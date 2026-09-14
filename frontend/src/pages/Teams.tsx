@@ -938,9 +938,31 @@ export function Teams() {
                     <TableCell className="font-mono text-sm">{team.channel_id}</TableCell>
                     <TableCell className="text-center">
                       {team.managed_channel_enabled ? (
-                        <Badge variant="success">
-                          {team.managed_channel_assigned_number ?? team.managed_channel_number ?? "Auto"}
-                        </Badge>
+                        team.managed_channel_sync_status === "error" ||
+                        team.managed_channel_sync_status === "conflict" ? (
+                          <RichTooltip
+                            title={
+                              team.managed_channel_sync_status === "conflict"
+                                ? "Channel conflict"
+                                : "Channel error"
+                            }
+                            content={
+                              <p className="max-w-xs text-xs">
+                                {team.managed_channel_sync_message ??
+                                  "The last generation could not create or update this channel."}
+                              </p>
+                            }
+                            side="bottom"
+                          >
+                            <Badge variant="destructive" className="cursor-help">
+                              {team.managed_channel_sync_status === "conflict" ? "Conflict" : "Error"}
+                            </Badge>
+                          </RichTooltip>
+                        ) : (
+                          <Badge variant="success">
+                            {team.managed_channel_assigned_number || team.managed_channel_number || "Auto"}
+                          </Badge>
+                        )
                       ) : (
                         <span className="text-xs text-muted-foreground">No</span>
                       )}

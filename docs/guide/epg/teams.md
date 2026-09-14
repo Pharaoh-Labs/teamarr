@@ -29,11 +29,6 @@ Each team's EPG includes:
 - **Postgame** programmes after the game ends
 - **Idle** programmes on days with no games
 
-In a team template's **Fillers** tab, idle content can be overridden separately
-for an offseason schedule with no upcoming game and for a schedule provider
-outage. The outage override applies only when every requested league schedule
-fetch fails; a successful empty schedule is treated as offseason.
-
 ## Importing Teams
 
 Go to **EPG → Team EPG** and click **Add Team** to browse the league cache by sport.
@@ -57,7 +52,7 @@ The Teams table lists all imported teams. Columns are sortable, and a filter row
 | **League** | League the team belongs to |
 | **Sport** | The team's sport |
 | **Channel ID** | XMLTV channel id — point a Dispatcharr channel at this id to wire up the EPG. Generated as PascalCase team name + league (e.g. `DetroitLions.nfl`) at import; regenerate in bulk with a custom format via the **Channel ID** action after selecting rows |
-| **Managed** | Shows whether Teamarr manages a persistent Dispatcharr channel for this team and its requested number, or `Auto` when the dedicated range assigns it |
+| **Managed** | Shows whether Teamarr manages a persistent Dispatcharr channel for this team and its channel number (`Auto` until the first generation assigns one). A red badge means the last generation could not create or update the channel — hover it for the reason (a hand-made channel already using the team's `tvg-id`, an occupied number override, a Dispatcharr error) |
 | **Template** | Assigned template (click to change) |
 | **Status** | On/off toggle — inactive teams are excluded from EPG generation |
 | **Actions** | Per-team actions (delete, etc.) |
@@ -68,17 +63,21 @@ Each team needs a **team template** assigned — see [Team vs Event](team-vs-eve
 
 ### Managed Channels
 
-The edit dialog can enable a persistent managed channel for a team. Enabling it also keeps the team active, because Teamarr needs its guide data to manage the channel. Set an optional channel-number override there, or leave it automatic.
+The edit dialog can enable a persistent managed channel for a team. Turning it on also activates the team, because Teamarr needs its guide data to manage the channel. Set an optional channel-number override there, or leave it automatic.
 
-Configure the automatic **Managed Team EPG Channels** range and choose priority teams in **Channels → Numbering**. Priority teams fill the automatic range first. This range is independent from event-channel numbering, so ordinary channel blocks do not consume it.
+Configure the automatic **Managed Team EPG Channels** range and choose priority teams in **Channels → Numbering**. Priority teams are numbered first when channels are created. This range is independent from event-channel numbering, so ordinary channel blocks do not consume it. Once a channel has a number it keeps it across runs — DVRs and Plex remember channels by number — and only an explicit override or a collision with another channel moves it.
 
-Managed Team EPG channels are durable, empty Dispatcharr channels when no game is live. During generation, Teamarr attaches streams matched to that team's games, applies stream-priority rules, and removes memberships that no longer match. For EPG-matched linear streams, the attachment is limited to the programme window and its configured buffers. This lets one linear stream move between games without creating or deleting the team's channel. If attachment windows overlap, Teamarr keeps streams from only one event: the event whose window ends first. This preserves the current game's streams through its postgame buffer before switching to the next event.
+Managed Team EPG channels are durable, empty Dispatcharr channels when no game is on. During generation, Teamarr attaches streams matched to that team's games in any of the team's competitions, applies stream-priority rules, and releases memberships that no longer match. Every attachment has a window: an EPG-matched linear stream keeps its programme slot plus the configured buffers, and a name-matched stream gets the game itself, widened by the lifecycle pre/post buffers. A game that is final, cancelled or outside the event-channel lifecycle window never attaches. When more than one game is inside its window at once, the channel carries the one that starts soonest and switches when that game's window closes.
+
+A stream's home/away side is read from the broadcast (feed markers in the name, or the side the stream matched), not from the team whose channel it landed on, so `home_feed`/`away_feed`/`team_feed` ordering rules behave as they do on event channels.
 
 #### Ownership And Lifecycle
 
-Teamarr treats a channel as managed only after it has created a record for that team. A Dispatcharr channel with the same XMLTV channel id (`tvg-id`) is still a manual channel, so Teamarr will not adopt, update, repair, or delete it. If that conflict exists when management is enabled, Teamarr reports it instead of creating a duplicate.
+Teamarr treats a channel as managed only after it has created a record for that team. A Dispatcharr channel with the same XMLTV channel id (`tvg-id`) is still a manual channel, so Teamarr will not adopt, update, repair, or delete it. If that conflict exists when management is enabled, Teamarr reports it on the Teams page instead of creating a duplicate — delete or re-point the hand-made channel, then generate again.
 
-Disable managed channels or deactivate a team from **EPG → Team EPG**. Teamarr applies the change during the next manual or scheduled generation, after it writes the guide: it removes the proven Teamarr-owned Dispatcharr channel, then removes its ownership and temporary stream-membership records. If Teamarr cannot prove ownership or Dispatcharr deletion fails, the generation records the error so a manual replacement cannot be deleted accidentally. Disabling management leaves an active team's XMLTV output in place, while deactivating the team stops its Team EPG output. Deleting a team removes its configuration and its proven Teamarr-owned channel immediately.
+Every decision that could orphan or duplicate a channel is made only on evidence: if the Dispatcharr channel list cannot be read, the run skips team-channel sync; if a mapped channel is missing from the list, Teamarr asks Dispatcharr for it directly and recreates it only on a confirmed "not found". A source whose matching failed this run keeps the memberships it produced last run, so a provider blip does not clear a game off a channel.
+
+Turn management off from **EPG → Team EPG** to release a channel. Teamarr applies that during the next manual or scheduled generation: it removes the proven Teamarr-owned Dispatcharr channel, then its ownership and stream-membership records. If Teamarr cannot prove ownership or Dispatcharr deletion fails, the generation records the error so a manual replacement cannot be deleted accidentally. Deactivating a team is different: the channel, its number and its identity are kept, its streams are released, and its guide stops updating until the team is active again. Deleting a team removes its configuration and its proven Teamarr-owned channel immediately; a team with no managed channel can be deleted without a Dispatcharr connection.
 
 The [Dashboard](../dashboard) lists managed team channels for status and stream audit only. Its event-channel reset, expiry, reconciliation, orphan discovery, and deletion controls do not apply to persistent Team EPG channels.
 

@@ -19,7 +19,7 @@ from teamarr.database.migrations import (
     _migrate_v75_extract_art_base_url,
     _run_migrations,
 )
-from teamarr.database.migrations.versioned import _migrate_v101_team_channel_logo_repair
+from teamarr.database.migrations.versioned import _migrate_v95_team_channel_defaults
 from teamarr.utilities.xmltv import apply_art_base_url
 
 # ===========================================================================
@@ -219,7 +219,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 103
+        assert row["schema_version"] == 95
 
 
 class TestV73CleansTeamCache:
@@ -413,7 +413,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 103
+        assert row["schema_version"] == 95
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +444,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 103
+        assert row["schema_version"] == 95
 
 
 # ===========================================================================
@@ -1223,7 +1223,7 @@ class TestV82ChannelsDVRServersList:
         row = conn.execute(
             "SELECT schema_version, channelsdvr_servers FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 103
+        assert row["schema_version"] == 95
         servers = json.loads(row["channelsdvr_servers"])
         assert servers == [
             {
@@ -1242,7 +1242,7 @@ class TestV82ChannelsDVRServersList:
         row = conn.execute(
             "SELECT schema_version, channelsdvr_servers FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 103
+        assert row["schema_version"] == 95
         assert row["channelsdvr_servers"] is None
 
     def test_settings_roundtrip_servers_list(self, db_conn):
@@ -1270,25 +1270,28 @@ class TestV82ChannelsDVRServersList:
         assert settings.servers[1].lineup_id is None
 
 
-def test_v101_repairs_missing_team_channel_logo():
+def test_v95_seeds_team_channel_defaults_without_touching_custom_values():
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     conn.executescript(
         """
         CREATE TABLE templates (
-            id INTEGER PRIMARY KEY, template_type TEXT, team_channel_logo_url TEXT
+            id INTEGER PRIMARY KEY, template_type TEXT,
+            team_channel_name TEXT, team_channel_logo_url TEXT
         );
-        INSERT INTO templates VALUES (1, 'team', NULL);
-        INSERT INTO templates VALUES (2, 'event', NULL);
+        INSERT INTO templates VALUES (1, 'team', NULL, NULL);
+        INSERT INTO templates VALUES (2, 'event', NULL, NULL);
+        INSERT INTO templates VALUES (3, 'team', '{team_name}', 'https://x/logo.png');
         """
     )
 
-    _migrate_v101_team_channel_logo_repair(conn)
+    _migrate_v95_team_channel_defaults(conn)
 
     default_logo = "{league_id}/{team_name|pascal}/logo.png?style=1&logo=true&fallback=true"
-    assert conn.execute(
-        "SELECT team_channel_logo_url FROM templates WHERE id = 1"
-    ).fetchone()[0] == default_logo
-    assert conn.execute(
-        "SELECT team_channel_logo_url FROM templates WHERE id = 2"
-    ).fetchone()[0] is None
+    rows = {
+        row["id"]: (row["team_channel_name"], row["team_channel_logo_url"])
+        for row in conn.execute("SELECT * FROM templates")
+    }
+    assert rows[1] == ("{league} | {team_name}", default_logo)
+    assert rows[2] == (None, None)
+    assert rows[3] == ("{team_name}", "https://x/logo.png")

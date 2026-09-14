@@ -80,6 +80,10 @@ The full order, applied inside each block and inside Everything Else, is: **Prio
 
 Teamarr automatically **skips numbers already used by non-Teamarr channels** in Dispatcharr (and by pinned blocks that start inside this range), and logs a warning when the configured range overlaps external channels. Setting the start above your existing channels (e.g., 1000 if you use 1–500) is still tidier — contiguous blocks without skips — but collisions are prevented either way.
 
+## Managed Team EPG Channels
+
+Persistent team channels (see [Teams → Managed Channels](../epg/teams#managed-channels)) are numbered from their own range, default `9000` upward, so event-channel blocks never consume it. Set the range here and, optionally, an ordered list of **priority teams** that are numbered first; the rest follow the Sport & League Order. A team, league or sport [pinned block](#pinned-blocks) still wins over this range for teams it covers. A channel keeps its number once assigned; a per-team override on the Teams page moves it.
+
 ## Number Stability
 
 Controls whether a channel can be **renumbered while its event is live**. Dispatcharr relies on channel numbers staying put, so a game shouldn't jump numbers just because another event started or ended.

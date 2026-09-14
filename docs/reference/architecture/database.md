@@ -45,7 +45,7 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `stream_match_cache` | Fingerprint cache for stream matching |
 | `processing_runs` | EPG generation run statistics (28 columns) |
 
-The schema contains **35 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed event-channel membership), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `numbering_exceptions` (pinned blocks, #333), `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
+The schema contains **43 tables** in total; the table above shows the core subset. Other notable tables: `managed_channel_streams` (time-windowed event-channel membership), `managed_team_channels` / `managed_team_channel_streams` (persistent Team EPG channel ownership and its windowed memberships, #810), `epg_matched_streams`, `epg_failed_matches`, `match_corrections`, `subscription_league_config`, `channel_sort_priorities`, `numbering_exceptions` (pinned blocks, #333), `lifetime_stats`, `stats_snapshots`, `league_overrides`, `team_epg_xmltv`, `event_epg_xmltv`.
 
 ## Persistent Team Channels
 

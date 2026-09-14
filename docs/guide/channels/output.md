@@ -50,6 +50,10 @@ In group patterns, `{sport}` resolves to the sport's display name ("Hockey"), an
 
 A few failure modes are handled gracefully: a pattern whose wildcard can't resolve for an event falls back to the static group; and if a configured static group has been deleted in Dispatcharr, the channels are created **ungrouped** with a log warning telling you to re-select a group.
 
+## Managed Team EPG Channels
+
+Persistent team channels have their own **channel group** and **channel profiles**, set on this page. They deliberately do not inherit the event-channel defaults above: leave the profiles empty for every profile, or narrow them the same way (existing profiles, `{sport}`, `{league}`). The default stream profile applies to team channels too.
+
 ## Per-League Channel Config
 
 Override channel profiles, channel groups, group modes, and the [matchup order](../settings/general.md#matchup-order) on a per-league basis. The **Subscribed only** toggle is on by default, so the table opens with just your subscribed leagues (turn it off to see all; the search field filters within whatever's visible). Click a league row to expand its configuration.

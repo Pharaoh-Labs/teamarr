@@ -95,6 +95,18 @@ export function ChannelNumbering() {
   }, [lifecycle])
 
   const handleSave = async () => {
+    // Validate everything before any request leaves: a rejected range must not
+    // leave the other cards half-saved (#826).
+    const rangeStart = parseInt(managedTeamRangeStart)
+    const rangeEnd = managedTeamRangeEnd ? parseInt(managedTeamRangeEnd) : null
+    const rangeValid =
+      !isNaN(rangeStart) &&
+      rangeStart >= 1 &&
+      (rangeEnd === null || (!isNaN(rangeEnd) && rangeEnd >= rangeStart))
+    if (!rangeValid) {
+      toast.error("Managed Team EPG channel range is invalid")
+      return
+    }
     try {
       const promises: Promise<unknown>[] = [
         // Manual mode is retired (v88); the mode is always auto and the legacy
@@ -106,21 +118,14 @@ export function ChannelNumbering() {
           channel_daily_reset_enabled: channelNumbering.channel_daily_reset_enabled,
           channel_daily_reset_time: channelNumbering.channel_daily_reset_time,
         }),
-      ]
-      if (lifecycle) {
-        promises.push(updateLifecycle.mutateAsync(lifecycle))
-      }
-      const rangeStart = parseInt(managedTeamRangeStart)
-      const rangeEnd = managedTeamRangeEnd ? parseInt(managedTeamRangeEnd) : null
-      if (!isNaN(rangeStart) && rangeStart >= 1 && (rangeEnd === null || rangeEnd >= rangeStart)) {
-        promises.push(updateManagedTeam.mutateAsync({
+        updateManagedTeam.mutateAsync({
           range_start: rangeStart,
           range_end: rangeEnd,
           priority_ids: managedTeamPriorityIds,
-        }))
-      } else {
-        toast.error("Managed Team EPG channel range is invalid")
-        return
+        }),
+      ]
+      if (lifecycle) {
+        promises.push(updateLifecycle.mutateAsync(lifecycle))
       }
       await Promise.all(promises)
       toast.success("Channel numbering settings saved")
