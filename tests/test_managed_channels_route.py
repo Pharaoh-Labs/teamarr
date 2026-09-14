@@ -77,13 +77,13 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
                         id=90,
                         name="NBA | Blue",
                         logo_id=42,
-                        logo_url=None,
+                        logo_url="epg-channel-logo",
                     )
                 ],
             ),
-            logos=SimpleNamespace(get=lambda logo_id: SimpleNamespace(
-                url="epg-channel-logo" if logo_id == 42 else None
-            )),
+            # No per-row logo GET on a polled list (#826): the route must not
+            # touch the logos manager at all.
+            logos=None,
         ),
     )
 
@@ -91,7 +91,9 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
         group_id=None, sport=None, league=None, include_deleted=False
     )
 
-    assert response.total == 2
+    # Both managed teams are listed: the channel of an inactive team persists
+    # (only the managed toggle releases it), so the audit view shows it.
+    assert response.total == 3
     channel = response.channels[1]
     assert channel.id == -8
     assert channel.channel_type == "team"
@@ -100,6 +102,9 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
     assert channel.dispatcharr_channel_id == 90
     assert channel.channel_name == "NBA | Blue"
     assert channel.logo_url == "epg-channel-logo"
+    inactive = response.channels[2]
+    assert inactive.team_id == 8
+    assert inactive.logo_url is None
 
 
 def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
@@ -122,7 +127,7 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
             event_id TEXT, event_provider TEXT, source_group_id INTEGER, stream_name TEXT,
             m3u_account_name TEXT, match_method TEXT, match_type TEXT, feed_side TEXT,
             feed_team_id TEXT, dispatcharr_channel_group TEXT, priority INTEGER,
-            attach_at TEXT, detach_at TEXT, removed_at TEXT
+            event_start TEXT, attach_at TEXT, detach_at TEXT, removed_at TEXT
         );
         CREATE TABLE team_epg_xmltv (team_id INTEGER, xmltv_content TEXT, updated_at TEXT);
         INSERT INTO teams VALUES
@@ -131,7 +136,7 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
             (7, 90, 'team-uuid', 9000, 'ready', '2026-01-01', '2026-01-02');
         INSERT INTO managed_team_channel_streams VALUES
             (1, 7, 44, 'game-1', 'espn', 3, 'Blue at Red', 'Sports', 'epg', 'event',
-             'away', 'home', NULL, 1, NULL, NULL, NULL);
+             'away', 'home', NULL, 1, NULL, NULL, NULL, NULL);
         INSERT INTO team_epg_xmltv VALUES (
             7,
             '<tv><programme channel="team-blue" start="20260913090000 +0000" '

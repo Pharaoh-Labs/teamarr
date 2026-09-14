@@ -359,9 +359,43 @@ class DispatcharrClient:
                 into.extend(page.get("results", []))
                 next_page = _next_path(page)
 
+        items = self.paginated_get_or_none(initial_endpoint, error_context=error_context)
+        return [] if items is None else items
+
+    def paginated_get_or_none(
+        self, initial_endpoint: str, error_context: str = "items"
+    ) -> list[dict] | None:
+        """``paginated_get`` that answers ``None`` when page 1 cannot be read.
+
+        Callers that take a destructive decision on "nothing there" (the team
+        channel sync recreates channels it cannot see) need failure and empty
+        told apart; ``[]`` from ``paginated_get`` conflates them (#826).
+        """
+        def fetch(url: str) -> dict | list | None:
+            """One page. ``None`` means the request failed — never an empty page."""
+            response = self.get(url)
+            if response is None or response.status_code != 200:
+                status = response.status_code if response else "No response"
+                logger.error("[DISPATCHARR] Failed to get %s: %s", error_context, status)
+                return None
+            return response.json()
+
+        def follow(data: dict, into: list[dict]) -> None:
+            """Walk `next` links from an already-fetched page, appending."""
+            next_page = _next_path(data)
+            while next_page:
+                page = fetch(next_page)
+                if page is None:
+                    return
+                if not isinstance(page, dict):
+                    into.extend(page)
+                    return
+                into.extend(page.get("results", []))
+                next_page = _next_path(page)
+
         first = fetch(initial_endpoint)
         if first is None:
-            return []
+            return None
 
         # A non-paginated endpoint answers with the whole collection at once
         # (/api/epg/epgdata/ does exactly this, page_size and all).

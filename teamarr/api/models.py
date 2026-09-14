@@ -68,6 +68,8 @@ class TeamResponse(BaseModel):
     managed_channel_enabled: bool = False
     managed_channel_number: int | None = None
     managed_channel_assigned_number: int | None = None
+    managed_channel_sync_status: str | None = None
+    managed_channel_sync_message: str | None = None
     created_at: datetime
     updated_at: datetime
 

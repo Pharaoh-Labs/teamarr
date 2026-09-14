@@ -41,15 +41,14 @@ def get_managed_team_channel(conn: Connection, team_id: int) -> ManagedTeamChann
     return _row_to_channel(row) if row else None
 
 
-def list_managed_team_channels(conn: Connection) -> list[ManagedTeamChannel]:
-    rows = conn.execute(
-        "SELECT * FROM managed_team_channels ORDER BY channel_number, team_id"
-    ).fetchall()
-    return [_row_to_channel(row) for row in rows]
-
-
 def list_enabled_managed_teams(conn: Connection) -> list[dict]:
-    """Return opted-in active teams with any persisted ownership mapping."""
+    """Return opted-in teams with any persisted ownership mapping.
+
+    Inactive teams are included: the channel is persistent, so deactivating a
+    team (off-season, say) keeps its channel, number and identity. Only the
+    managed toggle releases the channel. Callers that attach streams must
+    check ``active`` themselves (#826).
+    """
     rows = conn.execute(
         """
         SELECT t.*, mtc.dispatcharr_channel_id, mtc.dispatcharr_uuid,
@@ -57,7 +56,7 @@ def list_enabled_managed_teams(conn: Connection) -> list[dict]:
                mtc.sync_status, mtc.sync_message, mtc.last_verified_at
         FROM teams t
         LEFT JOIN managed_team_channels mtc ON mtc.team_id = t.id
-        WHERE t.active = 1 AND t.managed_channel_enabled = 1
+        WHERE t.managed_channel_enabled = 1
         ORDER BY t.team_name, t.id
         """
     ).fetchall()
@@ -74,7 +73,7 @@ def list_owned_enabled_managed_team_channels(conn: Connection) -> list[dict]:
                mtc.channel_number, mtc.sync_status, mtc.created_at, mtc.updated_at
         FROM managed_team_channels mtc
         JOIN teams t ON t.id = mtc.team_id
-        WHERE t.active = 1 AND t.managed_channel_enabled = 1
+        WHERE t.managed_channel_enabled = 1 AND mtc.dispatcharr_channel_id IS NOT NULL
         ORDER BY t.team_name, t.id
         """
     ).fetchall()
@@ -82,14 +81,14 @@ def list_owned_enabled_managed_team_channels(conn: Connection) -> list[dict]:
 
 
 def list_disabled_managed_team_channels(conn: Connection) -> list[dict]:
-    """Return owned channels whose team is no longer eligible for management."""
+    """Return owned channels whose team has been un-managed (toggle off)."""
     rows = conn.execute(
         """
         SELECT t.id AS team_id, t.active, t.managed_channel_enabled,
                mtc.dispatcharr_channel_id, mtc.dispatcharr_uuid
         FROM managed_team_channels mtc
         JOIN teams t ON t.id = mtc.team_id
-        WHERE t.active = 0 OR t.managed_channel_enabled = 0
+        WHERE t.managed_channel_enabled = 0
         """
     ).fetchall()
     return [dict(row) for row in rows]

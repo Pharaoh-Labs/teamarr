@@ -149,16 +149,40 @@ class ChannelManager:
             logger.debug("[CHANNEL_CACHE] Cleared")
 
     def _ensure_cache(self) -> list[DispatcharrChannel]:
-        """Ensure cache is populated. Returns cached channels list."""
+        """Ensure cache is populated. Returns cached channels list.
+
+        A failed fetch is NOT cached: caching ``[]`` would make every later
+        read in the run see an empty Dispatcharr, and callers that create on
+        "missing" would then duplicate every channel they own (#826). The
+        next call retries instead.
+        """
+        populated = self._try_populate_cache()
+        if populated is None:
+            return []
+        return populated
+
+    def _try_populate_cache(self) -> list[DispatcharrChannel] | None:
+        """Populate the cache if needed; None when the fetch failed."""
         if not self._cache.is_populated():
-            raw_channels = self._client.paginated_get(
+            raw_channels = self._client.paginated_get_or_none(
                 "/api/channels/channels/?page=1&page_size=1000",
                 error_context="channels",
             )
+            if raw_channels is None:
+                return None
             channels = [DispatcharrChannel.from_api(c) for c in raw_channels]
             self._cache.populate(channels)
             logger.debug("[CHANNEL_CACHE] Populated %d channels", len(channels))
         return self._cache.get_all()
+
+    def fetch_channels(self) -> list[DispatcharrChannel] | None:
+        """All channels, or ``None`` when Dispatcharr could not be read.
+
+        Unlike ``get_channels`` this never answers an empty list for a failed
+        read, so a caller can refuse to act rather than act on nothing.
+        """
+        with self._lock:
+            return self._try_populate_cache()
 
     def get_channels(self, use_cache: bool = True) -> list[DispatcharrChannel]:
         """Get all channels from Dispatcharr.

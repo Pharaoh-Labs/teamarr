@@ -215,14 +215,23 @@ def update_team(team_id: int, team: TeamUpdate):
     if "leagues" in updates:
         updates["leagues"] = json.dumps(updates["leagues"])
 
-    if updates.get("managed_channel_enabled"):
-        # A managed channel cannot have a stale/missing Team EPG guide.
-        updates["active"] = True
+    number = updates.get("managed_channel_number")
+    if number is not None and number < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="managed_channel_number must be at least 1",
+        )
 
     with get_db() as conn:
         current = db_get_team(conn, team_id)
         if current is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        # Turning management ON activates the team so its guide exists; an
+        # already-managed team may still be deactivated (the channel is kept,
+        # only its streams are released) — the edit dialog sends both fields
+        # on every save, so the rule keys on the transition, not the flag (#826).
+        if updates.get("managed_channel_enabled") and not current.get("managed_channel_enabled"):
+            updates["active"] = True
         result = db_update_team(conn, team_id, updates)
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
@@ -236,6 +245,8 @@ def delete_team(team_id: int):
     with get_db() as conn:
         if not db_get_team(conn, team_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        # A team with no managed channel deletes without Dispatcharr; one with
+        # a channel must release it first, or the channel is orphaned (#826).
         client = get_dispatcharr_client(get_db)
         manager = TeamChannelManager(get_db, ChannelManager(client) if client else None)
         deleted, error = manager.remove_team_channel(team_id)

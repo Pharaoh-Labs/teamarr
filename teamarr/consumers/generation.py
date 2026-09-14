@@ -383,8 +383,12 @@ def run_full_generation(
             )
 
         team_matched_streams: list[dict] = []
+        # Groups whose matching finished this run. Only their memberships are
+        # reconciled; a group that errored says nothing about its streams (#826).
+        team_completed_groups: set[int] = set()
 
         def collect_team_matches(group_id: int, matches: list[dict]) -> None:
+            team_completed_groups.add(group_id)
             team_matched_streams.extend({**match, "source_group_id": group_id} for match in matches)
 
         group_result = process_all_event_groups(
@@ -412,6 +416,21 @@ def run_full_generation(
             external_occupied=external_occupied,
         )
         timer.mark("channel_reassign")
+
+        # Step 3a: Reconcile persistent Team EPG channels and their stream
+        # memberships. Runs before ordering so the ordering pass pushes this
+        # run's memberships, not last run's. Guarded like every other step:
+        # a failure here must not stop event channels being created/deleted.
+        check_cancelled()
+        try:
+            result.managed_team_channels = team_channel_manager.sync()
+            result.managed_team_streams = team_channel_manager.sync_stream_memberships(
+                team_matched_streams, completed_group_ids=team_completed_groups
+            )
+        except Exception as e:  # noqa: BLE001 - per-step isolation
+            logger.exception("[GENERATION] Managed team channel sync failed: %s", e)
+            result.managed_team_channels = {"error": str(e)}
+        timer.mark("team_channels")
 
         # Step 3b: Apply stream ordering rules to all channels (93-95%)
         check_cancelled()
@@ -450,13 +469,6 @@ def run_full_generation(
             )
         timer.mark("xmltv_save")
 
-        # Apply managed-team channel creation, deletion, and stream membership
-        # only after the Team EPG has been fully generated and written.
-        result.managed_team_channels = team_channel_manager.sync()
-        result.managed_team_streams = team_channel_manager.sync_stream_memberships(
-            team_matched_streams
-        )
-
         # Create lifecycle service once for steps 5-6
         # Reuse shared_service to maintain cache warmth
         lifecycle_service = create_lifecycle_service(
@@ -494,9 +506,12 @@ def run_full_generation(
             result.epg_association = lifecycle_service.associate_epg_with_channels(
                 dispatcharr_settings.epg_id
             )
-            result.epg_association["managed_team_channels"] = team_channel_manager.associate_epg(
-                dispatcharr_settings.epg_id
-            )
+            try:
+                result.epg_association["managed_team_channels"] = (
+                    team_channel_manager.associate_epg(dispatcharr_settings.epg_id)
+                )
+            except Exception as e:  # noqa: BLE001 - per-step isolation
+                logger.exception("[GENERATION] Managed team EPG association failed: %s", e)
         timer.mark("dispatcharr_epg_refresh")
 
         # Capture the configured guide refreshes now, then run them after the
@@ -1553,13 +1568,15 @@ def _apply_stream_ordering(
                 )
                 pushes.append((plan, ordered_ids))
 
-            # Team channels are durable and use their own membership table, but
-            # their streams obey the same scoped ordering rules and windows.
-            team_ordering = TeamChannelManager(db_factory, channel_mgr).sync_stream_ordering()
-            reorder_result["managed_team_channels_reordered"] = team_ordering["channels"]
-            reorder_result["managed_team_streams_reordered"] = team_ordering["streams"]
-            if team_ordering["errors"]:
-                reorder_result["managed_team_order_errors"] = team_ordering["errors"]
+        # Team channels are durable and use their own membership table, but
+        # their streams obey the same scoped ordering rules and windows. This
+        # opens its own connection and issues its own PATCHes, so it runs only
+        # once the block above has committed and closed (#735, #826).
+        team_ordering = TeamChannelManager(db_factory, channel_mgr).sync_stream_ordering()
+        reorder_result["managed_team_channels_reordered"] = team_ordering["channels"]
+        reorder_result["managed_team_streams_reordered"] = team_ordering["streams"]
+        if team_ordering["errors"]:
+            reorder_result["managed_team_order_errors"] = team_ordering["errors"]
 
         # Phase 3 (parallel, network only): issue the pushes. Outside the `with`
         # so the database connection is closed before any thread runs — every

@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS managed_team_channel_streams (
     feed_side TEXT,
     dispatcharr_channel_group TEXT,
     priority INTEGER NOT NULL DEFAULT 999,
+    event_start TIMESTAMP,                    -- UTC; the soonest game wins the channel (#826)
     attach_at TIMESTAMP,
     detach_at TIMESTAMP,
     removed_at TIMESTAMP,
@@ -547,7 +548,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 103
+    schema_version INTEGER DEFAULT 95
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains

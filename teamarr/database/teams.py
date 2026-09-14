@@ -36,8 +36,15 @@ def _managed_channel_number_column(conn: Connection) -> str:
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'managed_team_channels'"
     ).fetchone()
     if exists:
-        return "mtc.channel_number AS managed_channel_assigned_number"
-    return "NULL AS managed_channel_assigned_number"
+        return (
+            "mtc.channel_number AS managed_channel_assigned_number, "
+            "mtc.sync_status AS managed_channel_sync_status, "
+            "mtc.sync_message AS managed_channel_sync_message"
+        )
+    return (
+        "NULL AS managed_channel_assigned_number, "
+        "NULL AS managed_channel_sync_status, NULL AS managed_channel_sync_message"
+    )
 
 
 def list_teams(conn: Connection, active_only: bool = False) -> list[dict]:

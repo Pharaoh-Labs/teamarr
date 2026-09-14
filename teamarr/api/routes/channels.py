@@ -43,7 +43,7 @@ from teamarr.services import create_channel_service, create_default_service
 from teamarr.services.stream_ordering import StreamOrderingService
 from teamarr.services.team_channel_status import find_next_live_window
 from teamarr.templates.resolver import TemplateResolver
-from teamarr.utilities.art_url import apply_art_base_url
+from teamarr.utilities.art_url import apply_art_base_url, is_relative_art_path
 from teamarr.utilities.tz import parse_db_timestamp
 
 logger = logging.getLogger(__name__)
@@ -275,7 +275,9 @@ def _effective_team_channel_logo(conn, team_channel: dict) -> str | None:
                     "team_name": team_channel["team_name"],
                 },
             )
-            return apply_art_base_url(resolved, art_base_url)
+            resolved = apply_art_base_url(resolved, art_base_url)
+            if not is_relative_art_path(resolved):
+                return resolved
     return team_channel["team_logo_url"]
 
 
@@ -316,27 +318,25 @@ def list_managed_channels(
             int(channel["team_id"]): channel["team_name"] for channel in team_channels
         }
 
-    # The remote channel logo is what subscribers see for this managed output.
-    # Fall back to the Team EPG artwork when Dispatcharr cannot provide one.
-    try:
-        dispatcharr = get_dispatcharr_connection(get_db)
-        remote_channels = (
-            {channel.id: channel for channel in dispatcharr.channels.get_channels()}
-            if dispatcharr
-            else {}
-        )
-        for channel in team_channels:
-            remote = remote_channels.get(channel["dispatcharr_channel_id"])
-            if remote:
-                team_channel_names[int(channel["team_id"])] = remote.name
-                if remote.logo_url:
-                    team_channel_logos[int(channel["team_id"])] = remote.logo_url
-                elif remote.logo_id and dispatcharr:
-                    logo = dispatcharr.logos.get(remote.logo_id)
-                    if logo and logo.url:
-                        team_channel_logos[int(channel["team_id"])] = logo.url
-    except Exception:
-        logger.debug("[CHANNELS] Could not fetch managed team channel logos", exc_info=True)
+    # The remote channel name/logo is what subscribers see for this managed
+    # output. Read from the pooled connection's channel cache only — no
+    # per-row logo GET on a list that the Dashboard polls (#736, #826).
+    if team_channels:
+        try:
+            dispatcharr = get_dispatcharr_connection(get_db)
+            remote_channels = (
+                {channel.id: channel for channel in dispatcharr.channels.get_channels()}
+                if dispatcharr
+                else {}
+            )
+            for channel in team_channels:
+                remote = remote_channels.get(channel["dispatcharr_channel_id"])
+                if remote:
+                    team_channel_names[int(channel["team_id"])] = remote.name
+                    if remote.logo_url:
+                        team_channel_logos[int(channel["team_id"])] = remote.logo_url
+        except Exception:
+            logger.debug("[CHANNELS] Could not read managed team channels", exc_info=True)
 
     if sport:
         team_channels = [channel for channel in team_channels if channel["sport"] == sport]
