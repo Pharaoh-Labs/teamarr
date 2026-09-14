@@ -411,7 +411,7 @@ def run_full_generation(
 
         # Step 3b: Global channel reassignment (if enabled)
         check_cancelled()
-        _sync_global_channels(
+        relayout = _sync_global_channels(
             db_factory, dispatcharr_client, update_progress,
             external_occupied=external_occupied,
         )
@@ -423,7 +423,7 @@ def run_full_generation(
         # a failure here must not stop event channels being created/deleted.
         check_cancelled()
         try:
-            result.managed_team_channels = team_channel_manager.sync()
+            result.managed_team_channels = team_channel_manager.sync(relayout=relayout)
             result.managed_team_streams = team_channel_manager.sync_stream_memberships(
                 team_matched_streams, completed_group_ids=team_completed_groups
             )
@@ -1120,13 +1120,16 @@ def _sync_global_channels(
     dispatcharr_client: Any | None,
     update_progress: Callable,
     external_occupied: set[int] | None = None,
-) -> None:
+) -> bool:
     """Reassign channel numbers globally by sort priority.
 
     This is the single authoritative pass that pushes numbers to Dispatcharr.
     In sticky (gap/strict) modes it places only new channels, unless the daily
     reset window has arrived (should_run_channel_reset) — then it re-grids
     everything once.
+
+    Returns whether that full re-layout ran, so the managed team channel sync
+    can re-sort its own numbers in the same run (#810).
     """
     from teamarr.database.channel_numbers import (
         reassign_all_channels,
@@ -1142,7 +1145,7 @@ def _sync_global_channels(
             conn, external_occupied=external_occupied, force_reset=force_reset
         )
         if global_result["channels_moved"] == 0:
-            return
+            return force_reset
 
         logger.info(
             "[GENERATION] Global reassignment: %d channels processed, %d moved",
@@ -1151,7 +1154,7 @@ def _sync_global_channels(
         )
 
         if not dispatcharr_client:
-            return
+            return force_reset
 
         synced = 0
         for ch in global_result.get("drift_details", []):
@@ -1171,6 +1174,7 @@ def _sync_global_channels(
                     )
         if synced:
             logger.info("[GENERATION] Synced %d channel numbers to Dispatcharr", synced)
+        return force_reset
 
 
 @dataclass

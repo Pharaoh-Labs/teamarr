@@ -7,6 +7,7 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+from teamarr.database.channel_numbers import get_channel_stability_settings
 from teamarr.database.managed_team_channel_streams import (
     active_stream_ids,
     reconcile_team_streams,
@@ -99,8 +100,14 @@ class TeamChannelManager:
     # Channel ownership
     # ------------------------------------------------------------------
 
-    def sync(self) -> dict[str, Any]:
-        """Create or update enabled team channels and remove disabled ones."""
+    def sync(self, relayout: bool = False) -> dict[str, Any]:
+        """Create or update enabled team channels and remove disabled ones.
+
+        Automatic numbers follow the event channels' Number Stability setting:
+        Compact re-sorts every run; Gapped/Strict hold a channel's number and
+        re-sort only when the daily re-layout or a manual re-grid fires, which
+        the caller reports as ``relayout`` (the event pass computes it once).
+        """
         result: dict[str, Any] = {
             "created": 0, "synced": 0, "deleted": 0, "conflicts": 0, "errors": 0,
             "unavailable": False,
@@ -159,10 +166,20 @@ class TeamChannelManager:
                     team["team_name"],
                 )
 
-            # The sort decides the order NEW channels are numbered in. A channel
-            # that already holds a number keeps it (DVRs and Plex key on the
-            # number); only an exact override or a collision moves it.
             teams.sort(key=team_sort_key)
+            reflow = relayout or self._stability_mode(conn) == "compact"
+            if reflow:
+                # Every automatic channel floats back into sort order: release
+                # their current numbers so the walk below can hand them out
+                # again from the top of the lane.
+                for team in teams:
+                    if team.get("managed_channel_number") is not None:
+                        continue
+                    mapped_id = team.get("dispatcharr_channel_id")
+                    remote = remote_channels.get(mapped_id) if mapped_id else None
+                    number = self._number(remote.channel_number) if remote else None
+                    if number is not None:
+                        occupied.discard(number)
             for team in teams:
                 mapping_id = team.get("dispatcharr_channel_id")
                 remote = remote_channels.get(mapping_id) if mapping_id else None
@@ -193,11 +210,18 @@ class TeamChannelManager:
                     continue
 
                 own_number = self._number(remote.channel_number) if remote else None
-                team_occupied = occupied - ({own_number} if own_number is not None else set())
+                # Holding: a channel's own number never blocks itself. Reflow
+                # already released every floating number above, and one that
+                # has since been handed to an earlier team must stay taken.
+                team_occupied = (
+                    occupied
+                    if reflow and team.get("managed_channel_number") is None
+                    else occupied - ({own_number} if own_number is not None else set())
+                )
                 channel_number, allocation_error = self._allocate_number(
                     team.get("managed_channel_number"),
-                    own_number,
-                    team.get("allocated_channel_number"),
+                    None if reflow else own_number,
+                    None if reflow else team.get("allocated_channel_number"),
                     team_occupied,
                     settings,
                     conn,
@@ -676,6 +700,13 @@ class TeamChannelManager:
                 result["errors"] += 1
 
     @staticmethod
+    def _stability_mode(conn) -> str:
+        try:
+            return get_channel_stability_settings(conn)["mode"]
+        except Exception:  # noqa: BLE001 - tests use a bare schema
+            return "compact"
+
+    @staticmethod
     def _number(value: Any) -> int | None:
         try:
             return int(float(value))
@@ -685,7 +716,7 @@ class TeamChannelManager:
     def _allocate_number(
         self, requested, own, allocated, occupied, settings, conn, team
     ) -> tuple[int | None, str | None]:
-        """An exact override wins; otherwise a channel keeps the number it has."""
+        """An exact override wins; a held number (sticky modes) is kept; else first free."""
         requested = self._number(requested)
         if requested is not None:
             if requested < 1:

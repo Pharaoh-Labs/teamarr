@@ -168,6 +168,10 @@ def _factory(conn):
 def settings(monkeypatch):
     import teamarr.services.team_channel_manager as module
 
+    # Compact is the event channels' default; the sticky tests override it.
+    monkeypatch.setattr(
+        module, "get_channel_stability_settings", lambda _: {"mode": "compact"}
+    )
     monkeypatch.setattr(
         module,
         "get_managed_team_channel_settings",
@@ -415,8 +419,8 @@ def test_uuid_mismatch_blocks_every_mutation(conn, settings):
     assert mapping.sync_status == "conflict"
 
 
-def test_automatic_channels_keep_their_numbers_across_runs(conn, settings):
-    """Numbers are held once assigned; DVRs and Plex key on them (#826)."""
+def _two_out_of_order_teams(conn):
+    """Alpha (basketball) holds 9000, Zulu (hockey) 9001; hockey sorts first."""
     conn.execute("ALTER TABLE teams ADD COLUMN sport TEXT")
     conn.execute(
         "INSERT INTO teams (id, active, managed_channel_enabled, channel_id, team_name, "
@@ -442,17 +446,44 @@ def test_automatic_channels_keep_their_numbers_across_runs(conn, settings):
         "INSERT INTO managed_team_channels VALUES "
         "(2, 11, 'zulu-uuid', 9001, 'ready', NULL, NULL, NULL)"
     )
-    channels = FakeChannels([
+    return FakeChannels([
         RemoteChannel(10, "alpha-uuid", "Alpha", "9000", tvg_id="alpha", stream_profile_id=4),
         RemoteChannel(11, "zulu-uuid", "Zulu", "9001", tvg_id="zulu", stream_profile_id=4),
     ])
 
+
+def test_compact_mode_reflows_automatic_channels_every_run(conn, settings):
+    """Compact is what event channels do by default: re-sort every run."""
+    channels = _two_out_of_order_teams(conn)
+
     result = TeamChannelManager(_factory(conn), channels).sync()
 
+    assert result["synced"] == 2
+    assert channels.updated == [
+        (11, {"channel_number": 9000}),
+        (10, {"channel_number": 9001}),
+    ]
+
+
+def test_sticky_modes_hold_numbers_until_a_relayout(conn, settings, monkeypatch):
+    """Gapped/Strict: a channel keeps its number; the daily re-layout re-sorts (#826)."""
+    import teamarr.services.team_channel_manager as module
+
+    monkeypatch.setattr(module, "get_channel_stability_settings", lambda _: {"mode": "gap"})
+    channels = _two_out_of_order_teams(conn)
+
+    result = TeamChannelManager(_factory(conn), channels).sync()
     assert result["synced"] == 2
     assert channels.updated == []
     assert get_managed_team_channel(conn, 1).channel_number == 9000
     assert get_managed_team_channel(conn, 2).channel_number == 9001
+
+    result = TeamChannelManager(_factory(conn), channels).sync(relayout=True)
+    assert result["synced"] == 2
+    assert channels.updated == [
+        (11, {"channel_number": 9000}),
+        (10, {"channel_number": 9001}),
+    ]
 
 
 def test_new_channels_are_numbered_in_priority_order_into_free_slots(conn, settings):
