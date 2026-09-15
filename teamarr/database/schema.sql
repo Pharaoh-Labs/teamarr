@@ -285,7 +285,19 @@ CREATE TABLE IF NOT EXISTS settings (
     default_bypass_filter_for_playoffs BOOLEAN DEFAULT 0, -- Include all playoff and All-Star games regardless of team filter
 
     -- Scheduled Generation
-    cron_expression TEXT DEFAULT '0 * * * *',    -- Cron for auto EPG generation
+    -- cron_expression is deprecated and no longer read by the scheduler
+    -- (kept only so existing rows/back-ups don't lose the column). Automatic
+    -- generation is now triggered per-match: see pre_match_lead_minutes and
+    -- epg_discovery_interval_hours below.
+    cron_expression TEXT DEFAULT '0 * * * *',    -- Deprecated, unused
+    -- Minutes before each known match's start time to trigger a fresh EPG
+    -- generation (keeps lineups/venue/broadcast info current right before
+    -- kickoff).
+    pre_match_lead_minutes INTEGER DEFAULT 30,
+    -- Fallback cadence (hours) that runs generation even with no known
+    -- upcoming matches, so newly added teams/leagues and far-future
+    -- matches get discovered and scheduled.
+    epg_discovery_interval_hours INTEGER DEFAULT 4,
 
     -- Cache Refresh Frequencies
     soccer_cache_refresh_frequency TEXT DEFAULT 'weekly',

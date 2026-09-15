@@ -14,9 +14,12 @@ class SchedulerStatus:
     """Status of the scheduler."""
 
     running: bool = False
-    cron_expression: str = "0 * * * *"
+    pre_match_lead_minutes: int = 30
+    discovery_interval_hours: int = 4
     last_run: datetime | None = None
     next_run: datetime | None = None
+    next_run_reason: str | None = None  # "pre_match" | "discovery"
+    next_match_start: datetime | None = None
 
 
 @dataclass
@@ -46,11 +49,18 @@ class SchedulerService:
         self._db_factory = db_factory
         self._client = dispatcharr_client
 
-    def start(self, cron_expression: str | None = None) -> bool:
-        """Start the cron scheduler.
+    def start(
+        self,
+        pre_match_lead_minutes: int | None = None,
+        discovery_interval_hours: int | None = None,
+    ) -> bool:
+        """Start the scheduler.
 
         Args:
-            cron_expression: Cron expression (None = use settings)
+            pre_match_lead_minutes: Minutes before a match to trigger
+                generation (None = use settings)
+            discovery_interval_hours: Fallback discovery cadence in hours
+                (None = use settings)
 
         Returns:
             True if started, False if already running or disabled
@@ -59,7 +69,8 @@ class SchedulerService:
 
         return start_lifecycle_scheduler(
             self._db_factory,
-            cron_expression=cron_expression,
+            pre_match_lead_minutes=pre_match_lead_minutes,
+            discovery_interval_hours=discovery_interval_hours,
             dispatcharr_client=self._client,
         )
 
@@ -80,19 +91,26 @@ class SchedulerService:
         """Get scheduler status.
 
         Returns:
-            SchedulerStatus with running state, cron expression, and run times
+            SchedulerStatus with running state, triggers, and run times
         """
         from teamarr.consumers.scheduler import get_scheduler_status
 
         status = get_scheduler_status()
         return SchedulerStatus(
             running=status.get("running", False),
-            cron_expression=status.get("cron_expression", "0 * * * *"),
+            pre_match_lead_minutes=status.get("pre_match_lead_minutes", 30),
+            discovery_interval_hours=status.get("discovery_interval_hours", 4),
             last_run=(
                 datetime.fromisoformat(status["last_run"]) if status.get("last_run") else None
             ),
             next_run=(
                 datetime.fromisoformat(status["next_run"]) if status.get("next_run") else None
+            ),
+            next_run_reason=status.get("next_run_reason"),
+            next_match_start=(
+                datetime.fromisoformat(status["next_match_start"])
+                if status.get("next_match_start")
+                else None
             ),
         )
 

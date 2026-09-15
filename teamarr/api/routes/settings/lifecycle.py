@@ -167,9 +167,12 @@ def get_scheduler_status():
 
     return SchedulerStatusResponse(
         running=status.running,
-        cron_expression=status.cron_expression,
+        pre_match_lead_minutes=status.pre_match_lead_minutes,
+        discovery_interval_hours=status.discovery_interval_hours,
         last_run=status.last_run.isoformat() if status.last_run else None,
         next_run=status.next_run.isoformat() if status.next_run else None,
+        next_run_reason=status.next_run_reason,
+        next_match_start=status.next_match_start.isoformat() if status.next_match_start else None,
     )
 
 

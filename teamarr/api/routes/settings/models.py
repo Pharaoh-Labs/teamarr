@@ -217,9 +217,12 @@ class SchedulerStatusResponse(BaseModel):
     """Scheduler status response."""
 
     running: bool
-    cron_expression: str | None = None
+    pre_match_lead_minutes: int | None = None
+    discovery_interval_hours: int | None = None
     last_run: str | None = None
     next_run: str | None = None
+    next_run_reason: str | None = None
+    next_match_start: str | None = None
 
 
 # =============================================================================
@@ -238,7 +241,8 @@ class EPGSettingsModel(BaseModel):
     epg_output_path: str = "./data/teamarr.xml"
     include_final_events: bool = False
     midnight_crossover_mode: str = "postgame"
-    cron_expression: str = "0 * * * *"
+    pre_match_lead_minutes: int = 30
+    epg_discovery_interval_hours: int = 4
     epg_xtream_fallback_enabled: bool = False
     epg_xtream_cache_hours: int = 24
     epg_channel_source_enabled: bool = False

@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { ToggleCard } from "@/components/ui/toggle-card"
 import { Badge } from "@/components/ui/badge"
-import { CronPreview } from "@/components/CronPreview"
 import {
   useUpdateSchedulerSettings,
   useSchedulerStatus,
@@ -29,15 +28,20 @@ import type {
   TSDBKeyValidationResult,
 } from "@/api/settings"
 import { validateTSDBKey } from "@/api/settings"
-import { formatRelativeTime } from "../format"
+import { formatRelativeTime, formatFutureTime } from "../format"
 
-const CRON_PRESETS = [
-  { label: "Every Hour", cron: "0 * * * *" },
-  { label: "Every 2 Hours", cron: "0 */2 * * *" },
-  { label: "Every 4 Hours", cron: "0 */4 * * *" },
-  { label: "Every 6 Hours", cron: "0 */6 * * *" },
-  { label: "Daily at Midnight", cron: "0 0 * * *" },
-  { label: "Daily at 6 AM", cron: "0 6 * * *" },
+const LEAD_TIME_PRESETS = [
+  { label: "15 min before", minutes: 15 },
+  { label: "30 min before", minutes: 30 },
+  { label: "1 hour before", minutes: 60 },
+  { label: "2 hours before", minutes: 120 },
+]
+
+const DISCOVERY_PRESETS = [
+  { label: "Every 2 hours", hours: 2 },
+  { label: "Every 4 hours", hours: 4 },
+  { label: "Every 6 hours", hours: 6 },
+  { label: "Every 12 hours", hours: 12 },
 ]
 
 function UpdateNotificationsCard() {
@@ -373,6 +377,10 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
       <Card>
         <CardHeader>
           <CardTitle>Schedule</CardTitle>
+          <CardDescription>
+            Generation runs automatically ahead of each match, rather than on a fixed
+            timer.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-4">
@@ -391,38 +399,91 @@ export function GeneralTab({ settings }: { settings: AllSettings }) {
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="cron-expression">Cron Expression</Label>
-                <Input
-                  id="cron-expression"
-                  value={epg?.cron_expression ?? "0 * * * *"}
-                  onChange={(e) => epg && setEPG({ ...epg, cron_expression: e.target.value })}
-                  className="font-mono"
-                  placeholder="0 * * * *"
-                />
-                <CronPreview expression={epg?.cron_expression ?? "0 * * * *"} />
-              </div>
-              <div className="space-y-2">
-                <Label>Last Run</Label>
-                <p className="text-sm text-muted-foreground pt-2">
-                  {schedulerStatus.data?.last_run ?? "Never"}
-                </p>
+            <div className="space-y-2">
+              <Label htmlFor="pre-match-lead">Generate before each match</Label>
+              <Input
+                id="pre-match-lead"
+                type="number"
+                min={0}
+                value={epg?.pre_match_lead_minutes ?? 30}
+                onChange={(e) =>
+                  epg &&
+                  setEPG({ ...epg, pre_match_lead_minutes: Number(e.target.value) })
+                }
+                className="max-w-[10rem]"
+              />
+              <p className="text-sm text-muted-foreground">
+                Minutes before a match's start time to refresh the EPG (lineups, venue,
+                broadcast info).
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {LEAD_TIME_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.minutes}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      epg && setEPG({ ...epg, pre_match_lead_minutes: preset.minutes })
+                    }
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {CRON_PRESETS.map((preset) => (
-                <Button
-                  key={preset.cron}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => epg && setEPG({ ...epg, cron_expression: preset.cron })}
-                >
-                  {preset.label}
-                </Button>
-              ))}
+            <div className="space-y-2">
+              <Label htmlFor="discovery-interval">Discovery fallback</Label>
+              <Input
+                id="discovery-interval"
+                type="number"
+                min={1}
+                value={epg?.epg_discovery_interval_hours ?? 4}
+                onChange={(e) =>
+                  epg &&
+                  setEPG({ ...epg, epg_discovery_interval_hours: Number(e.target.value) })
+                }
+                className="max-w-[10rem]"
+              />
+              <p className="text-sm text-muted-foreground">
+                How often (hours) to check for newly added teams/leagues and far-future
+                matches, even with nothing else scheduled soon.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {DISCOVERY_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.hours}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      epg && setEPG({ ...epg, epg_discovery_interval_hours: preset.hours })
+                    }
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-1">
+                <Label>Last Run</Label>
+                <p className="text-sm text-muted-foreground">
+                  {formatRelativeTime(schedulerStatus.data?.last_run ?? null)}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label>Next Run</Label>
+                <p className="text-sm text-muted-foreground">
+                  {formatFutureTime(schedulerStatus.data?.next_run ?? null)}
+                  {schedulerStatus.data?.next_run_reason === "pre_match" &&
+                    " (before upcoming match)"}
+                  {schedulerStatus.data?.next_run_reason === "discovery" &&
+                    " (discovery check)"}
+                </p>
+              </div>
             </div>
           </div>
 
