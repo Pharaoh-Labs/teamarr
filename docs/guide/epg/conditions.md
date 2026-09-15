@@ -91,9 +91,11 @@ Recap published → it renders verbatim. Game still running → the in-progress
 line. Final but no recap → neither row fires and the base register's
 constructed result line renders.
 
-The idle register's **offseason override** (no upcoming game in the
-lookahead) stays separate from condition rows — it's a no-game state, and
-condition rows need a reference game to evaluate.
+The idle register's **no-schedule override** (no upcoming game in the
+lookahead) stays separate from condition rows. It applies both in the
+off-season and when a provider has not published a schedule. Each enabled
+title, subtitle, or description field replaces only its corresponding normal
+idle field. Condition rows need a reference game to evaluate.
 
 ---
 

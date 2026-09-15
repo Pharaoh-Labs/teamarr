@@ -77,12 +77,19 @@ def legacy_conditional_to_rows(cond: dict | None) -> list[dict]:
 
 @dataclass
 class OffseasonFillerTemplate:
-    """Offseason templates when no games scheduled."""
+    """Idle overrides when no future game is available."""
 
-    enabled: bool = False
+    title_enabled: bool = False
     title: str | None = None
+    subtitle_enabled: bool = False
     subtitle: str | None = None
+    description_enabled: bool = False
     description: str | None = None
+
+    @property
+    def enabled(self) -> bool:
+        """Whether any no-schedule field overrides ordinary idle content."""
+        return self.title_enabled or self.subtitle_enabled or self.description_enabled
 
 
 @dataclass

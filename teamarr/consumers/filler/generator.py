@@ -562,13 +562,26 @@ class FillerGenerator:
                 context.last_game,
             )
         else:  # IDLE
-            # Offseason register stays separate — it's a no-game state;
+            # The no-schedule register stays separate — it has no reference game;
             # condition rows need a reference game to evaluate.
             if is_offseason and config.idle_offseason.enabled:
                 return FillerTemplate(
-                    title=config.idle_offseason.title or config.idle_template.title,
-                    subtitle=config.idle_offseason.subtitle or config.idle_template.subtitle,
-                    description=config.idle_offseason.description,
+                    title=(
+                        config.idle_offseason.title
+                        if config.idle_offseason.title_enabled and config.idle_offseason.title
+                        else config.idle_template.title
+                    ),
+                    subtitle=(
+                        config.idle_offseason.subtitle
+                        if config.idle_offseason.subtitle_enabled and config.idle_offseason.subtitle
+                        else config.idle_template.subtitle
+                    ),
+                    description=(
+                        config.idle_offseason.description
+                        if config.idle_offseason.description_enabled
+                        and config.idle_offseason.description
+                        else config.idle_template.description
+                    ),
                     art_url=config.idle_template.art_url,
                 )
             base, rows, game_ctx = config.idle_template, config.idle_rows, context.last_game

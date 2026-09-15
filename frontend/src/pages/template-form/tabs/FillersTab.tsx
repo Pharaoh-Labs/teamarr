@@ -218,7 +218,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
           </CardHeader>
           {formData.idle_enabled && (
             <CardContent className="space-y-4">
-              {/* Title with offseason override */}
+              {/* Title with no-schedule override */}
               <TemplateField
                 id="idle_content.title"
                 label="Title"
@@ -234,7 +234,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                     checked={idleOffseason.title_enabled}
                     onCheckedChange={() => updateIdleOffseason("title_enabled", !idleOffseason.title_enabled)}
                   />
-                  <span className="text-sm">Override title when no games in 30-day lookahead</span>
+                  <span className="text-sm">Override title when no games are available in the schedule lookahead</span>
                 </label>
                 {idleOffseason.title_enabled && (
                   <TemplateField
@@ -250,7 +250,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                 )}
               </div>
 
-              {/* Subtitle with offseason override */}
+              {/* Subtitle with no-schedule override */}
               <TemplateField
                 id="idle_content.subtitle"
                 label="Subtitle"
@@ -267,7 +267,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                     checked={idleOffseason.subtitle_enabled}
                     onCheckedChange={() => updateIdleOffseason("subtitle_enabled", !idleOffseason.subtitle_enabled)}
                   />
-                  <span className="text-sm">Override subtitle when no games in 30-day lookahead</span>
+                  <span className="text-sm">Override subtitle when no games are available in the schedule lookahead</span>
                 </label>
                 {idleOffseason.subtitle_enabled && (
                   <TemplateField
@@ -283,7 +283,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                 )}
               </div>
 
-              {/* Description with offseason override */}
+              {/* Description with no-schedule override */}
               <TemplateField
                 id="idle_content.description"
                 label="Description"
@@ -299,7 +299,7 @@ export function FillersTab({ formData, setFormData, isTeamTemplate, fieldRefs, s
                     checked={idleOffseason.description_enabled}
                     onCheckedChange={() => updateIdleOffseason("description_enabled", !idleOffseason.description_enabled)}
                   />
-                  <span className="text-sm">Override description when no games in 30-day lookahead</span>
+                  <span className="text-sm">Override description when no games are available in the schedule lookahead</span>
                 </label>
                 {idleOffseason.description_enabled && (
                   <TemplateField

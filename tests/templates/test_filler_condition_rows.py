@@ -211,12 +211,71 @@ def test_offseason_register_ignores_rows():
     gen = _generator()
     config = FillerConfig(
         idle_template=BASE,
-        idle_offseason=OffseasonFillerTemplate(enabled=True, description="Offseason text"),
+        idle_offseason=OffseasonFillerTemplate(
+            description_enabled=True, description="No schedule text"
+        ),
         idle_rows=[{"priority": 100, "template": "default row"}],
     )
     ctx = _filler_context(last_event=_event("post"))
     selected = gen._select_register_template(FillerType.IDLE, config, ctx, is_offseason=True)
-    assert selected.description == "Offseason text"
+    assert selected.description == "No schedule text"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("title", "Schedule unavailable"),
+        ("subtitle", "Schedule unavailable"),
+        ("description", "Schedule unavailable"),
+    ],
+)
+def test_no_schedule_field_overrides_activate_independently(field: str, value: str):
+    gen = _generator()
+    config = FillerConfig(
+        idle_template=BASE,
+        idle_offseason=OffseasonFillerTemplate(**{f"{field}_enabled": True, field: value}),
+    )
+
+    selected = gen._select_register_template(FillerType.IDLE, config, _filler_context(), is_offseason=True)
+
+    assert getattr(selected, field) == value
+    assert selected.title == (value if field == "title" else "Base Title")
+    assert selected.subtitle == (value if field == "subtitle" else "Base Sub")
+    assert selected.description == (value if field == "description" else "Base description")
+
+
+def test_no_schedule_register_is_disabled_when_all_fields_are_disabled():
+    gen = _generator()
+    config = FillerConfig(idle_template=BASE, idle_offseason=OffseasonFillerTemplate())
+
+    selected = gen._select_register_template(FillerType.IDLE, config, _filler_context(), is_offseason=True)
+
+    assert selected is config.idle_template
+
+
+def test_template_to_filler_config_preserves_no_schedule_field_flags():
+    from teamarr.database.templates import Template, template_to_filler_config
+
+    template = Template(
+        id=1,
+        name="t",
+        template_type="team",
+        idle_offseason={
+            "title_enabled": True,
+            "title": "Schedule unavailable",
+            "subtitle_enabled": False,
+            "subtitle": "ignored",
+            "description_enabled": False,
+            "description": "ignored",
+        },
+    )
+
+    config = template_to_filler_config(template)
+
+    assert config.idle_offseason.enabled
+    assert config.idle_offseason.title == "Schedule unavailable"
+    assert config.idle_offseason.subtitle is None
+    assert config.idle_offseason.description is None
 
 
 # --- config conversion: rows plumbed, legacy shim only when rows empty ---

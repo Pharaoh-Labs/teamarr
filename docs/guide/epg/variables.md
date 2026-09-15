@@ -47,7 +47,7 @@ Click the badge to toggle to **Sample** mode, which uses generic, intentionally-
 **Event templates** don't need suffixes - each channel exists for a single game, so there's no "next" or "last" to reference.
 
 {: .note }
-> **When there's no next (or last) game** — offseason, end of a season — suffixed variables resolve to empty and the usual cleanup removes leftover wrappers, so raw `{…}` braces never reach your guide. A misspelled variable name, or a suffix the variable doesn't support, still renders literally so you can spot the mistake. For a proper offseason message, use the **Offseason** idle register on the Fillers tab (enabled with generic content by default on new templates).
+> **When there's no next (or last) game** — offseason, an unpublished provider schedule, or the end of a season — suffixed variables resolve to empty and the usual cleanup removes leftover wrappers, so raw `{…}` braces never reach your guide. A misspelled variable name, or a suffix the variable doesn't support, still renders literally so you can spot the mistake. For a proper no-schedule message, use the idle no-schedule overrides on the Fillers tab. Each enabled field replaces its corresponding normal idle field.
 
 In the tables below, the **Suffixes** column indicates which suffixes are available:
 - **base** = no suffix (current game)

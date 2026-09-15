@@ -637,15 +637,16 @@ def template_to_filler_config(template: Template) -> FillerConfig:
         template.idle_conditional
     )
 
-    # Idle offseason
-    # Schema uses per-field enabled flags (title_enabled, subtitle_enabled, description_enabled)
-    # Use description_enabled as master toggle (like V1's idle_offseason_enabled)
+    # Idle no-schedule overrides use independent field toggles. A provider can
+    # temporarily have no schedule, which needs the same rendering as offseason.
     idle_off = template.idle_offseason or {}
     idle_offseason = OffseasonFillerTemplate(
-        enabled=idle_off.get("description_enabled", False),
+        title_enabled=idle_off.get("title_enabled", False),
         title=idle_off.get("title") if idle_off.get("title_enabled") else None,
+        subtitle_enabled=idle_off.get("subtitle_enabled", False),
         subtitle=idle_off.get("subtitle") if idle_off.get("subtitle_enabled") else None,
-        description=idle_off.get("description"),
+        description_enabled=idle_off.get("description_enabled", False),
+        description=idle_off.get("description") if idle_off.get("description_enabled") else None,
     )
     # Filler categories are independent from event categories (#199).
     filler_categories = template.xmltv_filler_categories or []
