@@ -236,7 +236,9 @@ def test_no_schedule_field_overrides_activate_independently(field: str, value: s
         idle_offseason=OffseasonFillerTemplate(**{f"{field}_enabled": True, field: value}),
     )
 
-    selected = gen._select_register_template(FillerType.IDLE, config, _filler_context(), is_offseason=True)
+    selected = gen._select_register_template(
+        FillerType.IDLE, config, _filler_context(), is_offseason=True
+    )
 
     assert getattr(selected, field) == value
     assert selected.title == (value if field == "title" else "Base Title")
@@ -248,7 +250,9 @@ def test_no_schedule_register_is_disabled_when_all_fields_are_disabled():
     gen = _generator()
     config = FillerConfig(idle_template=BASE, idle_offseason=OffseasonFillerTemplate())
 
-    selected = gen._select_register_template(FillerType.IDLE, config, _filler_context(), is_offseason=True)
+    selected = gen._select_register_template(
+        FillerType.IDLE, config, _filler_context(), is_offseason=True
+    )
 
     assert selected is config.idle_template
 
