@@ -24,6 +24,9 @@ Requests include `brand=tsn` and `lang=en`. The provider uses the league
 calendar to resolve a requested date to a weekly or daily schedule group, then filters
 that group locally. Event detail uses the numeric TSN event ID. Hockey `seasonTypeId`
 values are normalized as preseason (0), regular season (1), and postseason (2).
+Competitor responses include `seoIdentifier` but no logo URL, so Teamarr uses the TSN
+widget CDN at `https://widgets.sports.bellmedia.ca/img/{league}/{seoIdentifier}.webp`
+for team artwork across Bell Media-supported leagues.
 
 Teamarr can optionally route these JSON requests through Settings → Proxy using
 a SOCKS5 transport. The direct public API remains the default.

@@ -19,6 +19,8 @@ from teamarr.providers.bellmedia.client import BellMediaClient
 
 logger = logging.getLogger(__name__)
 
+_WIDGET_LOGO_URL = "https://widgets.sports.bellmedia.ca/img/{league}/{team}.webp"
+
 
 class BellMediaProvider(SportsProvider):
     """Bell Media implementation of SportsProvider."""
@@ -125,6 +127,7 @@ class BellMediaProvider(SportsProvider):
             abbreviation=competitor.get("shortName") or name[:3].upper(),
             league=league,
             sport=self._sport(league),
+            logo_url=self._logo_url(competitor, league),
             color=competitor.get("primaryColor") or None,
         )
 
@@ -190,8 +193,17 @@ class BellMediaProvider(SportsProvider):
             abbreviation=data.get("shortName") or name[:3].upper(),
             league=league,
             sport=self._sport(league),
+            logo_url=self._logo_url(data, league),
             color=data.get("primaryColor") or None,
         )
+
+    def _logo_url(self, competitor: dict, league: str) -> str | None:
+        """Build the TSN widget artwork URL for a Bell Media competitor."""
+        mapping = self._client.get_mapping(league)
+        seo_identifier = competitor.get("seoIdentifier")
+        if not mapping or not seo_identifier:
+            return None
+        return _WIDGET_LOGO_URL.format(league=mapping.provider_league_id, team=seo_identifier)
 
     @staticmethod
     def _parse_status(payload: dict) -> EventStatus:

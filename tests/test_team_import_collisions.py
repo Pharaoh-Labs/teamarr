@@ -87,6 +87,27 @@ class TestTBDFiltering:
         assert result.imported == 0
 
 
+def test_import_persists_provider_logo_url(conn):
+    result = bulk_import_teams(
+        conn,
+        [
+            ImportTeam(
+                "London Knights",
+                "LDN",
+                "bellmedia",
+                "14",
+                "baseball/college-baseball",
+                "hockey",
+                "https://widgets.sports.bellmedia.ca/img/ohl/london-knights.webp",
+            )
+        ],
+    )
+
+    assert result.imported == 1
+    row = conn.execute("SELECT team_logo_url FROM teams").fetchone()
+    assert row["team_logo_url"] == "https://widgets.sports.bellmedia.ca/img/ohl/london-knights.webp"
+
+
 class TestChannelIdCollision:
     def test_duplicate_team_names_different_ids(self, conn):
         """Two ESPN entries with same name but different IDs should both import."""

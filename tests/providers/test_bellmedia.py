@@ -14,6 +14,7 @@ COMPETITORS = [
         "name": "BC Lions",
         "club": "Lions",
         "shortName": "BC",
+        "seoIdentifier": "bc-lions",
         "primaryColor": "F15623",
     },
     {
@@ -72,10 +73,15 @@ class _Client:
         self.events = list(events)
 
     def supports_league(self, league):
-        return league == "cfl"
+        return league in {"cfl", "ohl", "pwhl"}
 
     def get_mapping(self, league):
-        return SimpleNamespace(sport="football") if league == "cfl" else None
+        mappings = {
+            "cfl": SimpleNamespace(sport="football", provider_league_id="cfl"),
+            "ohl": SimpleNamespace(sport="hockey", provider_league_id="ohl"),
+            "pwhl": SimpleNamespace(sport="hockey", provider_league_id="pwhl"),
+        }
+        return mappings.get(league)
 
     def get_competitors(self, league):
         return COMPETITORS if league == "cfl" else []
@@ -101,6 +107,62 @@ def test_team_parsing_and_league_discovery():
     assert team.abbreviation == "BC"
     assert team.color == "F15623"
     assert provider.get_supported_leagues() == ["cfl"]
+
+
+def test_hockey_team_parsing_uses_tsn_widget_logo_url():
+    provider = _provider()
+
+    team = provider._parse_team(
+        {
+            "competitorId": 14,
+            "name": "London Knights",
+            "club": "Knights",
+            "shortName": "LDN",
+            "seoIdentifier": "london-knights",
+        },
+        "ohl",
+    )
+
+    assert team is not None
+    assert team.logo_url == "https://widgets.sports.bellmedia.ca/img/ohl/london-knights.webp"
+
+
+def test_event_only_hockey_team_uses_tsn_widget_logo_url():
+    provider = _provider()
+
+    team = provider._parse_event_team(
+        {
+            "competitorId": 6,
+            "location": "Toronto",
+            "name": "Sceptres",
+            "shortName": "TOR",
+            "seoIdentifier": "toronto-sceptres",
+        },
+        {},
+        "pwhl",
+    )
+
+    assert team is not None
+    assert team.logo_url == "https://widgets.sports.bellmedia.ca/img/pwhl/toronto-sceptres.webp"
+
+
+def test_cfl_team_parsing_uses_tsn_widget_logo_url():
+    provider = _provider()
+
+    assert (
+        provider._parse_team(COMPETITORS[0], "cfl").logo_url
+        == "https://widgets.sports.bellmedia.ca/img/cfl/bc-lions.webp"
+    )
+
+
+def test_missing_seo_identifier_has_no_widget_logo():
+    provider = _provider()
+
+    competitor = {key: value for key, value in COMPETITORS[0].items() if key != "seoIdentifier"}
+    team = provider._parse_team(competitor, "ohl")
+
+    assert team is not None
+    assert team.logo_url is None
 
 
 def test_event_parsing_uses_top_as_away_and_bottom_as_home():
