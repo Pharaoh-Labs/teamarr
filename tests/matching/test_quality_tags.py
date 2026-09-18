@@ -86,6 +86,7 @@ class TestNflSchedulePrefixes:
             ("NFL | 02 - TNF 8:35pm 49ers at Rams", "49ers", "Rams"),
             ("NFL | 15 - SNF 8:20pm Cowboys at Giants", "Cowboys", "Giants"),
             ("US| NFL LIVE 02 - MNF 8:15pm Broncos at Chiefs", "Broncos", "Chiefs"),
+            ("NFL : 01 - TNF 8:15pm Lions at Bills", "Lions", "Bills"),
         ],
     )
     def test_schedule_metadata_does_not_pollute_the_first_team(self, stream, team1, team2):
