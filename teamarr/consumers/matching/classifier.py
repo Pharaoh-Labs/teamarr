@@ -1119,7 +1119,7 @@ def _clean_team_name(name: str) -> str:
     # Strip 1-2 digit channel numbers followed by whitespace only (no dash/colon)
     # "01 Bills" → "Bills", "03 49ers" → "49ers"
     # Safe because after separator split, a leading 1-2 digit number + space is a channel number
-    name = re.sub(r"^\d{1,2}\s+", "", name)
+    name = re.sub(r"^\d{1,2}\s+(?!-\s*)", "", name)
 
     # Strip numbered channel prefixes like "NFL Game Pass 03:", "ESPN+ 45:"
     name = re.sub(r"^[A-Za-z][A-Za-z\s+]*\d*:\s*", "", name)
@@ -1142,7 +1142,9 @@ def _clean_team_name(name: str) -> str:
 
     # Re-strip channel numbers in case league prefix revealed one
     # "NFL 03 Bills" → after league strip: "03 Bills" → "Bills"
-    name = re.sub(r"^\d{1,2}\s+", "", name)
+    # Keep a number followed by a dash for the NFL schedule-label cleanup below.
+    # A preceding league prefix can expose this shape only at this second pass.
+    name = re.sub(r"^\d{1,2}\s+(?!-\s*)", "", name)
 
     # NFL schedule feeds prepend a channel and broadcast-window label after the
     # league prefix, e.g. "NFL | 02 - TNF 8:35pm 49ers at Rams". Strip only
