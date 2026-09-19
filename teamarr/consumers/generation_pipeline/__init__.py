@@ -21,6 +21,7 @@ from teamarr.consumers.generation_pipeline.models import (
     ProgressUpdate,
     legacy_progress_reporter,
 )
+from teamarr.consumers.generation_pipeline.runner import GenerationStage, StageRunner
 
 __all__ = [
     "CallbackCancellationToken",
@@ -29,8 +30,10 @@ __all__ = [
     "GenerationContext",
     "GenerationResult",
     "GenerationSettingsSnapshot",
+    "GenerationStage",
     "ProgressCallback",
     "ProgressReporter",
     "ProgressUpdate",
+    "StageRunner",
     "legacy_progress_reporter",
 ]
