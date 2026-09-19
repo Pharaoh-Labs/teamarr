@@ -215,3 +215,40 @@ class TestVerdictsUnchanged:
         out = self._run(matcher, "Tampa Bay Rays vs Detroit Tigers")
         assert out.category is ResultCategory.MATCHED
         assert out.event.id == "e1"
+
+
+class TestSimultaneousReversedFixtures:
+    """Venue notation resolves split-squad fixtures only after a full tie."""
+
+    @pytest.fixture
+    def matcher(self):
+        return make_team_matcher()
+
+    @staticmethod
+    def _candidates():
+        leafs = _team("Toronto Maple Leafs", "Maple Leafs", "TOR", "nhl", "hockey")
+        canadiens = _team("Montreal Canadiens", "Canadiens", "MTL", "nhl", "hockey")
+        return (
+            ("nhl", _event(leafs, canadiens, "tor-home")),
+            ("nhl", _event(canadiens, leafs, "mtl-home")),
+        )
+
+    def test_at_prefers_the_away_home_candidate(self, matcher, monkeypatch):
+        monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+
+        out = matcher._match_against_candidates(
+            _ctx("Toronto Maple Leafs at Montreal Canadiens"), self._candidates()
+        )
+
+        assert out.category is ResultCategory.MATCHED
+        assert out.event.id == "mtl-home"
+
+    def test_vs_keeps_existing_order_insensitive_tie_behavior(self, matcher, monkeypatch):
+        monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+
+        out = matcher._match_against_candidates(
+            _ctx("Toronto Maple Leafs vs Montreal Canadiens"), self._candidates()
+        )
+
+        assert out.category is ResultCategory.MATCHED
+        assert out.event.id == "tor-home"

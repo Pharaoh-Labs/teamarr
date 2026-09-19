@@ -1410,6 +1410,7 @@ class TeamMatcher:
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
         best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
+        best_away_home_orientation = False
         date_rejected = 0  # Candidates gated by a trusted stream date (#474)
         fixture_rejected = 0  # Candidates in a league these teams never meet in
         # Candidates skipped before scoring (window / EPG anchor / sport hint),
@@ -1566,6 +1567,7 @@ class TeamMatcher:
 
             if match_result:
                 method, score = match_result
+                away_home_orientation = self._has_away_home_orientation(ctx, event)
 
                 # Calculate date metrics for comparison
                 days_from_target = (event_date - ctx.target_date).days
@@ -1597,7 +1599,10 @@ class TeamMatcher:
                         # strongest equal-score disambiguator (#474)
                         is_better = stream_date_dist < best_stream_date_dist
                     elif ctx.anchor_dt is not None:
-                        is_better = anchor_dist < best_anchor_dist
+                        if anchor_dist != best_anchor_dist:
+                            is_better = anchor_dist < best_anchor_dist
+                        else:
+                            is_better = away_home_orientation and not best_away_home_orientation
                     elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
                         is_better = True
@@ -1608,6 +1613,8 @@ class TeamMatcher:
                         elif is_future == best_is_future and abs_distance < best_date_distance:
                             # Same future/past status, prefer closer
                             is_better = True
+                        elif is_future == best_is_future and abs_distance == best_date_distance:
+                            is_better = away_home_orientation and not best_away_home_orientation
 
                 if is_better:
                     best_match = event
@@ -1619,6 +1626,7 @@ class TeamMatcher:
                     best_anchor_dist = anchor_dist
                     best_time_distance = time_distance
                     best_stream_date_dist = stream_date_dist
+                    best_away_home_orientation = away_home_orientation
 
         if best_match and best_league:
             logger.debug(
@@ -1893,6 +1901,29 @@ class TeamMatcher:
 
         # Try fuzzy matching with team names
         return self._score_teams_against_event(team1, team2, event, code_tokens)
+
+    def _has_away_home_orientation(self, ctx: MatchContext, event: Event) -> bool:
+        """Whether an ``@``/``at`` stream explicitly names this event's sides.
+
+        This is deliberately a ranking signal rather than a match requirement:
+        providers commonly omit or reverse sides, but two simultaneous fixtures
+        with the same teams need the venue notation to break an otherwise exact tie.
+        """
+        separator = (ctx.classified.separator_found or "").strip().lower()
+        if separator not in {"@", "at"} or not ctx.team1 or not ctx.team2:
+            return False
+
+        def _side_matches(team_name: str, event_team) -> bool:
+            canonical = self._resolve_alias(team_name, event.league)
+            candidate = canonical or team_name
+            return (
+                _abbrev_equals(candidate, event_team.abbreviation)
+                or _best_name_score(candidate, event_team) >= BOTH_TEAMS_THRESHOLD
+            )
+
+        return _side_matches(ctx.team1, event.away_team) and _side_matches(
+            ctx.team2, event.home_team
+        )
 
     @staticmethod
     def _strip_parentheticals(name: str) -> str:
