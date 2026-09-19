@@ -72,6 +72,7 @@ class GenerationResult:
     jellyfin_refresh: dict = field(default_factory=dict)
     channelsdvr_refresh: dict = field(default_factory=dict)
     channelsdvr_epg_refresh: dict = field(default_factory=dict)
+    plex_refresh: dict = field(default_factory=dict)
     # One entry per media server refreshed this run (#649): persisted on the
     # run row so a server that fails every run is visible after the fact.
     media_server_outcomes: list[dict] = field(default_factory=list)

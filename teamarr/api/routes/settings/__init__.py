@@ -36,6 +36,7 @@ from .models import (
     FeedSeparationSettingsModel,
     JellyfinSettingsModel,
     LifecycleSettingsModel,
+    PlexSettingsModel,
     ProxySettingsModel,
     ReconciliationSettingsModel,
     SchedulerSettingsModel,
@@ -44,6 +45,7 @@ from .models import (
     TeamFilterSettingsModel,
     UpdateCheckSettingsModel,
 )
+from .plex import router as plex_router
 from .proxy import router as proxy_router
 from .stream_ordering import router as stream_ordering_router
 from .team_filter import router as team_filter_router
@@ -58,6 +60,7 @@ router.include_router(dispatcharr_router)
 router.include_router(emby_router)
 router.include_router(jellyfin_router)
 router.include_router(channelsdvr_router)
+router.include_router(plex_router)
 router.include_router(lifecycle_router)
 router.include_router(managed_team_channels_router)
 router.include_router(epg_router)
@@ -106,6 +109,7 @@ __all__ = [
     "FeedSeparationSettingsModel",
     "JellyfinSettingsModel",
     "LifecycleSettingsModel",
+    "PlexSettingsModel",
     "ReconciliationSettingsModel",
     "SchedulerSettingsModel",
     "StreamOrderingRuleModel",

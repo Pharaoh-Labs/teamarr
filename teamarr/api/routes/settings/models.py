@@ -42,7 +42,7 @@ def merge_masked_servers(incoming: list[dict], stored: list[Any]) -> list[dict]:
     for i, entry in enumerate(incoming):
         e = dict(entry)
         match = by_url.get(e.get("url")) or (stored[i] if i < len(stored) else None)
-        for secret in ("password", "api_key"):
+        for secret in ("password", "api_key", "token"):
             if e.get(secret) == MASKED_SECRET:
                 e[secret] = getattr(match, secret, None) if match else None
         merged.append(e)
@@ -708,6 +708,101 @@ class ChannelsDVRLineupsResponse(BaseModel):
 
 
 # =============================================================================
+# PLEX SETTINGS
+# =============================================================================
+
+
+class PlexServerModel(BaseModel):
+    """One Plex Media Server target. The token is masked."""
+
+    name: str = ""
+    url: str | None = None
+    token: str | None = None
+    dvr_id: str | None = None
+    device_key: str | None = None
+    channel_profile_id: int | str | None = None
+
+    @field_serializer("token")
+    @classmethod
+    def _mask_token(cls, v: str | None) -> str | None:
+        return MASKED_SECRET if v else None
+
+
+class PlexServerUpdateModel(BaseModel):
+    """Update-path twin of PlexServerModel — NO masking serializer.
+
+    See MediaServerEntryUpdateModel for why: the response model's
+    field_serializer also runs during model_dump(), which would mask a
+    freshly-entered token before merge_masked_servers ever saw it.
+    """
+
+    name: str = ""
+    url: str | None = None
+    token: str | None = None
+    dvr_id: str | None = None
+    device_key: str | None = None
+    channel_profile_id: int | str | None = None
+
+
+class PlexSettingsModel(BaseModel):
+    """Plex integration settings."""
+
+    enabled: bool = False
+    servers: list[PlexServerModel] = []
+
+
+class PlexSettingsUpdate(BaseModel):
+    """Update model for Plex settings (all fields optional).
+
+    `servers` is full-replace: send the complete list.
+    """
+
+    enabled: bool | None = None
+    servers: list[PlexServerUpdateModel] | None = None
+
+
+class PlexConnectionTestRequest(BaseModel):
+    """Request to test Plex connection."""
+
+    url: str | None = Field(None, description="Override URL (uses saved if not provided)")
+    token: str | None = Field(None, description="Override token")
+
+
+class PlexConnectionTestResponse(BaseModel):
+    """Response from Plex connection test."""
+
+    success: bool
+    dvr_count: int | None = None
+    error: str | None = None
+
+
+class PlexDeviceModel(BaseModel):
+    """One HDHomeRun (emulated) device attached to a Plex DVR."""
+
+    key: str
+    device_id: str | None = None
+    uri: str | None = None
+    profile_hint: str | None = None
+    channel_count: int = 0
+
+
+class PlexDvrModel(BaseModel):
+    """One DVR configured in Plex Live TV, with its devices."""
+
+    key: str
+    lineup_title: str | None = None
+    devices: list[PlexDeviceModel] = []
+
+
+class PlexDvrsResponse(BaseModel):
+    """DVR/device discovery response, for the Settings device picker."""
+
+    success: bool
+    dvrs: list[PlexDvrModel] = []
+    error: str | None = None
+
+
+# =============================================================================
 # PROVIDER PROXY SETTINGS
 # =============================================================================
 
@@ -758,6 +853,7 @@ class AllSettingsModel(BaseModel):
     emby: EmbySettingsModel = EmbySettingsModel()
     jellyfin: JellyfinSettingsModel = JellyfinSettingsModel()
     channelsdvr: ChannelsDVRSettingsModel = ChannelsDVRSettingsModel()
+    plex: PlexSettingsModel = PlexSettingsModel()
     proxy: ProxySettingsModel = ProxySettingsModel()
     epg_generation_counter: int = 0
     schema_version: int = 44

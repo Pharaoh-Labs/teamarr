@@ -21,8 +21,13 @@ import {
   useTestChannelsDVRConnection,
   useChannelsDVRSources,
   useChannelsDVRLineups,
+  usePlexSettings,
+  useUpdatePlexSettings,
+  useTestPlexConnection,
+  usePlexDvrs,
 } from "@/hooks/useSettings"
-import type { ChannelsDVRServer, ChannelsDVRSettings, EmbySettings, JellyfinSettings, MediaServerEntry } from "@/api/settings"
+import type { ChannelsDVRServer, ChannelsDVRSettings, EmbySettings, JellyfinSettings, MediaServerEntry, PlexServer, PlexSettings } from "@/api/settings"
+import { useChannelProfiles } from "@/hooks/useDispatcharr"
 
 interface TestResult {
   success: boolean
@@ -584,6 +589,298 @@ function ChannelsDVRForm({ initial }: { initial: ChannelsDVRSettings }) {
   )
 }
 
+function PlexCard() {
+  const { data } = usePlexSettings()
+  if (!data) return null
+  return <PlexForm initial={data} />
+}
+
+const EMPTY_PLEX_SERVER: PlexServer = {
+  name: "",
+  url: null,
+  token: null,
+  dvr_id: null,
+  device_key: null,
+  channel_profile_id: null,
+}
+
+interface PlexServerRowProps {
+  index: number
+  server: PlexServer
+  onChange: (server: PlexServer) => void
+  onRemove: () => void
+  removable: boolean
+}
+
+function PlexServerRow({ index, server, onChange, onRemove, removable }: PlexServerRowProps) {
+  const testPlex = useTestPlexConnection()
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
+  const { data: dvrsData, isFetching: dvrsLoading } = usePlexDvrs(server.url, server.token)
+  const { data: channelProfiles = [] } = useChannelProfiles()
+
+  const idPrefix = `plex-${index}`
+  const noUrl = !server.url
+  const noToken = !server.token
+
+  const handleTest = async () => {
+    try {
+      setTestResult(null)
+      const result = await testPlex.mutateAsync({
+        url: server.url || undefined,
+        token: server.token || undefined,
+      })
+      if (result.success) {
+        setTestResult({
+          success: true,
+          message: `Connected to Plex (${result.dvr_count ?? 0} DVR${result.dvr_count === 1 ? "" : "s"})`,
+        })
+      } else {
+        setTestResult({
+          success: false,
+          message: result.error || "Connection failed",
+        })
+      }
+    } catch (err) {
+      setTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Connection test failed",
+      })
+    }
+  }
+
+  const devices = (dvrsData?.dvrs ?? []).flatMap((dvr) =>
+    dvr.devices.map((device) => ({ dvr, device }))
+  )
+  const selectedValue = server.dvr_id && server.device_key ? `${server.dvr_id}::${server.device_key}` : ""
+  const savedMissing =
+    selectedValue && devices.length > 0 &&
+    !devices.some((d) => `${d.dvr.key}::${d.device.key}` === selectedValue)
+
+  return (
+    <div className="rounded-lg border p-4 space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-1">
+          <Input
+            id={`${idPrefix}-name`}
+            className="max-w-56"
+            value={server.name ?? ""}
+            onChange={(e) => onChange({ ...server, name: e.target.value })}
+            placeholder={`Server ${index + 1} name (optional)`}
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={handleTest} variant="outline" size="sm" disabled={testPlex.isPending || noUrl || noToken}>
+            {testPlex.isPending ? (
+              <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <TestTube className="h-4 w-4 mr-1" />
+            )}
+            Test
+          </Button>
+          {removable && (
+            <Button onClick={onRemove} variant="outline" size="sm">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+      {testResult && (
+        testResult.success ? (
+          <Badge variant="success" className="gap-1">
+            <CircleCheckBig className="h-3 w-3" /> {testResult.message}
+          </Badge>
+        ) : (
+          <Badge variant="destructive" className="gap-1">
+            <CircleX className="h-3 w-3" /> {testResult.message}
+          </Badge>
+        )
+      )}
+
+      {/* URL */}
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-url`}>URL</Label>
+        <Input
+          id={`${idPrefix}-url`}
+          value={server.url ?? ""}
+          onChange={(e) => onChange({ ...server, url: e.target.value, dvr_id: null, device_key: null })}
+          placeholder="http://plex:32400"
+        />
+      </div>
+
+      {/* Token */}
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-token`}>Plex Token</Label>
+        <Input
+          id={`${idPrefix}-token`}
+          type="password"
+          value={server.token ?? ""}
+          onChange={(e) => onChange({ ...server, token: e.target.value })}
+          placeholder="Leave as-is to keep current"
+        />
+        <p className="text-xs text-muted-foreground">
+          Sent as <code className="px-1 rounded bg-muted">X-Plex-Token</code>. See{" "}
+          <a
+            href="https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/"
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            finding your token
+          </a>.
+        </p>
+      </div>
+
+      {/* DVR / Device (discovered list) */}
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-device`}>DVR / Device</Label>
+        {(() => {
+          const devicesError = dvrsData && !dvrsData.success ? dvrsData.error : null
+          return (
+            <>
+              <Select
+                id={`${idPrefix}-device`}
+                value={selectedValue}
+                onChange={(e) => {
+                  const [dvrId, deviceKey] = e.target.value.split("::")
+                  const picked = devices.find((d) => d.dvr.key === dvrId && d.device.key === deviceKey)
+                  const hint = picked?.device.profile_hint
+                  const matchedProfile = hint
+                    ? channelProfiles.find((p) => p.name.toLowerCase() === hint.toLowerCase())
+                    : undefined
+                  onChange({
+                    ...server,
+                    dvr_id: dvrId || null,
+                    device_key: deviceKey || null,
+                    channel_profile_id: matchedProfile ? matchedProfile.id : server.channel_profile_id,
+                  })
+                }}
+                disabled={noUrl || noToken || dvrsLoading}
+              >
+                <option value="">
+                  {noUrl || noToken
+                    ? "— Set URL and token first —"
+                    : dvrsLoading
+                    ? "Loading DVRs…"
+                    : devices.length === 0
+                    ? "— No DVRs discovered —"
+                    : "— Select a DVR/device —"}
+                </option>
+                {devices.map(({ dvr, device }) => (
+                  <option key={`${dvr.key}::${device.key}`} value={`${dvr.key}::${device.key}`}>
+                    {device.profile_hint || device.uri || device.key}
+                    {" "}({device.channel_count} enabled)
+                  </option>
+                ))}
+                {savedMissing && (
+                  <option value={selectedValue}>{selectedValue} (not found on server)</option>
+                )}
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Discovered from <code className="px-1 rounded bg-muted">GET /livetv/dvrs</code>. A device with no
+                profile suffix (e.g. plain <code className="px-1 rounded bg-muted">/hdhr</code>) pulls channels from
+                every Dispatcharr profile — pick it only if that's intentional.
+              </p>
+              {devicesError && (
+                <p className="text-xs text-destructive">Couldn't load DVRs: {devicesError}</p>
+              )}
+            </>
+          )
+        })()}
+      </div>
+
+      {/* Dispatcharr channel profile (scopes which channels get pushed to this device) */}
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-profile`}>Dispatcharr Channel Profile</Label>
+        <Select
+          id={`${idPrefix}-profile`}
+          value={server.channel_profile_id != null ? String(server.channel_profile_id) : ""}
+          onChange={(e) => {
+            const raw = e.target.value
+            const profile = channelProfiles.find((p) => String(p.id) === raw)
+            onChange({ ...server, channel_profile_id: profile ? profile.id : null })
+          }}
+        >
+          <option value="">— Unscoped (all Teamarr channels) —</option>
+          {channelProfiles.map((profile) => (
+            <option key={profile.id} value={String(profile.id)}>
+              {profile.name}
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          If this device's HDHomeRun URI is scoped to one Dispatcharr profile, pick the
+          matching profile so only that profile's channels are pushed to it — otherwise
+          leave unscoped.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function PlexForm({ initial }: { initial: PlexSettings }) {
+  const updatePlex = useUpdatePlexSettings()
+  const [enabled, setEnabled] = useState(initial.enabled)
+  const [servers, setServers] = useState<PlexServer[]>(
+    initial.servers.length > 0 ? initial.servers : [{ ...EMPTY_PLEX_SERVER }]
+  )
+
+  const handleSave = async () => {
+    try {
+      // Drop rows the user added but never filled in
+      await updatePlex.mutateAsync({
+        enabled,
+        servers: servers.filter((s) => s.url),
+      })
+      toast.success("Plex settings saved")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Plex</CardTitle>
+          <Button
+            onClick={() => setServers([...servers, { ...EMPTY_PLEX_SERVER }])}
+            variant="outline"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-1" /> Add Server
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Enable */}
+        <div className="flex items-center gap-2">
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+          <Label>Enable Plex Integration</Label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          After each generation, reloads the guide and syncs enabled channels for the matched
+          DVR/device. Channels already enabled on the same device that aren't Teamarr's are
+          preserved.
+        </p>
+
+        {servers.map((server, i) => (
+          <PlexServerRow
+            key={i}
+            index={i}
+            server={server}
+            onChange={(updated) => setServers(servers.map((s, j) => (j === i ? updated : s)))}
+            onRemove={() => setServers(servers.filter((_, j) => j !== i))}
+            removable={servers.length > 1}
+          />
+        ))}
+
+        {/* Save button */}
+        <SaveButton onClick={handleSave} pending={updatePlex.isPending} />
+      </CardContent>
+    </Card>
+  )
+}
+
 export function MediaServersTab() {
   return (
     <>
@@ -597,6 +894,7 @@ export function MediaServersTab() {
       <EmbyCard />
       <JellyfinCard />
       <ChannelsDVRCard />
+      <PlexCard />
     </>
   )
 }

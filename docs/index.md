@@ -49,7 +49,7 @@ EPG:     Kansas City Chiefs @ Philadelphia Eagles
 - **Flexible matching** — stream-name matching, team streams, and EPG program matching per source; aliases, fuzzy matching, and custom regex extractors for inconsistent IPTV naming
 - **Channel management** — automatic create/update/delete lifecycle, numbering strategies, consolidation, feed separation, and stream priority rules
 - **Dynamic groups & profiles** — use existing Dispatcharr groups/profiles or create them on the fly with `{sport}` / `{league}` wildcards
-- **Media server integration** — trigger guide refreshes on Emby, Jellyfin, and Channels DVR (multiple servers, in parallel) after each generation
+- **Media server integration** — trigger guide refreshes on Emby, Jellyfin, Channels DVR, and Plex (multiple servers, in parallel) after each generation
 - **Artwork** — per-template art URLs with [Game Thumbs](guide/epg/game-thumbs) integration for matchup thumbnails
 - **Scheduled automation** — cron-based generation, scheduled backups, and a [Homepage dashboard widget](guide/homepage-widget)
 
