@@ -152,6 +152,13 @@ def test_display_setting_and_league_override_persist(db_path):
         assert get_league_config(conn, "eng.1") is None
 
 
+def test_per_league_feed_separation_override_persists(db_path):
+    with get_connection(db_path) as conn:
+        config = upsert_league_config(conn, "nfl", feed_separation_enabled=False)
+        assert config.feed_separation_enabled is False
+        assert get_league_config(conn, "nfl").feed_separation_enabled is False
+
+
 def test_schema_rejects_unknown_modes(db_path):
     with get_connection(db_path) as conn:
         with pytest.raises(sqlite3.IntegrityError):

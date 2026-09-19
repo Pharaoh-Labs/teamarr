@@ -31,8 +31,12 @@ from teamarr.utilities.tz import get_user_timezone, to_utc
 logger = logging.getLogger(__name__)
 
 
-def _separation_applies(event: Any, separation_sports: list[str] | None) -> bool:
-    """Whether feed separation splits channels for this event's sport (#732).
+def _separation_applies(
+    event: Any,
+    separation_sports: list[str] | None,
+    disabled_leagues: set[str] | None = None,
+) -> bool:
+    """Whether feed separation splits channels for this event (#732, #862).
 
     An empty or missing list means every sport — separation was global before
     #732, so that is both the upgrade default and the "no opinion" answer.
@@ -42,6 +46,8 @@ def _separation_applies(event: Any, separation_sports: list[str] | None) -> bool
     has nothing to say, and the master toggle stands. Excluding here would
     silently un-split channels whenever a provider omitted the field.
     """
+    if getattr(event, "league", None) in (disabled_leagues or set()):
+        return False
     if not separation_sports:
         return True
     sport = getattr(event, "sport", None)
@@ -536,6 +542,7 @@ class StreamMatching:
         detect_team_names: bool,
         separation_enabled: bool,
         separation_sports: list[str] | None = None,
+        disabled_leagues: set[str] | None = None,
     ) -> list[dict]:
         """Resolve feed hints to actual teams (Phase 2 feed separation).
 
@@ -571,6 +578,8 @@ class StreamMatching:
                 None means every sport — the pre-#732 behavior, and what
                 existing installs upgrade to. Narrows the master toggle only;
                 it can never turn separation on where the toggle is off.
+            disabled_leagues: League codes whose per-league override disables
+                separation (#862).
         """
         for entry in matched_streams:
             event = entry.get("event")
@@ -610,7 +619,9 @@ class StreamMatching:
                             source = "team_name_detect"
                             break
 
-            splits = separation_enabled and _separation_applies(event, separation_sports)
+            splits = separation_enabled and _separation_applies(
+                event, separation_sports, disabled_leagues
+            )
 
             entry["stream_feed_team"] = feed_team
             entry["feed_team"] = feed_team if splits else None

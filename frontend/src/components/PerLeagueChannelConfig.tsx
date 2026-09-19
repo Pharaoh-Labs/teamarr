@@ -55,6 +55,7 @@ function LeagueConfigRow({
     channel_group_mode?: string | null
     matchup_order?: string | null
     included_divisions?: string[] | null
+    feed_separation_enabled?: boolean | null
   }) => Promise<void>
   onClear: () => Promise<void>
 }) {
@@ -62,6 +63,7 @@ function LeagueConfigRow({
   const [localGroupId, setLocalGroupId] = useState<number | null>(null)
   const [localGroupMode, setLocalGroupMode] = useState<string | null>(null)
   const [localMatchupOrder, setLocalMatchupOrder] = useState<string | null>(null)
+  const [localFeedSeparationEnabled, setLocalFeedSeparationEnabled] = useState<boolean | null>(null)
   // #811: the divisions still ingested. Held as the checked set (null config =
   // all of them), so the UI never has to special-case "no override".
   const [localDivisions, setLocalDivisions] = useState<string[]>([])
@@ -84,12 +86,14 @@ function LeagueConfigRow({
       setLocalGroupId(config.channel_group_id)
       setLocalGroupMode(config.channel_group_mode)
       setLocalMatchupOrder(config.matchup_order ?? null)
+      setLocalFeedSeparationEnabled(config.feed_separation_enabled)
       setLocalDivisions(config.included_divisions ?? divisions.map((d) => d.key))
     } else if (isExpanded && !config) {
       setLocalProfileIds([])
       setLocalGroupId(null)
       setLocalGroupMode(null)
       setLocalMatchupOrder(null)
+      setLocalFeedSeparationEnabled(null)
       setLocalDivisions(divisions.map((d) => d.key))
     }
   }
@@ -134,6 +138,7 @@ function LeagueConfigRow({
         channel_group_id: localGroupId,
         channel_group_mode: localGroupMode,
         matchup_order: localMatchupOrder,
+        feed_separation_enabled: localFeedSeparationEnabled,
         // All of them is stored as "no override" so the selection still means
         // everything if ESPN's slate gains a division later.
         included_divisions:
@@ -178,6 +183,13 @@ function LeagueConfigRow({
             {matchupOrderSummary}
           </span>
         </td>
+        <td className="px-3 py-1.5">
+          <span className={cn("text-xs", !hasOverride && "text-muted-foreground")}>
+            {config?.feed_separation_enabled === null || config?.feed_separation_enabled === undefined
+              ? "Default"
+              : config.feed_separation_enabled ? "Enabled" : "Disabled"}
+          </span>
+        </td>
         <td className="px-3 py-1.5 text-right">
           {hasOverride && (
             <Button
@@ -197,7 +209,7 @@ function LeagueConfigRow({
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={8} className="px-4 py-3 bg-muted/20 border-t-0">
+          <td colSpan={9} className="px-4 py-3 bg-muted/20 border-t-0">
             <div className="space-y-4 max-w-2xl">
               {/* Channel Profiles */}
               <div>
@@ -326,6 +338,32 @@ function LeagueConfigRow({
                   )}
                 </div>
               )}
+
+              {/* Feed separation (#862) */}
+              <div>
+                <Label className="text-sm font-medium">Feed Separation</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Choose whether HOME/AWAY feeds create separate channels for this league.
+                  Default inherits the global setting, which remains the master toggle.
+                </p>
+                <Select
+                  value={
+                    localFeedSeparationEnabled === null
+                      ? ""
+                      : localFeedSeparationEnabled ? "enabled" : "disabled"
+                  }
+                  onChange={(e) =>
+                    setLocalFeedSeparationEnabled(
+                      e.target.value === "" ? null : e.target.value === "enabled"
+                    )
+                  }
+                  className="w-64"
+                >
+                  <option value="">Default (inherit)</option>
+                  <option value="enabled">Enabled</option>
+                  <option value="disabled">Disabled</option>
+                </Select>
+              </div>
 
               {/* Matchup Order (#692) */}
               <div>
@@ -486,6 +524,7 @@ export function PerLeagueChannelConfig() {
                 <th className="px-3 py-2 text-left font-medium">Channel Group</th>
                 <th className="px-3 py-2 text-left font-medium">Group Mode</th>
                 <th className="px-3 py-2 text-left font-medium">Matchup Order</th>
+                <th className="px-3 py-2 text-left font-medium">Feed Separation</th>
                 <th className="px-3 py-2 text-right font-medium w-16"></th>
               </tr>
             </thead>
@@ -537,7 +576,7 @@ export function PerLeagueChannelConfig() {
                 })}
               {filteredLeagues.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-3 py-4 text-center text-muted-foreground">
                     {leagueSearch ? "No leagues match your search" : "No subscribed leagues"}
                   </td>
                 </tr>
