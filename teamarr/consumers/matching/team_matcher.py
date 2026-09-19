@@ -1915,7 +1915,7 @@ class TeamMatcher:
 
         def _side_matches(team_name: str, event_team) -> bool:
             canonical = self._resolve_alias(team_name, event.league)
-            candidate = canonical or team_name
+            candidate = normalize_for_matching(canonical or team_name)
             return (
                 _abbrev_equals(candidate, event_team.abbreviation)
                 or _best_name_score(candidate, event_team) >= BOTH_TEAMS_THRESHOLD

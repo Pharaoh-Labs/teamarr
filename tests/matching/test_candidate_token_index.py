@@ -243,6 +243,17 @@ class TestSimultaneousReversedFixtures:
         assert out.category is ResultCategory.MATCHED
         assert out.event.id == "mtl-home"
 
+    def test_at_normalizes_short_title_cased_sides(self, matcher, monkeypatch):
+        """Live NHL streams omit cities but retain title case after parsing."""
+        monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+
+        out = matcher._match_against_candidates(
+            _ctx("NHL | 03 - 7pm Maple Leafs at Canadiens"), self._candidates()
+        )
+
+        assert out.category is ResultCategory.MATCHED
+        assert out.event.id == "mtl-home"
+
     def test_vs_keeps_existing_order_insensitive_tie_behavior(self, matcher, monkeypatch):
         monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
 
