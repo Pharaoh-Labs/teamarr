@@ -293,10 +293,26 @@ def _run_startup_tasks():
                     )
 
                 scheduler_service = create_scheduler_service(get_db, connection)
-                cron_expr = epg_settings.cron_expression or "0 * * * *"
-                started = scheduler_service.start(cron_expression=cron_expr)
+                mode = epg_settings.scheduler_mode
+                lead_minutes = epg_settings.pre_match_lead_minutes
+                discovery_hours = epg_settings.epg_discovery_interval_hours
+                cron_expr = epg_settings.cron_expression
+                started = scheduler_service.start(
+                    mode=mode,
+                    pre_match_lead_minutes=lead_minutes,
+                    discovery_interval_hours=discovery_hours,
+                    cron_expression=cron_expr,
+                )
                 if started:
-                    logger.info("[STARTUP] Background scheduler started (cron: %s)", cron_expr)
+                    if mode == "cron":
+                        logger.info("[STARTUP] Background scheduler started (cron: %s)", cron_expr)
+                    else:
+                        logger.info(
+                            "[STARTUP] Background scheduler started "
+                            "(pre-match lead: %dm, discovery: every %dh)",
+                            lead_minutes,
+                            discovery_hours,
+                        )
                 # Store scheduler service reference for shutdown
                 _app_state["scheduler_service"] = scheduler_service
             except Exception as e:

@@ -91,7 +91,6 @@ class TestCronSchedulerSubTasks:
         db_factory = MagicMock()
         return CronScheduler(
             db_factory=db_factory,
-            cron_expression="0 0 1 1 *",  # Never fires
             run_on_start=False,
         )
 
@@ -164,7 +163,6 @@ class TestTaskBackupSimplified:
         """_task_backup returns skip when backups disabled."""
         sched = CronScheduler(
             db_factory=MagicMock(),
-            cron_expression="0 0 1 1 *",
             run_on_start=False,
         )
 
@@ -186,7 +184,6 @@ class TestTaskBackupSimplified:
         """_task_backup runs immediately when enabled (no 1-hour window)."""
         sched = CronScheduler(
             db_factory=MagicMock(),
-            cron_expression="0 0 1 1 *",
             run_on_start=False,
         )
 

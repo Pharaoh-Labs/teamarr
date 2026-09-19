@@ -64,7 +64,10 @@ export interface EPGSettings {
   epg_output_path: string
   include_final_events: boolean
   midnight_crossover_mode: string
+  scheduler_mode: "pre_match" | "cron"
   cron_expression: string
+  pre_match_lead_minutes: number
+  epg_discovery_interval_hours: number
   epg_xtream_fallback_enabled: boolean
   epg_xtream_cache_hours: number
   epg_channel_source_enabled: boolean
@@ -398,12 +401,16 @@ export interface ConnectionTestResponse {
 
 export interface SchedulerStatus {
   running: boolean
+  mode: "pre_match" | "cron" | null
   cron_expression: string | null
+  pre_match_lead_minutes: number | null
+  discovery_interval_hours: number | null
   last_run: string | null
   next_run: string | null
+  next_run_reason: "pre_match" | "discovery" | "cron" | null
+  next_match_start: string | null
+  next_match_sport: string | null
 }
-
-// Note: cron_description is handled on frontend via cronstrue library
 
 export interface DispatcharrStatus {
   configured: boolean
@@ -477,6 +484,29 @@ export async function updateSchedulerSettings(
 
 export async function getSchedulerStatus(): Promise<SchedulerStatus> {
   return api.get("/scheduler/status")
+}
+
+export interface SportLeadTimeOverride {
+  sport: string
+  pre_match_lead_minutes: number
+  display_name?: string | null
+}
+
+export async function getSportLeadTimes(): Promise<SportLeadTimeOverride[]> {
+  return api.get("/settings/scheduler/sport-lead-times")
+}
+
+export async function setSportLeadTime(
+  sport: string,
+  preMatchLeadMinutes: number
+): Promise<SportLeadTimeOverride[]> {
+  return api.put(`/settings/scheduler/sport-lead-times/${sport}`, {
+    pre_match_lead_minutes: preMatchLeadMinutes,
+  })
+}
+
+export async function deleteSportLeadTime(sport: string): Promise<SportLeadTimeOverride[]> {
+  return api.delete(`/settings/scheduler/sport-lead-times/${sport}`)
 }
 
 export async function getEPGSettings(): Promise<EPGSettings> {

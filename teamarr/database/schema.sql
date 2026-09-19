@@ -347,7 +347,20 @@ CREATE TABLE IF NOT EXISTS settings (
     default_bypass_filter_for_playoffs BOOLEAN DEFAULT 0, -- Include all playoff and All-Star games regardless of team filter
 
     -- Scheduled Generation
-    cron_expression TEXT DEFAULT '0 * * * *',    -- Cron for auto EPG generation
+    -- How the scheduler decides when to run: 'pre_match' (event-driven,
+    -- default) or 'cron' (classic fixed schedule).
+    scheduler_mode TEXT DEFAULT 'pre_match',
+    -- Used when scheduler_mode = 'cron'.
+    cron_expression TEXT DEFAULT '0 * * * *',
+    -- Minutes before each known match's start time to trigger a fresh EPG
+    -- generation (keeps lineups/venue/broadcast info current right before
+    -- kickoff). Used when scheduler_mode = 'pre_match'.
+    pre_match_lead_minutes INTEGER DEFAULT 30,
+    -- Fallback cadence (hours) that runs generation even with no known
+    -- upcoming matches, so newly added teams/leagues and far-future
+    -- matches get discovered and scheduled. Used when scheduler_mode =
+    -- 'pre_match'.
+    epg_discovery_interval_hours INTEGER DEFAULT 4,
 
     -- Cache Refresh Frequencies
     soccer_cache_refresh_frequency TEXT DEFAULT 'weekly',
@@ -950,6 +963,26 @@ INSERT OR REPLACE INTO sports (sport_code, display_name) VALUES
     ('wrestling', 'Wrestling'),
     ('racing', 'Racing'),
     ('australian-football', 'Australian Football');
+
+
+-- =============================================================================
+-- SPORT SCHEDULE OVERRIDES
+-- Per-sport pre-match lead time overrides for the EPG scheduler. A sport with
+-- no row here uses epg_settings.pre_match_lead_minutes (the global default).
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS sport_schedule_overrides (
+    sport TEXT PRIMARY KEY,                  -- Sport code (e.g. 'football', 'mma')
+    pre_match_lead_minutes INTEGER NOT NULL, -- Overrides the global default for this sport
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TRIGGER IF NOT EXISTS update_sport_schedule_overrides_timestamp
+AFTER UPDATE ON sport_schedule_overrides
+BEGIN
+    UPDATE sport_schedule_overrides SET updated_at = CURRENT_TIMESTAMP WHERE sport = NEW.sport;
+END;
 
 
 -- =============================================================================
