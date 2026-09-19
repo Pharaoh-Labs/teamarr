@@ -814,7 +814,9 @@ CREATE TABLE IF NOT EXISTS subscription_league_config (
     -- NCAA divisions this league still ingests (#811): NULL = every division
     -- ESPN files under the league, otherwise a JSON list of division keys
     -- (see COLLEGE_SCOREBOARD_DIVISIONS). A dropped division is never fetched.
-    included_divisions JSON DEFAULT NULL
+    included_divisions JSON DEFAULT NULL,
+    -- Feed separation override (#862): NULL = use global setting
+    feed_separation_enabled BOOLEAN DEFAULT NULL
 );
 
 

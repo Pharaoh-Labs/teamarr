@@ -710,11 +710,19 @@ class EventGroupProcessor(
             # identification persists per-stream for team_feed ordering rules;
             # feed_separation.enabled gates only channel splitting.
             feed_settings = get_feed_separation_settings(conn)
+            from teamarr.database.subscription import get_league_configs
+
+            feed_separation_disabled_leagues = {
+                config.league_code
+                for config in get_league_configs(conn)
+                if config.feed_separation_enabled is False
+            }
             matched_streams = self._resolve_feed_teams(
                 matched_streams,
                 feed_settings.detect_team_names,
                 feed_settings.enabled,
                 feed_settings.sports,
+                feed_separation_disabled_leagues,
             )
 
             # Sort channels: sport → league → time → event_id (fixed order since v59)
@@ -771,7 +779,11 @@ class EventGroupProcessor(
                     eid
                     for m in matched_streams
                     if (eid := _effective_event_id(m))
-                    and _separation_applies(m.get("event"), feed_settings.sports)
+                    and _separation_applies(
+                        m.get("event"),
+                        feed_settings.sports,
+                        feed_separation_disabled_leagues,
+                    )
                 }
                 if feed_settings.enabled
                 else set()

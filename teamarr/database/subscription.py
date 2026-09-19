@@ -46,6 +46,8 @@ class SubscriptionLeagueConfig:
     # #811: NCAA divisions this league ingests. None = every division ESPN
     # files under it (the default); otherwise the kept division keys.
     included_divisions: list[str] | None = None
+    # #862: None inherits the global feed separation setting.
+    feed_separation_enabled: bool | None = None
 
 
 @dataclass
@@ -499,19 +501,21 @@ def upsert_league_config(
     channel_group_mode: str | None = None,
     matchup_order: str | None = None,
     included_divisions: list[str] | None = None,
+    feed_separation_enabled: bool | None = None,
 ) -> SubscriptionLeagueConfig:
     """Create or update per-league config. Returns the saved config."""
     conn.execute(
         """INSERT INTO subscription_league_config
            (league_code, channel_profile_ids, channel_group_id,
-            channel_group_mode, matchup_order, included_divisions)
-           VALUES (?, ?, ?, ?, ?, ?)
+             channel_group_mode, matchup_order, included_divisions, feed_separation_enabled)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(league_code) DO UPDATE SET
                channel_profile_ids = excluded.channel_profile_ids,
                channel_group_id = excluded.channel_group_id,
                channel_group_mode = excluded.channel_group_mode,
                matchup_order = excluded.matchup_order,
-               included_divisions = excluded.included_divisions
+                included_divisions = excluded.included_divisions,
+                feed_separation_enabled = excluded.feed_separation_enabled
         """,
         (
             league_code,
@@ -522,6 +526,7 @@ def upsert_league_config(
             channel_group_mode,
             matchup_order,
             json.dumps(included_divisions) if included_divisions is not None else None,
+            feed_separation_enabled,
         ),
     )
     logger.info("[LEAGUE_CONFIG] Upserted config for %s", league_code)
@@ -564,4 +569,10 @@ def _build_league_config(row) -> SubscriptionLeagueConfig:
         channel_group_mode=row["channel_group_mode"],
         matchup_order=row["matchup_order"] if "matchup_order" in row.keys() else None,
         included_divisions=divisions,
+        feed_separation_enabled=(
+            bool(row["feed_separation_enabled"])
+            if "feed_separation_enabled" in row.keys()
+            and row["feed_separation_enabled"] is not None
+            else None
+        ),
     )

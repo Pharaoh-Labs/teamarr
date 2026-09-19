@@ -2761,6 +2761,13 @@ def _migrate_v92_retire_tsdb_tier(conn: sqlite3.Connection) -> None:
     logger.info("[MIGRATE] v92: cleared tsdb_tier on %d league row(s)", cleared)
 
 
+def _migrate_v97_league_feed_separation(conn: sqlite3.Connection) -> None:
+    """Add the nullable per-league feed separation override (#862)."""
+    _add_column_if_not_exists(
+        conn, "subscription_league_config", "feed_separation_enabled", "BOOLEAN DEFAULT NULL"
+    )
+
+
 def _migrate_v95_team_channel_defaults(conn: sqlite3.Connection) -> None:
     """Seed the managed-channel name/logo defaults on existing team templates.
 

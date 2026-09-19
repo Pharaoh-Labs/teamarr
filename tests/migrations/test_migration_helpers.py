@@ -277,6 +277,7 @@ class TestV62DefaultChannelGroup:
             "INSERT INTO subscription_league_config (league_code, channel_group_mode) "
             "VALUES ('eng.1', '{sport} | {league}')"
         )
+
         row = db.execute(
             "SELECT channel_group_mode FROM subscription_league_config WHERE league_code='eng.1'"
         ).fetchone()
@@ -307,6 +308,24 @@ class TestV62DefaultChannelGroup:
 
         cols = {row[1] for row in db.execute("PRAGMA table_info(settings)")}
         assert "default_channel_group_id" in cols
+
+
+# =============================================================================
+# v97: per-league feed separation override
+# =============================================================================
+
+
+class TestV97LeagueFeedSeparation:
+    def test_adds_nullable_feed_separation_override(self, db):
+        from teamarr.database.migrations import (
+            _migrate_v61_subscription_league_config,
+            _migrate_v97_league_feed_separation,
+        )
+
+        _migrate_v61_subscription_league_config(db)
+        _migrate_v97_league_feed_separation(db)
+        columns = {row[1] for row in db.execute("PRAGMA table_info(subscription_league_config)")}
+        assert "feed_separation_enabled" in columns
 
 
 # =============================================================================

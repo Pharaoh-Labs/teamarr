@@ -95,6 +95,7 @@ class LeagueConfigResponse(BaseModel):
     channel_group_mode: str | None = None
     matchup_order: str | None = None  # #692: None = global setting
     included_divisions: list[str] | None = None  # #811: None = every division
+    feed_separation_enabled: bool | None = None  # #862: None = global setting
 
 
 class LeagueConfigUpdate(BaseModel):
@@ -105,6 +106,7 @@ class LeagueConfigUpdate(BaseModel):
     channel_group_mode: str | None = None
     matchup_order: str | None = None  # #692: 'auto' | 'away_first' | 'home_first'
     included_divisions: list[str] | None = None  # #811: None = every division
+    feed_separation_enabled: bool | None = None  # #862: None = global setting
 
 
 class LeagueDivision(BaseModel):
@@ -376,6 +378,7 @@ def list_league_configs():
                 channel_group_mode=c.channel_group_mode,
                 matchup_order=c.matchup_order,
                 included_divisions=c.included_divisions,
+                feed_separation_enabled=c.feed_separation_enabled,
             )
             for c in configs
         ],
@@ -405,6 +408,7 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
             channel_group_mode=request.channel_group_mode,
             matchup_order=request.matchup_order,
             included_divisions=included_divisions,
+            feed_separation_enabled=request.feed_separation_enabled,
         )
     set_league_matchup_order(league_code, config.matchup_order)  # render-time cache (#692)
 
@@ -415,6 +419,7 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
         channel_group_mode=config.channel_group_mode,
         matchup_order=config.matchup_order,
         included_divisions=config.included_divisions,
+        feed_separation_enabled=config.feed_separation_enabled,
     )
 
 

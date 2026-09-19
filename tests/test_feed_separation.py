@@ -1413,6 +1413,13 @@ class TestPerSportScope:
 
         assert _separation_applies(self._event("racing"), ["baseball"]) is False
 
+    def test_disabled_league_does_not_apply(self):
+        from teamarr.consumers.event_group_processor.matching import _separation_applies
+
+        event = self._event("baseball")
+        event.league = "mlb"
+        assert _separation_applies(event, [], {"mlb"}) is False
+
     def test_event_without_a_sport_is_never_excluded(self):
         # The list can only speak about sports; not knowing the sport means it
         # has nothing to say, so the master toggle stands. Excluding here would

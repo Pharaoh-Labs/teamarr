@@ -660,6 +660,7 @@ export interface SubscriptionLeagueConfig {
   channel_group_mode: string | null
   matchup_order: string | null // "auto" | "away_first" | "home_first"; null = global setting
   included_divisions: string[] | null // #811: null = every division ESPN files under the league
+  feed_separation_enabled: boolean | null // #862: null = global setting
 }
 
 export interface LeagueDivision {
@@ -689,6 +690,7 @@ export async function upsertLeagueConfig(
     channel_group_mode?: string | null
     matchup_order?: string | null
     included_divisions?: string[] | null
+    feed_separation_enabled?: boolean | null
   }
 ): Promise<SubscriptionLeagueConfig> {
   return api.put(`/league-configs/${encodeURIComponent(leagueCode)}`, data)
