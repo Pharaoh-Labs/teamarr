@@ -43,9 +43,10 @@ identity decision.
 """
 
 import logging
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import httpx
 
@@ -122,6 +123,39 @@ def _channel_sort_key(channel_key: str) -> tuple[int, object]:
         return (0, int(float(channel_key)))
     except (TypeError, ValueError):
         return (1, channel_key)
+
+
+_LINEUP_PREFIX = "lineup://tv.plex.providers.epg.xmltv/"
+
+
+def guide_path_from_lineup(lineup: str | None) -> str | None:
+    """Path + query of the XMLTV guide URL embedded in a DVR ``lineup`` string.
+
+    Plex stores it as ``lineup://tv.plex.providers.epg.xmltv/<urlencoded url>#<title>``.
+    Only the path/query is returned: the host is Plex's view of Dispatcharr, which
+    need not be reachable under the same name from Teamarr.
+    """
+    if not lineup or not lineup.startswith(_LINEUP_PREFIX):
+        return None
+    url = unquote(lineup[len(_LINEUP_PREFIX) :].split("#", 1)[0])
+    parts = urlsplit(url)
+    if not parts.path:
+        return None
+    return f"{parts.path}?{parts.query}" if parts.query else parts.path
+
+
+def is_complete_xmltv(content: bytes) -> bool:
+    """True when ``content`` is a whole, well-formed XMLTV document.
+
+    Plex was observed (2026-09-20) crashing outright when it fetched the guide
+    while Dispatcharr was still rewriting it — libxml reported "Extra content at
+    the end of the document" on a file cut off mid-<programme>, then the server
+    died with SIGFPE.
+    """
+    try:
+        return ET.fromstring(content).tag == "tv"
+    except ET.ParseError:
+        return False
 
 
 def compute_channelmap_update(

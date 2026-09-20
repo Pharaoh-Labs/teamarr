@@ -29,7 +29,12 @@ from teamarr.dispatcharr.factory import DispatcharrConnection
 from teamarr.dispatcharr.managers import ChannelManager
 from teamarr.emby.client import EmbyClient
 from teamarr.jellyfin.client import JellyfinClient
-from teamarr.plex.client import PlexClient, compute_channelmap_update
+from teamarr.plex.client import (
+    PlexClient,
+    compute_channelmap_update,
+    guide_path_from_lineup,
+    is_complete_xmltv,
+)
 from teamarr.services import TeamChannelManager, create_default_service
 from teamarr.services.sports_data import flush_shared_cache
 from teamarr.utilities import call_metrics
@@ -1021,6 +1026,62 @@ def _refresh_channelsdvr_server(
     return m3u_result, epg_result
 
 
+_PLEX_GUIDE_READY_TIMEOUT_SECONDS = 90
+_PLEX_GUIDE_READY_POLL_SECONDS = 3
+
+
+def _wait_for_dispatcharr_guide(
+    lineup: str | None,
+    db_factory: Callable[[], Any],
+    label: str,
+    is_cancellation_requested: Callable[[], bool],
+) -> dict | None:
+    """Hold until the XMLTV guide Plex is about to fetch is complete.
+
+    The channelmap PUT makes Plex fetch the DVR's guide from Dispatcharr right
+    away. If Dispatcharr is still rewriting it (channel/EPG updates just ran),
+    Plex reads a truncated document and can crash outright (2026-09-20: libxml
+    "Extra content at the end of the document", then SIGFPE). Returns None when
+    the guide parses whole; otherwise a failure dict, so the PUT is skipped and
+    the next generation run retries — Plex is never pointed at a bad guide.
+
+    When the guide URL can't be derived or Dispatcharr isn't configured there
+    is nothing to check, so the PUT proceeds as before.
+    """
+    import httpx
+
+    from teamarr.database.settings import get_dispatcharr_settings
+
+    path = guide_path_from_lineup(lineup)
+    with db_factory() as conn:
+        base = (get_dispatcharr_settings(conn).url or "").rstrip("/")
+    if not path or not base:
+        return None
+
+    url = f"{base}{path}"
+    deadline = time.monotonic() + _PLEX_GUIDE_READY_TIMEOUT_SECONDS
+    while True:
+        if is_cancellation_requested():
+            return {"success": False, "error": "Cancelled"}
+        try:
+            resp = httpx.get(url, timeout=30)
+            if resp.status_code == 200 and is_complete_xmltv(resp.content):
+                return None
+            detail = f"HTTP {resp.status_code}" if resp.status_code != 200 else "incomplete XMLTV"
+        except httpx.HTTPError as e:
+            detail = str(e)
+        if time.monotonic() >= deadline:
+            logger.warning(
+                "[PLEX] %s: Dispatcharr guide not ready after %ds (%s) — skipping channel "
+                "map update this run",
+                label,
+                _PLEX_GUIDE_READY_TIMEOUT_SECONDS,
+                detail,
+            )
+            return {"success": False, "error": f"Dispatcharr guide not ready: {detail}"}
+        time.sleep(_PLEX_GUIDE_READY_POLL_SECONDS)
+
+
 def _channel_in_profile(raw_profile_ids: str | None, profile_id: int | str) -> bool:
     """Check a managed_channels row's ``channel_profile_ids`` against one profile.
 
@@ -1089,17 +1150,23 @@ def _refresh_plex_server(
         )
         return dvrs_result
 
-    device = next(
-        (d for dvr in dvrs_result["dvrs"] for d in dvr.devices if d.key == server.device_key),
+    found = next(
+        (
+            (dvr, d)
+            for dvr in dvrs_result["dvrs"]
+            for d in dvr.devices
+            if d.key == server.device_key
+        ),
         None,
     )
-    if device is None:
+    if found is None:
         logger.warning(
             "[PLEX] %s: configured device %s no longer found on server",
             label,
             server.device_key,
         )
         return {"success": False, "error": "Configured device not found"}
+    dvr, device = found
 
     if result := cancelled():
         return result
@@ -1135,6 +1202,12 @@ def _refresh_plex_server(
 
     if result := cancelled():
         return result
+
+    progress("Waiting for Dispatcharr guide...")
+    if not_ready := _wait_for_dispatcharr_guide(
+        dvr.lineup, db_factory, label, is_cancellation_requested
+    ):
+        return not_ready
 
     progress("Updating Plex channel map...")
     map_result = client.update_channelmap(device.key, enabled, mapping)

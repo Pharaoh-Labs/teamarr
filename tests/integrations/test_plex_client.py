@@ -20,6 +20,8 @@ from teamarr.plex.client import (
     PlexClient,
     PlexDevice,
     compute_channelmap_update,
+    guide_path_from_lineup,
+    is_complete_xmltv,
 )
 
 
@@ -300,3 +302,36 @@ class TestComputeChannelmapUpdate:
         enabled, mapping = compute_channelmap_update([], {"101"}, range_)
         assert enabled == ["101"]
         assert mapping == {"101": "101"}
+
+
+class TestGuidePathFromLineup:
+    def test_extracts_path_and_query(self):
+        lineup = (
+            "lineup://tv.plex.providers.epg.xmltv/"
+            "http%3A%2F%2Flocalhost%3A9191%2Foutput%2Fepg%2FNFL%3Fcachedlogos%3Dfalse"
+            "#NFL%20Guide"
+        )
+        assert guide_path_from_lineup(lineup) == "/output/epg/NFL?cachedlogos=false"
+
+    def test_no_query(self):
+        lineup = "lineup://tv.plex.providers.epg.xmltv/http%3A%2F%2Fd%3A9191%2Foutput%2Fepg#T"
+        assert guide_path_from_lineup(lineup) == "/output/epg"
+
+    @pytest.mark.parametrize("lineup", [None, "", "lineup://other/x", "not a lineup"])
+    def test_unrecognised_returns_none(self, lineup):
+        assert guide_path_from_lineup(lineup) is None
+
+
+class TestIsCompleteXmltv:
+    def test_whole_document(self):
+        assert is_complete_xmltv(b'<?xml version="1.0"?><tv><programme channel="7"/></tv>')
+
+    def test_truncated_mid_programme(self):
+        assert not is_complete_xmltv(b'<tv>\n  <programme start="2026" channel="7')
+
+    def test_extra_content_after_root(self):
+        assert not is_complete_xmltv(b"<tv></tv><programme/>")
+
+    def test_wrong_root_or_empty(self):
+        assert not is_complete_xmltv(b"<html></html>")
+        assert not is_complete_xmltv(b"")

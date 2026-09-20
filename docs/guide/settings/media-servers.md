@@ -58,4 +58,6 @@ Teamarr assumes Dispatcharr/XMLTV numbering is aligned — that a tuner channel 
 
 Saved tokens display as `********` — leave them as-is to keep the stored value, or type over them to replace.
 
+Before writing the channel map, Teamarr checks that Dispatcharr's XMLTV guide for that DVR is complete (Plex fetches it immediately after the write). Plex has been seen crashing outright when it reads a guide Dispatcharr is still rewriting, so if the guide isn't whole within 90 seconds Teamarr skips that server for the run — it shows as a failed refresh — and tries again on the next generation.
+
 Plex does not need explicit channel removal from Teamarr: channels that drop out of Dispatcharr's HDHomeRun lineup are pruned by Plex itself on its own polling cadence.
