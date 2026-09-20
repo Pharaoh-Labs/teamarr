@@ -215,9 +215,10 @@ class TestWindowAndSubscriptionReasons:
     """
 
     def test_future_dated_stream_beyond_window_is_named(self):
+        stream_date = TODAY + timedelta(days=4)
         stream = (
             "AU (STAN 94) | Nottingham Forest v Coventry City"
-            f"  Premier League Matchweek 5 ({(TODAY + timedelta(days=4)).isoformat()} 02:20:29)"
+            f"  Premier League Matchweek 5 2026/2027 ({stream_date.isoformat()} 02:20:29)"
         )
         result = _match(stream, _event(0))
         assert result.failed_reason is FailedReason.EVENT_BEYOND_WINDOW
