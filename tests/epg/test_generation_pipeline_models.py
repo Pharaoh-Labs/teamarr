@@ -401,6 +401,8 @@ def test_context_is_mutable_so_stages_can_publish_results():
 
 def test_package_exports_match_the_models_module():
     from teamarr.consumers import generation_pipeline
+    from teamarr.consumers.generation_pipeline import runner
 
     for name in generation_pipeline.__all__:
-        assert getattr(generation_pipeline, name) is getattr(models, name), name
+        source = runner if name in runner.__all__ else models
+        assert getattr(generation_pipeline, name) is getattr(source, name), name

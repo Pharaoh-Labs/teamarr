@@ -17,12 +17,13 @@ from teamarr.channelsdvr.client import ChannelsDVRClient
 from teamarr.consumers.generation_pipeline.models import (
     CallbackCancellationToken,
     GenerationCancelled,
+    GenerationContext,
     GenerationResult,
     GenerationSettingsSnapshot,
     ProgressCallback,
-    ProgressUpdate,
     legacy_progress_reporter,
 )
+from teamarr.consumers.generation_pipeline.runner import GenerationStage, StageRunner
 from teamarr.dispatcharr import EPGManager, M3UManager
 from teamarr.dispatcharr.factory import DispatcharrConnection
 from teamarr.dispatcharr.managers import ChannelManager
@@ -81,61 +82,19 @@ def run_full_generation(
     progress_callback: ProgressCallback | None = None,
     manual: bool = False,
 ) -> GenerationResult:
-    """Run the complete EPG generation workflow.
-
-    This is the single source of truth for EPG generation. Both the
-    streaming API endpoint and the background scheduler call this function.
-
-    Workflow:
-    1. Refresh M3U accounts (0-5%)
-    2. Process all teams (5-50%) - 45% budget
-    3. Process all event groups (50-95%) - 45% budget
-    4. Merge and save XMLTV (95-96%)
-    5. Dispatcharr EPG refresh + channel association (96-98%)
-    6. Process scheduled deletions (98-99%)
-    7. Run reconciliation + cleanup (99-100%)
-
-    Args:
-        db_factory: Factory function returning database connection context manager
-        dispatcharr_client: Optional DispatcharrClient for Dispatcharr operations
-        progress_callback: Optional callback for progress updates
-        manual: True for user-triggered runs (API endpoints); bypasses the
-            live-event #1 stream pin (#232) so a wrong pin can be corrected.
-            Scheduled runs leave this False.
-
-    Returns:
-        GenerationResult with all stats and sub-task results
-    """
+    """Run the fixed, complete EPG generation workflow."""
     global _generation_running
 
-    # Prevent concurrent generation runs
     if not _generation_lock.acquire(blocking=False):
         logger.warning("[GENERATION] Already in progress, skipping duplicate run")
-        result = GenerationResult()
-        result.success = False
-        result.error = "Generation already in progress"
-        return result
-
+        return GenerationResult(success=False, error="Generation already in progress")
     if _generation_running:
         _generation_lock.release()
         logger.warning("[GENERATION] Already in progress (flag check), skipping")
-        result = GenerationResult()
-        result.success = False
-        result.error = "Generation already in progress"
-        return result
-
+        return GenerationResult(success=False, error="Generation already in progress")
     _generation_running = True
 
-    from teamarr.consumers import (
-        create_lifecycle_service,
-        create_reconciler,
-        detect_stale_groups,
-        process_all_event_groups,
-        process_all_teams,
-    )
-    from teamarr.consumers.team_processor import get_all_team_xmltv
-    from teamarr.database.channels import get_reconciliation_settings
-    from teamarr.database.groups import get_all_group_xmltv
+    from teamarr.consumers.generation_status import cancel_generation, is_cancellation_requested
     from teamarr.database.settings import (
         get_dispatcharr_settings,
         get_display_settings,
@@ -143,451 +102,84 @@ def run_full_generation(
     )
     from teamarr.database.stats import create_run
 
-    result = GenerationResult()
-    result.started_at = time.time()
-
-    # Structured progress in, the public six-argument callback out. Stage
-    # bodies still call update_progress positionally; Packet 3 onward moves
-    # them onto ProgressUpdate as they are extracted.
+    result = GenerationResult(started_at=time.time())
     report_progress = legacy_progress_reporter(progress_callback)
-
-    def update_progress(
-        phase: str,
-        percent: int,
-        message: str,
-        current: int = 0,
-        total: int = 0,
-        item_name: str = "",
-    ):
-        report_progress(
-            ProgressUpdate(
-                phase=phase,
-                percent=percent,
-                message=message,
-                current=current,
-                total=total,
-                item_name=item_name,
-            )
-        )
-
-    # Create stats run for tracking with database-level lock
-    # Use BEGIN IMMEDIATE to acquire exclusive write lock BEFORE checking
-    # This prevents race conditions where two processes both pass the check
-    # before either has inserted their row
-    with db_factory() as conn:
-        try:
-            # BEGIN IMMEDIATE acquires write lock immediately, blocking other writers
-            conn.execute("BEGIN IMMEDIATE")
-
-            # Now check for in-progress runs - with lock held, this is reliable
-            recent_running = conn.execute("""
-                SELECT id FROM processing_runs
-                WHERE run_type = 'full_epg'
-                  AND status = 'running'
-                  AND started_at > datetime('now', '-5 minutes')
-                LIMIT 1
-            """).fetchone()
-
-            if recent_running:
-                conn.execute("ROLLBACK")
+    try:
+        with db_factory() as conn:
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                recent_running = conn.execute(
+                    """SELECT id FROM processing_runs
+                       WHERE run_type = 'full_epg' AND status = 'running'
+                       AND started_at > datetime('now', '-5 minutes') LIMIT 1"""
+                ).fetchone()
+                if recent_running:
+                    conn.execute("ROLLBACK")
+                    _generation_running = False
+                    _generation_lock.release()
+                    logger.warning(
+                        "[GENERATION] Already in progress (run %d), skipping",
+                        recent_running["id"],
+                    )
+                    return GenerationResult(success=False, error="Generation already in progress")
+                stats_run = create_run(conn, run_type="full_epg")
+                result.run_id = stats_run.id
+            except Exception as exc:
+                try:
+                    conn.execute("ROLLBACK")
+                except Exception as rollback_err:
+                    logger.debug(
+                        "[GENERATION] Rollback failed during lock acquisition: %s", rollback_err
+                    )
                 _generation_running = False
                 _generation_lock.release()
-                logger.warning(
-                    "[GENERATION] Already in progress (run %d), skipping", recent_running["id"]
-                )
-                result = GenerationResult()
-                result.success = False
-                result.error = "Generation already in progress"
-                return result
+                logger.error("[GENERATION] Failed to acquire lock: %s", exc)
+                return GenerationResult(success=False, error=f"Failed to acquire lock: {exc}")
 
-            # No running jobs - create our run (still holding lock)
-            stats_run = create_run(conn, run_type="full_epg")
-            result.run_id = stats_run.id
-            # create_run commits, which releases the lock
-
-        except Exception as e:
-            try:
-                conn.execute("ROLLBACK")
-            except Exception as rollback_err:
-                logger.debug(
-                    "[GENERATION] Rollback failed during lock acquisition: %s", rollback_err
-                )
-            _generation_running = False
-            _generation_lock.release()
-            logger.error("[GENERATION] Failed to acquire lock: %s", e)
-            result = GenerationResult()
-            result.success = False
-            result.error = f"Failed to acquire lock: {e}"
-            return result
-
-    # Import cancellation helpers
-    from teamarr.consumers.generation_status import cancel_generation, is_cancellation_requested
-
-    # The token only raises. Persisting the cancelled run and calling
-    # cancel_generation() stay with the outer handler below, so no stage can
-    # half-finish a run. The import above runs per call, so patching
-    # generation_status.is_cancellation_requested still controls this.
-    cancellation = CallbackCancellationToken(requested=is_cancellation_requested)
-    check_cancelled = cancellation.checkpoint
-
-    try:
-        # Increment generation counter ONCE at start of full EPG run
-        # This ensures all groups in this run share the same generation
         from teamarr.consumers.stream_match_cache import increment_generation_counter
 
         current_generation = increment_generation_counter(db_factory)
         logger.info("[GENERATION] Starting with cache generation %d", current_generation)
-
-        # Reset the run-scoped provider-call counter so this run's totals start
-        # clean. Runs are serialized (duplicate runs are rejected above), so a
-        # single process-global counter is safe. Snapshot is persisted at run end.
-
         call_metrics.reset()
-
-        # Create a single SportsDataService instance to share across all processing
-        # This ensures the event cache stays warm throughout the entire run
-        # (Previously each consumer created its own service with a cold cache)
         shared_service = create_default_service()
-
-        # Get settings. Snapshotted together, in this order, on one connection:
-        # every stage below reads the values this run started with, so a
-        # setting edited mid-run cannot change behavior halfway through.
-        # Deliberately only these three — reconciliation, media-server,
-        # ordering and cleanup settings keep their phase-local reads and their
-        # own failure policies.
         with db_factory() as conn:
             settings = GenerationSettingsSnapshot(
                 epg=get_epg_settings(conn),
                 dispatcharr=get_dispatcharr_settings(conn),
                 display=get_display_settings(conn),
             )
-
-        timer = _PhaseTimer(result.phase_timings)
-
-        # Step 1: Refresh M3U accounts (0-5%)
-        check_cancelled()
-        update_progress("init", 3, "Refreshing M3U accounts...")
-        if dispatcharr_client:
-            result.m3u_refresh = _refresh_m3u_accounts(db_factory, dispatcharr_client)
-        timer.mark("m3u_refresh")
-
-        # Step 2: Process all teams (5-50%) - 45% budget
-        check_cancelled()
-        update_progress("teams", 5, "Processing teams...")
-
-        teams_start_time = time.time()
-
-        def team_progress(current: int, total: int, name: str):
-            # Maps 0-100% within teams to 5-50% overall
-            pct = 5 + int((current / total) * 45) if total > 0 else 5
-            elapsed = time.time() - teams_start_time
-            remaining = total - current
-
-            # Messages from team_processor already include context
-            # (Processing X..., Finished X, now processing: Y, Z)
-            # Just add timing and counts
-            if remaining > 0:
-                msg = f"{name} ({current}/{total}) - {remaining} remaining [{elapsed:.1f}s]"
-            else:
-                msg = f"{name} ({current}/{total}) [{elapsed:.1f}s]"
-            update_progress("teams", pct, msg, current, total, name)
-
-        # Reuse the run-scoped service so teams share the warm event cache with
-        # group processing and lifecycle, instead of building a cold one here.
-        team_result = process_all_teams(
-            db_factory=db_factory,
-            progress_callback=team_progress,
-            service=shared_service,
-        )
-        result.teams_processed = team_result.teams_processed
-        result.teams_programmes = team_result.total_programmes
-        timer.mark("teams")
-
-        # Persistent Team EPG channels are owned exclusively through
-        # managed_team_channels. Reconcile them after the XMLTV guide is written.
-        team_channels = (
-            dispatcharr_client
-            if isinstance(dispatcharr_client, DispatcharrConnection)
-            else None
-        )
-        team_channel_manager = TeamChannelManager(
-            db_factory,
-            team_channels.channels if team_channels else None,
-            team_channels.epg if team_channels else None,
-            team_channels.logos if team_channels else None,
-        )
-
-        # Transition message - teams done, starting groups
-        logger.info("[GENERATION] Sending transition message: teams -> groups")
-        update_progress(
-            "groups",
-            50,
-            f"Teams complete ({result.teams_processed} processed), loading event groups...",
-            0,
-            1,
-            "Loading event groups...",
-        )
-        logger.info("[GENERATION] Transition message sent")
-
-        # Step 3: Process all event groups (50-95%) - 45% budget
-        check_cancelled()
-
-        groups_start_time = time.time()
-
-        def group_progress(current: int, total: int, name: str):
-            # Maps 0-100% within groups to 50-95% overall
-            pct = 50 + int((current / total) * 45) if total > 0 else 50
-            elapsed = time.time() - groups_start_time
-
-            # Check if this is a stream-level progress update (contains ✓ or ✗)
-            if "✓" in name or "✗" in name:
-                # Stream-level progress - name contains "GroupName: StreamName ✓/✗ (x/y)"
-                # Pass the full message as item_name for display in toast
-                update_progress("groups", pct, name, current, total, name)
-            else:
-                # Group completion - add context
-                remaining = total - current
-                if remaining > 0:
-                    msg = f"Finished {name} ({current}/{total}) - {remaining} remaining [{elapsed:.1f}s]"  # noqa: E501
-                else:
-                    msg = f"Finished {name} ({current}/{total}) [{elapsed:.1f}s]"
-                update_progress("groups", pct, msg, current, total, name)
-
-        # Compute external occupied channel numbers once for the entire run (#146)
-        # This prevents Teamarr from assigning numbers already used by non-Teamarr channels
-        from teamarr.consumers.lifecycle import compute_external_occupied
-
-        _channel_mgr = (
-            dispatcharr_client.channels
-            if isinstance(dispatcharr_client, DispatcharrConnection)
-            else None
-        )
-        external_occupied = compute_external_occupied(db_factory, _channel_mgr)
-
-        # Pre-generation validation: detect channel range conflicts (#146)
-        if external_occupied:
-            result.channel_conflicts = _validate_channel_ranges(
-                db_factory, external_occupied
-            )
-
-        team_matched_streams: list[dict] = []
-        # Groups whose matching finished this run. Only their memberships are
-        # reconciled; a group that errored says nothing about its streams (#826).
-        team_completed_groups: set[int] = set()
-
-        def collect_team_matches(group_id: int, matches: list[dict]) -> None:
-            team_completed_groups.add(group_id)
-            team_matched_streams.extend({**match, "source_group_id": group_id} for match in matches)
-
-        group_result = process_all_event_groups(
+        context = GenerationContext(
             db_factory=db_factory,
             dispatcharr_client=dispatcharr_client,
-            progress_callback=group_progress,
-            generation=current_generation,  # Share generation across all groups
-            service=shared_service,  # Reuse service to maintain warm cache
-            # Step 4 below re-reads team AND group XMLTV and merges the lot;
-            # aggregating the group half here would parse and serialize the
-            # whole guide a second time for a value nothing reads.
-            aggregate_xmltv=False,
-            run_id=stats_run.id,  # Details + per-group breakdown key on this run (#645)
-            matched_stream_callback=collect_team_matches,
+            manual=manual,
+            settings=settings,
+            sports_service=shared_service,
+            progress=report_progress,
+            cancellation=CallbackCancellationToken(requested=is_cancellation_requested),
+            result=result,
+            stats_run=stats_run,
+            current_generation=current_generation,
         )
-        result.groups_processed = group_result.groups_processed
-        result.groups_programmes = group_result.total_programmes
-        result.programmes_total = result.teams_programmes + result.groups_programmes
-        timer.mark("groups")
+        StageRunner(_PhaseTimer(result.phase_timings).mark).run(context, _FULL_GENERATION_STAGES)
 
-        # Step 3b: Global channel reassignment (if enabled)
-        check_cancelled()
-        relayout = _sync_global_channels(
-            db_factory, dispatcharr_client, update_progress,
-            external_occupied=external_occupied,
-        )
-        timer.mark("channel_reassign")
-
-        # Step 3a: Reconcile persistent Team EPG channels and their stream
-        # memberships. Runs before ordering so the ordering pass pushes this
-        # run's memberships, not last run's. Guarded like every other step:
-        # a failure here must not stop event channels being created/deleted.
-        check_cancelled()
-        try:
-            result.managed_team_channels = team_channel_manager.sync(relayout=relayout)
-            result.managed_team_streams = team_channel_manager.sync_stream_memberships(
-                team_matched_streams, completed_group_ids=team_completed_groups
-            )
-        except Exception as e:  # noqa: BLE001 - per-step isolation
-            logger.exception("[GENERATION] Managed team channel sync failed: %s", e)
-            result.managed_team_channels = {"error": str(e)}
-        timer.mark("team_channels")
-
-        # Step 3b: Apply stream ordering rules to all channels (93-95%)
-        check_cancelled()
-        update_progress("ordering", 93, "Applying stream ordering rules...")
-        result.stream_ordering = _apply_stream_ordering(
-            db_factory, dispatcharr_client, update_progress, manual=manual
-        )
-        timer.mark("stream_ordering")
-
-        # Step 4: Merge and save XMLTV (95-96%)
-        check_cancelled()
-        update_progress("saving", 95, "Saving XMLTV...")
-
-        xmltv_contents: list[str] = []
-        with db_factory() as conn:
-            team_xmltv = get_all_team_xmltv(conn)
-            xmltv_contents.extend(team_xmltv)
-            group_xmltv = get_all_group_xmltv(conn)
-            xmltv_contents.extend(group_xmltv)
-
-        output_path = settings.epg.epg_output_path
-        if xmltv_contents and output_path:
-            merged_xmltv = merge_xmltv_content(
-                xmltv_contents,
-                generator_name=settings.display.xmltv_generator_name,
-                generator_url=settings.display.xmltv_generator_url,
-            )
-            output_file = Path(output_path)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            output_file.write_text(merged_xmltv, encoding="utf-8")
-            result.file_written = True
-            result.file_path = str(output_file.absolute())
-            result.file_size = len(merged_xmltv)
-            logger.info(
-                "[GENERATION] EPG written to %s (%s bytes)", output_path, f"{result.file_size:,}"
-            )
-        timer.mark("xmltv_save")
-
-        # Create lifecycle service once for steps 5-6
-        # Reuse shared_service to maintain cache warmth
-        lifecycle_service = create_lifecycle_service(
-            db_factory,
-            shared_service,
-            dispatcharr_client=dispatcharr_client,
-        )
-        # Compute external channel numbers to avoid collisions (#146)
-        lifecycle_service.compute_external_occupied()
-        lifecycle_service.sync_stream_profiles()
-
-        # Step 5: Dispatcharr EPG refresh + channel association (96-98%)
-        check_cancelled()
-        if dispatcharr_client and settings.dispatcharr.epg_id:
-            update_progress("dispatcharr", 96, "Refreshing Dispatcharr EPG...")
-
-            raw_client = (
-                dispatcharr_client.client
-                if isinstance(dispatcharr_client, DispatcharrConnection)
-                else dispatcharr_client
-            )
-            epg_manager = EPGManager(raw_client)
-            refresh_result = epg_manager.wait_for_refresh(
-                settings.dispatcharr.epg_id,
-                timeout=300,
-                cancellation_check=is_cancellation_requested,
-            )
-            result.epg_refresh = {
-                "success": refresh_result.success,
-                "message": refresh_result.message,
-                "duration": refresh_result.duration,
-            }
-
-            update_progress("dispatcharr", 97, "Associating EPG with channels...")
-            result.epg_association = lifecycle_service.associate_epg_with_channels(
-                settings.dispatcharr.epg_id
-            )
-            try:
-                result.epg_association["managed_team_channels"] = (
-                    team_channel_manager.associate_epg(settings.dispatcharr.epg_id)
-                )
-            except Exception as e:  # noqa: BLE001 - per-step isolation
-                logger.exception("[GENERATION] Managed team EPG association failed: %s", e)
-        timer.mark("dispatcharr_epg_refresh")
-
-        # Capture the configured guide refreshes now, then run them after the
-        # EPG itself has completed and its run has been persisted.
-        check_cancelled()
-        media_jobs = _get_media_refresh_jobs(db_factory)
-        if media_jobs and _dry_run_media_refresh(result, media_jobs):
-            media_jobs = []
-
-        # Step 6: Process scheduled deletions (98-99%)
-        check_cancelled()
-        update_progress("lifecycle", 98, "Processing scheduled deletions...")
-        channels_deleted_count = 0
-        try:
-            deletion_result = lifecycle_service.process_scheduled_deletions()
-            channels_deleted_count = len(deletion_result.deleted)
-            result.deletions = {
-                "deleted_count": channels_deleted_count,
-                "error_count": len(deletion_result.errors),
-            }
-            if deletion_result.deleted:
-                logger.info("[GENERATION] Deleted %d expired channel(s)", channels_deleted_count)
-        except Exception as e:
-            logger.warning("[GENERATION] Scheduled deletions failed: %s", e)
-            result.deletions = {"error": str(e)}
-        timer.mark("deletions")
-
-        # Step 7: Run reconciliation + cleanup (99-100%)
-        check_cancelled()
-        update_progress("reconciliation", 99, "Running reconciliation...")
-        try:
-            with db_factory() as conn:
-                recon_settings = get_reconciliation_settings(conn)
-            if recon_settings.get("reconcile_on_epg_generation", True):
-                reconciler = create_reconciler(db_factory, dispatcharr_client)
-                recon_result = reconciler.reconcile(auto_fix=False)
-                result.reconciliation = recon_result.summary
-                if recon_result.issues_found:
-                    logger.info("[RECONCILE] Found %d issue(s)", len(recon_result.issues_found))
-        except Exception as e:
-            logger.warning("[RECONCILE] Failed: %s", e)
-            result.reconciliation = {"error": str(e)}
-        timer.mark("reconciliation")
-
-        # Step 7b: Stale source-group detection (lylt.1) — flag enabled groups
-        # whose Dispatcharr M3U source channel-group no longer exists.
-        try:
-            detect_stale_groups(db_factory)
-        except Exception as e:
-            logger.warning("[STALE_GROUPS] Detection failed: %s", e)
-
-        # DIAG: Post-generation stream audit — compare DB vs Dispatcharr
-        try:
-            _run_stream_audit(db_factory, dispatcharr_client)
-        except Exception as e:
-            logger.warning("[STREAM_AUDIT] Post-generation audit failed: %s", e)
-        timer.mark("stream_audit")
-
-        # Cleanup (history, old runs, unused logos — part of step 7)
-        check_cancelled()
-        update_progress("cleanup", 99, "Cleaning up history...")
-        cleanup_results = _run_cleanup_tasks(db_factory, dispatcharr_client, update_progress)
-        result.cleanup = cleanup_results["history"]
-        result.logo_cleanup = cleanup_results["logos"]
-        timer.mark("cleanup")
         logger.info("[GENERATION] Phase timings (s): %s", result.phase_timings)
-
-        # Update and save stats run
         _finalize_stats_run(
-            stats_run, result, team_result, group_result,
-            channels_deleted_count, db_factory,
+            stats_run,
+            result,
+            context.team_result,
+            context.group_result,
+            context.channels_deleted_count,
+            db_factory,
         )
-
-        if media_jobs and result.run_id is not None:
-            _start_media_server_refresh(db_factory, result.run_id, media_jobs)
-
+        if context.media_jobs and result.run_id is not None:
+            _start_media_server_refresh(db_factory, result.run_id, context.media_jobs)
         result.completed_at = time.time()
         result.duration_seconds = round(result.completed_at - result.started_at, 1)
         result.success = True
-
-        update_progress("complete", 100, "Generation complete")
-
-        # Flush the service cache to SQLite for immediate persistence
-
+        context.report("complete", 100, "Generation complete")
         flushed = flush_shared_cache()
         if flushed > 0:
             logger.debug("[CACHE] Flushed %d entries to SQLite", flushed)
-
     except GenerationCancelled:
         elapsed = round(time.time() - result.started_at, 1)
         logger.info("[GENERATION] Cancelled by user after %.1fs", elapsed)
@@ -596,40 +188,331 @@ def run_full_generation(
         result.completed_at = time.time()
         result.duration_seconds = elapsed
         cancel_generation()
-
-        # Save cancelled run
         try:
-            from teamarr.database.stats import save_run as _save_run
+            from teamarr.database.stats import save_run
 
             stats_run.complete(status="cancelled", error="Cancelled by user")
             with db_factory() as conn:
-                _save_run(conn, stats_run)
+                save_run(conn, stats_run)
         except Exception as save_err:
             logger.warning("[GENERATION] Failed to save cancelled run stats: %s", save_err)
-
-    except Exception as e:
-        logger.exception("[GENERATION] Failed: %s", e)
+    except Exception as exc:
+        logger.exception("[GENERATION] Failed: %s", exc)
         result.success = False
-        result.error = str(e)
+        result.error = str(exc)
         result.completed_at = time.time()
         result.duration_seconds = round(result.completed_at - result.started_at, 1)
-
-        # Save failed run
         try:
-            from teamarr.database.stats import save_run as _save_run
+            from teamarr.database.stats import save_run
 
-            stats_run.complete(status="failed", error=str(e))
+            stats_run.complete(status="failed", error=str(exc))
             with db_factory() as conn:
-                _save_run(conn, stats_run)
+                save_run(conn, stats_run)
         except Exception as save_err:
             logger.warning("[GENERATION] Failed to save failed run stats: %s", save_err)
-
     finally:
-        # Always release the lock
         _generation_running = False
-        _generation_lock.release()
-
+        if _generation_lock.locked():
+            _generation_lock.release()
     return result
+
+
+def _stage_m3u_refresh(context: GenerationContext) -> None:
+    context.report("init", 3, "Refreshing M3U accounts...")
+    if context.dispatcharr_client:
+        context.result.m3u_refresh = _refresh_m3u_accounts(
+            context.db_factory, context.dispatcharr_client
+        )
+
+
+def _stage_teams(context: GenerationContext) -> None:
+    from teamarr.consumers import process_all_teams
+
+    context.report("teams", 5, "Processing teams...")
+    started_at = time.time()
+
+    def progress(current: int, total: int, name: str) -> None:
+        percent = 5 + int((current / total) * 45) if total else 5
+        elapsed = time.time() - started_at
+        remaining = total - current
+        message = (
+            f"{name} ({current}/{total}) - {remaining} remaining [{elapsed:.1f}s]"
+            if remaining > 0
+            else f"{name} ({current}/{total}) [{elapsed:.1f}s]"
+        )
+        context.report("teams", percent, message, current, total, name)
+
+    context.team_result = process_all_teams(
+        db_factory=context.db_factory, progress_callback=progress, service=context.sports_service
+    )
+    context.result.teams_processed = context.team_result.teams_processed
+    context.result.teams_programmes = context.team_result.total_programmes
+
+
+def _stage_prepare_team_channels(context: GenerationContext) -> None:
+    team_channels = (
+        context.dispatcharr_client
+        if isinstance(context.dispatcharr_client, DispatcharrConnection)
+        else None
+    )
+    context.team_channel_manager = TeamChannelManager(
+        context.db_factory,
+        team_channels.channels if team_channels else None,
+        team_channels.epg if team_channels else None,
+        team_channels.logos if team_channels else None,
+    )
+    context.report(
+        "groups",
+        50,
+        f"Teams complete ({context.result.teams_processed} processed), loading event groups...",
+        0,
+        1,
+        "Loading event groups...",
+    )
+
+
+def _stage_groups(context: GenerationContext) -> None:
+    from teamarr.consumers import process_all_event_groups
+    from teamarr.consumers.lifecycle import compute_external_occupied
+
+    started_at = time.time()
+
+    def progress(current: int, total: int, name: str) -> None:
+        percent = 50 + int((current / total) * 45) if total else 50
+        elapsed = time.time() - started_at
+        if "✓" in name or "✗" in name:
+            context.report("groups", percent, name, current, total, name)
+            return
+        remaining = total - current
+        message = (
+            f"Finished {name} ({current}/{total}) - {remaining} remaining [{elapsed:.1f}s]"
+            if remaining > 0
+            else f"Finished {name} ({current}/{total}) [{elapsed:.1f}s]"
+        )
+        context.report("groups", percent, message, current, total, name)
+
+    channel_manager = (
+        context.dispatcharr_client.channels
+        if isinstance(context.dispatcharr_client, DispatcharrConnection)
+        else None
+    )
+    context.external_occupied = compute_external_occupied(context.db_factory, channel_manager)
+    if context.external_occupied:
+        context.result.channel_conflicts = _validate_channel_ranges(
+            context.db_factory, context.external_occupied
+        )
+
+    def collect_matches(group_id: int, matches: list[dict]) -> None:
+        context.team_completed_groups.add(group_id)
+        context.team_matched_streams.extend(
+            {**match, "source_group_id": group_id} for match in matches
+        )
+
+    context.group_result = process_all_event_groups(
+        db_factory=context.db_factory,
+        dispatcharr_client=context.dispatcharr_client,
+        progress_callback=progress,
+        generation=context.current_generation,
+        service=context.sports_service,
+        aggregate_xmltv=False,
+        run_id=context.stats_run.id,
+        matched_stream_callback=collect_matches,
+    )
+    context.result.groups_processed = context.group_result.groups_processed
+    context.result.groups_programmes = context.group_result.total_programmes
+    context.result.programmes_total = (
+        context.result.teams_programmes + context.result.groups_programmes
+    )
+
+
+def _stage_channel_reassign(context: GenerationContext) -> None:
+    context.relayout = _sync_global_channels(
+        context.db_factory,
+        context.dispatcharr_client,
+        context.report,
+        external_occupied=context.external_occupied,
+    )
+
+
+def _stage_team_channels(context: GenerationContext) -> None:
+    assert context.team_channel_manager is not None
+    try:
+        context.result.managed_team_channels = context.team_channel_manager.sync(
+            relayout=context.relayout
+        )
+        context.result.managed_team_streams = context.team_channel_manager.sync_stream_memberships(
+            context.team_matched_streams, completed_group_ids=context.team_completed_groups
+        )
+    except Exception as exc:  # noqa: BLE001 - per-step isolation
+        logger.exception("[GENERATION] Managed team channel sync failed: %s", exc)
+        context.result.managed_team_channels = {"error": str(exc)}
+
+
+def _stage_stream_ordering(context: GenerationContext) -> None:
+    context.report("ordering", 93, "Applying stream ordering rules...")
+    context.result.stream_ordering = _apply_stream_ordering(
+        context.db_factory, context.dispatcharr_client, context.report, manual=context.manual
+    )
+
+
+def _stage_xmltv_save(context: GenerationContext) -> None:
+    from teamarr.consumers.team_processor import get_all_team_xmltv
+    from teamarr.database.groups import get_all_group_xmltv
+
+    context.report("saving", 95, "Saving XMLTV...")
+    with context.db_factory() as conn:
+        xmltv_contents = get_all_team_xmltv(conn) + get_all_group_xmltv(conn)
+    output_path = context.settings.epg.epg_output_path
+    if xmltv_contents and output_path:
+        merged = merge_xmltv_content(
+            xmltv_contents,
+            generator_name=context.settings.display.xmltv_generator_name,
+            generator_url=context.settings.display.xmltv_generator_url,
+        )
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.write_text(merged, encoding="utf-8")
+        context.result.file_written = True
+        context.result.file_path = str(output_file.absolute())
+        context.result.file_size = len(merged)
+        logger.info("[GENERATION] EPG written to %s (%s bytes)", output_path, f"{len(merged):,}")
+
+
+def _stage_lifecycle_prepare(context: GenerationContext) -> None:
+    from teamarr.consumers import create_lifecycle_service
+
+    context.lifecycle_service = create_lifecycle_service(
+        context.db_factory, context.sports_service, dispatcharr_client=context.dispatcharr_client
+    )
+    context.lifecycle_service.compute_external_occupied()
+    context.lifecycle_service.sync_stream_profiles()
+
+
+def _stage_dispatcharr_epg(context: GenerationContext) -> None:
+    from teamarr.consumers.generation_status import is_cancellation_requested
+
+    if not (context.dispatcharr_client and context.settings.dispatcharr.epg_id):
+        return
+    assert context.lifecycle_service is not None
+    assert context.team_channel_manager is not None
+    context.report("dispatcharr", 96, "Refreshing Dispatcharr EPG...")
+    raw_client = (
+        context.dispatcharr_client.client
+        if isinstance(context.dispatcharr_client, DispatcharrConnection)
+        else context.dispatcharr_client
+    )
+    refresh = EPGManager(raw_client).wait_for_refresh(
+        context.settings.dispatcharr.epg_id,
+        timeout=300,
+        cancellation_check=is_cancellation_requested,
+    )
+    context.result.epg_refresh = {
+        "success": refresh.success,
+        "message": refresh.message,
+        "duration": refresh.duration,
+    }
+    context.report("dispatcharr", 97, "Associating EPG with channels...")
+    context.result.epg_association = context.lifecycle_service.associate_epg_with_channels(
+        context.settings.dispatcharr.epg_id
+    )
+    try:
+        context.result.epg_association["managed_team_channels"] = (
+            context.team_channel_manager.associate_epg(context.settings.dispatcharr.epg_id)
+        )
+    except Exception as exc:  # noqa: BLE001 - per-step isolation
+        logger.exception("[GENERATION] Managed team EPG association failed: %s", exc)
+
+
+def _stage_media_jobs(context: GenerationContext) -> None:
+    context.media_jobs = _get_media_refresh_jobs(context.db_factory)
+    if context.media_jobs and _dry_run_media_refresh(context.result, context.media_jobs):
+        context.media_jobs = []
+
+
+def _stage_deletions(context: GenerationContext) -> None:
+    assert context.lifecycle_service is not None
+    context.report("lifecycle", 98, "Processing scheduled deletions...")
+    try:
+        deletion_result = context.lifecycle_service.process_scheduled_deletions()
+        context.channels_deleted_count = len(deletion_result.deleted)
+        context.result.deletions = {
+            "deleted_count": context.channels_deleted_count,
+            "error_count": len(deletion_result.errors),
+        }
+        if deletion_result.deleted:
+            logger.info(
+                "[GENERATION] Deleted %d expired channel(s)", context.channels_deleted_count
+            )
+    except Exception as exc:
+        logger.warning("[GENERATION] Scheduled deletions failed: %s", exc)
+        context.result.deletions = {"error": str(exc)}
+
+
+def _stage_reconciliation(context: GenerationContext) -> None:
+    from teamarr.consumers import create_reconciler
+    from teamarr.database.channels import get_reconciliation_settings
+
+    context.report("reconciliation", 99, "Running reconciliation...")
+    try:
+        with context.db_factory() as conn:
+            settings = get_reconciliation_settings(conn)
+        if settings.get("reconcile_on_epg_generation", True):
+            reconciliation = create_reconciler(
+                context.db_factory, context.dispatcharr_client
+            ).reconcile(auto_fix=False)
+            context.result.reconciliation = reconciliation.summary
+            if reconciliation.issues_found:
+                logger.info("[RECONCILE] Found %d issue(s)", len(reconciliation.issues_found))
+    except Exception as exc:
+        logger.warning("[RECONCILE] Failed: %s", exc)
+        context.result.reconciliation = {"error": str(exc)}
+
+
+def _stage_stream_audit(context: GenerationContext) -> None:
+    from teamarr.consumers import detect_stale_groups
+
+    try:
+        detect_stale_groups(context.db_factory)
+    except Exception as exc:
+        logger.warning("[STALE_GROUPS] Detection failed: %s", exc)
+    try:
+        _run_stream_audit(context.db_factory, context.dispatcharr_client)
+    except Exception as exc:
+        logger.warning("[STREAM_AUDIT] Post-generation audit failed: %s", exc)
+
+
+def _stage_cleanup(context: GenerationContext) -> None:
+    context.report("cleanup", 99, "Cleaning up history...")
+    results = _run_cleanup_tasks(context.db_factory, context.dispatcharr_client, context.report)
+    context.result.cleanup = results["history"]
+    context.result.logo_cleanup = results["logos"]
+
+
+_FULL_GENERATION_STAGES = (
+    GenerationStage(_stage_m3u_refresh, cancellation_before=True, timing_name="m3u_refresh"),
+    GenerationStage(_stage_teams, cancellation_before=True, timing_name="teams"),
+    GenerationStage(_stage_prepare_team_channels),
+    GenerationStage(_stage_groups, cancellation_before=True, timing_name="groups"),
+    GenerationStage(
+        _stage_channel_reassign, cancellation_before=True, timing_name="channel_reassign"
+    ),
+    GenerationStage(_stage_team_channels, cancellation_before=True, timing_name="team_channels"),
+    GenerationStage(
+        _stage_stream_ordering, cancellation_before=True, timing_name="stream_ordering"
+    ),
+    GenerationStage(_stage_xmltv_save, cancellation_before=True, timing_name="xmltv_save"),
+    GenerationStage(_stage_lifecycle_prepare),
+    GenerationStage(
+        _stage_dispatcharr_epg,
+        cancellation_before=True,
+        timing_name="dispatcharr_epg_refresh",
+    ),
+    GenerationStage(_stage_media_jobs, cancellation_before=True),
+    GenerationStage(_stage_deletions, cancellation_before=True, timing_name="deletions"),
+    GenerationStage(_stage_reconciliation, cancellation_before=True, timing_name="reconciliation"),
+    GenerationStage(_stage_stream_audit, timing_name="stream_audit"),
+    GenerationStage(_stage_cleanup, cancellation_before=True, timing_name="cleanup"),
+)
 
 
 def _get_media_refresh_jobs(db_factory: Callable[[], Any]) -> list[tuple[str, Any]]:
@@ -690,8 +573,7 @@ def _start_media_server_refresh(
                     lambda current, _total: update_refresh("Refreshing media servers...", current),
                 )
                 flattened = [
-                    _media_server_outcome(kind, label, outcome)
-                    for kind, label, outcome in outcomes
+                    _media_server_outcome(kind, label, outcome) for kind, label, outcome in outcomes
                 ]
                 complete_refresh(flattened)
             except Exception as exc:  # noqa: BLE001 - detached worker must not escape
@@ -761,8 +643,14 @@ def _dry_run_media_refresh(result: Any, jobs: list[tuple[str, Any]]) -> bool:
         logger.info("[DRY_RUN] Suppressed %s guide refresh for %s", kind, ", ".join(urls))
         payload = {"success": True, "dry_run": True, "servers": urls}
         result.media_server_outcomes += [
-            {"kind": kind, "server": u, "success": True, "duration": 0.0, "error": None,
-             "dry_run": True}
+            {
+                "kind": kind,
+                "server": u,
+                "success": True,
+                "duration": 0.0,
+                "error": None,
+                "dry_run": True,
+            }
             for u in urls
         ]
         if kind == "emby":
@@ -816,9 +704,7 @@ def _run_media_server_refreshes(
                     label,
                     e,
                 )
-                results.append(
-                    (kind, label, {"guide": {"success": False, "error": str(e)}})
-                )
+                results.append((kind, label, {"guide": {"success": False, "error": str(e)}}))
             if completion_callback:
                 completion_callback(completed, len(jobs))
     return results
@@ -1095,8 +981,7 @@ def _validate_channel_ranges(
 
     if not conflicts["group_warnings"]:
         logger.info(
-            "[CHANNEL_NUM] No channel range conflicts "
-            "with %d external channels",
+            "[CHANNEL_NUM] No channel range conflicts with %d external channels",
             len(external_occupied),
         )
 
@@ -1150,9 +1035,7 @@ def _sync_global_channels(
             new_num = ch.get("new_number")
             if disp_id and new_num:
                 try:
-                    dispatcharr_client.channels.update_channel(
-                        disp_id, {"channel_number": new_num}
-                    )
+                    dispatcharr_client.channels.update_channel(disp_id, {"channel_number": new_num})
                     synced += 1
                 except Exception as e:
                     logger.warning(
@@ -1235,7 +1118,9 @@ def _push_stream_orders(
 
     logger.info(
         "[ORDERING] Pushed stream order for %d channel(s) across %d worker(s); %d failed",
-        total, workers, failures,
+        total,
+        workers,
+        failures,
     )
     return failures
 
@@ -1327,14 +1212,11 @@ def _apply_stream_ordering(
             if ordering_settings.rules or has_scoped_rules:
                 logger.info("[ORDERING] Applying scoped stream ordering rules")
             else:
-                logger.debug(
-                    "[ORDERING] No ordering rules configured; running window sync only"
-                )
+                logger.debug("[ORDERING] No ordering rules configured; running window sync only")
 
             # Setup Dispatcharr channel manager once if available
             channel_mgr = None
             if dispatcharr_client:
-
                 raw_client = (
                     dispatcharr_client.client
                     if isinstance(dispatcharr_client, DispatcharrConnection)
@@ -1466,9 +1348,7 @@ def _apply_stream_ordering(
                             pinned_top = None
 
                 reordered_count = 0
-                ordering_service = get_stream_ordering_service(
-                    conn, channel.sport, channel.league
-                )
+                ordering_service = get_stream_ordering_service(conn, channel.sport, channel.league)
                 if ordering_service.rules:
                     for stream in streams:
                         new_priority = ordering_service.compute_priority(stream)
@@ -1528,9 +1408,7 @@ def _apply_stream_ordering(
                 # Compared AFTER the pin is applied, so a pinned channel is
                 # measured against the order we actually intend to push and
                 # doesn't re-push every run.
-                order_drifted = (
-                    plan.current_order is not None and ordered_ids != plan.current_order
-                )
+                order_drifted = plan.current_order is not None and ordered_ids != plan.current_order
 
                 if not (plan.reordered_count > 0 or plan.has_windowed or order_drifted):
                     continue
