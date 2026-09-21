@@ -468,6 +468,8 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\buefa\s+champions\s+league[:\s-]", "uefa.champions"),
     (r"\bucl[:\s-]", "uefa.champions"),
     (r"\bchampions\s+league[:\s-]", "uefa.champions"),
+    (r"\buefa\s+nations\s+league[:\s-]", "uefa.nations"),
+    (r"\bunl[:\s-]", "uefa.nations"),
     (r"\bspl[:\s-]", "ksa.1"),  # Saudi Pro League
     # ==========================================================================
     # Hockey - Multi-league umbrella brands first
