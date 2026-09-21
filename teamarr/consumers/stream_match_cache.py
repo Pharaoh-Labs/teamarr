@@ -62,8 +62,10 @@ class StreamCacheEntry:
     user_corrected: bool = False
 
 
-# Sentinel value for failed match cache entries
+# Sentinel values for non-event cache entries
 FAILED_MATCH_EVENT_ID = "__FAILED__"
+# A user-selected skip is a pinned decision, unlike a transient failed match.
+USER_SKIPPED_EVENT_ID = "__SKIPPED__"
 
 
 class StreamMatchCache:
@@ -388,7 +390,8 @@ class StreamMatchCache:
             group_id: Event group ID
             stream_id: Stream ID
             stream_name: Exact stream name
-            event_id: Correct event ID
+            event_id: Correct event ID, or None when the user explicitly skips
+                the stream
             league: Correct league code
             cached_data: Event data for template vars
 
@@ -396,6 +399,11 @@ class StreamMatchCache:
             True if saved successfully
         """
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
+        # SQLite NULL was previously used for skips.  The matcher could not
+        # reconstruct an event from it and deleted the correction before
+        # rematching.  Store a durable, explicit value instead.
+        event_id = event_id if event_id is not None else USER_SKIPPED_EVENT_ID
+        league = league or USER_SKIPPED_EVENT_ID
         cached_json = json.dumps(cached_data, default=_json_serializer)
 
         try:

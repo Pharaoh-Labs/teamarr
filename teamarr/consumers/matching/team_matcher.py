@@ -49,7 +49,11 @@ from teamarr.consumers.matching.result import (
     MatchMethod,
     MatchOutcome,
 )
-from teamarr.consumers.stream_match_cache import StreamMatchCache, event_to_cache_data
+from teamarr.consumers.stream_match_cache import (
+    USER_SKIPPED_EVENT_ID,
+    StreamMatchCache,
+    event_to_cache_data,
+)
 from teamarr.core.types import (
     GENERATED_PREVIEW_FIELDS,
     Event,
@@ -1150,6 +1154,17 @@ class TeamMatcher:
 
         # Touch the cache entry to keep it fresh
         self._cache.touch(ctx.group_id, ctx.stream_id, ctx.stream_name, ctx.generation)
+
+        # A manually skipped stream is a pinned no-match decision.  Older
+        # versions stored it as NULL, so retain support for those rows as well.
+        if entry.user_corrected and entry.event_id in (None, USER_SKIPPED_EVENT_ID):
+            logger.debug("[CACHE_SKIP] stream_id=%d (user skipped)", ctx.stream_id)
+            return MatchOutcome.filtered(
+                FilteredReason.USER_SKIPPED,
+                stream_name=ctx.stream_name,
+                stream_id=ctx.stream_id,
+                detail="Skipped by user",
+            )
 
         # Reconstruct event from cached data
         event = self._reconstruct_event(entry.cached_data)
