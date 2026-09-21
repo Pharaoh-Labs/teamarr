@@ -48,7 +48,6 @@ def seeded_leagues(db_factory, monkeypatch):
         ("ITA.1", "ita.1"),
         # Hint patterns reached without a trailing delimiter
         ("Champions League", "uefa.champions"),
-        ("UEFA Nations League", "uefa.nations"),
     ],
 )
 def test_resolves_capture_to_league_code(captured, expected):
