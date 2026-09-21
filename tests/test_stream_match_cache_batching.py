@@ -13,10 +13,9 @@ The behaviour that must not change is durability of a *completed* session, so
 these tests check what is readable from an independent connection afterwards.
 """
 
-
 import pytest
 
-from teamarr.consumers.stream_match_cache import StreamMatchCache
+from teamarr.consumers.stream_match_cache import USER_SKIPPED_EVENT_ID, StreamMatchCache
 
 EVENT = {"id": "e1", "name": "Rays at Tigers"}
 
@@ -28,8 +27,12 @@ def cache(db_factory):
 
 def _set(cache, stream_id, generation=1):
     return cache.set(
-        group_id=1, stream_id=stream_id, stream_name=f"Stream {stream_id}",
-        event_id=f"e{stream_id}", league="mlb", cached_data=EVENT,
+        group_id=1,
+        stream_id=stream_id,
+        stream_name=f"Stream {stream_id}",
+        event_id=f"e{stream_id}",
+        league="mlb",
+        cached_data=EVENT,
         generation=generation,
     )
 
@@ -77,11 +80,29 @@ class TestDurability:
         with cache.session():
             _set(cache, 7)
             cache.set_user_correction(
-                group_id=1, stream_id=7, stream_name="Stream 7", event_id="corrected",
-                league="mlb", cached_data=EVENT,
+                group_id=1,
+                stream_id=7,
+                stream_name="Stream 7",
+                event_id="corrected",
+                league="mlb",
+                cached_data=EVENT,
             )
         entry = cache.get(1, 7, "Stream 7")
         assert entry.event_id == "corrected"
+        assert entry.user_corrected
+
+    def test_a_user_skip_is_stored_as_an_explicit_sentinel(self, cache):
+        cache.set_user_correction(
+            group_id=1,
+            stream_id=8,
+            stream_name="Skipped stream",
+            event_id=None,
+            league=None,
+            cached_data={},
+        )
+        entry = cache.get(1, 8, "Skipped stream")
+        assert entry is not None
+        assert entry.event_id == USER_SKIPPED_EVENT_ID
         assert entry.user_corrected
 
 

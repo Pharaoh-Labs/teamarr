@@ -64,6 +64,9 @@ class FilteredReason(Enum):
     # Stream's detected sport is not supported (swimming, diving, gymnastics, etc.)
     SPORT_NOT_SUPPORTED = "sport_not_supported"
 
+    # User explicitly chose "Skip Stream" in the match correction modal.
+    USER_SKIPPED = "user_skipped"
+
 
 # =============================================================================
 # FAILED REASONS - Matching attempted but couldn't complete
@@ -452,6 +455,7 @@ FILTERED_DISPLAY: dict[FilteredReason | None, str] = {
     FilteredReason.LEAGUE_NOT_INCLUDED: "League not in group",
     FilteredReason.STALE: "Stale stream",
     FilteredReason.SPORT_NOT_SUPPORTED: "Sport not supported",
+    FilteredReason.USER_SKIPPED: "Skipped by user",
 }
 
 FAILED_DISPLAY: dict[FailedReason | None, str] = {
