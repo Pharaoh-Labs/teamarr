@@ -200,6 +200,11 @@ TEAM_ALIASES: dict[str, str] = {
     # NCAA Football - provider abbreviations for lower-division teams
     "northwestern college": "northwestern ia",
     "south dakota school of mines": "south dakota mines",
+    # National teams — labels broadcasters and providers write that ESPN
+    # spells differently. Widening only (#874): "Ireland" keeps its rugby
+    # reading and gains the soccer side.
+    "ireland": "republic of ireland",
+    "holland": "netherlands",
 }
 
 

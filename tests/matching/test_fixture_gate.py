@@ -73,6 +73,16 @@ CACHED_TEAMS = [
     ("AS Roma", "AS Roma", "ROMA", "uefa.champions", "soccer"),
     ("Fenerbahce", "Fenerbahce", "FEN", "uefa.champions", "soccer"),
     ("Roma", "Roma", "ROMA", "uefa.wchampions", "soccer"),
+    # A bare label that is one sport's FULL name and only an alias of the
+    # other sport's team (#874): "Ireland" is the rugby side, ESPN spells the
+    # soccer side "Republic of Ireland" (short name "Rep Ireland"), and the
+    # only route between them is TEAM_ALIASES.
+    ("Ireland", "Ireland", "IRE", "6n", "rugby"),
+    ("Wales", "Wales", "WAL", "6n", "rugby"),
+    ("Republic of Ireland", "Rep Ireland", "IRL", "uefa.nations", "soccer"),
+    ("Kosovo", "Kosovo", "KOS", "uefa.nations", "soccer"),
+    ("Netherlands", "Netherlands", "NED", "uefa.nations", "soccer"),
+    ("Germany", "Germany", "GER", "uefa.nations", "soccer"),
 ]
 
 
@@ -622,6 +632,45 @@ class TestBareLabelOfPrefixedClub:
         )
         stream = "UEFA: 01-  Fenerbahce  vs Roma   5:45pm"
         result = _match(stream, event, "uefa.champions", db_factory)
+        assert result.category is ResultCategory.MATCHED
+        result_multi = _match_multi(stream, event, db_factory)
+        assert result_multi.category is ResultCategory.MATCHED
+
+
+class TestAliasWidensAnExactIdentity:
+    """Kosovo vs Ireland, UEFA Nations League 2026-09-24 (#874). The provider
+    wrote the side as every broadcaster does — "Ireland" — which is the rugby
+    team's full name and nothing else in the cache, so the fixture gate found
+    no league the two could meet in and vetoed the fixture the stream named.
+    TEAM_ALIASES carries the ESPN spelling; as a widening it adds the soccer
+    identity without taking the rugby one away.
+    """
+
+    def test_ireland_reads_as_both_codes(self):
+        resolution = TeamIdentityIndex(CACHED_TEAMS).resolve("Ireland")
+        assert resolution.exact
+        assert {i.league for i in resolution.identities} >= {"6n", "uefa.nations"}
+
+    def test_soccer_pair_finds_the_nations_league(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        assert index.fixture_leagues("Kosovo", "Ireland") == {"uefa.nations"}
+
+    def test_rugby_pair_still_finds_the_six_nations(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        assert index.fixture_leagues("Ireland", "Wales") == {"6n"}
+
+    def test_holland_reads_as_the_netherlands(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        assert index.fixture_leagues("Holland", "Germany") == {"uefa.nations"}
+
+    def test_ireland_stream_matches_the_nations_league_event(self, db_factory):
+        event = _event(
+            _team("Kosovo", "Kosovo", "KOS", "uefa.nations", "soccer"),
+            _team("Republic of Ireland", "Rep Ireland", "IRL", "uefa.nations", "soccer"),
+            "unl-kos-irl",
+        )
+        stream = "Kosovo vs Ireland | 7:45 PM UK"
+        result = _match(stream, event, "uefa.nations", db_factory)
         assert result.category is ResultCategory.MATCHED
         result_multi = _match_multi(stream, event, db_factory)
         assert result_multi.category is ResultCategory.MATCHED

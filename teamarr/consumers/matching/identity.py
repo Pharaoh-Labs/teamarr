@@ -588,6 +588,17 @@ class TeamIdentityIndex:
         # reading it only widens the identity set, per the module rules.
         if norm in self._exact:
             hits = self._exact[norm] + self._partial.get(norm, []) + self._by_abbrev.get(norm, [])
+            # An alias rewrite that lands on a surface form widens the same
+            # way (#874). "Ireland" is the rugby side's full name, while ESPN
+            # spells the soccer side "Republic of Ireland" (short name "Rep
+            # Ireland"), so the bare word had no soccer reading at all and
+            # "Kosovo vs Ireland" vetoed the very Nations League fixture it
+            # named. The alias is a curated statement that the text CAN name
+            # that team; it never says what the text is not, so the rugby
+            # identities stay and the reading stays exact.
+            for variant in self._alias_variants(norm):
+                if variant != norm:
+                    hits = hits + self._exact.get(variant, [])
             return Resolution(tuple(dict.fromkeys(hits)), True)
 
         # A known alias rewrite that lands on a real surface form is as good as
