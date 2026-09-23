@@ -546,6 +546,14 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_enabled BOOLEAN DEFAULT 0,
     channelsdvr_servers JSON,
 
+    -- Plex Integration (Live TV Guide + Channel-Map Refresh)
+    -- plex_servers is a JSON list of {name, url, token, dvr_id, device_key}
+    -- entries. dvr_id/device_key are the matched Plex DVR + HDHomeRun device
+    -- (from GET /livetv/dvrs), discovered and picked in the Settings UI;
+    -- a server missing either is skipped at refresh time.
+    plex_enabled BOOLEAN DEFAULT 0,
+    plex_servers JSON,
+
     -- Schema Version
     schema_version INTEGER DEFAULT 96
 );

@@ -588,6 +588,23 @@ def update_channelsdvr_settings(
     return _apply(conn, "channelsdvr", provided)
 
 
+def update_plex_settings(
+    conn: Connection,
+    enabled: bool | None = None,
+    servers: list[dict] | None = None,
+) -> bool:
+    """Update Plex integration settings (only provided fields).
+
+    `servers` replaces the whole list (full-replace semantics). Masked
+    tokens must be resolved by the caller (API route) before this point.
+
+    Returns:
+        True if updated
+    """
+    provided = _skip_none(enabled=enabled, servers=servers)
+    return _apply(conn, "plex", provided)
+
+
 def update_proxy_settings(
     conn: Connection,
     enabled: bool | None = None,

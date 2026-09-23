@@ -14,7 +14,7 @@ everything with `pytest tests/ -q` — the full suite finishes in under 10s.
 | `templates/` | Template engine: variables, scope gating, resolution priority, validation, sample/preview system |
 | `migrations/` | Schema upgrades: versioned migrations, checkpoint_v43, reconciliation, migration conventions (static analysis) |
 | `subscriptions/` | Global sports subscription, per-group overrides, unsubscribed-league cleanup, sub-scheduler |
-| `integrations/` | External clients: Dispatcharr auth/stats, Channels DVR, Jellyfin/Emby, settings API parity |
+| `integrations/` | External clients: Dispatcharr auth/stats, Channels DVR, Jellyfin/Emby, Plex, settings API parity |
 
 Big cross-cutting behavior files stay top-level: `test_custom_leagues.py`,
 `test_tennis.py`, `test_feed_separation.py`, `test_stream_ordering.py`,

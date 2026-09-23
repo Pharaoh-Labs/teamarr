@@ -45,6 +45,13 @@ def test_channelsdvr_outcome_needs_both_steps():
     assert o["success"] is False and o["error"] == "timed out"
 
 
+def test_plex_outcome_flattens_guide_result():
+    o = _media_server_outcome("plex", "Plex", {"guide": {"success": False, "error": "no token"}})
+    assert o == {
+        "kind": "plex", "server": "Plex", "success": False, "duration": 0.0, "error": "no token",
+    }
+
+
 # ---------------------------------------------------------------------------
 # media_server_health — consecutive failures from newest run backwards
 # ---------------------------------------------------------------------------

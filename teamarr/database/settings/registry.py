@@ -44,6 +44,7 @@ from .types import (
     JellyfinSettings,
     LifecycleSettings,
     ManagedTeamChannelSettings,
+    PlexSettings,
     ProxySettings,
     ReconciliationSettings,
     SchedulerSettings,
@@ -310,6 +311,31 @@ def _parse_channelsdvr_servers(raw: Any) -> list:
     ]
 
 
+def _parse_plex_servers(raw: Any) -> list:
+    from .types import PlexServer
+
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [
+        PlexServer(
+            name=entry.get("name", ""),
+            url=entry.get("url"),
+            token=entry.get("token"),
+            dvr_id=entry.get("dvr_id"),
+            device_key=entry.get("device_key"),
+            channel_profile_id=entry.get("channel_profile_id"),
+        )
+        for entry in data
+        if isinstance(entry, dict)
+    ]
+
+
 def _parse_media_servers(raw: Any) -> list:
     from .types import MediaServerEntry
 
@@ -552,6 +578,21 @@ GROUPS: dict[str, GroupSpec] = {
                 },
             ),
             "Channels DVR",
+        ),
+        GroupSpec(
+            "plex",
+            PlexSettings,
+            _specs(
+                PlexSettings,
+                prefix="plex_",
+                hooks={
+                    "servers": {
+                        "parse": _parse_plex_servers,
+                        "dump": _dump_server_list,
+                    },
+                },
+            ),
+            "Plex",
         ),
         GroupSpec("proxy", ProxySettings, _specs(ProxySettings, prefix="proxy_"), "Proxy"),
     )
