@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 from rapidfuzz import fuzz
 
+from teamarr.config import get_matchup_order
 from teamarr.consumers.matching import MATCH_WINDOW_DAYS
 from teamarr.consumers.matching.candidate_index import (
     CandidateTokenIndex,
@@ -54,6 +55,7 @@ from teamarr.consumers.stream_match_cache import (
     StreamMatchCache,
     event_to_cache_data,
 )
+from teamarr.core.naming import matchup_home_first
 from teamarr.core.types import (
     GENERATED_PREVIEW_FIELDS,
     Event,
@@ -768,6 +770,12 @@ class TeamMatcher:
         # Try to match against all events
         result = self._match_against_multi_league_events(ctx, all_events)
 
+        supplemental = self._reversed_fixture_schedule_candidates(ctx, result, all_events)
+        if supplemental:
+            result = self._match_against_multi_league_events(
+                ctx, (*all_events, *supplemental)
+            )
+
         # If match failed with NO_EVENT_FOUND, try reverse alias resolution
         # This handles cases where classifier couldn't detect league but user has aliases
         if result.is_failed and result.failed_reason in (
@@ -783,6 +791,53 @@ class TeamMatcher:
             self._cache_result(ctx, result)
 
         return result
+
+    def _reversed_fixture_schedule_candidates(
+        self,
+        ctx: MatchContext,
+        result: MatchOutcome,
+        candidates: Sequence[tuple[str, Event]],
+    ) -> tuple[tuple[str, Event], ...]:
+        """Load a missing simultaneous reverse fixture from its team's schedule.
+
+        Some providers' league scoreboards omit split-squad fixtures that their
+        team schedules include. Only consult that richer source when a stream's
+        explicit venue notation contradicts an otherwise valid selected event.
+        """
+        event = result.event
+        separator = (ctx.classified.separator_found or "").strip().lower()
+        if (
+            not result.is_matched
+            or event is None
+            or self._has_away_home_orientation(ctx, event)
+            or (separator not in {"@", "at"} and not separator.startswith("vs"))
+        ):
+            return ()
+
+        known_ids = {
+            (league, candidate.provider, candidate.id) for league, candidate in candidates
+        }
+        scheduled = self._service.get_team_schedule(
+            event.home_team.id, event.league, days_ahead=self._days_ahead
+        )
+        supplemental = tuple(
+            (event.league, candidate)
+            for candidate in scheduled
+            if (
+                candidate.start_time == event.start_time
+                and candidate.away_team.id == event.home_team.id
+                and candidate.home_team.id == event.away_team.id
+                and (event.league, candidate.provider, candidate.id) not in known_ids
+            )
+        )
+        if supplemental:
+            logger.debug(
+                "[SPLIT_SQUAD] stream_id=%d selected=%s supplemental=%s source=team_schedule",
+                ctx.stream_id,
+                event.id,
+                [candidate.id for _, candidate in supplemental],
+            )
+        return supplemental
 
     def match_team_only(
         self,
@@ -1918,27 +1973,38 @@ class TeamMatcher:
         return self._score_teams_against_event(team1, team2, event, code_tokens)
 
     def _has_away_home_orientation(self, ctx: MatchContext, event: Event) -> bool:
-        """Whether an ``@``/``at`` stream explicitly names this event's sides.
+        """Whether a stream's sides follow its configured venue convention.
 
         This is deliberately a ranking signal rather than a match requirement:
         providers commonly omit or reverse sides, but two simultaneous fixtures
-        with the same teams need the venue notation to break an otherwise exact tie.
+        with the same teams need the declared convention to break an otherwise
+        exact tie.
         """
         separator = (ctx.classified.separator_found or "").strip().lower()
-        if separator not in {"@", "at"} or not ctx.team1 or not ctx.team2:
+        if not ctx.team1 or not ctx.team2:
+            return False
+
+        if separator in {"@", "at"}:
+            first, second = event.away_team, event.home_team
+        elif separator.startswith("vs"):
+            home_first = matchup_home_first(event.sport, get_matchup_order(event.league))
+            first, second = (
+                (event.home_team, event.away_team)
+                if home_first
+                else (event.away_team, event.home_team)
+            )
+        else:
             return False
 
         def _side_matches(team_name: str, event_team) -> bool:
             canonical = self._resolve_alias(team_name, event.league)
-            candidate = canonical or team_name
+            candidate = normalize_for_matching(canonical or team_name)
             return (
                 _abbrev_equals(candidate, event_team.abbreviation)
                 or _best_name_score(candidate, event_team) >= BOTH_TEAMS_THRESHOLD
             )
 
-        return _side_matches(ctx.team1, event.away_team) and _side_matches(
-            ctx.team2, event.home_team
-        )
+        return _side_matches(ctx.team1, first) and _side_matches(ctx.team2, second)
 
     @staticmethod
     def _strip_parentheticals(name: str) -> str:
