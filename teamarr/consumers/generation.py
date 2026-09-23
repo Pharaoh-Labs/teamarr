@@ -23,8 +23,9 @@ from teamarr.consumers.generation_pipeline.models import (
     ProgressCallback,
     legacy_progress_reporter,
 )
+from teamarr.consumers.generation_pipeline.phases import preparation, processing
 from teamarr.consumers.generation_pipeline.runner import GenerationStage, StageRunner
-from teamarr.dispatcharr import EPGManager, M3UManager
+from teamarr.dispatcharr import EPGManager
 from teamarr.dispatcharr.factory import DispatcharrConnection
 from teamarr.dispatcharr.managers import ChannelManager
 from teamarr.emby.client import EmbyClient
@@ -218,110 +219,32 @@ def run_full_generation(
 
 
 def _stage_m3u_refresh(context: GenerationContext) -> None:
-    context.report("init", 3, "Refreshing M3U accounts...")
-    if context.dispatcharr_client:
-        context.result.m3u_refresh = _refresh_m3u_accounts(
-            context.db_factory, context.dispatcharr_client
-        )
+    """Facade seam for the preparation phase's M3U refresh."""
+    preparation.stage_m3u_refresh(context, refresh_m3u_accounts=_refresh_m3u_accounts)
 
 
 def _stage_teams(context: GenerationContext) -> None:
+    """Facade seam for team processing and its legacy patch path."""
     from teamarr.consumers import process_all_teams
 
-    context.report("teams", 5, "Processing teams...")
-    started_at = time.time()
-
-    def progress(current: int, total: int, name: str) -> None:
-        percent = 5 + int((current / total) * 45) if total else 5
-        elapsed = time.time() - started_at
-        remaining = total - current
-        message = (
-            f"{name} ({current}/{total}) - {remaining} remaining [{elapsed:.1f}s]"
-            if remaining > 0
-            else f"{name} ({current}/{total}) [{elapsed:.1f}s]"
-        )
-        context.report("teams", percent, message, current, total, name)
-
-    context.team_result = process_all_teams(
-        db_factory=context.db_factory, progress_callback=progress, service=context.sports_service
-    )
-    context.result.teams_processed = context.team_result.teams_processed
-    context.result.teams_programmes = context.team_result.total_programmes
+    processing.stage_teams(context, team_processor=process_all_teams)
 
 
 def _stage_prepare_team_channels(context: GenerationContext) -> None:
-    team_channels = (
-        context.dispatcharr_client
-        if isinstance(context.dispatcharr_client, DispatcharrConnection)
-        else None
-    )
-    context.team_channel_manager = TeamChannelManager(
-        context.db_factory,
-        team_channels.channels if team_channels else None,
-        team_channels.epg if team_channels else None,
-        team_channels.logos if team_channels else None,
-    )
-    context.report(
-        "groups",
-        50,
-        f"Teams complete ({context.result.teams_processed} processed), loading event groups...",
-        0,
-        1,
-        "Loading event groups...",
-    )
+    """Facade seam for managed team-channel preparation."""
+    preparation.stage_prepare_team_channels(context)
 
 
 def _stage_groups(context: GenerationContext) -> None:
+    """Facade seam for group processing and its legacy patch paths."""
     from teamarr.consumers import process_all_event_groups
     from teamarr.consumers.lifecycle import compute_external_occupied
 
-    started_at = time.time()
-
-    def progress(current: int, total: int, name: str) -> None:
-        percent = 50 + int((current / total) * 45) if total else 50
-        elapsed = time.time() - started_at
-        if "✓" in name or "✗" in name:
-            context.report("groups", percent, name, current, total, name)
-            return
-        remaining = total - current
-        message = (
-            f"Finished {name} ({current}/{total}) - {remaining} remaining [{elapsed:.1f}s]"
-            if remaining > 0
-            else f"Finished {name} ({current}/{total}) [{elapsed:.1f}s]"
-        )
-        context.report("groups", percent, message, current, total, name)
-
-    channel_manager = (
-        context.dispatcharr_client.channels
-        if isinstance(context.dispatcharr_client, DispatcharrConnection)
-        else None
-    )
-    context.external_occupied = compute_external_occupied(context.db_factory, channel_manager)
-    if context.external_occupied:
-        context.result.channel_conflicts = _validate_channel_ranges(
-            context.db_factory, context.external_occupied
-        )
-
-    def collect_matches(group_id: int, matches: list[dict]) -> None:
-        context.team_completed_groups.add(group_id)
-        context.team_matched_streams.extend(
-            {**match, "source_group_id": group_id} for match in matches
-        )
-
-    context.group_result = process_all_event_groups(
-        db_factory=context.db_factory,
-        dispatcharr_client=context.dispatcharr_client,
-        progress_callback=progress,
-        generation=context.current_generation,
-        service=context.sports_service,
-        aggregate_xmltv=False,
-        run_id=context.stats_run.id,
-        matched_stream_callback=collect_matches,
-    )
-    context.result.groups_processed = context.group_result.groups_processed
-    context.result.groups_programmes = context.group_result.total_programmes
-    context.result.programmes_total = (
-        context.result.teams_programmes + context.result.groups_programmes
+    processing.stage_groups(
+        context,
+        group_processor=process_all_event_groups,
+        external_occupied_provider=compute_external_occupied,
+        validate_channel_ranges=_validate_channel_ranges,
     )
 
 
@@ -881,111 +804,16 @@ def _refresh_channelsdvr_server(
 
 
 def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:
-    """Refresh M3U accounts for all event groups."""
-    from teamarr.database.groups import get_all_groups
-
-    result = {"refreshed": 0, "skipped": 0, "failed": 0, "account_ids": []}
-
-    # Collect unique M3U account IDs from active groups
-    with db_factory() as conn:
-        groups = get_all_groups(conn, include_disabled=False)
-
-    account_ids = set()
-    for group in groups:
-        if group.m3u_account_id:
-            account_ids.add(group.m3u_account_id)
-
-    if not account_ids:
-        return result
-
-    result["account_ids"] = list(account_ids)
-
-    # Refresh all accounts in parallel
-
-    raw_client = (
-        dispatcharr_client.client
-        if isinstance(dispatcharr_client, DispatcharrConnection)
-        else dispatcharr_client
-    )
-    m3u_manager = M3UManager(raw_client)
-    batch_result = m3u_manager.refresh_multiple(
-        list(account_ids),
-        timeout=300,
-        skip_if_recent_minutes=30,
-    )
-
-    result["refreshed"] = batch_result.succeeded_count - batch_result.skipped_count
-    result["skipped"] = batch_result.skipped_count
-    result["failed"] = batch_result.failed_count
-    result["duration"] = batch_result.duration
-
-    if batch_result.succeeded_count > 0:
-        logger.info(
-            "[M3U] Refresh: %d refreshed, %d skipped (recently updated)",
-            result["refreshed"],
-            result["skipped"],
-        )
-
-    return result
+    """Compatibility wrapper for the extracted M3U refresh helper."""
+    return preparation.refresh_m3u_accounts_for_groups(db_factory, dispatcharr_client)
 
 
 def _validate_channel_ranges(
     db_factory: Callable[[], Any],
     external_occupied: set[int],
 ) -> dict:
-    """Validate global channel range against external Dispatcharr channels.
-
-    Checks for overlap between the configured channel range and external
-    channels. Returns conflict info for the generation result (#146).
-
-    Args:
-        db_factory: Factory function returning database connection
-        external_occupied: Channel numbers occupied by non-Teamarr channels
-
-    Returns:
-        Dict with external channel stats and range warnings
-    """
-    from teamarr.database.channel_numbers import get_global_channel_range
-
-    max_external = max(external_occupied) if external_occupied else 0
-    conflicts: dict = {
-        "external_channels_detected": len(external_occupied),
-        "max_external_channel": max_external,
-        "group_warnings": [],
-    }
-
-    with db_factory() as conn:
-        range_start, range_end = get_global_channel_range(conn)
-        effective_end = range_end if range_end else range_start + 9999
-        global_range = set(range(range_start, effective_end + 1))
-        collisions = external_occupied & global_range
-
-        if collisions:
-            available = len(global_range) - len(collisions)
-            warning = {
-                "group_id": None,
-                "group_name": "Global Range",
-                "range": f"{range_start}-{effective_end}",
-                "external_collisions": len(collisions),
-                "available_slots": available,
-            }
-            conflicts["group_warnings"].append(warning)
-            logger.warning(
-                "[CHANNEL_NUM] Global range %d-%d has %d "
-                "external channel collisions (%d slots available)",
-                range_start,
-                effective_end,
-                len(collisions),
-                available,
-            )
-
-    if not conflicts["group_warnings"]:
-        logger.info(
-            "[CHANNEL_NUM] No channel range conflicts with %d external channels",
-            len(external_occupied),
-        )
-
-    return conflicts
+    """Compatibility wrapper for extracted channel-range validation."""
+    return processing.validate_channel_ranges(db_factory, external_occupied)
 
 
 def _sync_global_channels(
