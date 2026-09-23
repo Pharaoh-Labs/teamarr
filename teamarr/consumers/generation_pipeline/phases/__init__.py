@@ -1,5 +1,5 @@
-"""Preparation and processing phases for the internal generation pipeline."""
+"""Internal phases for the fixed generation pipeline."""
 
-from . import preparation, processing
+from . import channel_output, preparation, processing
 
-__all__ = ["preparation", "processing"]
+__all__ = ["channel_output", "preparation", "processing"]
