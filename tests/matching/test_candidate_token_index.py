@@ -13,7 +13,9 @@ measurement forced:
   * The index must never narrow a category the safety measurement did not cover.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
+from unittest.mock import MagicMock
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -252,3 +254,76 @@ class TestSimultaneousReversedFixtures:
 
         assert out.category is ResultCategory.MATCHED
         assert out.event.id == "tor-home"
+
+
+class TestMissingSplitSquadCandidates:
+    """Team schedules can contain a fixture absent from the league scoreboard."""
+
+    @staticmethod
+    def _fixtures():
+        toronto = _team("Toronto Maple Leafs", "Maple Leafs", "TOR", "nhl", "hockey")
+        ottawa = _team("Ottawa Senators", "Senators", "OTT", "nhl", "hockey")
+        return (
+            _event(ottawa, toronto, "401879650"),
+            _event(toronto, ottawa, "401886441"),
+        )
+
+    @pytest.mark.parametrize("token_index", [False, True])
+    @pytest.mark.parametrize(
+        ("stream_name", "expected_id", "schedule_needed"),
+        [
+            ("Ottawa @ Toronto", "401886441", True),
+            ("Toronto @ Ottawa", "401879650", False),
+        ],
+    )
+    def test_schedule_supplements_missing_reversed_fixture(
+        self, monkeypatch, token_index, stream_name, expected_id, schedule_needed
+    ):
+        wrong_orientation, correct_orientation = self._fixtures()
+        service = MagicMock()
+        service.get_team_schedule.return_value = [wrong_orientation, correct_orientation]
+        cache = MagicMock()
+        cache.get.return_value = None
+        matcher = make_team_matcher(service=service, cache=cache, include_leagues={"nhl"})
+
+        if token_index:
+            monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
+        else:
+            monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+
+        result = matcher.match_multi_league(
+            classified=classify_stream(stream_name),
+            enabled_leagues=["nhl"],
+            target_date=TODAY,
+            group_id=1,
+            stream_id=1,
+            generation=1,
+            user_tz=ZoneInfo("UTC"),
+            prefetched_events={"nhl": [wrong_orientation]},
+        )
+
+        assert result.category is ResultCategory.MATCHED
+        assert result.event.id == expected_id
+        if schedule_needed:
+            service.get_team_schedule.assert_called_once_with(
+                wrong_orientation.home_team.id, "nhl", days_ahead=3
+            )
+        else:
+            service.get_team_schedule.assert_not_called()
+
+    def test_time_still_disambiguates_same_orientation_doubleheaders(self, monkeypatch):
+        blue_jays = _team("Toronto Blue Jays", "Blue Jays", "TOR")
+        orioles = _team("Baltimore Orioles", "Orioles", "BAL")
+        early = _event(orioles, blue_jays, "401923610")
+        late = _event(orioles, blue_jays, "401817050")
+        early.start_time = datetime.combine(TODAY, time(17, 35), tzinfo=UTC)
+        late.start_time = datetime.combine(TODAY, time(22, 35), tzinfo=UTC)
+        monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+
+        out = make_team_matcher()._match_against_candidates(
+            _ctx("Toronto @ Baltimore @ 01:35 PM"),
+            (("mlb", late), ("mlb", early)),
+        )
+
+        assert out.category is ResultCategory.MATCHED
+        assert out.event.id == "401923610"
