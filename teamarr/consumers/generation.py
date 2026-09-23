@@ -10,7 +10,6 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from teamarr.channelsdvr.client import ChannelsDVRClient
@@ -23,7 +22,7 @@ from teamarr.consumers.generation_pipeline.models import (
     ProgressCallback,
     legacy_progress_reporter,
 )
-from teamarr.consumers.generation_pipeline.phases import preparation, processing
+from teamarr.consumers.generation_pipeline.phases import channel_output, preparation, processing
 from teamarr.consumers.generation_pipeline.runner import GenerationStage, StageRunner
 from teamarr.dispatcharr import EPGManager
 from teamarr.dispatcharr.factory import DispatcharrConnection
@@ -33,7 +32,6 @@ from teamarr.jellyfin.client import JellyfinClient
 from teamarr.services import TeamChannelManager, create_default_service
 from teamarr.services.sports_data import flush_shared_cache
 from teamarr.utilities import call_metrics
-from teamarr.utilities.xmltv import merge_xmltv_content
 
 logger = logging.getLogger(__name__)
 
@@ -249,12 +247,8 @@ def _stage_groups(context: GenerationContext) -> None:
 
 
 def _stage_channel_reassign(context: GenerationContext) -> None:
-    context.relayout = _sync_global_channels(
-        context.db_factory,
-        context.dispatcharr_client,
-        context.report,
-        external_occupied=context.external_occupied,
-    )
+    """Facade seam for global channel reassignment."""
+    channel_output.stage_channel_reassign(context, sync_global_channels=_sync_global_channels)
 
 
 def _stage_team_channels(context: GenerationContext) -> None:
@@ -279,26 +273,8 @@ def _stage_stream_ordering(context: GenerationContext) -> None:
 
 
 def _stage_xmltv_save(context: GenerationContext) -> None:
-    from teamarr.consumers.team_processor import get_all_team_xmltv
-    from teamarr.database.groups import get_all_group_xmltv
-
-    context.report("saving", 95, "Saving XMLTV...")
-    with context.db_factory() as conn:
-        xmltv_contents = get_all_team_xmltv(conn) + get_all_group_xmltv(conn)
-    output_path = context.settings.epg.epg_output_path
-    if xmltv_contents and output_path:
-        merged = merge_xmltv_content(
-            xmltv_contents,
-            generator_name=context.settings.display.xmltv_generator_name,
-            generator_url=context.settings.display.xmltv_generator_url,
-        )
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        output_file.write_text(merged, encoding="utf-8")
-        context.result.file_written = True
-        context.result.file_path = str(output_file.absolute())
-        context.result.file_size = len(merged)
-        logger.info("[GENERATION] EPG written to %s (%s bytes)", output_path, f"{len(merged):,}")
+    """Facade seam for XMLTV publication."""
+    channel_output.stage_xmltv_save(context)
 
 
 def _stage_lifecycle_prepare(context: GenerationContext) -> None:
@@ -822,58 +798,10 @@ def _sync_global_channels(
     update_progress: Callable,
     external_occupied: set[int] | None = None,
 ) -> bool:
-    """Reassign channel numbers globally by sort priority.
-
-    This is the single authoritative pass that pushes numbers to Dispatcharr.
-    In sticky (gap/strict) modes it places only new channels, unless the daily
-    reset window has arrived (should_run_channel_reset) — then it re-grids
-    everything once.
-
-    Returns whether that full re-layout ran, so the managed team channel sync
-    can re-sort its own numbers in the same run (#810).
-    """
-    from teamarr.database.channel_numbers import (
-        reassign_all_channels,
-        should_run_channel_reset,
+    """Compatibility wrapper for extracted global channel reassignment."""
+    return channel_output.reassign_global_channels(
+        db_factory, dispatcharr_client, update_progress, external_occupied
     )
-
-    update_progress("groups", 94, "Reassigning channels globally by sport/league priority...")
-    with db_factory() as conn:
-        force_reset = should_run_channel_reset(conn)
-        if force_reset:
-            update_progress("groups", 94, "Daily channel re-layout (low-traffic reset)...")
-        global_result = reassign_all_channels(
-            conn, external_occupied=external_occupied, force_reset=force_reset
-        )
-        if global_result["channels_moved"] == 0:
-            return force_reset
-
-        logger.info(
-            "[GENERATION] Global reassignment: %d channels processed, %d moved",
-            global_result["channels_processed"],
-            global_result["channels_moved"],
-        )
-
-        if not dispatcharr_client:
-            return force_reset
-
-        synced = 0
-        for ch in global_result.get("drift_details", []):
-            disp_id = ch.get("dispatcharr_channel_id")
-            new_num = ch.get("new_number")
-            if disp_id and new_num:
-                try:
-                    dispatcharr_client.channels.update_channel(disp_id, {"channel_number": new_num})
-                    synced += 1
-                except Exception as e:
-                    logger.warning(
-                        "[GENERATION] Failed to sync channel %s to Dispatcharr: %s",
-                        ch.get("channel_name"),
-                        e,
-                    )
-        if synced:
-            logger.info("[GENERATION] Synced %d channel numbers to Dispatcharr", synced)
-        return force_reset
 
 
 @dataclass
