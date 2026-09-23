@@ -111,6 +111,19 @@ def test_team_phase_forwards_the_run_scoped_service_and_updates_totals():
     assert context.progress_events[1][3:] == (2, 4, "Lions")
 
 
+def test_team_phase_uses_its_start_percentage_when_progress_has_no_total():
+    context = _context()
+
+    def process(**kwargs):
+        kwargs["progress_callback"](0, 0, "Lions")
+        return SimpleNamespace(teams_processed=0, total_programmes=0)
+
+    processing.stage_teams(context, team_processor=process)
+
+    assert context.progress_events[1][0:2] == ("teams", 5)
+    assert context.progress_events[1][3:] == (0, 0, "Lions")
+
+
 def test_group_phase_forwards_run_identity_collects_matches_and_updates_totals():
     context = _context()
     context.result.teams_programmes = 11
@@ -152,3 +165,26 @@ def test_group_phase_forwards_run_identity_collects_matches_and_updates_totals()
     assert context.result.programmes_total == 24
     assert context.progress_events[0][0:2] == ("groups", 72)
     assert context.progress_events[0][3:] == (1, 2, "Tigers")
+
+
+def test_group_phase_preserves_terminal_messages_and_uses_start_percentage_without_total():
+    context = _context()
+
+    def process(**kwargs):
+        progress = kwargs["progress_callback"]
+        progress(0, 0, "No groups")
+        progress(1, 2, "✓ Tigers")
+        progress(2, 2, "✗ Lions")
+        return SimpleNamespace(groups_processed=0, total_programmes=0)
+
+    processing.stage_groups(
+        context,
+        group_processor=process,
+        external_occupied_provider=lambda *_: set(),
+        validate_channel_ranges=lambda *_: (_ for _ in ()).throw(AssertionError("called")),
+    )
+
+    assert context.progress_events[0][0:2] == ("groups", 50)
+    assert context.progress_events[0][3:] == (0, 0, "No groups")
+    assert context.progress_events[1] == ("groups", 72, "✓ Tigers", 1, 2, "✓ Tigers")
+    assert context.progress_events[2] == ("groups", 95, "✗ Lions", 2, 2, "✗ Lions")
