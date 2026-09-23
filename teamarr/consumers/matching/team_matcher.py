@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 
 from rapidfuzz import fuzz
 
+from teamarr.config import get_matchup_order
 from teamarr.consumers.matching import MATCH_WINDOW_DAYS
 from teamarr.consumers.matching.candidate_index import (
     CandidateTokenIndex,
@@ -54,6 +55,7 @@ from teamarr.consumers.stream_match_cache import (
     StreamMatchCache,
     event_to_cache_data,
 )
+from teamarr.core.naming import matchup_home_first
 from teamarr.core.types import (
     GENERATED_PREVIEW_FIELDS,
     Event,
@@ -803,11 +805,12 @@ class TeamMatcher:
         explicit venue notation contradicts an otherwise valid selected event.
         """
         event = result.event
+        separator = (ctx.classified.separator_found or "").strip().lower()
         if (
             not result.is_matched
             or event is None
             or self._has_away_home_orientation(ctx, event)
-            or (ctx.classified.separator_found or "").strip().lower() not in {"@", "at"}
+            or (separator not in {"@", "at"} and not separator.startswith("vs"))
         ):
             return ()
 
@@ -1970,14 +1973,27 @@ class TeamMatcher:
         return self._score_teams_against_event(team1, team2, event, code_tokens)
 
     def _has_away_home_orientation(self, ctx: MatchContext, event: Event) -> bool:
-        """Whether an ``@``/``at`` stream explicitly names this event's sides.
+        """Whether a stream's sides follow its configured venue convention.
 
         This is deliberately a ranking signal rather than a match requirement:
         providers commonly omit or reverse sides, but two simultaneous fixtures
-        with the same teams need the venue notation to break an otherwise exact tie.
+        with the same teams need the declared convention to break an otherwise
+        exact tie.
         """
         separator = (ctx.classified.separator_found or "").strip().lower()
-        if separator not in {"@", "at"} or not ctx.team1 or not ctx.team2:
+        if not ctx.team1 or not ctx.team2:
+            return False
+
+        if separator in {"@", "at"}:
+            first, second = event.away_team, event.home_team
+        elif separator.startswith("vs"):
+            home_first = matchup_home_first(event.sport, get_matchup_order(event.league))
+            first, second = (
+                (event.home_team, event.away_team)
+                if home_first
+                else (event.away_team, event.home_team)
+            )
+        else:
             return False
 
         def _side_matches(team_name: str, event_team) -> bool:
@@ -1988,9 +2004,7 @@ class TeamMatcher:
                 or _best_name_score(candidate, event_team) >= BOTH_TEAMS_THRESHOLD
             )
 
-        return _side_matches(ctx.team1, event.away_team) and _side_matches(
-            ctx.team2, event.home_team
-        )
+        return _side_matches(ctx.team1, first) and _side_matches(ctx.team2, second)
 
     @staticmethod
     def _strip_parentheticals(name: str) -> str:

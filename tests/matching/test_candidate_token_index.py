@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from teamarr.config import set_matchup_orders
 from teamarr.consumers.matching.candidate_index import (
     CandidateTokenIndex,
     event_tokens,
@@ -245,7 +246,7 @@ class TestSimultaneousReversedFixtures:
         assert out.category is ResultCategory.MATCHED
         assert out.event.id == "mtl-home"
 
-    def test_vs_keeps_existing_order_insensitive_tie_behavior(self, matcher, monkeypatch):
+    def test_vs_uses_auto_away_first_order_for_hockey(self, matcher, monkeypatch):
         monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
 
         out = matcher._match_against_candidates(
@@ -253,7 +254,7 @@ class TestSimultaneousReversedFixtures:
         )
 
         assert out.category is ResultCategory.MATCHED
-        assert out.event.id == "tor-home"
+        assert out.event.id == "mtl-home"
 
 
 class TestMissingSplitSquadCandidates:
@@ -327,3 +328,53 @@ class TestMissingSplitSquadCandidates:
 
         assert out.category is ResultCategory.MATCHED
         assert out.event.id == "401923610"
+
+    @pytest.mark.parametrize("token_index", [False, True])
+    def test_vs_uses_auto_matchup_order_for_missing_split_squad(
+        self, monkeypatch, token_index
+    ):
+        wrong_orientation, correct_orientation = self._fixtures()
+        service = MagicMock()
+        service.get_team_schedule.return_value = [wrong_orientation, correct_orientation]
+        cache = MagicMock()
+        cache.get.return_value = None
+        matcher = make_team_matcher(service=service, cache=cache, include_leagues={"nhl"})
+        set_matchup_orders("auto", {})
+
+        if token_index:
+            monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
+        else:
+            monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+
+        try:
+            result = matcher.match_multi_league(
+                classified=classify_stream("Ottawa Senators vs Toronto Maple Leafs"),
+                enabled_leagues=["nhl"],
+                target_date=TODAY,
+                group_id=1,
+                stream_id=1,
+                generation=1,
+                user_tz=ZoneInfo("UTC"),
+                prefetched_events={"nhl": [wrong_orientation]},
+            )
+        finally:
+            set_matchup_orders("auto", {})
+
+        assert result.category is ResultCategory.MATCHED
+        assert result.event.id == "401886441"
+
+    def test_vs_respects_configured_home_first_order(self, monkeypatch):
+        wrong_orientation, correct_orientation = self._fixtures()
+        monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+        set_matchup_orders("home_first", {})
+
+        try:
+            out = make_team_matcher()._match_against_candidates(
+                _ctx("Ottawa Senators vs Toronto Maple Leafs"),
+                (("nhl", wrong_orientation), ("nhl", correct_orientation)),
+            )
+        finally:
+            set_matchup_orders("auto", {})
+
+        assert out.category is ResultCategory.MATCHED
+        assert out.event.id == "401879650"
