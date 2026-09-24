@@ -209,6 +209,9 @@ class XmltvRenderer:
                     match["_exception_keyword"] = keyword_label
 
         # Load sport durations and lookback from settings
+        from teamarr.database.settings import get_dispatcharr_settings
+
+        options.untagged_keyword_label = get_dispatcharr_settings(conn).untagged_keyword_label
         options.sport_durations = self._load_sport_durations(conn)
         lookback_hours = self._load_lookback_hours(conn)
 

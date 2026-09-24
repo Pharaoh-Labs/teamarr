@@ -16,6 +16,8 @@ export interface DispatcharrSettings {
   default_channel_group_id: number | null
   // Channel group mode: 'static', 'sport', 'league', or custom pattern
   default_channel_group_mode: string | null
+  // {exception_keyword} value for channels no keyword matched (null = empty)
+  untagged_keyword_label: string | null
   // Dedicated output defaults for managed Team EPG channels.
   managed_team_channel_profile_ids: (number | string)[] | null
   managed_team_channel_group_id: number | null

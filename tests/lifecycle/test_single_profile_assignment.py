@@ -56,6 +56,7 @@ class TestResolveProfilesForEvent:
             profile_ids=[2],
             event_sport="baseball",
             event_league="milb",
+            exception_keyword=None,
         )
 
     def test_empty_list_stays_empty(self):

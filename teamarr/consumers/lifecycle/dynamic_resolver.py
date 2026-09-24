@@ -1,7 +1,7 @@
 """Dynamic channel group and profile resolver.
 
-Resolves {sport}, {league}, {conference}, {conference_abbrev} and {division}
-wildcards to actual Dispatcharr group/profile IDs.
+Resolves {sport}, {league}, {conference}, {conference_abbrev}, {division} and
+{exception_keyword} wildcards to actual Dispatcharr group/profile IDs.
 Auto-creates groups/profiles in Dispatcharr if they don't exist.
 """
 
@@ -276,6 +276,7 @@ class DynamicResolver:
         conference: str | None = None,
         division: str | None = None,
         conference_abbrev: str | None = None,
+        exception_keyword: str | None = None,
     ) -> str:
         """Interpolate pattern with event data.
 
@@ -287,6 +288,8 @@ class DynamicResolver:
             division: Division name for the {division} wildcard (#717)
             conference_abbrev: Conference abbreviation for the
                 {conference_abbrev} wildcard (#777)
+            exception_keyword: Keyword label for the {exception_keyword}
+                wildcard; empty leaves the token unresolved
 
         Returns:
             Resolved string with wildcards replaced by display names
@@ -311,6 +314,9 @@ class DynamicResolver:
 
         if conference_abbrev and "{conference_abbrev}" in result:
             result = result.replace("{conference_abbrev}", conference_abbrev)
+
+        if exception_keyword and "{exception_keyword}" in result:
+            result = result.replace("{exception_keyword}", exception_keyword)
 
         return result
 
@@ -450,18 +456,23 @@ class DynamicResolver:
         event_sport: str | None,
         event_league: str | None,
         event: Any = None,
+        exception_keyword: str | None = None,
     ) -> int | None:
         """Resolve channel group ID based on mode.
 
         Args:
             mode: 'static' or pattern string containing
-                {sport}/{league}/{conference}/{conference_abbrev}/{division}
+                {sport}/{league}/{conference}/{conference_abbrev}/{division}/
+                {exception_keyword}
             static_group_id: Group ID to use for 'static' mode
             event_sport: Event's sport code
             event_league: Event's league code
             event: The event itself — needed only for the {conference} (#91),
                 {conference_abbrev} (#777) and {division} (#717) wildcards,
                 which resolve from the home team
+            exception_keyword: Label for {exception_keyword} — the matched
+                keyword, or the untagged label for a channel with none. Empty
+                falls back to the static group like any unresolved wildcard.
 
         Returns:
             Resolved group ID or None
@@ -510,7 +521,13 @@ class DynamicResolver:
                 else None
             )
             resolved_name = self.resolve_pattern(
-                mode, event_sport, event_league, conference, division, conference_abbrev
+                mode,
+                event_sport,
+                event_league,
+                conference,
+                division,
+                conference_abbrev,
+                exception_keyword,
             )
 
             # Check if any wildcards remain unresolved (a non-NCAA event under
@@ -522,6 +539,7 @@ class DynamicResolver:
                 or "{conference}" in resolved_name
                 or "{division}" in resolved_name
                 or "{conference_abbrev}" in resolved_name
+                or "{exception_keyword}" in resolved_name
             ):
                 logger.warning(
                     "[RESOLVER] Pattern has unresolved wildcards: %s -> %s (sport=%s, league=%s)",
@@ -555,6 +573,7 @@ class DynamicResolver:
         profile_ids: list[int | str] | None,
         event_sport: str | None,
         event_league: str | None,
+        exception_keyword: str | None = None,
     ) -> list[int]:
         """Resolve channel profile IDs, expanding wildcards and patterns.
 
@@ -562,6 +581,8 @@ class DynamicResolver:
             profile_ids: List of profile IDs, wildcards ("{sport}", "{league}"), or custom patterns
             event_sport: Event's sport code
             event_league: Event's league code
+            exception_keyword: Label for the {exception_keyword} wildcard;
+                empty skips patterns that use it
 
         Returns:
             List of resolved integer profile IDs
@@ -581,7 +602,9 @@ class DynamicResolver:
                     resolved.append(int(item))
                 elif "{" in item:
                     # Pattern - resolve it
-                    resolved_name = self.resolve_pattern(item, event_sport, event_league)
+                    resolved_name = self.resolve_pattern(
+                        item, event_sport, event_league, exception_keyword=exception_keyword
+                    )
 
                     # Check if wildcards remain unresolved. The conference
                     # tokens are never passed here (profiles get sport/league
@@ -596,6 +619,7 @@ class DynamicResolver:
                             "{conference}",
                             "{conference_abbrev}",
                             "{division}",
+                            "{exception_keyword}",
                         )
                     ):
                         logger.warning(

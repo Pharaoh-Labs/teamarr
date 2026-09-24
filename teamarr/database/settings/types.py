@@ -25,6 +25,10 @@ class DispatcharrSettings:
     default_channel_group_id: int | None = None
     # Channel group mode: 'static', 'sport', 'league', or custom pattern like '{sport} | {league}'
     default_channel_group_mode: str = "static"
+    # Value {exception_keyword} takes on channels no keyword matched, in group and
+    # profile patterns and in templates. None = empty, so a pattern using the token
+    # falls back to the static group for those channels.
+    untagged_keyword_label: str | None = None
     # Dedicated output defaults for persistent Team EPG channels. These do not
     # inherit event-channel defaults: None means no group / all profiles.
     managed_team_channel_profile_ids: list[int | str] | None = None

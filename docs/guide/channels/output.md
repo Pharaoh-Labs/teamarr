@@ -39,11 +39,13 @@ Pick a static group from the dropdown. By default the list hides M3U-sourced gro
 | **Static** | All channels go to the selected group above |
 | **Dynamic by Sport** | Auto-creates and assigns groups named by sport |
 | **Dynamic by League** | Auto-creates and assigns groups named by league |
-| **Custom pattern** | Define a pattern using `{sport}`, `{league}`, `{conference}`, `{conference_abbrev}`, and `{division}` placeholders |
+| **Custom pattern** | Define a pattern using `{sport}`, `{league}`, `{conference}`, `{conference_abbrev}`, `{division}`, and `{exception_keyword}` placeholders |
 
 When **Custom pattern** is selected, a pattern field appears. For example, `{sport} | {league}` creates groups like "Hockey | NHL". Teamarr creates these dynamic groups in Dispatcharr automatically.
 
 In group patterns, `{sport}` resolves to the sport's display name ("Hockey"), and `{league}` to the league's **short alias** — "EPL", not "English Premier League". `{conference}` resolves to the home team's conference name for NCAA football/basketball events ("Southeastern Conference"), `{conference_abbrev}` to its compact form ("SEC", "ACC", "Big Ten"), and `{division}` to that conference's division — **FBS** or **FCS** for college football, **Division I** for college basketball. Events without conference data fall back to the static group.
+
+`{exception_keyword}` resolves to the label of the [exception keyword](consolidation.md#exception-keywords) the channel's stream matched, so `{exception_keyword}: {sport}` puts Spanish-keyword channels in "Spanish: Rugby". It also works in channel profile patterns. A channel no keyword matched has no label: it falls back to the static group unless you set an **Untagged label** (below the group mode), which stands in for the keyword — with `EN` set, those channels land in "EN: Rugby". The same setting fills `{exception_keyword}` in channel name and logo templates.
 
 {: .note }
 `{division}` is the light-touch way to tame a college football Saturday: `{league} | {division}` splits ~80 games into "NCAAF | FBS" and "NCAAF | FCS" without the 25 groups `{conference}` produces. When you do want per-conference groups but not the long names, `{conference_abbrev}` gives you "NCAAF | SEC" instead of "NCAAF | Southeastern Conference". All three wildcards bucket on the **home** team, so an FBS-vs-FCS game lands in FBS — which is where you want it, since the FCS side is the visitor in those matchups. `{division}` needs a conference-tree refresh (Settings → Cache → Refresh) before it resolves; until then those events fall back to the static group.

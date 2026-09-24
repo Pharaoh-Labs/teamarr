@@ -43,6 +43,14 @@ def get_exception_keywords(conn: Connection, enabled_only: bool = True) -> list[
     return get_all_keywords(conn, include_disabled=not enabled_only)
 
 
+def keyword_display_value(keyword: str | None, untagged_label: str | None) -> str:
+    """Display value of ``{exception_keyword}``: the keyword, else the untagged
+    label, else empty. For display text only; tvg-ids and channel lookup use
+    the keyword itself.
+    """
+    return keyword or untagged_label or ""
+
+
 def _make_keyword_pattern(term: str) -> str:
     """Create regex pattern with smart boundaries for term matching.
 

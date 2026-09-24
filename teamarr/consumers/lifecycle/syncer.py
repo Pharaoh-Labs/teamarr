@@ -58,6 +58,7 @@ class ChannelSyncer(_LifecycleHost):
         | top active stream   | stream_profile_id   | Override or global default    |
         """
         from teamarr.database.channels import (
+            keyword_display_value,
             log_channel_history,
             update_managed_channel,
         )
@@ -150,6 +151,9 @@ class ChannelSyncer(_LifecycleHost):
                 event_sport=event_sport,
                 event_league=event_league,
                 event=event,
+                exception_keyword=keyword_display_value(
+                    matched_keyword, _ds.untagged_keyword_label
+                ),
             )
 
             old_group_id = current_channel.channel_group_id
@@ -322,7 +326,7 @@ class ChannelSyncer(_LifecycleHost):
         Dispatcharr profile semantics:
           [] = NO profiles, [0] = ALL profiles (sentinel), [1,2,...] = specific IDs
         """
-        from teamarr.database.channels import update_managed_channel
+        from teamarr.database.channels import keyword_display_value, update_managed_channel
         from teamarr.database.settings import get_dispatcharr_settings
 
         dispatcharr_settings = get_dispatcharr_settings(conn)
@@ -344,6 +348,10 @@ class ChannelSyncer(_LifecycleHost):
                 profile_ids=raw_group_profiles,
                 event_sport=event_sport,
                 event_league=event_league,
+                exception_keyword=keyword_display_value(
+                    getattr(existing, "exception_keyword", None),
+                    dispatcharr_settings.untagged_keyword_label,
+                ),
             )
             effective_profile_ids = resolved_profile_ids if resolved_profile_ids else []
         else:

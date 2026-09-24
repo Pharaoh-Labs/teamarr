@@ -75,6 +75,8 @@ class ChannelCreator(_LifecycleHost):
                 from teamarr.database.channel_numbers import get_global_consolidation_mode
                 duplicate_mode = get_global_consolidation_mode(conn)
 
+                from teamarr.database.channels import keyword_display_value
+
                 # Profile IDs from global settings (per-league overrides below)
                 from teamarr.database.settings import (
                     get_dispatcharr_settings,
@@ -102,6 +104,7 @@ class ChannelCreator(_LifecycleHost):
                 static_channel_group_id = dispatcharr_settings.default_channel_group_id
                 channel_group_mode = dispatcharr_settings.default_channel_group_mode or "static"
                 raw_profile_ids = dispatcharr_settings.default_channel_profile_ids
+                untagged_keyword_label = dispatcharr_settings.untagged_keyword_label
 
                 # Load per-league subscription configs for override
                 from teamarr.database.subscription import get_league_configs
@@ -347,11 +350,17 @@ class ChannelCreator(_LifecycleHost):
                                 event_sport=event_sport,
                                 event_league=event_league,
                                 event=event,
+                                exception_keyword=keyword_display_value(
+                                    matched_keyword, untagged_keyword_label
+                                ),
                             )
                         )
 
                         resolved_channel_profile_ids = self._resolve_profiles_for_event(
-                            effective_profile_ids, event_sport, event_league
+                            effective_profile_ids,
+                            event_sport,
+                            event_league,
+                            keyword_display_value(matched_keyword, untagged_keyword_label),
                         )
 
                         # Create new channel
@@ -809,6 +818,7 @@ class ChannelCreator(_LifecycleHost):
         profile_ids: list[int | str] | None,
         event_sport: str | None,
         event_league: str | None,
+        exception_keyword: str | None = None,
     ) -> list[int] | None:
         """Resolve configured channel profile IDs for channel creation.
 
@@ -823,6 +833,7 @@ class ChannelCreator(_LifecycleHost):
             profile_ids=profile_ids,
             event_sport=event_sport,
             event_league=event_league,
+            exception_keyword=exception_keyword,
         )
         return self._validate_profile_ids(resolved)
 

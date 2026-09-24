@@ -27,6 +27,8 @@ interface ChannelProfileSelectorProps {
   className?: string
   /** Whether to show wildcard options (default: true) */
   showWildcards?: boolean
+  /** Whether custom patterns may use {exception_keyword} (event channels only) */
+  allowKeywordWildcard?: boolean
 }
 
 /**
@@ -44,6 +46,7 @@ export function ChannelProfileSelector({
   disabled = false,
   className,
   showWildcards = true,
+  allowKeywordWildcard = false,
 }: ChannelProfileSelectorProps) {
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState("")
@@ -84,8 +87,11 @@ export function ChannelProfileSelector({
 
   const addCustomPattern = () => {
     if (!customPattern.trim()) return
-    if (!customPattern.includes("{sport}") && !customPattern.includes("{league}")) {
-      toast.error("Pattern must include {sport} or {league}")
+    const allowed = allowKeywordWildcard
+      ? ["{sport}", "{league}", "{exception_keyword}"]
+      : ["{sport}", "{league}"]
+    if (!allowed.some((token) => customPattern.includes(token))) {
+      toast.error(`Pattern must include ${allowed.join(" or ")}`)
       return
     }
     if (selectedIds.includes(customPattern)) {
@@ -376,6 +382,9 @@ export function ChannelProfileSelector({
 
           <div className="px-3 py-1.5 text-xs text-muted-foreground">
             Available: <code className="bg-muted px-1 rounded">{"{sport}"}</code>, <code className="bg-muted px-1 rounded">{"{league}"}</code>
+            {allowKeywordWildcard && (
+              <>, <code className="bg-muted px-1 rounded">{"{exception_keyword}"}</code></>
+            )}
           </div>
         </div>
       )}

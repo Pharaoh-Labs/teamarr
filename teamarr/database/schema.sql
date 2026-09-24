@@ -385,6 +385,7 @@ CREATE TABLE IF NOT EXISTS settings (
     default_stream_profile_id INTEGER,        -- Default stream profile for event channels
     default_channel_group_id INTEGER,         -- Default channel group for event channels
     default_channel_group_mode TEXT DEFAULT 'static', -- 'static', 'sport', 'league', or custom pattern
+    untagged_keyword_label TEXT DEFAULT NULL, -- {exception_keyword} value for channels with no keyword (NULL = empty)
     managed_team_channel_profile_ids JSON,    -- Dedicated channel profiles for managed team channels
     managed_team_channel_group_id INTEGER,    -- Dedicated channel group for managed team channels
     cleanup_unused_logos BOOLEAN DEFAULT 0,   -- Call Dispatcharr's cleanup API after generation

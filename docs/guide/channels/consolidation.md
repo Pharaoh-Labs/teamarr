@@ -26,7 +26,7 @@ Exception keywords let certain streams break out of the default behavior — use
 
 Each keyword has:
 
-- **Label** — the display name. It's appended to the variant channel's name, resolves the `{exception_keyword}` template variable, and is part of the channel's tvg-id.
+- **Label** — the display name. It's appended to the variant channel's name, resolves the `{exception_keyword}` template variable (and the `{exception_keyword}` wildcard in [channel group patterns](output.md)), and is part of the channel's tvg-id.
 - **Match Terms** — comma-separated terms matched against stream names. For a stream matched through its EPG guide (e.g. a linear `ESPN 2` feed), the matched programme's title and subtitle are checked too, so a *ManningCast* keyword with the term `Peyton and Eli` catches `Monday Night Football with Peyton and Eli` even though the stream is only named `ESPN 2`. The stream name is checked first.
 - **Behavior** — one of three:
 
@@ -37,6 +37,10 @@ Each keyword has:
 | **Ignore** | Matching streams are dropped entirely — no channel |
 
 - **Enabled** — an API-only flag (there's no UI toggle); keywords disabled via the API disappear from the card.
+
+### Naming untagged channels
+
+A channel no keyword matched has no label, so `{exception_keyword}: {matchup}` would render as ": Team A v Team B" for it. Set **Untagged label** (Channels → Dispatcharr Output) to give those channels a value — with `EN`, you get `EN: Team A v Team B` beside `ES: Team A v Team B`. The label applies to the channel name, logo URL and EPG display name, and to `{exception_keyword}` in group and profile patterns. It never changes a channel's tvg-id or which streams share a channel, and it does not trigger the automatic "(Label)" suffix, which only real keywords get.
 
 A fresh install ships with eight language keywords seeded (Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese — all Sub-Consolidate), so alternate-language feeds split out of the box. Each seeded keyword is offered **once**: delete or rename one and it stays gone across restarts and upgrades. To get a deleted default back, add it again by hand.
 
