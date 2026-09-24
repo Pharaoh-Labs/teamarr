@@ -22,10 +22,13 @@ from teamarr.consumers.generation_pipeline.models import (
     ProgressCallback,
     legacy_progress_reporter,
 )
-from teamarr.consumers.generation_pipeline.phases import channel_output, preparation, processing
+from teamarr.consumers.generation_pipeline.phases import (
+    channel_output,
+    post_processing,
+    preparation,
+    processing,
+)
 from teamarr.consumers.generation_pipeline.runner import GenerationStage, StageRunner
-from teamarr.dispatcharr import EPGManager
-from teamarr.dispatcharr.factory import DispatcharrConnection
 from teamarr.dispatcharr.managers import ChannelManager
 from teamarr.emby.client import EmbyClient
 from teamarr.jellyfin.client import JellyfinClient
@@ -277,48 +280,17 @@ def _stage_xmltv_save(context: GenerationContext) -> None:
 
 
 def _stage_lifecycle_prepare(context: GenerationContext) -> None:
+    """Facade seam for lifecycle construction and its dynamic factory."""
     from teamarr.consumers import create_lifecycle_service
 
-    context.lifecycle_service = create_lifecycle_service(
-        context.db_factory, context.sports_service, dispatcharr_client=context.dispatcharr_client
-    )
-    context.lifecycle_service.compute_external_occupied()
-    context.lifecycle_service.sync_stream_profiles()
+    post_processing.stage_lifecycle_prepare(context, lifecycle_factory=create_lifecycle_service)
 
 
 def _stage_dispatcharr_epg(context: GenerationContext) -> None:
+    """Facade seam for Dispatcharr EPG refresh cancellation behavior."""
     from teamarr.consumers.generation_status import is_cancellation_requested
 
-    if not (context.dispatcharr_client and context.settings.dispatcharr.epg_id):
-        return
-    assert context.lifecycle_service is not None
-    assert context.team_channel_manager is not None
-    context.report("dispatcharr", 96, "Refreshing Dispatcharr EPG...")
-    raw_client = (
-        context.dispatcharr_client.client
-        if isinstance(context.dispatcharr_client, DispatcharrConnection)
-        else context.dispatcharr_client
-    )
-    refresh = EPGManager(raw_client).wait_for_refresh(
-        context.settings.dispatcharr.epg_id,
-        timeout=300,
-        cancellation_check=is_cancellation_requested,
-    )
-    context.result.epg_refresh = {
-        "success": refresh.success,
-        "message": refresh.message,
-        "duration": refresh.duration,
-    }
-    context.report("dispatcharr", 97, "Associating EPG with channels...")
-    context.result.epg_association = context.lifecycle_service.associate_epg_with_channels(
-        context.settings.dispatcharr.epg_id
-    )
-    try:
-        context.result.epg_association["managed_team_channels"] = (
-            context.team_channel_manager.associate_epg(context.settings.dispatcharr.epg_id)
-        )
-    except Exception as exc:  # noqa: BLE001 - per-step isolation
-        logger.exception("[GENERATION] Managed team EPG association failed: %s", exc)
+    post_processing.stage_dispatcharr_epg(context, cancellation_requested=is_cancellation_requested)
 
 
 def _stage_media_jobs(context: GenerationContext) -> None:
@@ -328,55 +300,31 @@ def _stage_media_jobs(context: GenerationContext) -> None:
 
 
 def _stage_deletions(context: GenerationContext) -> None:
-    assert context.lifecycle_service is not None
-    context.report("lifecycle", 98, "Processing scheduled deletions...")
-    try:
-        deletion_result = context.lifecycle_service.process_scheduled_deletions()
-        context.channels_deleted_count = len(deletion_result.deleted)
-        context.result.deletions = {
-            "deleted_count": context.channels_deleted_count,
-            "error_count": len(deletion_result.errors),
-        }
-        if deletion_result.deleted:
-            logger.info(
-                "[GENERATION] Deleted %d expired channel(s)", context.channels_deleted_count
-            )
-    except Exception as exc:
-        logger.warning("[GENERATION] Scheduled deletions failed: %s", exc)
-        context.result.deletions = {"error": str(exc)}
+    """Facade seam for scheduled deletion processing."""
+    post_processing.stage_deletions(context)
 
 
 def _stage_reconciliation(context: GenerationContext) -> None:
+    """Facade seam for reconciliation's dynamic service and settings reads."""
     from teamarr.consumers import create_reconciler
     from teamarr.database.channels import get_reconciliation_settings
 
-    context.report("reconciliation", 99, "Running reconciliation...")
-    try:
-        with context.db_factory() as conn:
-            settings = get_reconciliation_settings(conn)
-        if settings.get("reconcile_on_epg_generation", True):
-            reconciliation = create_reconciler(
-                context.db_factory, context.dispatcharr_client
-            ).reconcile(auto_fix=False)
-            context.result.reconciliation = reconciliation.summary
-            if reconciliation.issues_found:
-                logger.info("[RECONCILE] Found %d issue(s)", len(reconciliation.issues_found))
-    except Exception as exc:
-        logger.warning("[RECONCILE] Failed: %s", exc)
-        context.result.reconciliation = {"error": str(exc)}
+    post_processing.stage_reconciliation(
+        context,
+        reconciler_factory=create_reconciler,
+        reconciliation_settings=get_reconciliation_settings,
+    )
 
 
 def _stage_stream_audit(context: GenerationContext) -> None:
+    """Facade seam for stale-group and stream-audit diagnostics."""
     from teamarr.consumers import detect_stale_groups
 
-    try:
-        detect_stale_groups(context.db_factory)
-    except Exception as exc:
-        logger.warning("[STALE_GROUPS] Detection failed: %s", exc)
-    try:
-        _run_stream_audit(context.db_factory, context.dispatcharr_client)
-    except Exception as exc:
-        logger.warning("[STREAM_AUDIT] Post-generation audit failed: %s", exc)
+    post_processing.stage_stream_audit(
+        context,
+        stale_group_detector=detect_stale_groups,
+        stream_audit=_run_stream_audit,
+    )
 
 
 def _stage_cleanup(context: GenerationContext) -> None:
