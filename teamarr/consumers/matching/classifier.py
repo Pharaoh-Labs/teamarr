@@ -949,6 +949,15 @@ def extract_teams_from_separator(
     team1 = _clean_team_name(team1)
     team2 = _clean_team_name(team2)
 
+    # A show label before the matchup ("Live UEFA Nations League|England v
+    # Spain") is not the first team. Unlike a pipe on team2, where the tail
+    # can be useful feed/venue metadata (#652), the segment immediately before
+    # the matchup separator is the team named by the listing (#876).
+    if team1 and "|" in team1:
+        last_segment = team1.rsplit("|", 1)[-1].strip()
+        if _is_substantial_side(last_segment):
+            team1 = last_segment
+
     # Validate: both teams should have substance
     if not _is_substantial_side(team1):
         team1 = None
