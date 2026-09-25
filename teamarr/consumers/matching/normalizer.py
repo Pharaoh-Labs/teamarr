@@ -186,6 +186,23 @@ def strip_quality_tags(text: str) -> str:
     return " ".join(stripped.split())
 
 
+# UK guide subtitles put a clock after the fixture ("England v Spain:
+# Kick-off 7.45pm"). The colon otherwise wins separator selection and the
+# dot-time is misread as a partial team name. Require a trailing clock so a
+# genuine team/show name containing "Kick-off" remains intact (#876).
+_KICKOFF_SUFFIX_RE = re.compile(
+    r"\s*(?:[:.]|[-–—]|\()\s*kick[\s-]?off\s+"
+    r"(?:\d{1,2}[.:]\d{2}\s*(?:[ap]\.?m\.?)?|\d{1,2}\s*[ap]\.?m\.?)"
+    r"(?:\s*(?:BST|GMT|UTC))?\s*\)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def strip_kickoff_suffix(text: str) -> str:
+    """Drop a trailing UK guide kick-off clock before matchup parsing (#876)."""
+    return _KICKOFF_SUFFIX_RE.sub("", text) if text else text
+
+
 def strip_provider_prefix(text: str) -> tuple[str, str | None]:
     """Remove provider prefix from stream name.
 
@@ -737,6 +754,9 @@ def normalize_stream(stream_name: str) -> NormalizedStream:
 
     # Step 2.5: Drop video-quality tags before anything looks at prefixes (#651)
     text = strip_quality_tags(text)
+
+    # Step 2.6: A trailing guide kick-off clock is not part of either team.
+    text = strip_kickoff_suffix(text)
 
     # Step 3: Apply city translations (includes unidecode)
     text = apply_city_translations(text)
