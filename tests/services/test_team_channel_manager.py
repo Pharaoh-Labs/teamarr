@@ -904,6 +904,88 @@ def test_stream_ordering_uses_team_scope_and_excludes_closed_windows(monkeypatch
     database.close()
 
 
+def _stats_ordering_db():
+    database = sqlite3.connect(":memory:")
+    database.row_factory = sqlite3.Row
+    database.executescript(
+        """
+        CREATE TABLE teams (
+            id INTEGER PRIMARY KEY, active INTEGER, managed_channel_enabled INTEGER,
+            team_name TEXT, sport TEXT, primary_league TEXT
+        );
+        INSERT INTO teams VALUES (1, 1, 1, 'Home', 'baseball', 'mlb');
+        CREATE TABLE managed_team_channels (
+            team_id INTEGER PRIMARY KEY, dispatcharr_channel_id INTEGER,
+            dispatcharr_uuid TEXT, channel_number INTEGER, sync_status TEXT,
+            sync_message TEXT, last_verified_at TEXT
+        );
+        INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL);
+        """
+        + _MEMBERSHIP_TABLE
+        + """
+        INSERT INTO managed_team_channel_streams
+            (id, team_id, dispatcharr_stream_id, event_id, event_provider, source_group_id,
+             stream_name, match_type, priority, attach_at)
+        VALUES
+            (1, 1, 55, 'game-1', 'espn', 7, 'SD feed', 'event', 999, ''),
+            (2, 1, 56, 'game-1', 'espn', 7, 'HD feed', 'event', 999, '');
+        """
+    )
+    return database
+
+
+def test_stream_ordering_scores_team_streams_with_stream_stats(monkeypatch):
+    """stats_metric rules must see stream_stats on team channels (#890)."""
+    database = _stats_ordering_db()
+    fetched = []
+
+    def fetch(ids, db_factory=None):
+        fetched.append(sorted(ids))
+        return {55: {"resolution": "720x480"}, 56: {"resolution": "1920x1080"}}
+
+    monkeypatch.setattr("teamarr.database.channels.streams.fetch_stream_stats_by_ids", fetch)
+
+    def priority(stream):
+        # Stand-in for "Res H >= 720 = +30": HD wins only if stats arrived.
+        stats = stream.stream_stats or {}
+        return 1 if stats.get("resolution") == "1920x1080" else 2
+
+    monkeypatch.setattr(
+        "teamarr.services.stream_ordering.get_stream_ordering_service",
+        lambda conn, sport, league: SimpleNamespace(
+            rules=[SimpleNamespace(type="stats_metric")], compute_priority=priority
+        ),
+    )
+    channels = FakeChannels([RemoteChannel(10, "owned", "Home", "9000", streams=(55, 56))])
+
+    TeamChannelManager(_factory(database), channels).sync_stream_ordering()
+
+    assert fetched == [[55, 56]]
+    assert channels.updated == [(10, {"streams": [56, 55]})]
+    database.close()
+
+
+def test_stream_ordering_skips_stats_fetch_without_stats_rules(monkeypatch):
+    database = _stats_ordering_db()
+    fetched = []
+    monkeypatch.setattr(
+        "teamarr.database.channels.streams.fetch_stream_stats_by_ids",
+        lambda ids, db_factory=None: fetched.append(list(ids)) or {},
+    )
+    monkeypatch.setattr(
+        "teamarr.services.stream_ordering.get_stream_ordering_service",
+        lambda conn, sport, league: SimpleNamespace(
+            rules=[SimpleNamespace(type="m3u")], compute_priority=lambda stream: 1
+        ),
+    )
+    channels = FakeChannels([RemoteChannel(10, "owned", "Home", "9000", streams=(55, 56))])
+
+    TeamChannelManager(_factory(database), channels).sync_stream_ordering()
+
+    assert fetched == [[]]
+    database.close()
+
+
 def test_stream_ordering_skips_when_dispatcharr_cannot_be_read():
     database = sqlite3.connect(":memory:")
     database.row_factory = sqlite3.Row

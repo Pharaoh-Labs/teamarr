@@ -690,6 +690,39 @@ def refresh_stream_stats_bulk(conn: Connection, stream_ids: list[int]) -> int:
     return updated
 
 
+def fetch_stream_stats_by_ids(stream_ids: list[int], db_factory=None) -> dict[int, dict]:
+    """Live ``stream_stats`` for Dispatcharr stream ids, keyed by stream id.
+
+    Read-only counterpart of :func:`refresh_stream_stats_bulk` for streams that
+    have no ``managed_channel_streams`` row to cache on — managed team channel
+    streams live in their own table (#890). Chunked like the bulk refresh.
+    Streams Dispatcharr has not probed are omitted, so a ``stats_metric`` rule
+    sees them as absent rather than zero. Makes network calls — keep it out of
+    per-channel DB loops (#735).
+    """
+    ids = sorted({int(sid) for sid in stream_ids if sid is not None})
+    if not ids:
+        return {}
+    client = get_dispatcharr_client(db_factory)
+    if client is None:
+        return {}
+    stats: dict[int, dict] = {}
+    for start in range(0, len(ids), STATS_BATCH_SIZE):
+        for entry in client.get_stream_stats_by_ids(ids[start : start + STATS_BATCH_SIZE]) or ():
+            sid = entry.get("id")
+            raw = entry.get("stream_stats")
+            if sid is None or raw is None:
+                continue
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except ValueError:
+                    continue
+            if isinstance(raw, dict):
+                stats[int(sid)] = raw
+    return stats
+
+
 def refresh_stream_stats(conn: Connection, managed_channel_id: int) -> int:
     """Fetch and cache stream_stats from Dispatcharr for a managed channel's active streams.
 

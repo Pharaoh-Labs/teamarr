@@ -23,6 +23,7 @@ from teamarr.database.channels import (
 )
 from teamarr.database.channels.crud import mark_all_channels_deleted
 from teamarr.database.channels.streams import (
+    fetch_stream_stats_by_ids,
     get_channel_streams,
     get_stream_match_details,
     refresh_stream_stats,
@@ -526,6 +527,17 @@ def get_managed_channel_streams(channel_id: int):
             ordering_service = StreamOrderingService(ordering_rules, conn)
             sorting_scope = ordering_scope.name if ordering_scope else "Global"
             has_rules = bool(ordering_service.rules)
+            # Fetched before scoring: team streams have no cached stats, and a
+            # stats_metric rule scored against None silently dropped its
+            # points from the explainer (#890).
+            stats_by_stream: dict[int, dict] = {}
+            try:
+                if streams:
+                    stats_by_stream = fetch_stream_stats_by_ids(
+                        [stream["dispatcharr_stream_id"] for stream in streams], get_db
+                    )
+            except Exception:
+                logger.debug("[CHANNELS] Could not fetch managed team stream stats", exc_info=True)
             stream_models = [
                 ManagedChannelStream(
                     id=stream["id"],
@@ -540,6 +552,7 @@ def get_managed_channel_streams(channel_id: int):
                     feed_side=stream["feed_side"],
                     dispatcharr_channel_group=stream["dispatcharr_channel_group"],
                     priority=stream["priority"],
+                    stream_stats=stats_by_stream.get(stream["dispatcharr_stream_id"]),
                 )
                 for stream in streams
             ]
@@ -567,20 +580,6 @@ def get_managed_channel_streams(channel_id: int):
                     if has_rules
                     else stream.priority
                 )
-
-            stats_by_stream: dict[int, dict] = {}
-            try:
-                client = get_dispatcharr_client(get_db)
-                if client and stream_models:
-                    stats_by_stream = {
-                        entry["id"]: entry["stream_stats"]
-                        for entry in client.get_stream_stats_by_ids(
-                            [stream.dispatcharr_stream_id for stream in stream_models]
-                        )
-                        if entry.get("id") is not None and entry.get("stream_stats") is not None
-                    }
-            except Exception:
-                logger.debug("[CHANNELS] Could not fetch managed team stream stats", exc_info=True)
 
             match_pairs = [
                 (stream.source_group_id, stream.dispatcharr_stream_id)
