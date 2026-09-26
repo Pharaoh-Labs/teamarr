@@ -75,6 +75,8 @@ class ChannelCreator(_LifecycleHost):
                 from teamarr.database.channel_numbers import get_global_consolidation_mode
                 duplicate_mode = get_global_consolidation_mode(conn)
 
+                from teamarr.database.channels import keyword_display_value
+
                 # Profile IDs from global settings (per-league overrides below)
                 from teamarr.database.settings import (
                     get_dispatcharr_settings,
@@ -102,6 +104,7 @@ class ChannelCreator(_LifecycleHost):
                 static_channel_group_id = dispatcharr_settings.default_channel_group_id
                 channel_group_mode = dispatcharr_settings.default_channel_group_mode or "static"
                 raw_profile_ids = dispatcharr_settings.default_channel_profile_ids
+                untagged_keyword_label = dispatcharr_settings.untagged_keyword_label
 
                 # Load per-league subscription configs for override
                 from teamarr.database.subscription import get_league_configs
@@ -237,7 +240,12 @@ class ChannelCreator(_LifecycleHost):
 
                         # Check exception keyword
                         matched_keyword, keyword_behavior = self._check_exception_keyword(
-                            stream_name, conn, event, epg_program_title
+                            stream_name,
+                            conn,
+                            event,
+                            epg_program_title,
+                            stream=stream,
+                            event_group_id=group_config.get("id"),
                         )
 
                         # V1 Parity: If behavior is 'ignore', skip stream entirely
@@ -347,11 +355,17 @@ class ChannelCreator(_LifecycleHost):
                                 event_sport=event_sport,
                                 event_league=event_league,
                                 event=event,
+                                exception_keyword=keyword_display_value(
+                                    matched_keyword, untagged_keyword_label
+                                ),
                             )
                         )
 
                         resolved_channel_profile_ids = self._resolve_profiles_for_event(
-                            effective_profile_ids, event_sport, event_league
+                            effective_profile_ids,
+                            event_sport,
+                            event_league,
+                            keyword_display_value(matched_keyword, untagged_keyword_label),
                         )
 
                         # Create new channel
@@ -510,6 +524,7 @@ class ChannelCreator(_LifecycleHost):
             update_stream_channel_source_group,
             update_stream_feed_side,
             update_stream_feed_team,
+            update_stream_m3u_group,
             update_stream_program_title,
             update_stream_window,
         )
@@ -630,6 +645,8 @@ class ChannelCreator(_LifecycleHost):
                     feed_side=stream_feed_side,
                     dispatcharr_channel_group=stream.get("dp_channel_group"),
                     dispatcharr_channel_group_id=stream.get("dp_channel_group_id"),
+                    m3u_group_id=stream.get("m3u_group_id"),
+                    m3u_group_name=stream.get("m3u_group_name"),
                     attach_at=attach_at,
                     detach_at=detach_at,
                 )
@@ -764,6 +781,17 @@ class ChannelCreator(_LifecycleHost):
                     update_stream_feed_side(
                         conn, existing.id, stream_id, stream_feed_side
                     )
+                if stream.get("m3u_group_id") is not None:
+                    # Backfill the M3U group (#893) so keyword enforcement can
+                    # re-check group sources on rows attached before the
+                    # column existed. Guarded like the fields above.
+                    update_stream_m3u_group(
+                        conn,
+                        existing.id,
+                        stream_id,
+                        stream["m3u_group_id"],
+                        stream.get("m3u_group_name"),
+                    )
             result.existing.append(
                 {
                     "stream": stream_name,
@@ -809,6 +837,7 @@ class ChannelCreator(_LifecycleHost):
         profile_ids: list[int | str] | None,
         event_sport: str | None,
         event_league: str | None,
+        exception_keyword: str | None = None,
     ) -> list[int] | None:
         """Resolve configured channel profile IDs for channel creation.
 
@@ -823,6 +852,7 @@ class ChannelCreator(_LifecycleHost):
             profile_ids=profile_ids,
             event_sport=event_sport,
             event_league=event_league,
+            exception_keyword=exception_keyword,
         )
         return self._validate_profile_ids(resolved)
 
@@ -1131,6 +1161,8 @@ class ChannelCreator(_LifecycleHost):
                 feed_side=stream_feed_side,
                 dispatcharr_channel_group=stream.get("dp_channel_group"),
                 dispatcharr_channel_group_id=stream.get("dp_channel_group_id"),
+                m3u_group_id=stream.get("m3u_group_id"),
+                m3u_group_name=stream.get("m3u_group_name"),
                 attach_at=attach_at,
                 detach_at=detach_at,
             )

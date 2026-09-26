@@ -16,6 +16,8 @@ export interface DispatcharrSettings {
   default_channel_group_id: number | null
   // Channel group mode: 'static', 'sport', 'league', or custom pattern
   default_channel_group_mode: string | null
+  // {exception_keyword} value for channels no keyword matched (null = empty)
+  untagged_keyword_label: string | null
   // Dedicated output defaults for managed Team EPG channels.
   managed_team_channel_profile_ids: (number | string)[] | null
   managed_team_channel_group_id: number | null
@@ -248,7 +250,22 @@ export interface UpdateInfo {
   latest_date: string | null  // ISO timestamp of when latest version was released
 }
 
-export interface ExceptionKeyword {
+/** A picked M3U group or stream; `name` is a display snapshot. */
+export interface KeywordSourceRef {
+  id: number
+  name: string | null
+}
+
+/** Match sources beyond stream-name terms (#893). Patterns use Python regex syntax. */
+export interface KeywordMatchSources {
+  m3u_group_pattern: string | null
+  m3u_groups: KeywordSourceRef[]
+  stream_pattern: string | null
+  streams: KeywordSourceRef[]
+  event_group_ids: number[]
+}
+
+export interface ExceptionKeyword extends KeywordMatchSources {
   id: number
   label: string
   match_terms: string
@@ -540,7 +557,7 @@ export async function createExceptionKeyword(data: {
   match_terms: string
   behavior: string
   enabled?: boolean
-}): Promise<ExceptionKeyword> {
+} & Partial<KeywordMatchSources>): Promise<ExceptionKeyword> {
   return api.post("/keywords", data)
 }
 
@@ -551,7 +568,7 @@ export async function updateExceptionKeyword(
     match_terms: string
     behavior: string
     enabled: boolean
-  }>
+  } & KeywordMatchSources>
 ): Promise<ExceptionKeyword> {
   return api.put(`/keywords/${id}`, data)
 }

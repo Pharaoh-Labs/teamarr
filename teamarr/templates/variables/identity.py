@@ -451,6 +451,8 @@ def extract_exception_keyword(ctx: TemplateContext, game_ctx: GameContext | None
     - EPG generator (programme generation, via context.extra_vars)
 
     Works in ALL template fields: channel name, title, subtitle, description, logo URL.
+    A channel no keyword matched renders the Dispatcharr "untagged label" setting
+    when one is set, and an empty string otherwise.
 
     Used in templates like:
         "{away_team} @ {home_team} ({exception_keyword})"

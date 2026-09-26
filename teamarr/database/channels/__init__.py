@@ -34,6 +34,7 @@ from .keywords import (
     event_identity_text,
     get_exception_keywords,
     get_keywords_for_league,
+    keyword_display_value,
 )
 
 # Settings helpers
@@ -59,6 +60,7 @@ from .streams import (
     update_stream_channel_source_group,
     update_stream_feed_side,
     update_stream_feed_team,
+    update_stream_m3u_group,
     update_stream_name,
     update_stream_priority,
     update_stream_program_title,
@@ -98,6 +100,7 @@ __all__ = [
     "update_stream_channel_source_group",
     "update_stream_feed_side",
     "update_stream_feed_team",
+    "update_stream_m3u_group",
     "update_stream_name",
     "update_stream_priority",
     "update_stream_program_title",
@@ -108,6 +111,7 @@ __all__ = [
     "cleanup_old_history",
     # Keywords
     "get_exception_keywords",
+    "keyword_display_value",
     "get_keywords_for_league",
     "check_exception_keyword",
     "event_identity_text",

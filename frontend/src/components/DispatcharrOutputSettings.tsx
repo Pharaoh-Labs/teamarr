@@ -83,6 +83,7 @@ export function DispatcharrOutputSettings() {
       default_stream_profile_id: settings.dispatcharr.default_stream_profile_id,
       default_channel_group_id: settings.dispatcharr.default_channel_group_id,
       default_channel_group_mode: settings.dispatcharr.default_channel_group_mode,
+      untagged_keyword_label: settings.dispatcharr.untagged_keyword_label,
       managed_team_channel_profile_ids: settings.dispatcharr.managed_team_channel_profile_ids,
       managed_team_channel_group_id: settings.dispatcharr.managed_team_channel_group_id,
       cleanup_unused_logos: settings.dispatcharr.cleanup_unused_logos,
@@ -129,6 +130,7 @@ export function DispatcharrOutputSettings() {
         default_stream_profile_id: dispatcharr.default_stream_profile_id,
         default_channel_group_id: dispatcharr.default_channel_group_id,
         default_channel_group_mode: dispatcharr.default_channel_group_mode,
+        untagged_keyword_label: dispatcharr.untagged_keyword_label?.trim() || null,
         managed_team_channel_profile_ids: profileIdsToApi(managedTeamProfileIds, allProfileIds),
         managed_team_channel_group_id: dispatcharr.managed_team_channel_group_id,
         cleanup_unused_logos: dispatcharr.cleanup_unused_logos,
@@ -161,6 +163,7 @@ export function DispatcharrOutputSettings() {
               selectedIds={selectedProfileIds}
               onChange={setSelectedProfileIds}
               disabled={!dispatcharrStatus.data?.connected}
+              allowKeywordWildcard
             />
             <p className="text-xs text-muted-foreground">
               These defaults apply to all groups unless overridden in individual group settings.
@@ -316,7 +319,7 @@ export function DispatcharrOutputSettings() {
             <p className="text-xs text-muted-foreground">
               Static uses the group above. Dynamic modes auto-create groups named by sport or league.
               Custom lets you define a pattern with {"{sport}"}, {"{league}"}, {"{conference}"},
-              {"{conference_abbrev}"}, and {"{division}"} (the last three NCAA) placeholders.
+              {"{conference_abbrev}"}, {"{division}"} (the last three NCAA), and {"{exception_keyword}"} placeholders.
             </p>
           </div>
 
@@ -337,10 +340,28 @@ export function DispatcharrOutputSettings() {
                 {"{division}"} (the last three NCAA only) as placeholders. Example:{" "}
                 "{"{sport}"} | {"{league}"}" creates groups like "Hockey | NHL";{" "}
                 "{"{league}"} | {"{conference_abbrev}"}" buckets college football by "NCAAF | SEC"
-                instead of the full conference name.
+                instead of the full conference name. {"{exception_keyword}"} is the matched
+                exception keyword ("Spanish: Rugby").
               </p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Untagged label</Label>
+            <Input
+              value={dispatcharr.untagged_keyword_label ?? ""}
+              onChange={(e) =>
+                setDispatcharr({ ...dispatcharr, untagged_keyword_label: e.target.value })
+              }
+              placeholder="e.g. EN"
+              className="w-64"
+            />
+            <p className="text-xs text-muted-foreground">
+              What {"{exception_keyword}"} becomes on channels no exception keyword matched, in
+              group and profile patterns and in channel name and logo templates. Leave empty for
+              none: channels then fall back to the static group, and templates render it blank.
+            </p>
+          </div>
 
           {saveButton}
         </CardContent>

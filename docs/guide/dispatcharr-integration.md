@@ -37,7 +37,7 @@ Go to **Channels → Dispatcharr Output** to configure where Teamarr channels la
 
 - **Default Channel Profiles** — which Dispatcharr profiles Teamarr channels appear in
 - **Default Stream Profile** — which stream profile to assign to streams
-- **Default Channel Group** — a static group, or a dynamic pattern like `{sport} | {league}` that auto-creates groups (`{conference}`, `{conference_abbrev}`, and `{division}` also available for NCAA leagues)
+- **Default Channel Group** — a static group, or a dynamic pattern like `{sport} | {league}` that auto-creates groups (`{conference}`, `{conference_abbrev}`, and `{division}` also available for NCAA leagues; `{exception_keyword}` groups by [exception keyword](channels/consolidation.md#exception-keywords))
 
 ![Channels → Dispatcharr Output configuration cards](../assets/images/channels-output.png)
 

@@ -9,6 +9,20 @@ from teamarr.services.stream_filter import FilterResult, StreamFilter, StreamFil
 logger = logging.getLogger(__name__)
 
 
+def stream_m3u_group(stream: Any, group_names: dict[int, str]) -> tuple[int | None, str | None]:
+    """The stream's M3U group id and name, for exception keyword sources (#893).
+
+    Dispatcharr's stream API returns the group id in ``channel_group``
+    (``channel_group_id`` is unset); the name comes from the groups list.
+    """
+    group_id = getattr(stream, "channel_group_id", None)
+    if group_id is None:
+        group_id = getattr(stream, "channel_group", None)
+    if not isinstance(group_id, int):
+        return None, None
+    return group_id, group_names.get(group_id)
+
+
 def managed_channel_ids(db_factory: Any) -> set[int]:
     """Dispatcharr ids of Teamarr's own output channels.
 
@@ -83,6 +97,14 @@ class StreamFetcher:
             self._account_name_cache = cache
         return cache
 
+    def _group_names(self, m3u_manager: Any) -> dict[int, str]:
+        """M3U group id -> name; empty (keyword group sources skipped) on failure."""
+        try:
+            return {g.id: g.name for g in m3u_manager.list_groups()}
+        except Exception as e:
+            logger.warning("[EVENT_EPG] Failed to list M3U groups: %s", e)
+            return {}
+
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
         """Fetch M3U streams from Dispatcharr for the group.
 
@@ -113,23 +135,28 @@ class StreamFetcher:
 
             # Convert to dicts for matcher (sorted by name for consistent order)
             account_names = self._account_names()
-            stream_dicts = [
-                {
-                    "id": s.id,
-                    "name": s.name,
-                    "tvg_id": s.tvg_id,
-                    "tvg_name": s.tvg_name,
-                    # Loopback EPG resolution reads the source-channel uuid
-                    # out of Dispatcharr-proxy URLs (see epg_resolver).
-                    "url": s.url,
-                    "channel_group": s.channel_group,
-                    "channel_group_id": s.channel_group_id,
-                    "m3u_account_id": s.m3u_account_id,
-                    "m3u_account_name": account_names.get(s.m3u_account_id),
-                    "is_stale": s.is_stale,
-                }
-                for s in streams
-            ]
+            group_names = self._group_names(m3u_manager)
+            stream_dicts = []
+            for s in streams:
+                m3u_group_id, m3u_group_name = stream_m3u_group(s, group_names)
+                stream_dicts.append(
+                    {
+                        "id": s.id,
+                        "name": s.name,
+                        "tvg_id": s.tvg_id,
+                        "tvg_name": s.tvg_name,
+                        # Loopback EPG resolution reads the source-channel uuid
+                        # out of Dispatcharr-proxy URLs (see epg_resolver).
+                        "url": s.url,
+                        "channel_group": s.channel_group,
+                        "channel_group_id": s.channel_group_id,
+                        "m3u_group_id": m3u_group_id,
+                        "m3u_group_name": m3u_group_name,
+                        "m3u_account_id": s.m3u_account_id,
+                        "m3u_account_name": account_names.get(s.m3u_account_id),
+                        "is_stale": s.is_stale,
+                    }
+                )
             # Sort by stream ID ascending for consistent processing order
             stream_dicts.sort(key=lambda s: s["id"])
             return stream_dicts
@@ -297,6 +324,7 @@ class StreamFetcher:
                 continue
             seen.add(stream_id)
             account_id = getattr(detail, "m3u_account_id", None) if detail else None
+            m3u_group_id, m3u_group_name = stream_m3u_group(detail, dp_group_names)
             candidates.append(
                 {
                     "id": stream_id,
@@ -310,6 +338,8 @@ class StreamFetcher:
                     "channel_group_id": getattr(detail, "channel_group_id", None)
                     if detail
                     else None,
+                    "m3u_group_id": m3u_group_id,
+                    "m3u_group_name": m3u_group_name,
                     # The DP CHANNEL's own group (channel organization), distinct from
                     # the M3U stream group above — drives scoping + the sorting rule.
                     "dp_channel_group_id": dp_group_id,

@@ -4,11 +4,14 @@ Provides CRUD operations for the consolidation_exception_keywords table.
 Exception keywords control how duplicate streams are handled during event matching.
 """
 
+import json
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from datetime import datetime
+from functools import cached_property
 from sqlite3 import Connection
-from typing import Literal
+from typing import Any, Literal
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +34,79 @@ class ExceptionKeyword:
     behavior: ExceptionBehavior = "consolidate"
     enabled: bool = True
     created_at: datetime | None = None
+    # Match sources beyond stream-name terms (#893). Picked groups/streams are
+    # [{"id": int, "name": str}]; the name is a display snapshot only.
+    m3u_group_pattern: str | None = None
+    m3u_groups: list[dict] = field(default_factory=list)
+    stream_pattern: str | None = None
+    streams: list[dict] = field(default_factory=list)
+    event_group_ids: list[int] = field(default_factory=list)
 
     @property
     def match_term_list(self) -> list[str]:
         """Get match terms as a list."""
         return [k.strip() for k in self.match_terms.split(",") if k.strip()]
+
+    @cached_property
+    def m3u_group_regex(self) -> re.Pattern | None:
+        return compile_source_pattern(self.m3u_group_pattern)
+
+    @cached_property
+    def stream_regex(self) -> re.Pattern | None:
+        return compile_source_pattern(self.stream_pattern)
+
+    @cached_property
+    def m3u_group_id_set(self) -> frozenset[int]:
+        return _id_set(self.m3u_groups)
+
+    @cached_property
+    def stream_id_set(self) -> frozenset[int]:
+        return _id_set(self.streams)
+
+    @cached_property
+    def event_group_id_set(self) -> frozenset[int]:
+        return frozenset(i for i in self.event_group_ids if isinstance(i, int))
+
+    @property
+    def uses_m3u_group(self) -> bool:
+        """Whether this keyword can match on a stream's M3U group."""
+        return bool(self.m3u_group_id_set or self.m3u_group_regex)
+
+
+def compile_source_pattern(pattern: str | None) -> re.Pattern | None:
+    """Compile a match-source regex, or None if empty/invalid.
+
+    Case-insensitive search, the same semantics as the event-group
+    ``m3u_group_name_pattern``. The API rejects invalid patterns; an invalid
+    one already stored is skipped rather than failing every match.
+    """
+    if not pattern or not pattern.strip():
+        return None
+    try:
+        return re.compile(pattern, re.IGNORECASE)
+    except re.error as e:
+        logger.warning("[KEYWORD] Invalid match-source pattern %r: %s", pattern, e)
+        return None
+
+
+def _id_set(items: list[dict]) -> frozenset[int]:
+    return frozenset(
+        item["id"] for item in items if isinstance(item, dict) and isinstance(item.get("id"), int)
+    )
+
+
+def _load_json_list(raw: Any) -> list:
+    if not raw:
+        return []
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return []
+    return value if isinstance(value, list) else []
+
+
+def _dump_json_list(value: list | None) -> str | None:
+    return json.dumps(value) if value else None
 
 
 def _row_to_keyword(row) -> ExceptionKeyword:
@@ -47,6 +118,12 @@ def _row_to_keyword(row) -> ExceptionKeyword:
         except (ValueError, TypeError):
             pass
 
+    keys = row.keys()
+
+    def col(name: str) -> Any:
+        # Missing on a DB not yet reconciled (tests with partial schemas).
+        return row[name] if name in keys else None
+
     return ExceptionKeyword(
         id=row["id"],
         label=row["label"] or "",
@@ -54,6 +131,11 @@ def _row_to_keyword(row) -> ExceptionKeyword:
         behavior=row["behavior"] or "consolidate",
         enabled=bool(row["enabled"]),
         created_at=created_at,
+        m3u_group_pattern=col("m3u_group_pattern") or None,
+        m3u_groups=_load_json_list(col("m3u_groups")),
+        stream_pattern=col("stream_pattern") or None,
+        streams=_load_json_list(col("streams")),
+        event_group_ids=_load_json_list(col("event_group_ids")),
     )
 
 
@@ -132,24 +214,44 @@ def create_keyword(
     match_terms: str,
     behavior: ExceptionBehavior = "consolidate",
     enabled: bool = True,
+    *,
+    m3u_group_pattern: str | None = None,
+    m3u_groups: list[dict] | None = None,
+    stream_pattern: str | None = None,
+    streams: list[dict] | None = None,
+    event_group_ids: list[int] | None = None,
 ) -> int:
     """Create a new exception keyword entry.
 
     Args:
         conn: Database connection
         label: Label for channel naming and {exception_keyword} variable
-        match_terms: Comma-separated terms to match in stream names
+        match_terms: Comma-separated terms to match in stream names ('' when
+            the keyword matches on its other sources only)
         behavior: How to handle matched streams
         enabled: Whether the keyword is active
+        m3u_group_pattern, m3u_groups, stream_pattern, streams, event_group_ids:
+            Match sources (#893), see ExceptionKeyword
 
     Returns:
         New keyword ID
     """
     cursor = conn.execute(
         """INSERT INTO consolidation_exception_keywords
-           (label, match_terms, behavior, enabled)
-           VALUES (?, ?, ?, ?)""",
-        (label, match_terms, behavior, int(enabled)),
+           (label, match_terms, behavior, enabled, m3u_group_pattern, m3u_groups,
+            stream_pattern, streams, event_group_ids)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            label,
+            match_terms,
+            behavior,
+            int(enabled),
+            m3u_group_pattern or None,
+            _dump_json_list(m3u_groups),
+            stream_pattern or None,
+            _dump_json_list(streams),
+            _dump_json_list(event_group_ids),
+        ),
     )
     conn.commit()
     keyword_id = cursor.lastrowid
@@ -170,10 +272,17 @@ def update_keyword(
     match_terms: str | None = None,
     behavior: ExceptionBehavior | None = None,
     enabled: bool | None = None,
+    *,
+    m3u_group_pattern: str | None = None,
+    m3u_groups: list[dict] | None = None,
+    stream_pattern: str | None = None,
+    streams: list[dict] | None = None,
+    event_group_ids: list[int] | None = None,
 ) -> bool:
     """Update an exception keyword.
 
-    Only updates fields that are explicitly provided (not None).
+    Only updates fields that are explicitly provided (not None). For the
+    match sources, an empty string/list clears the source.
 
     Args:
         conn: Database connection
@@ -204,6 +313,23 @@ def update_keyword(
     if enabled is not None:
         updates.append("enabled = ?")
         values.append(int(enabled))
+
+    for column, text in (
+        ("m3u_group_pattern", m3u_group_pattern),
+        ("stream_pattern", stream_pattern),
+    ):
+        if text is not None:
+            updates.append(f"{column} = ?")
+            values.append(text or None)
+
+    for column, items in (
+        ("m3u_groups", m3u_groups),
+        ("streams", streams),
+        ("event_group_ids", event_group_ids),
+    ):
+        if items is not None:
+            updates.append(f"{column} = ?")
+            values.append(_dump_json_list(items))
 
     if not updates:
         return False

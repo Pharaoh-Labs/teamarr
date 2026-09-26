@@ -222,6 +222,7 @@ function LeagueConfigRow({
                   selectedIds={localProfileIds}
                   onChange={setLocalProfileIds}
                   disabled={!dispatcharrConnected}
+                  allowKeywordWildcard
                 />
               </div>
 
@@ -293,7 +294,8 @@ function LeagueConfigRow({
                     <p className="text-xs text-muted-foreground mt-1">
                       {"{sport}"}, {"{league}"}, plus {"{conference}"}, {"{conference_abbrev}"}, and{" "}
                       {"{division}"} for NCAA leagues — "{"{league}"} | {"{conference_abbrev}"}"
-                      buckets college football as "NCAAF | SEC".
+                      buckets college football as "NCAAF | SEC". {"{exception_keyword}"} is the
+                      matched exception keyword ("{"{exception_keyword}"}: {"{league}"}" → "Spanish: EPL").
                     </p>
                   </>
                 )}

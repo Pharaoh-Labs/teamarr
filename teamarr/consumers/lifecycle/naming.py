@@ -42,6 +42,21 @@ class ChannelNaming(_LifecycleHost):
     ``_db_factory``, ``_context_builder`` and ``_resolver`` attributes.
     """
 
+    def _keyword_template_value(self, exception_keyword: str | None) -> str:
+        """Value for ``{exception_keyword}`` in a channel name or logo URL.
+
+        Falls back to the untagged label so name, logo and the XMLTV display
+        name (``event_epg``) render the same text for a channel with no keyword.
+        """
+        if exception_keyword:
+            return exception_keyword
+        from teamarr.database.channels import keyword_display_value
+        from teamarr.database.settings import get_dispatcharr_settings
+
+        with self._db_factory() as conn:
+            label = get_dispatcharr_settings(conn).untagged_keyword_label
+        return keyword_display_value(exception_keyword, label)
+
     def _generate_channel_name(
         self,
         event: Event,
@@ -90,9 +105,10 @@ class ChannelNaming(_LifecycleHost):
                 name_format = template.get("event_channel_name")
 
         # Build extra variables for template resolution
-        # Always include exception_keyword - resolves to "" if None (graceful disappear)
+        # Always include exception_keyword - resolves to the untagged label, or ""
+        # when none is set (graceful disappear)
         extra_vars = {
-            "exception_keyword": exception_keyword if exception_keyword else "",
+            "exception_keyword": self._keyword_template_value(exception_keyword),
         }
 
         if not name_format:
@@ -262,7 +278,7 @@ class ChannelNaming(_LifecycleHost):
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             if "{" in logo_url:
                 extra_vars = {
-                    "exception_keyword": exception_keyword if exception_keyword else "",
+                    "exception_keyword": self._keyword_template_value(exception_keyword),
                 }
                 resolved = self._resolve_template(
                     logo_url, event, extra_vars, card_segment=segment,
