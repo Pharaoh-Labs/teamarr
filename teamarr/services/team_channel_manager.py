@@ -620,8 +620,12 @@ class TeamChannelManager:
         if not self._channels:
             return result
 
+        from teamarr.database.channels.streams import fetch_stream_stats_by_ids
         from teamarr.database.channels.types import ManagedChannelStream
-        from teamarr.services.stream_ordering import get_stream_ordering_service
+        from teamarr.services.stream_ordering import (
+            get_stream_ordering_service,
+            uses_stats_rules,
+        )
 
         remote_channels = self._remote_channels()
         if remote_channels is None:
@@ -631,11 +635,10 @@ class TeamChannelManager:
             for channel_id, channel in remote_channels.items()
         }
         pushes: list[tuple[dict, list[int]]] = []
+        plans: list[tuple[dict, Any, list]] = []
         with self._db_factory() as conn:
-            teams = list_enabled_managed_teams(conn)
-            for team in teams:
-                channel_id = team.get("dispatcharr_channel_id")
-                if not channel_id:
+            for team in list_enabled_managed_teams(conn):
+                if not team.get("dispatcharr_channel_id"):
                     continue
                 rows = conn.execute(
                     "SELECT * FROM managed_team_channel_streams "
@@ -645,6 +648,25 @@ class TeamChannelManager:
                 service = get_stream_ordering_service(
                     conn, team.get("sport"), team.get("primary_league")
                 )
+                plans.append((team, service, rows))
+
+        # stats_metric rules score against stream_stats, which team streams
+        # have no cached copy of (#890) — without this they scored as if
+        # every stream were unprobed. Fetched between the two connections so
+        # no Dispatcharr call runs while one is held (#735).
+        stats_by_stream = fetch_stream_stats_by_ids(
+            [
+                row["dispatcharr_stream_id"]
+                for _, service, rows in plans
+                if uses_stats_rules(service)
+                for row in rows
+            ],
+            self._db_factory,
+        )
+
+        with self._db_factory() as conn:
+            for team, service, rows in plans:
+                channel_id = team["dispatcharr_channel_id"]
                 for row in rows:
                     stream = ManagedChannelStream(
                         id=row["id"], managed_channel_id=0,
@@ -656,6 +678,7 @@ class TeamChannelManager:
                         feed_team_id=row["feed_team_id"], feed_side=row["feed_side"],
                         dispatcharr_channel_group=row["dispatcharr_channel_group"],
                         priority=row["priority"],
+                        stream_stats=stats_by_stream.get(row["dispatcharr_stream_id"]),
                     )
                     priority = service.compute_priority(stream)
                     if priority != stream.priority:

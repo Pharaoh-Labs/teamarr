@@ -18,6 +18,7 @@ import logging
 import re
 from dataclasses import dataclass
 from sqlite3 import Connection
+from typing import Any
 
 from teamarr.database.channels.types import ManagedChannelStream
 from teamarr.database.settings.types import StreamOrderingRule
@@ -879,6 +880,16 @@ class StreamOrderingService:
 
         self._group_name_cache[group_id] = None  # type: ignore
         return None
+
+
+def uses_stats_rules(service: Any) -> bool:
+    """True when a service's rules read ``stream_stats`` (``stats_metric``).
+
+    Lets callers skip the Dispatcharr stats fetch for rulesets that cannot
+    use it — most are built from m3u/group/regex rules alone.
+    """
+    rules = getattr(service, "rules", None) or ()
+    return any(getattr(rule, "type", None) == "stats_metric" for rule in rules)
 
 
 def get_stream_ordering_service(
