@@ -42,6 +42,7 @@ class _LifecycleHost:
         _timezone: str
         _exception_keywords: list | None
         _pending_profile_changes: dict[int, dict[str, set[int]]]
+        _pending_profile_db_writes: dict[int, tuple[int, list[int]]]
         _all_profile_ids_cache: set[int] | None
         _stale_profile_ids_warned: set[int]
         _dispatcharr_failure_count: int

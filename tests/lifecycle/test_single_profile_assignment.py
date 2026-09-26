@@ -131,8 +131,10 @@ class TestValidateProfileIds:
     """
 
     def _service_with_catalog(self, catalog):
-        service = _make_service(channel_manager=MagicMock())
-        service._all_profile_ids_cache = catalog
+        cm = MagicMock()
+        cm.list_profiles.side_effect = lambda: [MagicMock(id=pid) for pid in catalog]
+        service = _make_service(channel_manager=cm)
+        service._all_profile_ids_cache = set(catalog)
         return service
 
     def test_valid_ids_pass_through(self):
@@ -177,3 +179,44 @@ class TestValidateProfileIds:
         service._dynamic_resolver = MagicMock()
         service._dynamic_resolver.resolve_channel_profiles.return_value = [2, 5]
         assert service._resolve_profiles_for_event([2, 5], "baseball", "mlb") == [2]
+
+
+class TestProfileCreatedMidRun:
+    """A profile the dynamic resolver creates mid-run is not stale (#894).
+
+    The catalog is cached once per run; ``{sport}``/``{league}`` profiles
+    created after that read were dropped as stale and the channel fell back
+    to ALL profiles ([0]).
+    """
+
+    def _service(self, cached, live):
+        cm = MagicMock()
+        cm.list_profiles.side_effect = lambda: [MagicMock(id=pid) for pid in live]
+        service = _make_service(channel_manager=cm)
+        service._all_profile_ids_cache = set(cached)
+        return service, cm
+
+    def test_id_created_after_catalog_read_is_kept(self, caplog):
+        service, _ = self._service(cached={1}, live={1, 5})
+        with caplog.at_level("WARNING"):
+            assert service._validate_profile_ids([5]) == [5]
+        assert "does not exist" not in caplog.text
+        assert "falling back to ALL profiles" not in caplog.text
+
+    def test_refreshed_catalog_serves_later_channels(self):
+        service, cm = self._service(cached={1}, live={1, 5, 6})
+        assert service._validate_profile_ids([5]) == [5]
+        assert service._validate_profile_ids([6]) == [6]
+        assert cm.list_profiles.call_count == 1
+
+    def test_truly_stale_id_costs_one_refresh(self):
+        service, cm = self._service(cached={1}, live={1})
+        assert service._validate_profile_ids([9]) == [0]
+        assert service._validate_profile_ids([9]) == [0]
+        assert cm.list_profiles.call_count == 1
+
+    def test_known_ids_never_refresh(self):
+        service, cm = self._service(cached={1, 2}, live={1, 2})
+        assert service._validate_profile_ids([1, 2]) == [1, 2]
+        cm.list_profiles.assert_not_called()
+

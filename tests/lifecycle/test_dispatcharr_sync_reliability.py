@@ -383,6 +383,114 @@ class TestProfileSelfHealing:
         assert changes_made == []
 
 
+class TestProfileMoveOffAllProfiles:
+    """Sync can move a channel from [0] to specific profiles (#894).
+
+    [0] is Dispatcharr's ALL-profiles sentinel, not a profile. Diffing it as
+    a literal id queued "remove from profile 0" (404) and left the channel in
+    every real profile; persisting the new ids anyway made the state stick.
+    """
+
+    def _sync(self, stored, dispatcharr, resolved, catalog=(1, 2, 5)):
+        cm = MagicMock()
+        cm.list_profiles.return_value = [MagicMock(id=pid) for pid in catalog]
+        service = _make_service(channel_manager=cm)
+        service._dynamic_resolver = MagicMock()
+        service._dynamic_resolver.resolve_channel_profiles.return_value = resolved
+        mock_settings = MagicMock()
+        mock_settings.default_channel_profile_ids = ["{sport}"]
+        existing = FakeManagedChannel(channel_profile_ids=stored)
+        current = (
+            _make_dispatcharr_channel(channel_profile_ids=dispatcharr)
+            if dispatcharr is not None
+            else None
+        )
+        with (
+            patch("teamarr.database.channels.update_managed_channel") as mock_update_db,
+            patch(
+                "teamarr.database.settings.get_dispatcharr_settings",
+                return_value=mock_settings,
+            ),
+        ):
+            service._sync_channel_profiles(
+                conn=MagicMock(),
+                existing=existing,
+                event_sport="rugby",
+                event_league="six-nations",
+                changes_made=[],
+                current_channel=current,
+            )
+        return service, mock_update_db
+
+    def test_leaving_all_profiles_removes_real_profiles_not_zero(self):
+        service, mock_update_db = self._sync("[0]", [1, 2, 5], [5])
+        assert service._pending_profile_changes == {
+            1: {"add": set(), "remove": {100}},
+            2: {"add": set(), "remove": {100}},
+        }
+        # Deferred until Dispatcharr accepts the bulk updates.
+        mock_update_db.assert_not_called()
+        assert service._pending_profile_db_writes == {100: (1, [5])}
+
+    def test_stuck_channel_heals_from_dispatcharr_membership(self):
+        # The pre-#894 end state: DB already says [5], Dispatcharr still [1,2,5].
+        service, _ = self._sync("[5]", [1, 2, 5], [5])
+        assert set(service._pending_profile_changes) == {1, 2}
+        assert all(c["remove"] == {100} for c in service._pending_profile_changes.values())
+
+    def test_sentinel_expanded_from_catalog_without_dispatcharr_state(self):
+        service, _ = self._sync("[0]", None, [5])
+        assert set(service._pending_profile_changes) == {1, 2}
+        assert 0 not in service._pending_profile_changes
+
+    def test_db_only_drift_persists_immediately(self):
+        service, mock_update_db = self._sync("[0]", [5], [5])
+        assert service._pending_profile_changes == {}
+        mock_update_db.assert_called_once()
+        assert mock_update_db.call_args[0][2] == {"channel_profile_ids": "[5]"}
+
+
+class TestPendingProfileDbWrites:
+    """New profile ids persist only when their bulk updates succeed (#894)."""
+
+    def _service(self, failing_profile=None):
+        cm = MagicMock()
+
+        def bulk(profile_id, add_channel_ids=None, remove_channel_ids=None):
+            if profile_id == failing_profile:
+                return OperationResult(success=False, error="No ChannelProfile matches")
+            return OperationResult(success=True)
+
+        cm.bulk_update_profile_channels.side_effect = bulk
+        service = _make_service(channel_manager=cm)
+        service._collect_profile_change(1, 100, "remove")
+        service._collect_profile_change(5, 100, "add")
+        service._collect_profile_change(5, 200, "add")
+        service._pending_profile_db_writes = {100: (11, [5]), 200: (22, [5])}
+        return service
+
+    def test_success_persists(self):
+        service = self._service()
+        with patch("teamarr.database.channels.update_managed_channel") as mock_update_db:
+            service._apply_pending_profile_changes(MagicMock())
+        assert sorted(c[0][1] for c in mock_update_db.call_args_list) == [11, 22]
+        assert service._pending_profile_db_writes == {}
+
+    def test_failed_channel_is_not_persisted(self):
+        service = self._service(failing_profile=1)
+        with patch("teamarr.database.channels.update_managed_channel") as mock_update_db:
+            service._apply_pending_profile_changes(MagicMock())
+        # Channel 100's removal failed; 200 only needed the add, which landed.
+        assert [c[0][1] for c in mock_update_db.call_args_list] == [22]
+
+    def test_without_conn_nothing_is_persisted(self):
+        service = self._service()
+        with patch("teamarr.database.channels.update_managed_channel") as mock_update_db:
+            service._apply_pending_profile_changes()
+        mock_update_db.assert_not_called()
+        assert service._pending_profile_db_writes == {}
+
+
 # =============================================================================
 # BEAD 3: Failure counters
 # =============================================================================

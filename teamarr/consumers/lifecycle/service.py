@@ -187,6 +187,10 @@ class ChannelLifecycleService(
         # Structure: {profile_id: {"add": set(channel_ids), "remove": set(channel_ids)}}
         self._pending_profile_changes: dict[int, dict[str, set[int]]] = {}
 
+        # Profile ids to persist once their queued changes land (#894).
+        # Structure: {dispatcharr_channel_id: (managed_channel_id, profile_ids)}
+        self._pending_profile_db_writes: dict[int, tuple[int, list[int]]] = {}
+
         # Template engine — art_base_url injected so channel-logo reconstruction
         # matches the EPG icon (epic z02s).
 
@@ -305,6 +309,7 @@ class ChannelLifecycleService(
             self._logo_manager.clear_cache()
         self._exception_keywords = None
         self._pending_profile_changes = {}
+        self._pending_profile_db_writes = {}
         self._all_profile_ids_cache = None
         self._stale_profile_ids_warned = set()
         self._dispatcharr_failure_count = 0
@@ -327,16 +332,25 @@ class ChannelLifecycleService(
             self._pending_profile_changes[profile_id] = {"add": set(), "remove": set()}
         self._pending_profile_changes[profile_id][action].add(channel_id)
 
-    def _apply_pending_profile_changes(self) -> dict:
+    def _apply_pending_profile_changes(self, conn: Connection | None = None) -> dict:
         """Apply all pending profile changes using bulk API.
+
+        A channel's new profile ids are persisted only when every bulk update
+        touching it succeeded (#894), so a rejected change is re-detected as
+        drift on the next run instead of being recorded as done. Without a
+        ``conn`` nothing is persisted and the next run re-derives the change
+        from Dispatcharr's actual membership.
 
         Returns:
             Dict with stats: {profiles_updated, channels_added, channels_removed, errors}
         """
         if not self._pending_profile_changes or not self._channel_manager:
+            self._pending_profile_changes = {}
+            self._pending_profile_db_writes = {}
             return {"profiles_updated": 0, "channels_added": 0, "channels_removed": 0}
 
         stats = {"profiles_updated": 0, "channels_added": 0, "channels_removed": 0, "errors": []}
+        failed_channel_ids: set[int] = set()
 
         with self._dispatcharr_lock:
             for profile_id, changes in self._pending_profile_changes.items():
@@ -361,6 +375,7 @@ class ChannelLifecycleService(
                             f"+{len(add_ids)} -{len(remove_ids)} channels"
                         )
                     else:
+                        failed_channel_ids.update(add_ids, remove_ids)
                         stats["errors"].append(f"Profile {profile_id}: {result.error}")
                         logger.warning(
                             "[LIFECYCLE] Bulk profile update failed for profile %d: %s",
@@ -368,13 +383,25 @@ class ChannelLifecycleService(
                             result.error,
                         )
                 except Exception as e:
+                    failed_channel_ids.update(add_ids, remove_ids)
                     stats["errors"].append(f"Profile {profile_id}: {e}")
                     logger.warning(
                         "[LIFECYCLE] Bulk profile update error for profile %d: %s", profile_id, e
                     )
 
+        if conn is not None:
+            from teamarr.database.channels import update_managed_channel
+
+            for channel_id, (managed_id, profile_ids) in self._pending_profile_db_writes.items():
+                if channel_id in failed_channel_ids:
+                    continue
+                update_managed_channel(
+                    conn, managed_id, {"channel_profile_ids": json.dumps(profile_ids)}
+                )
+
         # Clear pending changes after applying
         self._pending_profile_changes = {}
+        self._pending_profile_db_writes = {}
 
         if stats["profiles_updated"] > 0:
             logger.info(

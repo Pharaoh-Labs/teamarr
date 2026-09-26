@@ -419,17 +419,41 @@ class ChannelSyncer(_LifecycleHost):
             else:
                 changes_made.append("profiles: no profiles")
         else:
-            profiles_to_add = set(effective_profile_ids) - set(stored_profile_ids)
-            profiles_to_remove = set(stored_profile_ids) - set(effective_profile_ids)
+            # Diff against what the channel is actually a member of, never
+            # against the stored list alone (#894). A stored [0] is the
+            # ALL-profiles sentinel, not a profile: diffing it literally
+            # queued "remove from profile 0" (Dispatcharr 404s) and left the
+            # channel in every real profile. And once the DB matched the
+            # resolved ids, a stored-only diff queued nothing while
+            # Dispatcharr still disagreed, so the drift never healed.
+            if dispatcharr_profile_ids is not None:
+                current_members = set(dispatcharr_profile_ids)
+            elif stored_profile_ids == [0]:
+                current_members = set(self._all_profile_ids() or ())
+            else:
+                current_members = set(stored_profile_ids)
+            current_members.discard(0)
+
+            profiles_to_add = set(effective_profile_ids) - current_members
+            profiles_to_remove = current_members - set(effective_profile_ids)
 
             channel_id = existing.dispatcharr_channel_id
-            for profile_id in profiles_to_remove:
+            for profile_id in sorted(profiles_to_remove):
                 self._collect_profile_change(profile_id, channel_id, "remove")
                 changes_made.append(f"queued remove from profile {profile_id}")
 
-            for profile_id in profiles_to_add:
+            for profile_id in sorted(profiles_to_add):
                 self._collect_profile_change(profile_id, channel_id, "add")
                 changes_made.append(f"queued add to profile {profile_id}")
+
+            if profiles_to_add or profiles_to_remove:
+                # Persisted by _apply_pending_profile_changes only if every
+                # bulk update for this channel lands.
+                self._pending_profile_db_writes[channel_id] = (
+                    existing.id,
+                    list(effective_profile_ids),
+                )
+                return
 
         update_managed_channel(
             conn, existing.id, {"channel_profile_ids": json.dumps(effective_profile_ids)}
