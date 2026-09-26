@@ -122,6 +122,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # GITHUB_TOKEN pushes don't trigger push-event workflows, so publish
-          # main (:main + :latest) and the tag (:x.y.z semver set) explicitly.
+          # main (:main + :latest), the tag (:x.y.z semver set) and dev
+          # explicitly. dev matters too: the bump commit lands there by bot, so
+          # without this :dev stays one commit behind and reports the previous
+          # version (v2.19.0 deploy, #898).
           gh workflow run docker-publish.yml --ref main
+          gh workflow run docker-publish.yml --ref dev
           gh workflow run docker-publish.yml --ref "v${{ steps.ver.outputs.version }}"
