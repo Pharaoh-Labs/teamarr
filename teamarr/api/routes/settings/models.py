@@ -226,9 +226,29 @@ class SchedulerStatusResponse(BaseModel):
     """Scheduler status response."""
 
     running: bool
+    mode: str | None = None
     cron_expression: str | None = None
+    pre_match_lead_minutes: int | None = None
+    discovery_interval_hours: int | None = None
     last_run: str | None = None
     next_run: str | None = None
+    next_run_reason: str | None = None
+    next_match_start: str | None = None
+    next_match_sport: str | None = None
+
+
+class SportLeadTimeOverride(BaseModel):
+    """A per-sport pre-match lead time override."""
+
+    sport: str
+    pre_match_lead_minutes: int
+    display_name: str | None = None
+
+
+class SportLeadTimeUpdate(BaseModel):
+    """Request body for setting a sport's lead time override."""
+
+    pre_match_lead_minutes: int
 
 
 # =============================================================================
@@ -247,7 +267,10 @@ class EPGSettingsModel(BaseModel):
     epg_output_path: str = "./data/teamarr.xml"
     include_final_events: bool = False
     midnight_crossover_mode: str = "postgame"
+    scheduler_mode: str = "pre_match"  # "pre_match" | "cron"
     cron_expression: str = "0 * * * *"
+    pre_match_lead_minutes: int = 30
+    epg_discovery_interval_hours: int = 4
     epg_xtream_fallback_enabled: bool = False
     epg_xtream_cache_hours: int = 24
     epg_channel_source_enabled: bool = False

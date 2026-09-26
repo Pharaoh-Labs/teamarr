@@ -16,6 +16,8 @@ from .models import (
     SchedulerSettingsModel,
     SchedulerSettingsUpdate,
     SchedulerStatusResponse,
+    SportLeadTimeOverride,
+    SportLeadTimeUpdate,
     to_model,
 )
 
@@ -167,9 +169,15 @@ def get_scheduler_status():
 
     return SchedulerStatusResponse(
         running=status.running,
+        mode=status.mode,
         cron_expression=status.cron_expression,
+        pre_match_lead_minutes=status.pre_match_lead_minutes,
+        discovery_interval_hours=status.discovery_interval_hours,
         last_run=status.last_run.isoformat() if status.last_run else None,
         next_run=status.next_run.isoformat() if status.next_run else None,
+        next_run_reason=status.next_run_reason,
+        next_match_start=status.next_match_start.isoformat() if status.next_match_start else None,
+        next_match_sport=status.next_match_sport,
     )
 
 
@@ -196,3 +204,92 @@ def trigger_scheduler_run() -> dict:
             "cleanup": result.cleanup,
         },
     }
+
+
+# =============================================================================
+# PER-SPORT PRE-MATCH LEAD TIME OVERRIDES
+#
+# A sport with no override here uses epg_settings.pre_match_lead_minutes (the
+# global default). The scheduler reads these fresh on every computation, so
+# changes here take effect on the next run — no restart needed.
+# =============================================================================
+
+
+@router.get("/settings/scheduler/sport-lead-times", response_model=list[SportLeadTimeOverride])
+def get_sport_lead_times():
+    """Get all per-sport pre-match lead time overrides."""
+    from teamarr.database.sport_schedule import get_sport_lead_overrides_with_display
+
+    with get_db() as conn:
+        overrides = get_sport_lead_overrides_with_display(conn)
+
+    return [
+        SportLeadTimeOverride(
+            sport=o.sport,
+            pre_match_lead_minutes=o.pre_match_lead_minutes,
+            display_name=o.display_name,
+        )
+        for o in overrides
+    ]
+
+
+@router.put(
+    "/settings/scheduler/sport-lead-times/{sport}", response_model=list[SportLeadTimeOverride]
+)
+def set_sport_lead_time(sport: str, update: SportLeadTimeUpdate):
+    """Set (or update) a sport's pre-match lead time override."""
+    from teamarr.database.sport_schedule import (
+        get_sport_lead_overrides_with_display,
+        upsert_sport_lead_override,
+    )
+
+    if update.pre_match_lead_minutes < 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="pre_match_lead_minutes must be 0 or greater",
+        )
+
+    with get_db() as conn:
+        if not upsert_sport_lead_override(conn, sport, update.pre_match_lead_minutes):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save sport lead time override",
+            )
+        overrides = get_sport_lead_overrides_with_display(conn)
+
+    return [
+        SportLeadTimeOverride(
+            sport=o.sport,
+            pre_match_lead_minutes=o.pre_match_lead_minutes,
+            display_name=o.display_name,
+        )
+        for o in overrides
+    ]
+
+
+@router.delete(
+    "/settings/scheduler/sport-lead-times/{sport}", response_model=list[SportLeadTimeOverride]
+)
+def delete_sport_lead_time(sport: str):
+    """Remove a sport's override, reverting it to the global default."""
+    from teamarr.database.sport_schedule import (
+        delete_sport_lead_override,
+        get_sport_lead_overrides_with_display,
+    )
+
+    with get_db() as conn:
+        if not delete_sport_lead_override(conn, sport):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to remove sport lead time override",
+            )
+        overrides = get_sport_lead_overrides_with_display(conn)
+
+    return [
+        SportLeadTimeOverride(
+            sport=o.sport,
+            pre_match_lead_minutes=o.pre_match_lead_minutes,
+            display_name=o.display_name,
+        )
+        for o in overrides
+    ]

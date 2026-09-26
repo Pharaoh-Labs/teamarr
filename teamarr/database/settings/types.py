@@ -102,7 +102,20 @@ class EPGSettings:
     epg_output_path: str = "./data/teamarr.xml"
     include_final_events: bool = False
     midnight_crossover_mode: str = "postgame"
+    # How the EPG scheduler decides when to run: "pre_match" (event-driven —
+    # runs ahead of each known match, see pre_match_lead_minutes/
+    # epg_discovery_interval_hours) or "cron" (classic fixed schedule, see
+    # cron_expression).
+    scheduler_mode: str = "pre_match"
+    # Used when scheduler_mode == "cron".
     cron_expression: str = "0 * * * *"
+    # Minutes before each known match's start time to trigger a fresh EPG
+    # generation. Used when scheduler_mode == "pre_match".
+    pre_match_lead_minutes: int = 30
+    # Fallback cadence (hours) to run generation with no known upcoming
+    # matches, so new/far-future matches get discovered. Used when
+    # scheduler_mode == "pre_match".
+    epg_discovery_interval_hours: int = 4
     prepend_postponed_label: bool = True
     # XC provider EPG fallback (epic crs) — opt-in backup when DP has no mapping
     epg_xtream_fallback_enabled: bool = False

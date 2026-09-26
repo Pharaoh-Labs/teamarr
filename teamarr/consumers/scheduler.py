@@ -1,6 +1,13 @@
 """Background scheduler for EPG generation.
 
-Uses cron expressions for scheduling (like V1).
+The main EPG-generation scheduler is event-driven rather than cron-based: it
+runs generation shortly before each known match's start time, plus a
+periodic "discovery" fallback so new/far-future matches (not yet known to
+Teamarr) still get found. See CronScheduler for the two triggers.
+
+Sub-tasks (backup, scheduled channel reset) are unrelated to match timing and
+keep running on their own true cron schedules via SubTaskScheduler.
+
 Runs periodic EPG generation using the unified run_full_generation() function
 which handles everything:
 - EPG generation (teams, groups, XMLTV)
@@ -12,8 +19,8 @@ Integrates with FastAPI lifespan for clean startup/shutdown.
 
 import logging
 import threading
-from datetime import datetime
-from typing import Any
+from datetime import UTC, datetime, timedelta
+from typing import Any, NamedTuple
 
 from croniter import croniter
 
@@ -21,6 +28,42 @@ from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client, get_disp
 from teamarr.services import create_cache_service
 
 logger = logging.getLogger(__name__)
+
+# Default triggers for the main EPG scheduler (see CronScheduler).
+DEFAULT_PRE_MATCH_LEAD_MINUTES = 30
+DEFAULT_DISCOVERY_INTERVAL_HOURS = 4
+
+# Above this many entries, prune _pre_match_done of matches that have already
+# started so the set doesn't grow unbounded across a long-running process.
+_PRE_MATCH_DONE_PRUNE_THRESHOLD = 2000
+
+
+class _MatchTrigger(NamedTuple):
+    """A candidate pre-match generation trigger for one upcoming match."""
+
+    event_id: str
+    start: datetime
+    sport: str | None
+    trigger_time: datetime  # start minus that sport's lead time
+
+
+def _parse_event_dt(value: Any) -> datetime | None:
+    """Parse a managed_channels.event_date value to a naive local datetime.
+
+    Values are ISO strings (aware UTC, or naive assumed-UTC for legacy rows) —
+    see teamarr.consumers.lifecycle.timing._parse_channel_dt for the same
+    convention. Converted here to naive local time for comparison against
+    datetime.now(), which the rest of this module's scheduling math uses.
+    """
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone().replace(tzinfo=None)
 
 
 class SubTaskScheduler:
@@ -108,14 +151,38 @@ class SubTaskScheduler:
 
 
 class CronScheduler:
-    """Background scheduler using cron expressions.
+    """Background scheduler that triggers EPG generation.
 
-    Runs tasks at times specified by a cron expression.
+    Supports two scheduling modes (`mode`):
+
+    - "pre_match" (default): event-driven. Two triggers decide when the next
+      run happens; whichever comes first wins, and both are recalculated
+      after every run.
+        - Pre-match: `pre_match_lead_minutes` before the start of the
+          earliest known upcoming match (from managed_channels.event_date)
+          that hasn't already been covered by a pre-match run. A sport can
+          override this lead time (sport_schedule_overrides table, read
+          fresh on every computation — no restart needed when it changes);
+          triggers are ranked by each match's own effective trigger time,
+          not raw start time, so a sport with a longer lead can fire before
+          an earlier-starting match with a shorter one. A single run
+          refreshes the whole EPG, so a slate of matches with the same
+          effective trigger time (e.g. a Sunday 1pm NFL slate) is covered by
+          one run, not one per match.
+        - Discovery: a periodic fallback (`discovery_interval_hours`) that
+          runs generation even with no known upcoming matches, so newly
+          added teams/leagues and far-future matches get discovered and
+          scheduled.
+    - "cron": classic fixed-schedule mode. Runs on `cron_expression`
+      (standard 5-field cron syntax), same as Teamarr's original scheduler.
+      Ignores pre-match/discovery entirely.
 
     Usage:
         scheduler = CronScheduler(
             db_factory=get_db,
-            cron_expression="0 * * * *",  # Every hour
+            mode="pre_match",
+            pre_match_lead_minutes=30,
+            discovery_interval_hours=4,
         )
         scheduler.start()
         # ... application runs ...
@@ -124,7 +191,7 @@ class CronScheduler:
     FastAPI integration:
         @asynccontextmanager
         async def lifespan(app: FastAPI):
-            scheduler = CronScheduler(get_db, "0 * * * *")
+            scheduler = CronScheduler(get_db)
             scheduler.start()
             yield
             scheduler.stop()
@@ -133,6 +200,9 @@ class CronScheduler:
     def __init__(
         self,
         db_factory: Any,
+        mode: str = "pre_match",
+        pre_match_lead_minutes: int = DEFAULT_PRE_MATCH_LEAD_MINUTES,
+        discovery_interval_hours: int = DEFAULT_DISCOVERY_INTERVAL_HOURS,
         cron_expression: str = "0 * * * *",
         dispatcharr_client: Any = None,
         run_on_start: bool = True,
@@ -141,11 +211,21 @@ class CronScheduler:
 
         Args:
             db_factory: Factory function returning database connection
-            cron_expression: Cron expression (e.g., "0 * * * *" for hourly)
+            mode: "pre_match" (event-driven, default) or "cron" (classic
+                fixed-schedule)
+            pre_match_lead_minutes: (pre_match mode) Minutes before a
+                match's start to trigger a fresh generation run
+            discovery_interval_hours: (pre_match mode) Fallback cadence
+                (hours) that runs generation even with no known upcoming
+                matches
+            cron_expression: (cron mode) Standard 5-field cron expression
             dispatcharr_client: Optional DispatcharrClient for Dispatcharr operations
             run_on_start: Whether to run tasks immediately on start
         """
         self._db_factory = db_factory
+        self._mode = mode if mode in ("pre_match", "cron") else "pre_match"
+        self._pre_match_lead_minutes = max(0, pre_match_lead_minutes)
+        self._discovery_interval_hours = max(1, discovery_interval_hours)
         self._cron_expression = cron_expression
         self._dispatcharr_client = dispatcharr_client
         self._run_on_start = run_on_start
@@ -155,7 +235,27 @@ class CronScheduler:
         self._running = False
         self._last_run: datetime | None = None
         self._next_run: datetime | None = None
+        self._next_run_reason: str | None = None  # "pre_match" | "discovery" | "cron"
+        self._next_match_start: datetime | None = None
+        self._next_match_sport: str | None = None
         self._sub_schedulers: dict[str, SubTaskScheduler] = {}
+
+        # Matches already covered by a pre-match run, keyed by
+        # (event_id, raw event_date string) so a postponement (changed start
+        # time) is treated as a new, not-yet-covered match. In-memory only —
+        # resetting on restart just means one possible extra pre-match run
+        # for a match that was already covered, which is harmless.
+        self._pre_match_done: set[tuple[str, str]] = set()
+
+    @property
+    def mode(self) -> str:
+        """Get the scheduling mode: 'pre_match' or 'cron'."""
+        return self._mode
+
+    @property
+    def cron_expression(self) -> str:
+        """Get the cron expression (used when mode == 'cron')."""
+        return self._cron_expression
 
     @property
     def is_running(self) -> bool:
@@ -173,36 +273,65 @@ class CronScheduler:
         return self._next_run
 
     @property
-    def cron_expression(self) -> str:
-        """Get the cron expression."""
-        return self._cron_expression
+    def next_run_reason(self) -> str | None:
+        """Why the next run is scheduled: 'pre_match' or 'discovery'."""
+        return self._next_run_reason
+
+    @property
+    def next_match_start(self) -> datetime | None:
+        """Start time of the match the next pre-match run is anchored to, if any."""
+        return self._next_match_start
+
+    @property
+    def next_match_sport(self) -> str | None:
+        """Sport of the match the next pre-match run is anchored to, if any."""
+        return self._next_match_sport
+
+    @property
+    def pre_match_lead_minutes(self) -> int:
+        """Get the pre-match lead time in minutes."""
+        return self._pre_match_lead_minutes
+
+    @property
+    def discovery_interval_hours(self) -> int:
+        """Get the discovery fallback interval in hours."""
+        return self._discovery_interval_hours
 
     def start(self) -> bool:
         """Start the scheduler.
 
         Returns:
-            True if started, False if already running
+            True if started, False if already running or invalid
         """
         if self.is_running:
-            logger.warning("[CRON] Scheduler already running")
+            logger.warning("[SCHEDULER] Scheduler already running")
             return False
 
-        # Validate cron expression
-        try:
-            croniter(self._cron_expression)
-        except (KeyError, ValueError) as e:
-            logger.error("[CRON] Invalid expression '%s': %s", self._cron_expression, e)
-            return False
+        if self._mode == "cron":
+            try:
+                croniter(self._cron_expression)
+            except (KeyError, ValueError) as e:
+                logger.error(
+                    "[SCHEDULER] Invalid cron expression '%s': %s", self._cron_expression, e
+                )
+                return False
 
         self._stop_event.clear()
         self._running = True
         self._thread = threading.Thread(
             target=self._run_loop,
-            name="cron-scheduler",
+            name="epg-scheduler",
             daemon=True,
         )
         self._thread.start()
-        logger.info("[CRON] Scheduler started: %s", self._cron_expression)
+        if self._mode == "cron":
+            logger.info("[SCHEDULER] Started: cron '%s'", self._cron_expression)
+        else:
+            logger.info(
+                "[SCHEDULER] Started: pre-match lead %dm, discovery every %dh",
+                self._pre_match_lead_minutes,
+                self._discovery_interval_hours,
+            )
 
         # Start independent sub-schedulers for backup and channel reset
         self._start_sub_schedulers()
@@ -226,17 +355,17 @@ class CronScheduler:
             sub.stop(timeout=5.0)
         self._sub_schedulers.clear()
 
-        logger.debug("[CRON] Stopping scheduler...")
+        logger.debug("[SCHEDULER] Stopping scheduler...")
         self._stop_event.set()
         self._running = False
 
         if self._thread:
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
-                logger.warning("[CRON] Scheduler thread did not stop in time")
+                logger.warning("[SCHEDULER] Scheduler thread did not stop in time")
                 return False
 
-        logger.info("[CRON] Scheduler stopped")
+        logger.info("[SCHEDULER] Scheduler stopped")
         return True
 
     def _start_sub_schedulers(self) -> None:
@@ -307,40 +436,169 @@ class CronScheduler:
 
     def _run_loop(self) -> None:
         """Main scheduler loop - runs in background thread."""
-        # Run immediately on startup if configured
+        # Run immediately on startup if configured. Useful here specifically
+        # because, unlike a fixed cron, the pre-match/discovery schedule has
+        # nothing to anchor to until at least one generation has populated
+        # managed_channels with upcoming match times.
         if self._run_on_start:
             try:
-                logger.info("[CRON] Running initial scheduled tasks")
+                logger.info("[SCHEDULER] Running initial generation")
                 self._run_tasks()
             except Exception as e:
-                logger.exception("[CRON] Error in initial run: %s", e)
+                logger.exception("[SCHEDULER] Error in initial run: %s", e)
 
         while not self._stop_event.is_set():
-            # Calculate next run time
-            cron = croniter(self._cron_expression, datetime.now())
-            self._next_run = cron.get_next(datetime)
+            self._compute_next_run()
+            next_run = self._next_run
+            assert next_run is not None
 
-            wait_seconds = (self._next_run - datetime.now()).total_seconds()
+            wait_seconds = (next_run - datetime.now()).total_seconds()
             logger.debug(
-                "[CRON] Next run: %s (%.0fs)",
-                self._next_run.strftime("%Y-%m-%d %H:%M:%S"),
+                "[SCHEDULER] Next run: %s (%s, %.0fs)",
+                next_run.strftime("%Y-%m-%d %H:%M:%S"),
+                self._next_run_reason,
                 wait_seconds,
             )
 
             # Wait until next run time (checking stop event every second)
             while wait_seconds > 0 and not self._stop_event.is_set():
                 self._stop_event.wait(min(1.0, wait_seconds))
-                wait_seconds = (self._next_run - datetime.now()).total_seconds()
+                wait_seconds = (next_run - datetime.now()).total_seconds()
 
             if self._stop_event.is_set():
                 return
 
+            # Mark matches starting within the lead window as covered BEFORE
+            # running, so the run in progress (which is about to refresh
+            # exactly those matches) doesn't immediately re-trigger itself.
+            if self._next_run_reason == "pre_match":
+                self._mark_pre_match_covered()
+
             # Run tasks
             try:
-                logger.info("[CRON] Scheduled run triggered")
+                logger.info("[SCHEDULER] Scheduled run triggered (%s)", self._next_run_reason)
                 self._run_tasks()
             except Exception as e:
-                logger.exception("[CRON] Error in scheduled run: %s", e)
+                logger.exception("[SCHEDULER] Error in scheduled run: %s", e)
+
+    def _compute_next_run(self) -> None:
+        """Recalculate `next_run`/`next_run_reason` from fresh data.
+
+        In "cron" mode, delegates to croniter. In "pre_match" mode, whichever
+        of the pre-match and discovery triggers is sooner wins.
+        """
+        if self._mode == "cron":
+            self._next_run = croniter(self._cron_expression, datetime.now()).get_next(datetime)
+            self._next_run_reason = "cron"
+            self._next_match_start = None
+            self._next_match_sport = None
+            return
+
+        now = datetime.now()
+        discovery_time = (self._last_run or now) + timedelta(hours=self._discovery_interval_hours)
+
+        next_match = self._get_next_trigger()
+
+        if next_match is not None and next_match.trigger_time <= discovery_time:
+            self._next_run = next_match.trigger_time
+            self._next_run_reason = "pre_match"
+        else:
+            self._next_run = discovery_time
+            self._next_run_reason = "discovery"
+        self._next_match_start = next_match.start if next_match is not None else None
+        self._next_match_sport = next_match.sport if next_match is not None else None
+
+    def _lead_minutes_for_sport(self, sport: str | None, overrides: dict[str, int]) -> int:
+        """Per-sport lead time if one's set, else the global default."""
+        if sport and sport in overrides:
+            return max(0, overrides[sport])
+        return self._pre_match_lead_minutes
+
+    def _get_next_trigger(self) -> "_MatchTrigger | None":
+        """Find the soonest not-yet-covered match's pre-match trigger.
+
+        Each match's own trigger time is its start minus that sport's lead
+        time (a per-sport override, or the global default). Sorted by
+        trigger time rather than raw start time, so a sport with a longer
+        lead can trigger before an earlier-starting match with a shorter one.
+
+        Returns the winning _MatchTrigger, or None if nothing is known/upcoming.
+        """
+        from teamarr.database.sport_schedule import get_sport_lead_overrides
+
+        now = datetime.now()
+        try:
+            with self._db_factory() as conn:
+                overrides = get_sport_lead_overrides(conn)
+                rows = conn.execute(
+                    """SELECT event_id, event_date, sport FROM managed_channels
+                       WHERE event_date IS NOT NULL
+                         AND deleted_at IS NULL"""
+                ).fetchall()
+        except Exception as e:
+            logger.warning("[SCHEDULER] Failed to query upcoming matches: %s", e)
+            return None
+
+        soonest: _MatchTrigger | None = None
+        for row in rows:
+            event_id = row["event_id"]
+            raw_date = row["event_date"]
+            sport = row["sport"]
+            start = _parse_event_dt(raw_date)
+            if start is None or start <= now:
+                continue
+            if (event_id, raw_date) in self._pre_match_done:
+                continue
+
+            lead = self._lead_minutes_for_sport(sport, overrides)
+            trigger_time = start - timedelta(minutes=lead)
+            if soonest is None or trigger_time < soonest.trigger_time:
+                soonest = _MatchTrigger(
+                    event_id=event_id, start=start, sport=sport, trigger_time=trigger_time
+                )
+        return soonest
+
+    def _mark_pre_match_covered(self) -> None:
+        """Record every match whose own pre-match trigger has passed as covered.
+
+        A single generation run refreshes the whole EPG, so a slate of
+        matches with the same (effective) trigger time only needs one run —
+        including a mixed slate spanning sports with different lead times,
+        since each match is checked against its own sport's lead.
+        """
+        from teamarr.database.sport_schedule import get_sport_lead_overrides
+
+        now = datetime.now()
+        # Small buffer past "now" absorbs the gap between computing next_run
+        # and this method actually running.
+        buffer = timedelta(seconds=30)
+        try:
+            with self._db_factory() as conn:
+                overrides = get_sport_lead_overrides(conn)
+                rows = conn.execute(
+                    """SELECT event_id, event_date, sport FROM managed_channels
+                       WHERE event_date IS NOT NULL
+                         AND deleted_at IS NULL"""
+                ).fetchall()
+        except Exception as e:
+            logger.warning("[SCHEDULER] Failed to mark pre-match coverage: %s", e)
+            return
+
+        for row in rows:
+            start = _parse_event_dt(row["event_date"])
+            if start is None or start <= now:
+                continue
+            lead = self._lead_minutes_for_sport(row["sport"], overrides)
+            cutoff = now + timedelta(minutes=lead) + buffer
+            if start <= cutoff:
+                self._pre_match_done.add((row["event_id"], row["event_date"]))
+
+        if len(self._pre_match_done) > _PRE_MATCH_DONE_PRUNE_THRESHOLD:
+            self._pre_match_done = {
+                (event_id, raw_date)
+                for event_id, raw_date in self._pre_match_done
+                if (parsed := _parse_event_dt(raw_date)) is not None and parsed > now
+            }
 
     def _run_tasks(self) -> dict:
         """Run EPG-related scheduled tasks.
@@ -362,14 +620,14 @@ class CronScheduler:
         try:
             results["cache_refresh"] = self._task_refresh_cache()
         except Exception as e:
-            logger.warning("[CRON] Cache refresh task failed: %s", e)
+            logger.warning("[SCHEDULER] Cache refresh task failed: %s", e)
             results["cache_refresh"] = {"error": str(e)}
 
         try:
             # Single unified generation call - does everything
             results["epg_generation"] = self._task_generate_epg()
         except Exception as e:
-            logger.warning("[CRON] EPG generation task failed: %s", e)
+            logger.warning("[SCHEDULER] EPG generation task failed: %s", e)
             results["epg_generation"] = {"error": str(e)}
 
         results["completed_at"] = datetime.now().isoformat()
@@ -540,7 +798,7 @@ class CronScheduler:
 
         # Mark generation as started (enables UI polling)
         if not start_generation():
-            logger.warning("[CRON] EPG generation skipped: already in progress")
+            logger.warning("[SCHEDULER] EPG generation skipped: already in progress")
             return {"success": False, "error": "Generation already in progress"}
 
         def progress_callback(
@@ -624,18 +882,26 @@ _scheduler: CronScheduler | None = None
 
 def start_lifecycle_scheduler(
     db_factory: Any,
+    mode: str | None = None,
+    pre_match_lead_minutes: int | None = None,
+    discovery_interval_hours: int | None = None,
     cron_expression: str | None = None,
     dispatcharr_client: Any = None,
 ) -> bool:
-    """Start the global cron scheduler.
+    """Start the global EPG scheduler.
 
     Args:
         db_factory: Factory function returning database connection
-        cron_expression: Cron expression (None = use settings)
+        mode: "pre_match" or "cron" (None = use settings)
+        pre_match_lead_minutes: (pre_match mode) Minutes before a match to
+            trigger generation (None = use settings)
+        discovery_interval_hours: (pre_match mode) Fallback discovery
+            cadence in hours (None = use settings)
+        cron_expression: (cron mode) Cron expression (None = use settings)
         dispatcharr_client: Optional DispatcharrClient instance
 
     Returns:
-        True if started, False if already running or disabled
+        True if started, False if already running, disabled, or invalid
     """
     global _scheduler
 
@@ -647,21 +913,39 @@ def start_lifecycle_scheduler(
         epg_settings = get_epg_settings(conn)
 
     if not scheduler_settings.enabled:
-        logger.info("[CRON] Scheduler disabled in settings")
+        logger.info("[SCHEDULER] Scheduler disabled in settings")
         return False
 
-    # Use provided cron expression or fall back to settings
-    cron = cron_expression or epg_settings.cron_expression or "0 * * * *"
+    resolved_mode = mode if mode is not None else epg_settings.scheduler_mode
+    lead_minutes = (
+        pre_match_lead_minutes
+        if pre_match_lead_minutes is not None
+        else epg_settings.pre_match_lead_minutes
+    )
+    discovery_hours = (
+        discovery_interval_hours
+        if discovery_interval_hours is not None
+        else epg_settings.epg_discovery_interval_hours
+    )
+    cron = cron_expression if cron_expression is not None else epg_settings.cron_expression
 
     if _scheduler and _scheduler.is_running:
-        logger.warning("[CRON] Scheduler already running")
+        logger.warning("[SCHEDULER] Scheduler already running")
         return False
 
     _scheduler = CronScheduler(
         db_factory=db_factory,
+        mode=resolved_mode,
+        pre_match_lead_minutes=lead_minutes,
+        discovery_interval_hours=discovery_hours,
         cron_expression=cron,
         dispatcharr_client=dispatcharr_client,
-        run_on_start=False,  # Don't run EPG generation on startup
+        # In pre_match mode, unlike a fixed cron, the schedule has nothing to
+        # anchor to until a generation run has populated managed_channels
+        # with upcoming match times, so run once immediately on startup. In
+        # cron mode, the next tick is well-defined without one, matching
+        # Teamarr's original cron-scheduler behavior.
+        run_on_start=(resolved_mode == "pre_match"),
     )
     return _scheduler.start()
 
@@ -697,9 +981,17 @@ def get_scheduler_status() -> dict:
 
     status = {
         "running": _scheduler.is_running,
+        "mode": _scheduler.mode,
         "cron_expression": _scheduler.cron_expression,
+        "pre_match_lead_minutes": _scheduler.pre_match_lead_minutes,
+        "discovery_interval_hours": _scheduler.discovery_interval_hours,
         "last_run": _scheduler.last_run.isoformat() if _scheduler.last_run else None,
         "next_run": _scheduler.next_run.isoformat() if _scheduler.next_run else None,
+        "next_run_reason": _scheduler.next_run_reason,
+        "next_match_start": (
+            _scheduler.next_match_start.isoformat() if _scheduler.next_match_start else None
+        ),
+        "next_match_sport": _scheduler.next_match_sport,
         "sub_tasks": {},
     }
 

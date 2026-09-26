@@ -9,6 +9,9 @@ import {
   getSchedulerSettings,
   updateSchedulerSettings,
   getSchedulerStatus,
+  getSportLeadTimes,
+  setSportLeadTime,
+  deleteSportLeadTime,
   getEPGSettings,
   updateEPGSettings,
   getDurationSettings,
@@ -286,6 +289,40 @@ export function useSchedulerStatus() {
     queryKey: ["scheduler", "status"],
     queryFn: getSchedulerStatus,
     refetchInterval: 10000, // Refresh every 10 seconds
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Per-sport pre-match lead time overrides
+// ---------------------------------------------------------------------------
+
+export function useSportLeadTimes() {
+  return useQuery({
+    queryKey: ["scheduler", "sport-lead-times"],
+    queryFn: getSportLeadTimes,
+  })
+}
+
+export function useSetSportLeadTime() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ sport, minutes }: { sport: string; minutes: number }) =>
+      setSportLeadTime(sport, minutes),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["scheduler", "sport-lead-times"], data)
+    },
+  })
+}
+
+export function useDeleteSportLeadTime() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (sport: string) => deleteSportLeadTime(sport),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["scheduler", "sport-lead-times"], data)
+    },
   })
 }
 
