@@ -444,7 +444,7 @@ class ChannelCreator(_LifecycleHost):
                         continue
 
                 # Apply all pending profile changes in bulk
-                self._apply_pending_profile_changes()
+                self._apply_pending_profile_changes(conn)
 
         except Exception as e:
             logger.exception("Error in matched streams setup")
@@ -836,6 +836,12 @@ class ChannelCreator(_LifecycleHost):
         per-run profile catalog; an unavailable catalog passes ids through
         unverified rather than guessing.
 
+        The catalog is cached for the run, but the dynamic resolver creates
+        ``{sport}``/``{league}`` profiles mid-run (#894). An id missing from
+        the cache is therefore re-checked against a fresh catalog once before
+        it is called stale — otherwise every profile created after the first
+        catalog read was dropped and the channel fell back to ALL profiles.
+
         A non-empty selection whose every id is stale falls back to the
         [0] all-profiles sentinel: visible-everywhere beats a create loop
         that fails forever. [] (explicitly NO profiles) is respected as-is.
@@ -845,6 +851,14 @@ class ChannelCreator(_LifecycleHost):
         catalog = self._all_profile_ids()
         if catalog is None:
             return resolved
+        unknown = [p for p in resolved if p != 0 and p not in catalog]
+        if any(p not in self._stale_profile_ids_warned for p in unknown):
+            # _stale_profile_ids_warned doubles as "confirmed stale after a
+            # refresh", so each unknown id costs at most one catalog fetch.
+            self._all_profile_ids_cache = None
+            catalog = self._all_profile_ids()
+            if catalog is None:
+                return resolved
         valid = [p for p in resolved if p == 0 or p in catalog]
         stale = [p for p in resolved if p != 0 and p not in catalog]
         newly_warned = False
