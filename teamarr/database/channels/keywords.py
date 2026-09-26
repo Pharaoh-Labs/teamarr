@@ -108,6 +108,11 @@ def check_exception_keyword(
     keywords: list[ExceptionKeyword],
     event_text: str | None = None,
     program_title: str | None = None,
+    *,
+    stream_id: int | None = None,
+    m3u_group_id: int | None = None,
+    m3u_group_name: str | None = None,
+    event_group_id: int | None = None,
 ) -> tuple[str | None, str | None]:
     """Check if stream name matches any exception keyword.
 
@@ -131,19 +136,43 @@ def check_exception_keyword(
     direct evidence, so a keyword it names wins over one only the guide
     names. The event-name guard applies to both.
 
+    Keywords can also match on where a stream comes from (#893): providers
+    often mark a feed's language only in the M3U group they file it under
+    ("ES| DAZN"). Sources are checked from the most specific evidence to the
+    least, and the first hit wins:
+
+    1. a stream the user pinned to the keyword (``stream_id``)
+    2. the stream name — match terms, then the keyword's stream regex
+    3. the EPG programme title (match terms)
+    4. an M3U group the user picked (``m3u_group_id``)
+    5. the keyword's M3U group regex (``m3u_group_name``)
+    6. the Teamarr event group the stream came through (``event_group_id``)
+
+    The #803 guard applies to match terms only; a user-written regex is
+    taken as intended.
+
     Args:
         stream_name: Stream name to check
         keywords: List of ExceptionKeyword objects
         event_text: The matched event's name/short name/venue country, or None
         program_title: The matched EPG programme's title|sub_title, or None
+        stream_id: Dispatcharr stream id, for pinned streams
+        m3u_group_id: The stream's Dispatcharr M3U group id
+        m3u_group_name: The stream's M3U group name
+        event_group_id: The Teamarr event group the stream was matched in
 
     Returns:
         Tuple of (label, behavior) or (None, None) if no match.
         The label is the configured display name for the keyword, used for
         channel naming and the {exception_keyword} template variable.
     """
+    if stream_id is not None:
+        for kw in keywords:
+            if stream_id in kw.stream_id_set:
+                return (kw.label, kw.behavior)
+
     event_lower = event_text.lower() if event_text else ""
-    for text in (stream_name, program_title):
+    for text, use_regex in ((stream_name, True), (program_title, False)):
         if not text:
             continue
         text_lower = text.lower()
@@ -154,4 +183,24 @@ def check_exception_keyword(
                     continue
                 if re.search(pattern, text_lower):
                     return (kw.label, kw.behavior)
+        if use_regex:
+            for kw in keywords:
+                if kw.stream_regex and kw.stream_regex.search(text):
+                    return (kw.label, kw.behavior)
+
+    if m3u_group_id is not None:
+        for kw in keywords:
+            if m3u_group_id in kw.m3u_group_id_set:
+                return (kw.label, kw.behavior)
+
+    if m3u_group_name:
+        for kw in keywords:
+            if kw.m3u_group_regex and kw.m3u_group_regex.search(m3u_group_name):
+                return (kw.label, kw.behavior)
+
+    if event_group_id is not None:
+        for kw in keywords:
+            if event_group_id in kw.event_group_id_set:
+                return (kw.label, kw.behavior)
+
     return (None, None)

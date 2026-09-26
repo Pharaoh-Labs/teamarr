@@ -1697,6 +1697,8 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
         CHECK(feed_side IN ('home', 'away')),
     dispatcharr_channel_group TEXT,           -- (ybt.3) the DP channel's own group name, for channel-source streams; drives the 'dispatcharr_group' stream-ordering rule. NULL for non-channel-source streams.
     dispatcharr_channel_group_id INTEGER,     -- Stable DP channel-group id for channel-source stream-profile overrides. NULL for non-channel-source streams.
+    m3u_group_id INTEGER,                     -- (#893) the stream's own M3U group; exception keywords with M3U-group sources re-check against it. NULL on rows attached before the column existed.
+    m3u_group_name TEXT,
 
     -- Priority (0 = primary, higher = failover)
     priority INTEGER DEFAULT 0,
@@ -1795,7 +1797,17 @@ CREATE TABLE IF NOT EXISTS consolidation_exception_keywords (
         CHECK(behavior IN ('consolidate', 'separate', 'ignore')),
 
     -- Status
-    enabled BOOLEAN DEFAULT 1
+    enabled BOOLEAN DEFAULT 1,
+
+    -- Match sources beyond stream-name terms (#893). match_terms may be ''
+    -- when a keyword matches on these alone. Picked ids carry a name
+    -- snapshot for display: [{"id": 12, "name": "ES| DAZN"}]; matching
+    -- uses the id only.
+    m3u_group_pattern TEXT,                   -- regex on the stream's M3U group name
+    m3u_groups JSON,                          -- picked Dispatcharr M3U groups
+    stream_pattern TEXT,                      -- regex on the stream name
+    streams JSON,                             -- picked Dispatcharr streams
+    event_group_ids JSON                      -- Teamarr event groups whose streams get this keyword
 );
 
 -- Default language keywords are NOT seeded here (#726): executescript runs on

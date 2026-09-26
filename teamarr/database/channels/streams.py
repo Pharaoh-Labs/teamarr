@@ -57,6 +57,8 @@ def add_stream_to_channel(
         "feed_side",  # 'home'/'away'; NULL = unknown. Drives home_feed/away_feed rules (#533)
         "dispatcharr_channel_group",  # DP channel group; drives dispatcharr_group rule (ybt.3)
         "dispatcharr_channel_group_id",  # Stable DP channel group id for profile overrides
+        "m3u_group_id",  # the stream's M3U group; exception keyword sources (#893)
+        "m3u_group_name",
         "attach_at",   # time-windowed membership (183.5); None = full-life
         "detach_at",
     ]
@@ -537,6 +539,39 @@ def update_stream_program_title(
              AND removed_at IS NULL
              AND epg_program_title IS NOT ?""",
         (epg_program_title, managed_channel_id, dispatcharr_stream_id, epg_program_title),
+    )
+    return cursor.rowcount > 0
+
+
+def update_stream_m3u_group(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    m3u_group_id: int,
+    m3u_group_name: str | None,
+) -> bool:
+    """Backfill/refresh the M3U group of an attached stream (#893).
+
+    Keyword enforcement re-checks exception keywords from the stored row, so a
+    keyword that matches on M3U group needs the group there. Rows attached
+    before the columns existed carry NULL until the next generation that sees
+    the stream. Targets the active row; returns True when a value changed.
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET m3u_group_id = ?, m3u_group_name = ?
+           WHERE managed_channel_id = ?
+             AND dispatcharr_stream_id = ?
+             AND removed_at IS NULL
+             AND (m3u_group_id IS NOT ? OR m3u_group_name IS NOT ?)""",
+        (
+            m3u_group_id,
+            m3u_group_name,
+            managed_channel_id,
+            dispatcharr_stream_id,
+            m3u_group_id,
+            m3u_group_name,
+        ),
     )
     return cursor.rowcount > 0
 

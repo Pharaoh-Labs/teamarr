@@ -350,7 +350,7 @@ export function useCreateExceptionKeyword() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (data: { label: string; match_terms: string; behavior: string; enabled?: boolean }) =>
+    mutationFn: (data: Parameters<typeof createExceptionKeyword>[0]) =>
       createExceptionKeyword(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["keywords"] })

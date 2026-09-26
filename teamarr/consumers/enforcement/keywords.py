@@ -45,6 +45,19 @@ class KeywordEnforcementResult:
         }
 
 
+def _missing_group_evidence(stream: Any, current_keyword: str | None, keywords: list) -> bool:
+    """True when ``current_keyword`` may rest on an M3U group this row never stored.
+
+    Rows attached before #893 have no M3U group, so a keyword that matched
+    the stream by its group can't be re-confirmed from the row alone.
+    """
+    if current_keyword is None:
+        return False
+    if stream.m3u_group_id is not None or stream.m3u_group_name:
+        return False
+    return any(kw.label == current_keyword and kw.uses_m3u_group for kw in keywords)
+
+
 class KeywordEnforcer:
     """Enforces correct stream placement based on exception keywords.
 
@@ -145,11 +158,24 @@ class KeywordEnforcer:
                             league_keywords[league],
                             event_identity_text(channel),
                             stream.epg_program_title,
+                            stream_id=stream.dispatcharr_stream_id,
+                            m3u_group_id=stream.m3u_group_id,
+                            m3u_group_name=stream.m3u_group_name,
+                            event_group_id=stream.source_group_id,
                         )
 
                         # Normalize: None for no keyword
                         current_keyword = channel.exception_keyword or None
                         expected_keyword = expected_keyword if expected_keyword else None
+
+                        if expected_keyword != current_keyword and _missing_group_evidence(
+                            stream, current_keyword, league_keywords[league]
+                        ):
+                            # Attached before the M3U group was stored (#893):
+                            # the creator backfills it the next time it sees the
+                            # stream, and until then the move would be a guess.
+                            result.streams_correct += 1
+                            continue
 
                         # If behavior is 'ignore', stream shouldn't be here at all
                         if behavior == "ignore":
@@ -233,6 +259,8 @@ class KeywordEnforcer:
                             detach_at=stream.detach_at,
                             dispatcharr_channel_group=stream.dispatcharr_channel_group,
                             dispatcharr_channel_group_id=stream.dispatcharr_channel_group_id,
+                            m3u_group_id=stream.m3u_group_id,
+                            m3u_group_name=stream.m3u_group_name,
                         )
 
                         # Sync to Dispatcharr

@@ -193,7 +193,8 @@ class XmltvRenderer:
                 match["_event_filler_config"] = filler_cache[event_template_id]
 
             # Annotate match with exception keyword for EPG channel name parity
-            stream_name = match.get("stream", {}).get("name", "")
+            stream = match.get("stream", {})
+            stream_name = stream.get("name", "")
             if stream_name:
                 event = match.get("event")
                 keywords = get_keywords_for_league(
@@ -204,6 +205,10 @@ class XmltvRenderer:
                     keywords,
                     event_identity_text(event),
                     match.get("epg_program_title"),
+                    stream_id=stream.get("id"),
+                    m3u_group_id=stream.get("m3u_group_id"),
+                    m3u_group_name=stream.get("m3u_group_name"),
+                    event_group_id=group.id,
                 )
                 if keyword_label:
                     match["_exception_keyword"] = keyword_label

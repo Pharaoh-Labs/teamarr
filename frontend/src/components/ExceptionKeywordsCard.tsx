@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { toast } from "sonner"
-import { Check, X, Pencil, Trash2, LoaderCircle, Plus } from "lucide-react"
+import { Check, X, Pencil, Trash2, LoaderCircle, Plus, SlidersHorizontal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,7 +20,9 @@ import {
   useDeleteExceptionKeyword,
   useChannelNumberingSettings,
 } from "@/hooks/useSettings"
-import { updateExceptionKeyword } from "@/api/settings"
+import { updateExceptionKeyword, type KeywordMatchSources } from "@/api/settings"
+import { KeywordSourcesEditor } from "@/components/KeywordSourcesEditor"
+import { EMPTY_SOURCES, countSources } from "@/lib/keyword-sources"
 
 /**
  * Exception Keywords management — streams matching these terms get special
@@ -38,6 +40,20 @@ export function ExceptionKeywordsCard() {
 
   const [newKeyword, setNewKeyword] = useState({ label: "", match_terms: "", behavior: "consolidate" })
   const [editingKeyword, setEditingKeyword] = useState<{ id: number; label: string; match_terms: string } | null>(null)
+  // Which keyword's match-sources editor is open; "new" = the add row (#893)
+  const [sourcesFor, setSourcesFor] = useState<number | "new" | null>(null)
+  const [savingSources, setSavingSources] = useState(false)
+
+  const createNewKeyword = async (sources?: KeywordMatchSources) => {
+    try {
+      await createKeyword.mutateAsync({ ...newKeyword, ...sources })
+      setNewKeyword({ label: "", match_terms: "", behavior: "consolidate" })
+      setSourcesFor(null)
+      toast.success("Keyword added")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add keyword")
+    }
+  }
 
   const handleAddKeyword = async () => {
     if (!newKeyword.label.trim()) {
@@ -45,15 +61,28 @@ export function ExceptionKeywordsCard() {
       return
     }
     if (!newKeyword.match_terms.trim()) {
-      toast.error("Please enter at least one match term")
+      // No terms: the keyword needs another match source before it can exist.
+      setSourcesFor("new")
       return
     }
+    await createNewKeyword()
+  }
+
+  const handleSaveSources = async (sources: KeywordMatchSources) => {
+    setSavingSources(true)
     try {
-      await createKeyword.mutateAsync(newKeyword)
-      setNewKeyword({ label: "", match_terms: "", behavior: "consolidate" })
-      toast.success("Keyword added")
+      if (sourcesFor === "new") {
+        await createNewKeyword(sources)
+      } else if (sourcesFor !== null) {
+        await updateExceptionKeyword(sourcesFor, sources)
+        await keywordsQuery.refetch()
+        setSourcesFor(null)
+        toast.success("Match sources saved")
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to add keyword")
+      toast.error(err instanceof Error ? err.message : "Failed to save match sources")
+    } finally {
+      setSavingSources(false)
     }
   }
 
@@ -81,8 +110,9 @@ export function ExceptionKeywordsCard() {
       toast.error("Label cannot be empty")
       return
     }
-    if (!editingKeyword.match_terms.trim()) {
-      toast.error("Match terms cannot be empty")
+    const current = keywordsQuery.data?.keywords.find((k) => k.id === editingKeyword.id)
+    if (!editingKeyword.match_terms.trim() && !(current && countSources(current) > 0)) {
+      toast.error("Match terms cannot be empty unless the keyword has other match sources")
       return
     }
     try {
@@ -107,7 +137,9 @@ export function ExceptionKeywordsCard() {
       <CardHeader>
         <CardTitle>Exception Keywords</CardTitle>
         <CardDescription>
-          Streams matching these terms get special handling during consolidation. The label is used for channel naming and the {"{exception_keyword}"} template variable.
+          Streams matching these terms, or coming from the M3U groups, event groups or pinned streams set under
+          {" "}<SlidersHorizontal className="inline h-3 w-3" /> Match sources, get special handling during consolidation.
+          The label is used for channel naming, the {"{exception_keyword}"} template variable and group patterns.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -124,7 +156,8 @@ export function ExceptionKeywordsCard() {
             </TableHeader>
             <TableBody>
               {keywordsQuery.data?.keywords.map((kw) => (
-                <TableRow key={kw.id} className={kw.enabled === false ? "opacity-50" : undefined}>
+                <Fragment key={kw.id}>
+                <TableRow className={kw.enabled === false ? "opacity-50" : undefined}>
                   <TableCell>
                     <Checkbox
                       checked={kw.enabled !== false}
@@ -162,7 +195,12 @@ export function ExceptionKeywordsCard() {
                         }}
                       />
                     ) : (
-                      <span className="text-muted-foreground">{kw.match_terms}</span>
+                      <span className="text-muted-foreground">{kw.match_terms || "—"}</span>
+                    )}
+                    {countSources(kw) > 0 && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        + {countSources(kw)} source{countSources(kw) === 1 ? "" : "s"}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -214,6 +252,14 @@ export function ExceptionKeywordsCard() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => setSourcesFor(sourcesFor === kw.id ? null : kw.id)}
+                            title="Match sources"
+                          >
+                            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleDeleteKeyword(kw.id)}
                             disabled={deleteKeyword.isPending}
                             title="Delete"
@@ -225,6 +271,25 @@ export function ExceptionKeywordsCard() {
                     </div>
                   </TableCell>
                 </TableRow>
+                {sourcesFor === kw.id && (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <KeywordSourcesEditor
+                        initial={{
+                          m3u_group_pattern: kw.m3u_group_pattern,
+                          m3u_groups: kw.m3u_groups,
+                          stream_pattern: kw.stream_pattern,
+                          streams: kw.streams,
+                          event_group_ids: kw.event_group_ids,
+                        }}
+                        saving={savingSources}
+                        onSave={handleSaveSources}
+                        onCancel={() => setSourcesFor(null)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+                </Fragment>
               ))}
               {(!keywordsQuery.data?.keywords || keywordsQuery.data.keywords.length === 0) && (
                 <TableRow>
@@ -245,7 +310,7 @@ export function ExceptionKeywordsCard() {
             className="w-full sm:w-32"
           />
           <Input
-            placeholder="Match terms (e.g., Spanish, En Español, ESP)"
+            placeholder="Match terms (e.g., Spanish, En Español, ESP), or leave empty to match by source"
             value={newKeyword.match_terms}
             onChange={(e) => setNewKeyword({ ...newKeyword, match_terms: e.target.value })}
             className="w-full sm:flex-1"
@@ -267,6 +332,14 @@ export function ExceptionKeywordsCard() {
             )}
           </Button>
         </div>
+        {sourcesFor === "new" && (
+          <KeywordSourcesEditor
+            initial={EMPTY_SOURCES}
+            saving={savingSources || createKeyword.isPending}
+            onSave={handleSaveSources}
+            onCancel={() => setSourcesFor(null)}
+          />
+        )}
       </CardContent>
     </Card>
   )
