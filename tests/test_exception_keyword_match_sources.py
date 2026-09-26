@@ -321,6 +321,30 @@ class TestEnforcer:
         with db_factory() as conn:
             assert [s.dispatcharr_stream_id for s in get_channel_streams(conn, main_id)] == [42]
 
+    def test_move_onto_channel_already_holding_stream_keeps_one_row(self, db_factory):
+        # The creator attaches a re-tagged stream to its keyword channel before
+        # enforcement removes it from main; the move must not add it twice.
+        with db_factory() as conn:
+            main_id, es_id = self._setup(
+                conn, on_keyword=False, m3u_group_id=33, m3u_group_name="ES| DAZN"
+            )
+            add_stream_to_channel(
+                conn=conn,
+                managed_channel_id=es_id,
+                dispatcharr_stream_id=42,
+                stream_name="Arsenal v Chelsea",
+                priority=0,
+                exception_keyword="ZZES",
+                m3u_group_id=33,
+                m3u_group_name="ES| DAZN",
+            )
+            conn.commit()
+        result = KeywordEnforcer(db_factory=db_factory).enforce()
+        assert result.streams_moved
+        with db_factory() as conn:
+            assert [s.dispatcharr_stream_id for s in get_channel_streams(conn, es_id)] == [42]
+            assert get_channel_streams(conn, main_id) == []
+
 
 class TestStreamGroup:
     def test_dispatcharr_puts_the_id_in_channel_group(self):

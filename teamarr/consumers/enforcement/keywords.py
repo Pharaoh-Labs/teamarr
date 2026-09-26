@@ -106,6 +106,7 @@ class KeywordEnforcer:
             get_next_stream_priority,
             log_channel_history,
             remove_stream_from_channel,
+            stream_exists_on_channel,
         )
 
         result = KeywordEnforcementResult()
@@ -235,33 +236,39 @@ class KeywordEnforcer:
                             reason=f"Moved to {target_name} channel",
                         )
 
-                        # Use sequential priority - final ordering after all matching
-                        priority = get_next_stream_priority(conn, target_channel.id)
-                        add_stream_to_channel(
-                            conn=conn,
-                            managed_channel_id=target_channel.id,
-                            dispatcharr_stream_id=stream.dispatcharr_stream_id,
-                            stream_name=stream_name,
-                            priority=priority,
-                            source_group_id=stream.source_group_id,
-                            source_group_type=stream.source_group_type,
-                            exception_keyword=expected_keyword,
-                            m3u_account_id=stream.m3u_account_id,
-                            m3u_account_name=stream.m3u_account_name,
-                            # Carry matcher metadata across the move — dropping it
-                            # detached the stream from the epg_match/stream_type
-                            # ordering rules and its EPG attach window (#344).
-                            match_type=stream.match_type,
-                            match_method=stream.match_method,
-                            epg_program_title=stream.epg_program_title,
-                            feed_team_id=stream.feed_team_id,
-                            attach_at=stream.attach_at,
-                            detach_at=stream.detach_at,
-                            dispatcharr_channel_group=stream.dispatcharr_channel_group,
-                            dispatcharr_channel_group_id=stream.dispatcharr_channel_group_id,
-                            m3u_group_id=stream.m3u_group_id,
-                            m3u_group_name=stream.m3u_group_name,
-                        )
+                        # The creator may already have attached the stream to the
+                        # target this run (its keyword changed); only the removal
+                        # above is still needed, or the target gets a second row.
+                        if not stream_exists_on_channel(
+                            conn, target_channel.id, stream.dispatcharr_stream_id
+                        ):
+                            # Use sequential priority - final ordering after all matching
+                            priority = get_next_stream_priority(conn, target_channel.id)
+                            add_stream_to_channel(
+                                conn=conn,
+                                managed_channel_id=target_channel.id,
+                                dispatcharr_stream_id=stream.dispatcharr_stream_id,
+                                stream_name=stream_name,
+                                priority=priority,
+                                source_group_id=stream.source_group_id,
+                                source_group_type=stream.source_group_type,
+                                exception_keyword=expected_keyword,
+                                m3u_account_id=stream.m3u_account_id,
+                                m3u_account_name=stream.m3u_account_name,
+                                # Carry matcher metadata across the move — dropping it
+                                # detached the stream from the epg_match/stream_type
+                                # ordering rules and its EPG attach window (#344).
+                                match_type=stream.match_type,
+                                match_method=stream.match_method,
+                                epg_program_title=stream.epg_program_title,
+                                feed_team_id=stream.feed_team_id,
+                                attach_at=stream.attach_at,
+                                detach_at=stream.detach_at,
+                                dispatcharr_channel_group=stream.dispatcharr_channel_group,
+                                dispatcharr_channel_group_id=stream.dispatcharr_channel_group_id,
+                                m3u_group_id=stream.m3u_group_id,
+                                m3u_group_name=stream.m3u_group_name,
+                            )
 
                         # Sync to Dispatcharr
                         if self._channel_manager:
