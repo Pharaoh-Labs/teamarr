@@ -78,6 +78,10 @@ class ChannelSyncer(_LifecycleHost):
             db_updates = {}
             changes_made = []
 
+            from teamarr.database.settings import get_dispatcharr_settings as _get_ds
+
+            _ds = _get_ds(conn)
+
             # 1. Check channel name (template resolution) - V1 parity
             matched_keyword = getattr(existing, "exception_keyword", None)
 
@@ -103,6 +107,7 @@ class ChannelSyncer(_LifecycleHost):
                 event, template, matched_keyword, segment,
                 feed_team=sync_feed_team,
                 feed_label_style=sync_feed_label_style,
+                untagged_label=_ds.untagged_keyword_label,
             )
             if expected_name != current_channel.name:
                 update_data["name"] = expected_name
@@ -125,9 +130,6 @@ class ChannelSyncer(_LifecycleHost):
 
             # 3. Check channel_group_id (supports dynamic sport/league resolution)
             # Use global defaults from settings, then per-league overrides
-            from teamarr.database.settings import get_dispatcharr_settings as _get_ds
-
-            _ds = _get_ds(conn)
             channel_group_mode = _ds.default_channel_group_mode or "static"
             static_group_id = _ds.default_channel_group_id
             event_sport = getattr(event, "sport", None)
@@ -251,6 +253,7 @@ class ChannelSyncer(_LifecycleHost):
             self._sync_channel_logo(
                 conn, existing, event, template, matched_keyword, segment, changes_made,
                 feed_team=sync_feed_team,
+                untagged_label=_ds.untagged_keyword_label,
             )
 
             # 9. Sync stream_profile_id
@@ -477,12 +480,14 @@ class ChannelSyncer(_LifecycleHost):
         segment: str | None,
         changes_made: list[str],
         feed_team=None,
+        untagged_label: str | None = None,
     ) -> None:
         """Sync logo — handles both updates and removals."""
         from teamarr.database.channels import update_managed_channel
 
         logo_url = self._resolve_logo_url(
             event, template, matched_keyword, segment, feed_team=feed_team,
+            untagged_label=untagged_label,
         )
         current_logo_id = getattr(existing, "dispatcharr_logo_id", None)
         stored_logo_url = getattr(existing, "logo_url", None)

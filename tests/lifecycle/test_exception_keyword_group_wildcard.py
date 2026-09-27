@@ -7,7 +7,6 @@ from unittest.mock import patch
 import pytest
 
 from teamarr.consumers.lifecycle.dynamic_resolver import DynamicResolver
-from teamarr.consumers.lifecycle.naming import ChannelNaming
 from teamarr.database.channels import keyword_display_value
 from teamarr.database.settings import get_dispatcharr_settings, update_dispatcharr_settings
 
@@ -105,30 +104,6 @@ class TestUntaggedLabelSetting:
         assert get_dispatcharr_settings(db_conn).untagged_keyword_label == "EN"
 
 
-class TestNamingValue:
-    """Lifecycle name/logo path: the label feeds {exception_keyword} only for
-    untagged channels, and never touches the real keyword."""
-
-    @pytest.fixture
-    def naming(self, db_factory):
-        n = ChannelNaming.__new__(ChannelNaming)
-        n._db_factory = db_factory
-        return n
-
-    def test_untagged_without_label_is_empty(self, naming):
-        assert naming._keyword_template_value(None) == ""
-
-    def test_untagged_with_label(self, naming, db_conn):
-        update_dispatcharr_settings(db_conn, untagged_keyword_label="EN")
-        db_conn.commit()
-        assert naming._keyword_template_value(None) == "EN"
-
-    def test_tagged_unaffected_by_label(self, naming, db_conn):
-        update_dispatcharr_settings(db_conn, untagged_keyword_label="EN")
-        db_conn.commit()
-        assert naming._keyword_template_value("ES") == "ES"
-
-
 # The two lifecycle templates the label has to render the same way in the
 # Dispatcharr channel name and the XMLTV display name.
 _TOKEN_NAME = "{exception_keyword}: {away_team} @ {home_team}"
@@ -190,11 +165,6 @@ def lifecycle(db_factory):
     )
 
 
-def _set_label(db_conn, label):
-    update_dispatcharr_settings(db_conn, untagged_keyword_label=label)
-    db_conn.commit()
-
-
 def _epg_channel(label, keyword, name_format, logo_url=None):
     from teamarr.consumers.event_epg import EventEPGGenerator, EventEPGOptions
     from teamarr.database.templates import EventTemplateConfig
@@ -218,10 +188,9 @@ class TestUntaggedLabelInNames:
     """Channel name, logo URL and XMLTV display name all render the label for
     an untagged channel, and none of them changes the tvg-id."""
 
-    def test_untagged_with_label_uses_it(self, lifecycle, db_conn):
-        _set_label(db_conn, "EN")
+    def test_untagged_with_label_uses_it(self, lifecycle):
         name = lifecycle._generate_channel_name(
-            _real_event(), {"event_channel_name": _TOKEN_NAME}, None
+            _real_event(), {"event_channel_name": _TOKEN_NAME}, None, untagged_label="EN"
         )
         assert name == "EN: Arsenal @ Chelsea"
         assert _epg_channel("EN", None, _TOKEN_NAME).name == name
@@ -233,34 +202,33 @@ class TestUntaggedLabelInNames:
         assert name == "Arsenal @ Chelsea"
         assert _epg_channel(None, None, _PLAIN_NAME).name == name
 
-    def test_label_never_auto_appended(self, lifecycle, db_conn):
+    def test_label_never_auto_appended(self, lifecycle):
         # The "(Keyword)" suffix is for real keywords; an untagged channel
         # whose template doesn't use the token must not become "... (EN)".
-        _set_label(db_conn, "EN")
         name = lifecycle._generate_channel_name(
-            _real_event(), {"event_channel_name": _PLAIN_NAME}, None
+            _real_event(), {"event_channel_name": _PLAIN_NAME}, None, untagged_label="EN"
         )
         assert name == "Arsenal @ Chelsea"
         assert _epg_channel("EN", None, _PLAIN_NAME).name == name
 
-    def test_tagged_channel_ignores_label(self, lifecycle, db_conn):
-        _set_label(db_conn, "EN")
+    def test_tagged_channel_ignores_label(self, lifecycle):
         token = lifecycle._generate_channel_name(
-            _real_event(), {"event_channel_name": _TOKEN_NAME}, "ES"
+            _real_event(), {"event_channel_name": _TOKEN_NAME}, "ES", untagged_label="EN"
         )
         plain = lifecycle._generate_channel_name(
-            _real_event(), {"event_channel_name": _PLAIN_NAME}, "ES"
+            _real_event(), {"event_channel_name": _PLAIN_NAME}, "ES", untagged_label="EN"
         )
         assert token == "ES: Arsenal @ Chelsea"
         assert plain == "Arsenal @ Chelsea (ES)"
         assert _epg_channel("EN", "ES", _TOKEN_NAME).name == token
         assert _epg_channel("EN", "ES", _PLAIN_NAME).name == plain
 
-    def test_logo_url(self, lifecycle, db_conn):
-        _set_label(db_conn, "EN")
+    def test_logo_url(self, lifecycle):
         url = "https://logos.example/{exception_keyword}.png"
         assert (
-            lifecycle._resolve_logo_url(_real_event(), {"event_channel_logo_url": url}, None)
+            lifecycle._resolve_logo_url(
+                _real_event(), {"event_channel_logo_url": url}, None, untagged_label="EN"
+            )
             == "https://logos.example/EN.png"
         )
         assert _epg_channel("EN", None, _PLAIN_NAME, logo_url=url).icon == (
@@ -312,9 +280,9 @@ class TestSyncResolvesSameGroup:
             patch.object(
                 resolver, "resolve_channel_group", wraps=resolver.resolve_channel_group
             ) as spy,
-            patch.object(lifecycle, "_generate_channel_name", return_value="n"),
+            patch.object(lifecycle, "_generate_channel_name", return_value="n") as name,
             patch.object(lifecycle, "_sync_channel_profiles"),
-            patch.object(lifecycle, "_sync_channel_logo"),
+            patch.object(lifecycle, "_sync_channel_logo") as logo,
             patch.object(lifecycle, "_sync_stream_profile"),
         ):
             lifecycle._sync_channel_settings(
@@ -328,3 +296,6 @@ class TestSyncResolvesSameGroup:
             synced = resolver.resolve_channel_group(**spy.call_args_list[0].kwargs)
         assert spy.call_count == 2  # the sync call, plus the re-run just above
         assert synced == created
+        # Name and logo render the same label, from the settings read above
+        assert name.call_args.kwargs["untagged_label"] == label
+        assert logo.call_args.kwargs["untagged_label"] == label

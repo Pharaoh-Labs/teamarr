@@ -385,6 +385,7 @@ class ChannelCreator(_LifecycleHost):
                             feed_team_id=feed_team_id,
                             feed_team=feed_team,
                             feed_label_style=feed_label_style,
+                            untagged_label=untagged_keyword_label,
                             match_type=match_type,
                             match_method=match_method,
                             epg_program_title=epg_program_title,
@@ -929,6 +930,7 @@ class ChannelCreator(_LifecycleHost):
         feed_team_id: str | None = None,
         feed_team=None,
         feed_label_style: str | None = None,
+        untagged_label: str | None = None,
         match_type: str = "event",
         match_method: str | None = None,
         epg_program_title: str | None = None,
@@ -946,6 +948,7 @@ class ChannelCreator(_LifecycleHost):
             feed_team_id: Provider team ID for feed separation (HOME/AWAY channels)
             feed_team: Team object for feed label generation
             feed_label_style: Label style ('team_name', 'short_name', 'home_away')
+            untagged_label: {exception_keyword} value for a channel with no keyword
             stream_feed_team_id: Resolved feed/matched team persisted on the
                 stream row for team_feed ordering rules (#489) — includes the
                 TEAM_ONLY matched-side fallback, so it can be set when
@@ -981,6 +984,7 @@ class ChannelCreator(_LifecycleHost):
         channel_name = self._generate_channel_name(
             event, template, matched_keyword, segment,
             feed_team=feed_team, feed_label_style=feed_label_style,
+            untagged_label=untagged_label,
         )
 
         # Get channel number from the event's numbering lane (pinned block or default range)
@@ -1013,6 +1017,7 @@ class ChannelCreator(_LifecycleHost):
         # Resolve logo URL from template (supports template variables including {exception_keyword})
         logo_url = self._resolve_logo_url(
             event, template, matched_keyword, segment, feed_team=feed_team,
+            untagged_label=untagged_label,
         )
 
         # Dispatcharr profile semantics (as of commit 6b873be):

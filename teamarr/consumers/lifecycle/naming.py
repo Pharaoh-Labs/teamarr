@@ -10,6 +10,7 @@ import logging
 
 from teamarr.consumers.event_epg import POSTPONED_LABEL, is_event_postponed
 from teamarr.core import Event
+from teamarr.database.channels import keyword_display_value
 from teamarr.utilities.art_url import apply_art_base_url
 
 from ._host import _LifecycleHost
@@ -42,21 +43,6 @@ class ChannelNaming(_LifecycleHost):
     ``_db_factory``, ``_context_builder`` and ``_resolver`` attributes.
     """
 
-    def _keyword_template_value(self, exception_keyword: str | None) -> str:
-        """Value for ``{exception_keyword}`` in a channel name or logo URL.
-
-        Falls back to the untagged label so name, logo and the XMLTV display
-        name (``event_epg``) render the same text for a channel with no keyword.
-        """
-        if exception_keyword:
-            return exception_keyword
-        from teamarr.database.channels import keyword_display_value
-        from teamarr.database.settings import get_dispatcharr_settings
-
-        with self._db_factory() as conn:
-            label = get_dispatcharr_settings(conn).untagged_keyword_label
-        return keyword_display_value(exception_keyword, label)
-
     def _generate_channel_name(
         self,
         event: Event,
@@ -65,6 +51,7 @@ class ChannelNaming(_LifecycleHost):
         segment: str | None = None,
         feed_team=None,
         feed_label_style: str | None = None,
+        untagged_label: str | None = None,
     ) -> str:
         """Generate channel name for an event using template.
 
@@ -89,6 +76,7 @@ class ChannelNaming(_LifecycleHost):
             segment: UFC card segment code (e.g., "prelims", "main_card")
             feed_team: Team object for feed separation (if detected)
             feed_label_style: Label style ('team_name', 'short_name', 'home_away')
+            untagged_label: {exception_keyword} value when there is no keyword
 
         Raises:
             ValueError: If template is missing or has no channel name format
@@ -108,7 +96,7 @@ class ChannelNaming(_LifecycleHost):
         # Always include exception_keyword - resolves to the untagged label, or ""
         # when none is set (graceful disappear)
         extra_vars = {
-            "exception_keyword": self._keyword_template_value(exception_keyword),
+            "exception_keyword": keyword_display_value(exception_keyword, untagged_label),
         }
 
         if not name_format:
@@ -250,6 +238,7 @@ class ChannelNaming(_LifecycleHost):
         exception_keyword: str | None = None,
         segment: str | None = None,
         feed_team=None,
+        untagged_label: str | None = None,
     ) -> str | None:
         """Resolve logo URL from template.
 
@@ -262,6 +251,7 @@ class ChannelNaming(_LifecycleHost):
             exception_keyword: Optional keyword for {exception_keyword} variable
             segment: UFC card segment code (e.g., "prelims", "main_card")
             feed_team: Team object for feed separation (if detected)
+            untagged_label: {exception_keyword} value when there is no keyword
         """
         logo_url = None
         if template:
@@ -278,7 +268,7 @@ class ChannelNaming(_LifecycleHost):
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             if "{" in logo_url:
                 extra_vars = {
-                    "exception_keyword": self._keyword_template_value(exception_keyword),
+                    "exception_keyword": keyword_display_value(exception_keyword, untagged_label),
                 }
                 resolved = self._resolve_template(
                     logo_url, event, extra_vars, card_segment=segment,
