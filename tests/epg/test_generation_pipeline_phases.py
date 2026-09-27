@@ -167,6 +167,57 @@ def test_group_phase_forwards_run_identity_collects_matches_and_updates_totals()
     assert context.progress_events[0][3:] == (1, 2, "Tigers")
 
 
+def test_team_channel_phase_syncs_channels_before_memberships():
+    context = _context()
+    context.relayout = True
+    context.team_completed_groups = {7}
+    context.team_matched_streams = [{"stream_id": 99}]
+    context.result.managed_team_channels = {}
+    context.result.managed_team_streams = {}
+    calls = []
+
+    class Manager:
+        def sync(self, *, relayout):
+            calls.append(("channels", relayout))
+            return {"created": 2}
+
+        def sync_stream_memberships(self, matches, *, completed_group_ids):
+            calls.append(("memberships", matches, completed_group_ids))
+            return {"attached": 1}
+
+    context.team_channel_manager = Manager()
+
+    processing.stage_team_channels(context)
+
+    assert calls == [
+        ("channels", True),
+        ("memberships", context.team_matched_streams, context.team_completed_groups),
+    ]
+    assert context.result.managed_team_channels == {"created": 2}
+    assert context.result.managed_team_streams == {"attached": 1}
+
+
+def test_team_channel_phase_preserves_nonfatal_membership_failure():
+    context = _context()
+    context.relayout = False
+    context.result.managed_team_channels = {}
+    context.result.managed_team_streams = {}
+
+    class Manager:
+        def sync(self, *, relayout):
+            return {"created": 2}
+
+        def sync_stream_memberships(self, matches, *, completed_group_ids):
+            raise RuntimeError("membership failed")
+
+    context.team_channel_manager = Manager()
+
+    processing.stage_team_channels(context)
+
+    assert context.result.managed_team_channels == {"error": "membership failed"}
+    assert context.result.managed_team_streams == {}
+
+
 def test_group_phase_preserves_terminal_messages_and_uses_start_percentage_without_total():
     context = _context()
 

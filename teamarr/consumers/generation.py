@@ -51,6 +51,7 @@ __all__ = [
 _generation_lock = threading.Lock()
 _generation_running = False
 
+
 class _PhaseTimer:
     """Records elapsed wall time between phase marks."""
 
@@ -241,21 +242,13 @@ def _stage_channel_reassign(context: GenerationContext) -> None:
 
 
 def _stage_team_channels(context: GenerationContext) -> None:
-    assert context.team_channel_manager is not None
-    try:
-        context.result.managed_team_channels = context.team_channel_manager.sync(
-            relayout=context.relayout
-        )
-        context.result.managed_team_streams = context.team_channel_manager.sync_stream_memberships(
-            context.team_matched_streams, completed_group_ids=context.team_completed_groups
-        )
-    except Exception as exc:  # noqa: BLE001 - per-step isolation
-        logger.exception("[GENERATION] Managed team channel sync failed: %s", exc)
-        context.result.managed_team_channels = {"error": str(exc)}
+    """Facade seam for managed team-channel synchronization."""
+    processing.stage_team_channels(context)
 
 
 def _stage_stream_ordering(context: GenerationContext) -> None:
     """Facade seam for stream ordering and its patched manager dependency."""
+
     def apply_ordering(db_factory, dispatcharr_client, report, manual):
         return _apply_stream_ordering(db_factory, dispatcharr_client, report, manual=manual)
 
@@ -353,8 +346,6 @@ _FULL_GENERATION_STAGES = (
 )
 
 
-
-
 def _get_media_refresh_jobs(db_factory: Callable[[], Any]) -> list[tuple[str, Any]]:
     """Compatibility wrapper for extracted media-job discovery."""
     return media_refresh.get_media_refresh_jobs(db_factory)
@@ -406,6 +397,7 @@ def _finalize_stats_run(
         stats_run, result, team_result, group_result, channels_deleted_count, db_factory
     )
 
+
 def _refresh_m3u_accounts(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:
     """Compatibility wrapper for the extracted M3U refresh helper."""
     return preparation.refresh_m3u_accounts_for_groups(db_factory, dispatcharr_client)
@@ -429,7 +421,6 @@ def _sync_global_channels(
     return channel_output.reassign_global_channels(
         db_factory, dispatcharr_client, update_progress, external_occupied
     )
-
 
 
 def run_stream_ordering_only(
@@ -466,7 +457,6 @@ def run_stream_ordering_only(
     finally:
         _generation_running = False
         _generation_lock.release()
-
 
 
 def _apply_stream_ordering(
