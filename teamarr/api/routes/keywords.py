@@ -153,6 +153,11 @@ class ExceptionKeywordResponse(BaseModel):
     event_group_ids: list[int] = []
 
 
+def _refs(items: list[dict]) -> list[SourceRef]:
+    """Stored picked groups/streams as SourceRefs, skipping malformed entries."""
+    return [SourceRef(**item) for item in items if isinstance(item.get("id"), int)]
+
+
 def _to_response(kw: ExceptionKeyword) -> "ExceptionKeywordResponse":
     assert kw.id is not None  # persisted rows always have an id
     return ExceptionKeywordResponse(
@@ -164,9 +169,9 @@ def _to_response(kw: ExceptionKeyword) -> "ExceptionKeywordResponse":
         enabled=kw.enabled,
         created_at=kw.created_at.isoformat() if kw.created_at else None,
         m3u_group_pattern=kw.m3u_group_pattern,
-        m3u_groups=[SourceRef(**g) for g in kw.m3u_groups if isinstance(g.get("id"), int)],
+        m3u_groups=_refs(kw.m3u_groups),
         stream_pattern=kw.stream_pattern,
-        streams=[SourceRef(**st) for st in kw.streams if isinstance(st.get("id"), int)],
+        streams=_refs(kw.streams),
         event_group_ids=kw.event_group_ids,
     )
 
@@ -276,9 +281,9 @@ def update_keyword(keyword_id: int, request: ExceptionKeywordUpdate):
             sources = request.source_kwargs()
             merged = _MatchSources(
                 m3u_group_pattern=_pick(request.m3u_group_pattern, keyword.m3u_group_pattern),
-                m3u_groups=_pick(request.m3u_groups, keyword.m3u_groups or None),
+                m3u_groups=_pick(request.m3u_groups, _refs(keyword.m3u_groups) or None),
                 stream_pattern=_pick(request.stream_pattern, keyword.stream_pattern),
-                streams=_pick(request.streams, keyword.streams or None),
+                streams=_pick(request.streams, _refs(keyword.streams) or None),
                 event_group_ids=_pick(request.event_group_ids, keyword.event_group_ids or None),
             )
             _require_source(_pick(request.match_terms, keyword.match_terms) or "", merged)
