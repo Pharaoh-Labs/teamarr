@@ -346,6 +346,154 @@ class TestEnforcer:
             assert get_channel_streams(conn, main_id) == []
 
 
+class TestFailedGroupFetch:
+    """A run whose Dispatcharr groups request fails sees each stream's M3U
+    group id but not its name; that must not untag regex-matched streams."""
+
+    def _fetch(self, *, groups, db_factory=None):
+        from teamarr.consumers.event_group_processor.stream_fetcher import StreamFetcher
+
+        stream = SimpleNamespace(
+            id=42, name="Arsenal v Chelsea", tvg_id=None, tvg_name=None, url="",
+            channel_group=33, channel_group_id=None, m3u_account_id=1, is_stale=False,
+        )
+        m3u = SimpleNamespace(
+            list_streams=lambda **_: [stream],
+            list_groups=lambda: groups,
+            list_accounts=lambda **_: [],
+        )
+        fetcher = StreamFetcher.__new__(StreamFetcher)
+        fetcher._dispatcharr_client = SimpleNamespace(m3u=m3u)
+        fetcher._db_factory = db_factory
+        group = SimpleNamespace(
+            is_channel_source=False, m3u_group_name_pattern_enabled=False, m3u_group_id=None
+        )
+        return fetcher._fetch_streams(group)[0]
+
+    def test_failed_fetch_names_groups_from_stored_rows(self, db_factory):
+        from unittest.mock import MagicMock
+
+        from teamarr.consumers.lifecycle.service import ChannelLifecycleService
+
+        with db_factory() as conn:
+            TestEnforcer()._setup(
+                conn, on_keyword=True, m3u_group_id=33, m3u_group_name="ES| DAZN"
+            )
+        # list_groups() returns [] when the request fails
+        stream = self._fetch(groups=[], db_factory=db_factory)
+        assert (stream["m3u_group_id"], stream["m3u_group_name"]) == (33, "ES| DAZN")
+
+        # ...so the creator still tags the stream and never looks for (or
+        # creates) the untagged channel
+        svc = ChannelLifecycleService(
+            db_factory=db_factory,
+            sports_service=MagicMock(),
+            channel_manager=MagicMock(),
+            logo_manager=MagicMock(),
+            epg_manager=MagicMock(),
+        )
+        with db_factory() as conn:
+            assert svc._check_exception_keyword(stream["name"], conn, stream=stream)[0] == "ZZES"
+
+    def test_failed_fetch_of_unknown_group_has_no_name(self, db_factory):
+        stream = self._fetch(groups=[], db_factory=db_factory)
+        assert (stream["m3u_group_id"], stream["m3u_group_name"]) == (33, None)
+
+    def test_backfill_without_name_keeps_stored_name(self, db_factory):
+        with db_factory() as conn:
+            main_id, es_id = TestEnforcer()._setup(
+                conn, on_keyword=True, m3u_group_id=33, m3u_group_name="ES| DAZN"
+            )
+            assert not update_stream_m3u_group(conn, es_id, 42, 33, None)
+            conn.commit()
+            row = get_channel_streams(conn, es_id)[0]
+            assert (row.m3u_group_id, row.m3u_group_name) == (33, "ES| DAZN")
+
+        result = KeywordEnforcer(db_factory=db_factory).enforce()
+        assert not result.streams_moved
+        with db_factory() as conn:
+            assert [s.dispatcharr_stream_id for s in get_channel_streams(conn, es_id)] == [42]
+            assert get_channel_streams(conn, main_id) == []
+
+    def test_next_good_fetch_refreshes_name(self, db_factory):
+        with db_factory() as conn:
+            _, es_id = TestEnforcer()._setup(
+                conn, on_keyword=True, m3u_group_id=33, m3u_group_name="ES| DAZN"
+            )
+            stream = self._fetch(groups=[SimpleNamespace(id=33, name="ES| DAZN 2")])
+            assert update_stream_m3u_group(
+                conn, es_id, 42, stream["m3u_group_id"], stream["m3u_group_name"]
+            )
+            row = get_channel_streams(conn, es_id)[0]
+            assert (row.m3u_group_id, row.m3u_group_name) == (33, "ES| DAZN 2")
+
+    def test_group_change_without_name_drops_stale_name(self, db_factory):
+        # A new group id with no name must not keep the old group's name.
+        with db_factory() as conn:
+            _, es_id = TestEnforcer()._setup(
+                conn, on_keyword=True, m3u_group_id=33, m3u_group_name="ES| DAZN"
+            )
+            assert update_stream_m3u_group(conn, es_id, 42, 77, None)
+            row = get_channel_streams(conn, es_id)[0]
+            assert (row.m3u_group_id, row.m3u_group_name) == (77, None)
+
+    def test_row_with_id_but_no_name_is_not_moved(self, db_factory):
+        # Attached during a failed fetch: the regex can't be re-checked.
+        with db_factory() as conn:
+            main_id, es_id = TestEnforcer()._setup(
+                conn, on_keyword=True, m3u_group_id=33, m3u_group_name=None
+            )
+        result = KeywordEnforcer(db_factory=db_factory).enforce()
+        assert not result.streams_moved
+        with db_factory() as conn:
+            assert [s.dispatcharr_stream_id for s in get_channel_streams(conn, es_id)] == [42]
+
+    def test_untagged_duplicate_named_from_sibling_row_is_removed(self, db_factory):
+        # A stream from a group Teamarr hadn't stored yet, first seen while the
+        # groups list was failing, lands on the untagged channel with no group
+        # name. Once a later run tags it, the stored name finds the stray row.
+        with db_factory() as conn:
+            main_id, es_id = TestEnforcer()._setup(
+                conn, on_keyword=True, m3u_group_id=33, m3u_group_name="ES| DAZN"
+            )
+            add_stream_to_channel(
+                conn=conn,
+                managed_channel_id=main_id,
+                dispatcharr_stream_id=42,
+                stream_name="Arsenal v Chelsea",
+                priority=0,
+                m3u_group_id=33,
+            )
+            conn.commit()
+        result = KeywordEnforcer(db_factory=db_factory).enforce()
+        assert result.streams_moved
+        with db_factory() as conn:
+            assert [s.dispatcharr_stream_id for s in get_channel_streams(conn, es_id)] == [42]
+            assert get_channel_streams(conn, main_id) == []
+
+    @pytest.mark.parametrize(("group_id", "moved"), [(33, False), (77, True)])
+    def test_picked_group_needs_only_the_id(self, db_factory, group_id, moved):
+        # A keyword with picked groups (no regex) is decided by the id alone.
+        with db_factory() as conn:
+            create_keyword(conn, "ZZES", "", m3u_groups=[{"id": 33, "name": "ES| DAZN"}])
+            main_id = _channel(conn, "evt-1", None)
+            es_id = _channel(conn, "evt-1", "ZZES")
+            add_stream_to_channel(
+                conn=conn,
+                managed_channel_id=es_id,
+                dispatcharr_stream_id=42,
+                stream_name="Arsenal v Chelsea",
+                priority=0,
+                m3u_group_id=group_id,
+            )
+            conn.commit()
+        result = KeywordEnforcer(db_factory=db_factory).enforce()
+        assert bool(result.streams_moved) is moved
+        with db_factory() as conn:
+            on_main = [s.dispatcharr_stream_id for s in get_channel_streams(conn, main_id)]
+            assert on_main == ([42] if moved else [])
+
+
 class TestStreamGroup:
     def test_dispatcharr_puts_the_id_in_channel_group(self):
         stream = SimpleNamespace(channel_group=33, channel_group_id=None)

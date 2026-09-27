@@ -98,11 +98,26 @@ class StreamFetcher:
         return cache
 
     def _group_names(self, m3u_manager: Any) -> dict[int, str]:
-        """M3U group id -> name; empty (keyword group sources skipped) on failure."""
+        """M3U group id -> name, for keyword group sources."""
         try:
-            return {g.id: g.name for g in m3u_manager.list_groups()}
+            names = {g.id: g.name for g in m3u_manager.list_groups()}
         except Exception as e:
             logger.warning("[EVENT_EPG] Failed to list M3U groups: %s", e)
+            names = {}
+        return names or self._stored_group_names()
+
+    def _stored_group_names(self) -> dict[int, str]:
+        """Group names stored on attached streams, for when the groups list
+        fails to load (it comes back empty). Without them every stream a
+        keyword tagged by group name would read as untagged for the run.
+        """
+        from teamarr.database.channels import get_stored_m3u_group_names
+
+        try:
+            with self._db_factory() as conn:
+                return get_stored_m3u_group_names(conn)
+        except Exception as e:
+            logger.warning("[EVENT_EPG] Failed to load stored M3U group names: %s", e)
             return {}
 
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
@@ -272,6 +287,8 @@ class StreamFetcher:
         except Exception as e:
             logger.warning("[CHANNEL_SOURCE] Failed to list channel groups: %s", e)
             dp_group_names = {}
+        # The same endpoint names the streams' M3U groups (#893)
+        m3u_group_names = dp_group_names or self._stored_group_names()
 
         # Pass 1: cheap eligibility from the channel map alone, so the stream
         # detail lookup below covers only the streams that can become
@@ -324,7 +341,7 @@ class StreamFetcher:
                 continue
             seen.add(stream_id)
             account_id = getattr(detail, "m3u_account_id", None) if detail else None
-            m3u_group_id, m3u_group_name = stream_m3u_group(detail, dp_group_names)
+            m3u_group_id, m3u_group_name = stream_m3u_group(detail, m3u_group_names)
             candidates.append(
                 {
                     "id": stream_id,

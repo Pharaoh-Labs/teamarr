@@ -45,16 +45,20 @@ class KeywordEnforcementResult:
         }
 
 
-def _missing_group_evidence(stream: Any, current_keyword: str | None, keywords: list) -> bool:
-    """True when ``current_keyword`` may rest on an M3U group this row never stored.
+def _missing_group_evidence(
+    group_id: int | None, group_name: str | None, current_keyword: str | None, keywords: list
+) -> bool:
+    """True when ``current_keyword`` may rest on M3U group data this row lacks.
 
-    Rows attached before #893 have no M3U group, so a keyword that matched
-    the stream by its group can't be re-confirmed from the row alone.
+    Rows attached before #893 have no M3U group, and a row attached on a run
+    whose groups list failed to load has the id but no name. Either way a
+    keyword that matched the stream by its group can't be re-confirmed from
+    the row alone.
     """
-    if current_keyword is None:
+    if current_keyword is None or group_name:
         return False
-    if stream.m3u_group_id is not None or stream.m3u_group_name:
-        return False
+    if group_id is not None:
+        return any(kw.label == current_keyword and kw.m3u_group_regex for kw in keywords)
     return any(kw.label == current_keyword and kw.uses_m3u_group for kw in keywords)
 
 
@@ -104,6 +108,7 @@ class KeywordEnforcer:
             get_exception_keywords,
             get_keywords_for_league,
             get_next_stream_priority,
+            get_stored_m3u_group_names,
             log_channel_history,
             remove_stream_from_channel,
             stream_exists_on_channel,
@@ -124,6 +129,7 @@ class KeywordEnforcer:
                     logger.debug("[KEYWORD] No exception keywords configured, skipping")
                     return result
                 league_keywords: dict[str | None, list] = {}
+                stored_group_names = get_stored_m3u_group_names(conn)
 
                 # Get all active channels
                 channels = get_all_managed_channels(conn, include_deleted=False)
@@ -144,6 +150,11 @@ class KeywordEnforcer:
 
                     for stream in streams:
                         stream_name = stream.stream_name or ""
+                        group_name = stream.m3u_group_name
+                        if not group_name and stream.m3u_group_id is not None:
+                            # Attached while the groups list failed to load
+                            # (#893); another row may carry the group's name.
+                            group_name = stored_group_names.get(stream.m3u_group_id)
 
                         # What keyword should this stream have?
                         league = channel.league if channel.league in feed_leagues else None
@@ -161,7 +172,7 @@ class KeywordEnforcer:
                             stream.epg_program_title,
                             stream_id=stream.dispatcharr_stream_id,
                             m3u_group_id=stream.m3u_group_id,
-                            m3u_group_name=stream.m3u_group_name,
+                            m3u_group_name=group_name,
                             event_group_id=stream.source_group_id,
                         )
 
@@ -170,7 +181,10 @@ class KeywordEnforcer:
                         expected_keyword = expected_keyword if expected_keyword else None
 
                         if expected_keyword != current_keyword and _missing_group_evidence(
-                            stream, current_keyword, league_keywords[league]
+                            stream.m3u_group_id,
+                            group_name,
+                            current_keyword,
+                            league_keywords[league],
                         ):
                             # Attached before the M3U group was stored (#893):
                             # the creator backfills it the next time it sees the
@@ -267,7 +281,7 @@ class KeywordEnforcer:
                                 dispatcharr_channel_group=stream.dispatcharr_channel_group,
                                 dispatcharr_channel_group_id=stream.dispatcharr_channel_group_id,
                                 m3u_group_id=stream.m3u_group_id,
-                                m3u_group_name=stream.m3u_group_name,
+                                m3u_group_name=group_name,
                             )
 
                         # Sync to Dispatcharr
