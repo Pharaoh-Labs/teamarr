@@ -99,6 +99,21 @@ def stage_groups(
     )
 
 
+def stage_team_channels(context: GenerationContext) -> None:
+    """Sync managed team channels and memberships without failing the generation."""
+    assert context.team_channel_manager is not None
+    try:
+        context.result.managed_team_channels = context.team_channel_manager.sync(
+            relayout=context.relayout
+        )
+        context.result.managed_team_streams = context.team_channel_manager.sync_stream_memberships(
+            context.team_matched_streams, completed_group_ids=context.team_completed_groups
+        )
+    except Exception as exc:  # noqa: BLE001 - per-step isolation
+        logger.exception("[GENERATION] Managed team channel sync failed: %s", exc)
+        context.result.managed_team_channels = {"error": str(exc)}
+
+
 def validate_channel_ranges(db_factory: Callable[[], Any], external_occupied: set[int]) -> dict:
     """Validate the global channel range against external Dispatcharr channels."""
     from teamarr.database.channel_numbers import get_global_channel_range
@@ -142,4 +157,4 @@ def validate_channel_ranges(db_factory: Callable[[], Any], external_occupied: se
     return conflicts
 
 
-__all__ = ["stage_groups", "stage_teams", "validate_channel_ranges"]
+__all__ = ["stage_groups", "stage_team_channels", "stage_teams", "validate_channel_ranges"]

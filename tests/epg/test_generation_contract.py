@@ -341,6 +341,32 @@ def test_phase_timing_keys_and_order(isolated_db):
     assert all(isinstance(v, float) for v in result.phase_timings.values())
 
 
+def test_fixed_stage_list_keeps_phase_order_and_checkpoints():
+    """Packet 7 must not alter order or add plugin stages during facade cleanup."""
+    from teamarr.consumers import generation as generation_mod
+
+    assert [
+        (stage.run.__name__, stage.cancellation_before, stage.timing_name)
+        for stage in generation_mod._FULL_GENERATION_STAGES
+    ] == [
+        ("_stage_m3u_refresh", True, "m3u_refresh"),
+        ("_stage_teams", True, "teams"),
+        ("_stage_prepare_team_channels", False, None),
+        ("_stage_groups", True, "groups"),
+        ("_stage_channel_reassign", True, "channel_reassign"),
+        ("_stage_team_channels", True, "team_channels"),
+        ("_stage_stream_ordering", True, "stream_ordering"),
+        ("_stage_xmltv_save", True, "xmltv_save"),
+        ("_stage_lifecycle_prepare", False, None),
+        ("_stage_dispatcharr_epg", True, "dispatcharr_epg_refresh"),
+        ("_stage_media_jobs", True, None),
+        ("_stage_deletions", True, "deletions"),
+        ("_stage_reconciliation", True, "reconciliation"),
+        ("_stage_stream_audit", False, "stream_audit"),
+        ("_stage_cleanup", True, "cleanup"),
+    ]
+
+
 def test_untimed_work_is_billed_to_the_next_timing_mark(isolated_db):
     """Lifecycle construction has no key of its own.
 
@@ -596,6 +622,32 @@ def test_process_lock_rejects_a_duplicate_without_creating_a_row(isolated_db):
     assert result.run_id is None
     assert recorder.events == []
     assert _full_epg_run_count(isolated_db) == 0
+
+
+def test_reorder_only_cannot_overlap_an_active_full_generation(isolated_db, monkeypatch):
+    from teamarr.consumers import generation as generation_mod
+
+    original_ordering = generation_mod._apply_stream_ordering
+    ordering_calls = []
+
+    def traced_ordering(*args, **kwargs):
+        ordering_calls.append(kwargs["manual"])
+        return original_ordering(*args, **kwargs)
+
+    monkeypatch.setattr(generation_mod, "_apply_stream_ordering", traced_ordering)
+    rejected = []
+
+    def callback(phase, percent, message, current, total, item_name):
+        if phase == "init":
+            rejected.append(generation_mod.run_stream_ordering_only(isolated_db, None))
+
+    result = run_full_generation(isolated_db, progress_callback=callback)
+
+    assert result.success is True
+    assert rejected == [None]
+    assert ordering_calls == [False]  # full-generation stage only
+    assert generation_mod._generation_running is False
+    assert not generation_mod._generation_lock.locked()
 
 
 def test_database_guard_rejects_a_recent_running_run(isolated_db):
