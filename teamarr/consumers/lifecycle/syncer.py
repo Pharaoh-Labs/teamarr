@@ -568,7 +568,7 @@ class ChannelSyncer(_LifecycleHost):
             return 0
         updated = 0
         with self._db_factory() as conn:
-            for channel in get_all_managed_channels(conn, include_deleted=False):
+            for channel in get_all_managed_channels(conn, include_deleted=False, core_only=True):
                 if not channel.dispatcharr_channel_id:
                     continue
                 with self._dispatcharr_lock:

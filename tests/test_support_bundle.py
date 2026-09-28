@@ -25,6 +25,22 @@ def test_bundle_contains_contract_and_redacts_source_data(db_path, tmp_path):
         )
         channel_id = conn.execute("SELECT id FROM managed_channels").fetchone()[0]
         conn.execute(
+            """INSERT INTO managed_channels
+               (event_id, event_provider, tvg_id, channel_name, plugin_id,
+                plugin_logical_key, plugin_adoption_key, plugin_plan_generation)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "event-1",
+                "espn",
+                "plugin.event-1",
+                "Owned Channel",
+                "example.planner",
+                "event:new",
+                "slot:one",
+                2,
+            ),
+        )
+        conn.execute(
             "INSERT INTO managed_channel_streams (managed_channel_id, dispatcharr_stream_id, stream_name, m3u_account_name) VALUES (?, ?, ?, ?)",
             (channel_id, 17, "Example Stream", "Private Account"),
         )
@@ -70,6 +86,45 @@ def test_bundle_contains_contract_and_redacts_source_data(db_path, tmp_path):
     assert "secret@example.test" not in contents
     assert report["channels"]["managed_team_channels"][0]["dispatcharr_channel_id"] == 42
     assert report["channels"]["managed_team_channel_streams"][0]["event_id"] == "event-2"
+    assert report["schema_version"] == 2
+    assert report["channels"]["total"] == 2
+    assert report["channels"]["channels"][0]["owner_type"] == "core"
+    owned = report["channels"]["channels"][1]
+    assert (owned["owner_type"], owned["plugin_id"], owned["plugin_logical_key"]) == (
+        "plugin",
+        "example.planner",
+        "event:new",
+    )
+    assert owned["plugin_adoption_key"] == "slot:one"
+    assert owned["plugin_plan_generation"] == 2
+
+
+def test_plugin_ownership_diagnostics_redact_account_names_and_urls(db_path, tmp_path):
+    with get_connection(db_path) as conn:
+        conn.execute(
+            """INSERT INTO managed_channels
+               (event_id, event_provider, tvg_id, channel_name, plugin_id,
+                plugin_logical_key, plugin_adoption_key)
+               VALUES ('event', 'espn', 'plugin.event', 'Channel', 'planner.one',
+                       'event:one', 'slot:one')"""
+        )
+        channel_id = conn.execute("SELECT id FROM managed_channels").fetchone()[0]
+        conn.execute(
+            """INSERT INTO managed_channel_streams
+               (managed_channel_id, dispatcharr_stream_id, m3u_account_name)
+               VALUES (?, 17, 'Private Account')""",
+            (channel_id,),
+        )
+        conn.execute(
+            """UPDATE managed_channels SET plugin_adoption_key = ?, channel_name = ? WHERE id = ?""",
+            ("Private Account", "http://private.example/live", channel_id),
+        )
+
+    with zipfile.ZipFile(BytesIO(SupportBundleService(db_path, tmp_path).create())) as archive:
+        contents = "\n".join(archive.read(name).decode() for name in archive.namelist())
+    assert "Private Account" not in contents
+    assert "http://private.example/live" not in contents
+    assert "planner.one" in contents
 
 
 def test_bundle_signals_media_server_failing(db_path, tmp_path):

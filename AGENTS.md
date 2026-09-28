@@ -6,6 +6,8 @@ This project uses **bd** (beads) for issue tracking. Run `bd prime` for full wor
 
 When changing support-bundle schemas, archive layout, collection limits, redaction, or signal codes, update the implementation, tests, user documentation, bundled `AGENTS.md`, and this instruction in the same change. Never add a generic database dump or relax exclusions for stream URLs, M3U account names, credentials, or tokens without an explicit security decision. Redaction is key-name based and recurses into JSON-typed columns (`emby_servers`, `jellyfin_servers`, …) — a new column that stores nested credentials as text is covered only because `_sanitize` parses JSON strings (#686); never bypass that path. Managed team channel ownership and membership rows are diagnostic evidence, not a reason to include raw stream URLs or account names.
 
+Support-bundle v2 adds `owner_type` and the nullable plugin identity/adoption fields to each bounded managed event-channel row. Keep those fields redacted through `_sanitize`; never include plan payloads or stream URLs to explain ownership.
+
 > **Architecture in one line:** Issues live in a local Dolt database
 > (`.beads/dolt/`); cross-machine sync uses `bd dolt push/pull` (a
 > git-compatible protocol), stored under `refs/dolt/data` on your git

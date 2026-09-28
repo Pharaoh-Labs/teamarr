@@ -112,7 +112,7 @@ class KeywordEnforcer:
                 league_keywords: dict[str | None, list] = {}
 
                 # Get all active channels
-                channels = get_all_managed_channels(conn, include_deleted=False)
+                channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
 
                 # Build lookup: (group_id, event_id, provider) → channels by keyword
                 channel_lookup: dict[tuple, dict[str | None, Any]] = {}

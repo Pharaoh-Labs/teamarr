@@ -26,7 +26,7 @@ from teamarr.database.stats import (
 from teamarr.services.stream_ordering import get_stream_ordering_service
 from teamarr.utilities.logging import _get_log_dir
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 RUN_LIMIT = 100
 MATCH_DETAIL_LIMIT = 500
 CHANNEL_LIMIT = 2_000
@@ -255,7 +255,13 @@ class SupportBundleService:
             stream_assignments = (
                 by_channel.get(channel_id, []) if isinstance(channel_id, int) else []
             )
-            channel_entries.append({**channel, "streams": stream_assignments})
+            channel_entries.append(
+                {
+                    **channel,
+                    "owner_type": "plugin" if channel.get("plugin_id") is not None else "core",
+                    "streams": stream_assignments,
+                }
+            )
         return {
             "total": len(channels),
             "channels": channel_entries,
@@ -512,7 +518,7 @@ class SupportBundleService:
             [
                 "",
                 "## Report Layout",
-                "`channels` includes event channels plus managed-team ownership and temporary membership rows. `support-report.json` also contains summary, signals, configuration, templates, sources_and_subscriptions, generation, matching, reconciliation, environment, and collection_errors.",
+                "`channels` includes core/plugin-owned event channels (with owner_type, plugin identity and adoption keys), managed-team ownership, and temporary membership rows. `support-report.json` also contains summary, signals, configuration, templates, sources_and_subscriptions, generation, matching, reconciliation, environment, and collection_errors.",
                 "",
                 "## Collection Limits",
                 f"Recent runs: {RUN_LIMIT}; matched/failed stream details per run: {MATCH_DETAIL_LIMIT}; log tail per file: {LOG_BYTES} bytes.",

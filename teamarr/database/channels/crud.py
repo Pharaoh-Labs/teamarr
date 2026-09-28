@@ -5,6 +5,7 @@ Create, Read, Update, Delete operations for managed_channels table.
 
 import json
 import logging
+from collections.abc import Callable
 from sqlite3 import Connection
 
 from teamarr.utilities.tz import now_user
@@ -21,12 +22,15 @@ def _has_column(conn: Connection, table: str, column: str) -> bool:
     """Check if a column exists in a table (cached per session)."""
     key = f"{table}.{column}"
     if key not in _column_cache:
-        cols = {
-            row[1]
-            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
-        }
+        cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
         _column_cache[key] = column in cols
     return _column_cache[key]
+
+
+def _core_owner_clause(conn: Connection, prefix: str = "") -> str:
+    """Compatibility with legacy/minimal tables used by migration fixtures."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(managed_channels)")}
+    return f" AND {prefix}plugin_id IS NULL" if "plugin_id" in columns else ""
 
 
 def create_managed_channel(
@@ -65,6 +69,18 @@ def create_managed_channel(
     ]
     values: list = [event_id, event_provider, tvg_id, channel_name]
 
+    plugin_id = kwargs.get("plugin_id")
+    ownership = ("plugin_logical_key", "plugin_adoption_key", "plugin_plan_generation")
+    if plugin_id is None:
+        if any(kwargs.get(key) is not None for key in ownership):
+            raise ValueError("core channels cannot carry plugin ownership keys")
+    elif (
+        not plugin_id
+        or not kwargs.get("plugin_logical_key")
+        or not kwargs.get("plugin_adoption_key")
+    ):
+        raise ValueError("plugin channels require non-empty identity and adoption keys")
+
     # event_epg_group_id is optional (provenance, not ownership)
     if event_epg_group_id is not None:
         columns.append("event_epg_group_id")
@@ -72,6 +88,10 @@ def create_managed_channel(
 
     # Add optional fields
     allowed_fields = [
+        "plugin_id",
+        "plugin_logical_key",
+        "plugin_adoption_key",
+        "plugin_plan_generation",
         "channel_number",
         "logo_url",
         "dispatcharr_channel_id",
@@ -156,7 +176,8 @@ def get_managed_channel_by_tvg_id(conn: Connection, tvg_id: str) -> ManagedChann
         ManagedChannel or None if not found
     """
     cursor = conn.execute(
-        "SELECT * FROM managed_channels WHERE tvg_id = ? AND deleted_at IS NULL",
+        f"""SELECT * FROM managed_channels
+           WHERE tvg_id = ? AND deleted_at IS NULL{_core_owner_clause(conn)}""",
         (tvg_id,),
     )
     row = cursor.fetchone()
@@ -184,15 +205,16 @@ def get_managed_channel_by_event(
     """
     if group_id:
         cursor = conn.execute(
-            """SELECT * FROM managed_channels
+            f"""SELECT * FROM managed_channels
                WHERE event_id = ? AND event_provider = ?
-                 AND event_epg_group_id = ? AND deleted_at IS NULL""",
+                  AND event_epg_group_id = ? AND deleted_at IS NULL{_core_owner_clause(conn)}""",
             (event_id, event_provider, group_id),
         )
     else:
         cursor = conn.execute(
-            """SELECT * FROM managed_channels
-               WHERE event_id = ? AND event_provider = ? AND deleted_at IS NULL""",
+            f"""SELECT * FROM managed_channels
+                WHERE event_id = ? AND event_provider = ? AND deleted_at IS NULL
+                  {_core_owner_clause(conn)}""",
             (event_id, event_provider),
         )
     row = cursor.fetchone()
@@ -224,6 +246,67 @@ def get_managed_channel_by_dispatcharr_id(
     return ManagedChannel.from_row(dict(row))
 
 
+def get_plugin_channel(conn: Connection, plugin_id: str, logical_key: str) -> ManagedChannel | None:
+    """Look up only this plugin's active, stable logical identity."""
+    row = conn.execute(
+        """SELECT * FROM managed_channels
+           WHERE plugin_id = ? AND plugin_logical_key = ? AND deleted_at IS NULL""",
+        (plugin_id, logical_key),
+    ).fetchone()
+    return ManagedChannel.from_row(dict(row)) if row else None
+
+
+def adopt_plugin_channel(
+    conn: Connection,
+    plugin_id: str,
+    logical_key: str,
+    adoption_key: str,
+    channel_name: str,
+    tvg_id: str,
+    *,
+    rename_dispatcharr: Callable[[ManagedChannel, str, str], bool] | None = None,
+    plan_generation: int | None = None,
+) -> ManagedChannel | None:
+    """Rename one active plugin row in place, never a core/other plugin row.
+
+    The host supplies a Dispatcharr rename operation. If the channel has an
+    external ID, that operation must succeed *before* its local identity/name
+    changes. Plan application and cross-system retry belong to Packet 8C.
+    """
+    if not all((plugin_id, logical_key, adoption_key, channel_name, tvg_id)):
+        raise ValueError("plugin adoption requires non-empty identities and channel details")
+    if plan_generation is not None and plan_generation < 0:
+        raise ValueError("plan generation must be non-negative")
+    rows = conn.execute(
+        """SELECT * FROM managed_channels
+           WHERE plugin_id = ? AND plugin_adoption_key = ? AND deleted_at IS NULL
+           LIMIT 2""",
+        (plugin_id, adoption_key),
+    ).fetchall()
+    if len(rows) > 1:
+        raise ValueError("ambiguous plugin adoption key")
+    if not rows:
+        return None
+    channel = ManagedChannel.from_row(dict(rows[0]))
+    existing = get_plugin_channel(conn, plugin_id, logical_key)
+    if existing is not None and existing.id != channel.id:
+        raise ValueError("plugin logical key already belongs to another channel")
+
+    if channel.dispatcharr_channel_id is not None and (
+        channel.channel_name != channel_name or channel.tvg_id != tvg_id
+    ):
+        if rename_dispatcharr is None or not rename_dispatcharr(channel, channel_name, tvg_id):
+            raise RuntimeError("Dispatcharr rename failed; plugin identity was not changed")
+
+    conn.execute(
+        """UPDATE managed_channels SET plugin_logical_key = ?, channel_name = ?, tvg_id = ?,
+                  plugin_plan_generation = COALESCE(?, plugin_plan_generation)
+           WHERE id = ? AND plugin_id = ? AND deleted_at IS NULL""",
+        (logical_key, channel_name, tvg_id, plan_generation, channel.id, plugin_id),
+    )
+    return get_managed_channel(conn, channel.id)
+
+
 def get_managed_channels_for_group(
     conn: Connection,
     group_id: int,
@@ -251,7 +334,8 @@ def get_managed_channels_for_group(
         f"""SELECT DISTINCT mc.* FROM managed_channels mc
             LEFT JOIN managed_channel_streams mcs
                 ON mc.id = mcs.managed_channel_id AND mcs.removed_at IS NULL
-            WHERE (mc.event_epg_group_id = ? OR mcs.source_group_id = ?)
+             WHERE (mc.event_epg_group_id = ? OR mcs.source_group_id = ?)
+               {_core_owner_clause(conn, "mc.")}
             {deleted_clause}
             ORDER BY mc.channel_number""",
         (group_id, group_id),
@@ -274,13 +358,13 @@ def get_channels_pending_deletion(conn: Connection) -> list[ManagedChannel]:
 
     from dateutil import parser
 
-
     # Get all active channels with scheduled_delete_at
     cursor = conn.execute(
-        """SELECT * FROM managed_channels
+        f"""SELECT * FROM managed_channels
            WHERE scheduled_delete_at IS NOT NULL
-             AND deleted_at IS NULL
-           ORDER BY scheduled_delete_at""",
+               AND deleted_at IS NULL
+               {_core_owner_clause(conn)}
+            ORDER BY scheduled_delete_at""",
     )
 
     now = now_user()
@@ -306,6 +390,7 @@ def get_all_managed_channels(
     include_deleted: bool = False,
     sport: str | None = None,
     league: str | None = None,
+    core_only: bool = False,
 ) -> list[ManagedChannel]:
     """Get all managed channels, optionally filtered by sport/league.
 
@@ -323,6 +408,8 @@ def get_all_managed_channels(
 
     if not include_deleted:
         conditions.append("deleted_at IS NULL")
+    if core_only and _core_owner_clause(conn):
+        conditions.append("plugin_id IS NULL")
     if sport:
         conditions.append("sport = ?")
         params.append(sport)
@@ -356,6 +443,14 @@ def update_managed_channel(conn: Connection, channel_id: int, data: dict) -> boo
     """
     if not data:
         return False
+
+    if {
+        "plugin_id",
+        "plugin_logical_key",
+        "plugin_adoption_key",
+        "plugin_plan_generation",
+    } & data.keys():
+        raise ValueError("plugin ownership can only change through the adoption repository")
 
     # Serialize JSON fields
     for key in ["channel_profile_ids"]:
@@ -464,11 +559,11 @@ def find_existing_channel(
         # In separate mode, each stream gets its own channel
         if stream_id:
             cursor = conn.execute(
-                """SELECT * FROM managed_channels
+                f"""SELECT * FROM managed_channels
                    WHERE event_id = ?
                      AND event_provider = ?
                      AND primary_stream_id = ?
-                     AND deleted_at IS NULL""",
+                       AND deleted_at IS NULL{_core_owner_clause(conn)}""",
                 (event_id, event_provider, stream_id),
             )
             row = cursor.fetchone()
@@ -479,10 +574,10 @@ def find_existing_channel(
     elif mode == "ignore":
         # In ignore mode, first stream wins - just check if any channel exists
         cursor = conn.execute(
-            """SELECT * FROM managed_channels
+            f"""SELECT * FROM managed_channels
                WHERE event_id = ?
                  AND event_provider = ?
-                 AND deleted_at IS NULL
+                   AND deleted_at IS NULL{_core_owner_clause(conn)}
                LIMIT 1""",
             (event_id, event_provider),
         )
@@ -494,7 +589,13 @@ def find_existing_channel(
     else:  # consolidate (default)
         # In consolidate mode, look for channel with same keyword + feed_team
         # Build WHERE clause dynamically based on nullable fields
-        conditions = ["event_id = ?", "event_provider = ?", "deleted_at IS NULL"]
+        conditions = [
+            "event_id = ?",
+            "event_provider = ?",
+            "deleted_at IS NULL",
+        ]
+        if _core_owner_clause(conn):
+            conditions.append("plugin_id IS NULL")
         params: list = [event_id, event_provider]
 
         if exception_keyword:
@@ -524,8 +625,6 @@ def find_existing_channel(
         return None
 
 
-
-
 def find_any_channel_for_event(
     conn: Connection,
     event_id: str,
@@ -553,10 +652,11 @@ def find_any_channel_for_event(
     """
     params: list = [event_id, event_provider]
 
-    sql = """SELECT * FROM managed_channels
+    sql = f"""SELECT * FROM managed_channels
              WHERE event_id = ?
                AND event_provider = ?
-               AND deleted_at IS NULL"""
+                 AND deleted_at IS NULL
+                 {_core_owner_clause(conn)}"""
 
     if exclude_group_id:
         sql += " AND event_epg_group_id != ?"

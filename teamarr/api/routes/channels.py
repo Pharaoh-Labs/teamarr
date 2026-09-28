@@ -8,7 +8,7 @@ Provides REST API for:
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any, Literal, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -90,6 +90,10 @@ class ManagedChannelModel(BaseModel):
     event_epg_group_id: int | None = None  # Source group (provenance)
     event_id: str
     event_provider: str
+    plugin_id: str | None = None
+    plugin_logical_key: str | None = None
+    plugin_adoption_key: str | None = None
+    plugin_plan_generation: int | None = None
     tvg_id: str
     channel_name: str
     channel_number: str | None = None
@@ -307,8 +311,10 @@ def list_managed_channels(
             )
         else:
             channels = get_all_managed_channels(
-                conn, include_deleted=include_deleted,
-                sport=sport, league=league,
+                conn,
+                include_deleted=include_deleted,
+                sport=sport,
+                league=league,
             )
         team_channels = list_owned_enabled_managed_team_channels(conn)
         team_channel_logos = {
@@ -384,6 +390,10 @@ def list_managed_channels(
                 event_epg_group_id=c.event_epg_group_id,
                 event_id=c.event_id,
                 event_provider=c.event_provider,
+                plugin_id=getattr(c, "plugin_id", None),
+                plugin_logical_key=getattr(c, "plugin_logical_key", None),
+                plugin_adoption_key=getattr(c, "plugin_adoption_key", None),
+                plugin_plan_generation=getattr(c, "plugin_plan_generation", None),
                 tvg_id=c.tvg_id,
                 channel_name=c.channel_name,
                 channel_number=str(c.channel_number) if c.channel_number is not None else None,
@@ -405,7 +415,8 @@ def list_managed_channels(
                 deleted_at=_safe_isoformat(c.deleted_at),
             )
             for c in channels
-        ] + team_models,
+        ]
+        + team_models,
         total=len(channels) + len(team_models),
     )
 
@@ -429,6 +440,10 @@ def get_managed_channel(channel_id: int):
         event_epg_group_id=channel.event_epg_group_id,
         event_id=channel.event_id,
         event_provider=channel.event_provider,
+        plugin_id=channel.plugin_id,
+        plugin_logical_key=channel.plugin_logical_key,
+        plugin_adoption_key=channel.plugin_adoption_key,
+        plugin_plan_generation=channel.plugin_plan_generation,
         tvg_id=channel.tvg_id,
         channel_name=channel.channel_name,
         channel_number=str(channel.channel_number) if channel.channel_number is not None else None,
@@ -607,9 +622,11 @@ def get_managed_channel_streams(channel_id: int):
                     sorting_scope=sorting_scope,
                     matched_event=current["title"] if current else None,
                     matched_league=team_channel["primary_league"],
-                    cache_match_method=(detail := match_details.get(
-                        (stream["source_group_id"], stream["dispatcharr_stream_id"]), {}
-                    )).get("match_method"),
+                    cache_match_method=(
+                        detail := match_details.get(
+                            (stream["source_group_id"], stream["dispatcharr_stream_id"]), {}
+                        )
+                    ).get("match_method"),
                     cache_created_at=(
                         _safe_isoformat(detail.get("created_at"))
                         if detail.get("match_method") == "cache"
@@ -660,12 +677,16 @@ def get_managed_channel_streams(channel_id: int):
 
         # Refresh stats when any stream has null stats or stats older than 1 hour
         needs_refresh = any(
-            s.stream_stats is None or (
-                s.stream_stats_updated_at is not None and (
-                    datetime.now(timezone.utc) - datetime.fromisoformat(  # noqa: UP017
+            s.stream_stats is None
+            or (
+                s.stream_stats_updated_at is not None
+                and (
+                    datetime.now(UTC)
+                    - datetime.fromisoformat(  # noqa: UP017
                         str(s.stream_stats_updated_at).replace("Z", "+00:00")
                     )
-                ).total_seconds() > 3600
+                ).total_seconds()
+                > 3600
             )
             for s in streams
         )
@@ -697,8 +718,12 @@ def get_managed_channel_streams(channel_id: int):
             group_name = group_names.get(s.source_group_id) if s.source_group_id else None
             matched_by_stream[s.dispatcharr_stream_id] = [
                 StreamRuleMatch(
-                    type=e.type, value=e.value, priority=e.priority, is_winner=e.is_winner,
-                    mode=e.mode, points=e.points,
+                    type=e.type,
+                    value=e.value,
+                    priority=e.priority,
+                    is_winner=e.is_winner,
+                    mode=e.mode,
+                    points=e.points,
                 )
                 for e in ordering_service.evaluate_rules(s, group_name)
             ]
@@ -743,21 +768,21 @@ def get_managed_channel_streams(channel_id: int):
                 sorting_scope=sorting_scope,
                 matched_event=channel_event,
                 matched_league=channel.league,
-                cache_match_method=(d := match_details.get(
-                    cast("tuple[int, int]", (s.source_group_id, s.dispatcharr_stream_id)), {}
-                )).get("match_method"),
+                cache_match_method=(
+                    d := match_details.get(
+                        cast("tuple[int, int]", (s.source_group_id, s.dispatcharr_stream_id)), {}
+                    )
+                ).get("match_method"),
                 cache_created_at=(
                     _safe_isoformat(d.get("created_at"))
                     if d.get("match_method") == "cache"
                     else None
                 ),
                 match_aliases=[
-                    StreamNameMatch(text=a["alias"], team=a["team"])
-                    for a in d.get("aliases", [])
+                    StreamNameMatch(text=a["alias"], team=a["team"]) for a in d.get("aliases", [])
                 ],
                 match_patterns=[
-                    StreamNameMatch(text=p["token"], team=p["team"])
-                    for p in d.get("patterns", [])
+                    StreamNameMatch(text=p["token"], team=p["team"]) for p in d.get("patterns", [])
                 ],
                 user_corrected=d.get("user_corrected", False),
                 corrected_at=_safe_isoformat(d.get("corrected_at")),

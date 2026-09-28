@@ -35,7 +35,7 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `teams` | Per-team EPG configuration (provider, leagues, logo, template, XMLTV channel id) |
 | `event_epg_groups` | Event group config (leagues, filters, M3U account, template) |
 | `leagues` | League definitions (provider, sport, display name, logos, TSDB tier) |
-| `managed_channels` | Channels created in Dispatcharr (tvg_id, delete_at, profiles) |
+| `managed_channels` | Event channels created in Dispatcharr (tvg_id, delete_at, profiles); nullable plugin identity/adoption fields distinguish plugin-owned rows from core rows |
 | `managed_team_channels` | Sole ownership records for persistent Team EPG Dispatcharr channels |
 | `managed_team_channel_streams` | Temporary, event-scoped stream memberships for managed team channels |
 | `detection_keywords` | User-defined stream classification patterns |

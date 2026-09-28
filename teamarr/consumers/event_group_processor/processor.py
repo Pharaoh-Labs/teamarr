@@ -546,7 +546,7 @@ class EventGroupProcessor(
         system_group_ids = {g.id for g in all_groups if getattr(g, "is_channel_source", False)}
 
         deleted = 0
-        for ch in get_all_managed_channels(conn, include_deleted=False):
+        for ch in get_all_managed_channels(conn, include_deleted=False, core_only=True):
             league = (ch.league or "").strip().lower()
             if not league or league in subscribed:
                 continue

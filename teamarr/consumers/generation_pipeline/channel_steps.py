@@ -194,7 +194,7 @@ def apply_stream_ordering(
                     # the old change-gated behavior rather than failing the run.
                     logger.warning("[ORDERING] Could not read Dispatcharr stream order: %s", e)
 
-            all_channels = get_all_managed_channels(conn, include_deleted=False)
+            all_channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
 
             # One scan each instead of two queries per channel (#735). The
             # window instant is pinned for the whole pass so every channel's
@@ -458,7 +458,7 @@ def run_stream_audit(
     order_mismatches = []
 
     with db_factory() as conn:
-        channels = get_all_managed_channels(conn, include_deleted=False)
+        channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
         # One scan for every channel's active set instead of a query each (#735).
         ordered_by_channel = get_all_ordered_stream_ids(conn)
 

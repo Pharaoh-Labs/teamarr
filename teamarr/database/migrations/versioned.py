@@ -360,6 +360,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 96
 
+    if current_version < 97:
+        _apply_migration(
+            conn, 97, "scope managed-channel event identity to core ownership",
+            _migrate_v97_plugin_channel_identity,
+        )
+        current_version = 97
+
 
 # =============================================================================
 # Migration helpers
@@ -2759,6 +2766,26 @@ def _migrate_v92_retire_tsdb_tier(conn: sqlite3.Connection) -> None:
         "UPDATE leagues SET tsdb_tier = NULL WHERE tsdb_tier IS NOT NULL"
     ).rowcount
     logger.info("[MIGRATE] v92: cleared tsdb_tier on %d league row(s)", cleared)
+
+
+def _migrate_v97_plugin_channel_identity(conn: sqlite3.Connection) -> None:
+    """Keep the old event uniqueness for core rows, not plugin-owned rows."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(managed_channels)")}
+    # Isolated migration fixtures may omit managed_channels or intentionally
+    # exercise a pre-reconciliation table. init_db reconciles before reaching us.
+    identity_columns = {
+        "event_id", "event_provider", "primary_stream_id", "plugin_id", "feed_team_id"
+    }
+    if not identity_columns <= columns:
+        return
+    conn.execute("DROP INDEX IF EXISTS idx_mc_unique_event")
+    conn.execute("DROP INDEX IF EXISTS idx_mc_unique_event_v2")
+    conn.execute("""
+        CREATE UNIQUE INDEX idx_mc_unique_event_v2
+        ON managed_channels(event_id, event_provider, COALESCE(exception_keyword, ''),
+                            COALESCE(feed_team_id, ''), primary_stream_id)
+        WHERE deleted_at IS NULL AND plugin_id IS NULL
+    """)
 
 
 def _migrate_v97_league_feed_separation(conn: sqlite3.Connection) -> None:

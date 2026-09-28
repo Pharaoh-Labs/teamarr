@@ -231,7 +231,7 @@ class ChannelReconciler:
         )
 
         issues = []
-        channels = get_all_managed_channels(conn, include_deleted=False)
+        channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
 
         for channel in channels:
             if not channel.dispatcharr_channel_id:
@@ -374,13 +374,18 @@ class ChannelReconciler:
 
         issues = []
 
-        cursor = conn.execute("""
+        has_plugin_owner = any(
+            row[1] == "plugin_id" for row in conn.execute("PRAGMA table_info(managed_channels)")
+        )
+        core_filter = "AND mc.plugin_id IS NULL" if has_plugin_owner else ""
+        cursor = conn.execute(f"""
             SELECT mc.event_id, mc.event_provider,
                    COUNT(*) as channel_count,
                    GROUP_CONCAT(mc.id) as channel_ids,
                    GROUP_CONCAT(mc.channel_name) as channel_names
             FROM managed_channels mc
             WHERE mc.deleted_at IS NULL
+              {core_filter}
               AND mc.event_id IS NOT NULL
             GROUP BY mc.event_id, mc.event_provider,
                      COALESCE(mc.exception_keyword, ''),
@@ -436,7 +441,7 @@ class ChannelReconciler:
         )
 
         issues = []
-        channels = get_all_managed_channels(conn, include_deleted=False)
+        channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
 
         for channel in channels:
             if not channel.dispatcharr_channel_id:
