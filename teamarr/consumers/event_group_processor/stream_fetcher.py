@@ -98,13 +98,22 @@ class StreamFetcher:
         return cache
 
     def _group_names(self, m3u_manager: Any) -> dict[int, str]:
-        """M3U group id -> name, for keyword group sources."""
-        try:
-            names = {g.id: g.name for g in m3u_manager.list_groups()}
-        except Exception as e:
-            logger.warning("[EVENT_EPG] Failed to list M3U groups: %s", e)
-            names = {}
-        return names or self._stored_group_names()
+        """M3U group id -> name, cached per processor instance (i.e. per run).
+
+        ``_fetch_streams`` calls this once per event group, but the map
+        itself is shared across the whole generation — caching it here means
+        one ``list_groups()`` request per run instead of one per group.
+        """
+        cache = getattr(self, "_group_name_cache", None)
+        if cache is None:
+            try:
+                cache = {g.id: g.name for g in m3u_manager.list_groups()}
+            except Exception as e:
+                logger.warning("[EVENT_EPG] Failed to list M3U groups: %s", e)
+                cache = {}
+            cache = cache or self._stored_group_names()
+            self._group_name_cache = cache
+        return cache
 
     def _stored_group_names(self) -> dict[int, str]:
         """Group names stored on attached streams, for when the groups list
