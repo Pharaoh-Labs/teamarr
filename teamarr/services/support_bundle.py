@@ -157,11 +157,20 @@ class SupportBundleService:
             return []
 
     def _account_names_from(self, conn: sqlite3.Connection) -> set[str]:
+        # event_epg_groups.m3u_account_name (a source's configured account) is
+        # redacted by key name alone below, since the column never appears on
+        # a stream row — but that leaves its value out of this set, so any
+        # OTHER string that merely contains the same account name (e.g. a
+        # keyword's pinned-stream name snapshot, #893) sails through the
+        # generic substring pass unredacted. Every table that carries the
+        # account name must feed this set, not just the stream tables.
         try:
             rows = conn.execute(
                 """SELECT DISTINCT m3u_account_name FROM managed_channel_streams
                    WHERE m3u_account_name IS NOT NULL
                    UNION SELECT DISTINCT m3u_account_name FROM managed_team_channel_streams
+                   WHERE m3u_account_name IS NOT NULL
+                   UNION SELECT DISTINCT m3u_account_name FROM event_epg_groups
                    WHERE m3u_account_name IS NOT NULL"""
             ).fetchall()
             return {str(row[0]) for row in rows if row[0]}
