@@ -461,6 +461,10 @@ class TeamChannelManager:
             )
             result["conflicts"] += 1
             return
+        if self._channels is None:  # sync() returns before this; typing guard
+            self._record_error(conn, team, "Dispatcharr connection not available")
+            result["errors"] += 1
+            return
         deleted = self._channels.delete_channel(remote.id)
         if not deleted.success:
             self._record_error(conn, team, deleted.error or "Dispatcharr delete failed")
