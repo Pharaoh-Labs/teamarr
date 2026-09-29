@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { SaveButton } from "@/components/ui/save-button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Select } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { RadioCards } from "@/components/ui/radio-cards"
@@ -55,6 +56,7 @@ export function ChannelNumbering() {
   const [managedTeamRangeStart, setManagedTeamRangeStart] = useState("9000")
   const [managedTeamRangeEnd, setManagedTeamRangeEnd] = useState("")
   const [managedTeamPriorityIds, setManagedTeamPriorityIds] = useState<number[]>([])
+  const [managedTeamLifecycle, setManagedTeamLifecycle] = useState<"persistent" | "game_days">("persistent")
 
   const lifecycleInitRef = useRef(false)
   useEffect(() => {
@@ -78,6 +80,7 @@ export function ChannelNumbering() {
     setManagedTeamRangeStart(String(managedTeamData.range_start))
     setManagedTeamRangeEnd(managedTeamData.range_end?.toString() ?? "")
     setManagedTeamPriorityIds(managedTeamData.priority_ids)
+    setManagedTeamLifecycle(managedTeamData.lifecycle ?? "persistent")
   }
 
   const managedTeams = useMemo(
@@ -122,6 +125,7 @@ export function ChannelNumbering() {
           range_start: rangeStart,
           range_end: rangeEnd,
           priority_ids: managedTeamPriorityIds,
+          lifecycle: managedTeamLifecycle,
         }),
       ]
       if (lifecycle) {
@@ -244,7 +248,7 @@ export function ChannelNumbering() {
           <CardHeader>
             <CardTitle>Managed Team EPG Channels</CardTitle>
             <CardDescription>
-            Persistent channels enabled per team use this dedicated range by default. Automatic channels
+            Channels enabled per team use this dedicated range by default. Automatic channels
             follow Priority Teams, pinned blocks, and Sport &amp; League order, but not event start time.
             </CardDescription>
         </CardHeader>
@@ -258,6 +262,22 @@ export function ChannelNumbering() {
               <Label htmlFor="managed-team-range-end">Range End</Label>
               <Input id="managed-team-range-end" type="number" min={1} value={managedTeamRangeEnd} onChange={(e) => setManagedTeamRangeEnd(e.target.value)} placeholder="No limit" />
             </div>
+          </div>
+          <div className="space-y-2 max-w-md">
+            <Label htmlFor="managed-team-lifecycle">Lifecycle</Label>
+            <Select
+              id="managed-team-lifecycle"
+              value={managedTeamLifecycle}
+              onChange={(e) => setManagedTeamLifecycle(e.target.value as "persistent" | "game_days")}
+            >
+              <option value="persistent">Persistent — the channel always exists</option>
+              <option value="game_days">Game days only — appears inside the game's lifecycle window</option>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Game days only follows the event-channel create and delete timing and buffers. Between games
+              the team keeps its number, tvg-id and logo, so the channel comes back as the same channel.
+              Each team can override this in its edit dialog.
+            </p>
           </div>
           <div className="space-y-2">
             <Label>Priority teams</Label>

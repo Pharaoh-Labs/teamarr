@@ -69,15 +69,22 @@ def test_prepare_team_channels_builds_the_manager_and_announces_group_processing
     context.result.teams_processed = 3
     created = []
 
-    def manager(*args):
-        created.append(args)
+    def manager(*args, **kwargs):
+        created.append((args, kwargs))
         return "manager"
 
     monkeypatch.setattr(preparation, "TeamChannelManager", manager)
 
     preparation.stage_prepare_team_channels(context)
 
-    assert created == [(context.db_factory, None, None, None)]
+    # #904: the manager gets the run's sports service (game-day verdicts come
+    # from the schedule) and the teams whose guide errored (verdict withheld).
+    assert created == [
+        (
+            (context.db_factory, None, None, None),
+            {"sports_service": context.sports_service, "unverified_team_ids": set()},
+        )
+    ]
     assert context.team_channel_manager == "manager"
     assert context.progress_events == [
         (

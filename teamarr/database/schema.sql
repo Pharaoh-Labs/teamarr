@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS teams (
     active BOOLEAN DEFAULT 1,
     managed_channel_enabled BOOLEAN NOT NULL DEFAULT 0,
     managed_channel_number INTEGER,
+    managed_channel_lifecycle TEXT,          -- NULL = inherit the global setting (#904)
 
     -- One entry per team per league (ESPN reuses IDs across leagues for different teams)
     UNIQUE(provider, provider_team_id, sport, primary_league),
@@ -338,6 +339,10 @@ CREATE TABLE IF NOT EXISTS settings (
     managed_team_channel_range_start INTEGER DEFAULT 9000,
     managed_team_channel_range_end INTEGER,
     managed_team_channel_priority_ids JSON DEFAULT '[]',
+    -- Team channel lifecycle (#904): 'persistent' keeps every managed team
+    -- channel; 'game_days' creates it inside the event-channel lifecycle
+    -- window of a game and removes it after, keeping tvg-id and number.
+    managed_team_channel_lifecycle TEXT DEFAULT 'persistent',
 
     -- Default Team Filtering (for Event Groups)
     default_include_teams JSON,                  -- Global include filter [{"provider":"espn","team_id":"33","league":"nfl"}, ...]

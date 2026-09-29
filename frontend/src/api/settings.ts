@@ -34,10 +34,13 @@ export interface LifecycleSettings {
   channel_range_end: number | null
 }
 
+export type ManagedTeamChannelLifecycle = "persistent" | "game_days"
+
 export interface ManagedTeamChannelSettings {
   range_start: number
   range_end: number | null
   priority_ids: number[]
+  lifecycle: ManagedTeamChannelLifecycle
 }
 
 export type ManagedTeamChannelSettingsUpdate = Partial<ManagedTeamChannelSettings>

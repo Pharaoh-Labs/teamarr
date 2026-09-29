@@ -79,6 +79,7 @@ interface TeamUpdate {
   active?: boolean
   managed_channel_enabled?: boolean
   managed_channel_number?: number | null
+  managed_channel_lifecycle?: "persistent" | "game_days" | null
 }
 
 interface EditTeamDialogProps {
@@ -101,6 +102,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
     active: team.active,
     managed_channel_enabled: team.managed_channel_enabled,
     managed_channel_number: team.managed_channel_number,
+    managed_channel_lifecycle: team.managed_channel_lifecycle ?? null,
   })
 
   const handleSubmit = async () => {
@@ -184,10 +186,10 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
                   setFormData({ ...formData, managed_channel_enabled: checked })
                 }
               />
-              <Label className="font-normal">Manage persistent Dispatcharr channel</Label>
+              <Label className="font-normal">Manage Dispatcharr channel</Label>
             </div>
             <p className="text-xs text-muted-foreground">
-              Creates and keeps this team&apos;s Team EPG channel in the dedicated managed-team range.
+              Creates this team&apos;s Team EPG channel in the dedicated managed-team range.
             </p>
             {formData.managed_channel_enabled && (
               <div className="space-y-2 max-w-xs">
@@ -204,6 +206,19 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
                   placeholder="Automatic"
                 />
                 <p className="text-xs text-muted-foreground">Leave empty to assign automatically.</p>
+                <Label htmlFor="managed_channel_lifecycle">Lifecycle</Label>
+                <Select
+                  id="managed_channel_lifecycle"
+                  value={formData.managed_channel_lifecycle ?? ""}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    managed_channel_lifecycle: (e.target.value || null) as "persistent" | "game_days" | null,
+                  })}
+                >
+                  <option value="">Use global setting (Channels → Numbering)</option>
+                  <option value="persistent">Persistent — always exists</option>
+                  <option value="game_days">Game days only</option>
+                </Select>
               </div>
             )}
           </div>
@@ -568,9 +583,9 @@ export function Teams() {
       <Alert variant="info" title="What is Team EPG?">
         Team EPG builds a dedicated XMLTV schedule for each active team. You can associate that guide
         with an existing Dispatcharr channel, or enable management to have Teamarr create and maintain
-        a persistent Dispatcharr channel in the dedicated managed-team range. Managed channels keep the
-        team guide between games and attach streams matched from enabled Sources only while their game
-        windows are active.
+        a Dispatcharr channel in the dedicated managed-team range — always, or only on game days, per
+        the lifecycle setting. Managed channels carry the team guide and attach streams matched from
+        enabled Sources only while their game windows are active.
       </Alert>
 
       {/* Team EPG settings (lifted from Settings) */}
@@ -986,6 +1001,22 @@ export function Teams() {
                               {team.managed_channel_sync_status === "conflict" ? "Conflict" : "Error"}
                             </Badge>
                           </RichTooltip>
+                        ) : team.managed_channel_sync_status === "idle" ? (
+                          <RichTooltip
+                            title="Idle until the next game day"
+                            content={
+                              <p className="max-w-xs text-xs">
+                                {team.managed_channel_sync_message ??
+                                  "No game inside the lifecycle window; the channel returns on game day."}
+                                {team.managed_channel_assigned_number
+                                  ? ` Reserved number ${team.managed_channel_assigned_number}.`
+                                  : ""}
+                              </p>
+                            }
+                            side="bottom"
+                          >
+                            <Badge variant="secondary" className="cursor-help">Idle</Badge>
+                          </RichTooltip>
                         ) : (
                           <Badge variant="success">
                             {team.managed_channel_assigned_number || team.managed_channel_number || "Auto"}
@@ -1117,18 +1148,18 @@ export function Teams() {
           <DialogHeader>
             <DialogTitle>Managed Channel</DialogTitle>
             <DialogDescription>
-              Set persistent channel management for {selectedIds.size} selected team
+              Set channel management for {selectedIds.size} selected team
               {selectedIds.size !== 1 && "s"}.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-2">
             <div className="flex items-center gap-2">
               <Switch checked={bulkManagedEnabled} onCheckedChange={setBulkManagedEnabled} />
-              <Label className="font-normal">Manage persistent Dispatcharr channel</Label>
+              <Label className="font-normal">Manage Dispatcharr channel</Label>
             </div>
             <p className="text-xs text-muted-foreground">
               {bulkManagedEnabled
-                ? "Creates and keeps each team's Team EPG channel in the dedicated managed-team range. Channel numbers are assigned automatically; teams are activated."
+                ? "Creates each team's Team EPG channel in the dedicated managed-team range, following the lifecycle setting. Channel numbers are assigned automatically; teams are activated."
                 : "Releases each team's managed channel on the next generation. Any channel number override is kept for later."}
             </p>
           </div>

@@ -1,4 +1,15 @@
-"""Lifecycle management for persistent, streamless Team EPG channels."""
+"""Lifecycle management for Teamarr-owned Team EPG channels.
+
+Two lifecycles (#904). ``persistent`` (default) keeps a channel for every
+opted-in team. ``game_days`` keeps the *ownership row* for every opted-in
+team but only the Dispatcharr channel while the team has a game inside the
+event-channel lifecycle window (same create/delete thresholds and buffers as
+event channels). Outside it the row goes dormant (``sync_status='idle'``, no
+channel id) and still reserves the team's channel number, so the channel
+reappears with the same tvg-id, number and logo. Activation is decided from
+the team's schedule, never from whether a stream happened to match — a team
+channel with its own guide is the right destination on game day either way.
+"""
 
 from __future__ import annotations
 
@@ -56,7 +67,15 @@ class TeamChannelManager:
         epg_manager: Any | None = None,
         logo_manager: Any | None = None,
         dynamic_resolver: Any | None = None,
+        sports_service: Any | None = None,
+        unverified_team_ids: set[int] | None = None,
     ):
+        """``sports_service`` answers game-day questions from the schedule the
+        Team EPG stage already fetched this run; ``unverified_team_ids`` are
+        teams whose guide processing errored, so their schedule cannot be
+        trusted and their channel state is left exactly as it is (#826)."""
+        self._sports_service = sports_service
+        self._unverified_team_ids = set(unverified_team_ids or ())
         self._db_factory = db_factory
         self._channels = channel_manager
         self._epg = epg_manager
@@ -110,7 +129,7 @@ class TeamChannelManager:
         """
         result: dict[str, Any] = {
             "created": 0, "synced": 0, "deleted": 0, "conflicts": 0, "errors": 0,
-            "unavailable": False,
+            "idle": 0, "hibernated": 0, "unavailable": False,
         }
         if not self._channels:
             return result
@@ -167,6 +186,7 @@ class TeamChannelManager:
                 )
 
             teams.sort(key=team_sort_key)
+            timing = self._timing_manager(conn)
             reflow = relayout or self._stability_mode(conn) == "compact"
             if reflow:
                 # Every automatic channel floats back into sort order: release
@@ -209,6 +229,15 @@ class TeamChannelManager:
                     result["conflicts"] += 1
                     continue
 
+                # Game-days lifecycle (#904): decide whether this team should
+                # have a Dispatcharr channel right now. None = could not tell
+                # (schedule unreadable) → keep whatever state it is in.
+                wanted, note = True, None
+                if self._lifecycle_for(team, settings) == "game_days":
+                    wanted, note = self._game_day_verdict(conn, team, timing)
+                    if wanted is None:
+                        wanted = remote is not None
+
                 own_number = self._number(remote.channel_number) if remote else None
                 # Holding: a channel's own number never blocks itself. Reflow
                 # already released every floating number above, and one that
@@ -232,6 +261,25 @@ class TeamChannelManager:
                         conn, team, allocation_error or "No free managed team channel number"
                     )
                     result["errors"] += 1
+                    continue
+
+                if not wanted:
+                    occupied.add(channel_number)
+                    if remote is not None:
+                        self._hibernate(conn, team, remote, channel_number, note, result)
+                    else:
+                        # Dormant: keep the ownership row so the number stays
+                        # reserved and memberships keep their home.
+                        upsert_managed_team_channel(
+                            conn,
+                            team_id=team["id"],
+                            dispatcharr_channel_id=None,
+                            dispatcharr_uuid=None,
+                            channel_number=channel_number,
+                            sync_status="idle",
+                            sync_message=note,
+                        )
+                        result["idle"] += 1
                     continue
 
                 if remote is None:
@@ -316,6 +364,128 @@ class TeamChannelManager:
                 )
                 result["synced"] += 1
         return result
+
+    # ------------------------------------------------------------------
+    # Game-days lifecycle (#904)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _lifecycle_for(team: dict, settings) -> str:
+        """Per-team override, else the global setting; anything odd is persistent."""
+        value = team.get("managed_channel_lifecycle") or getattr(settings, "lifecycle", None)
+        return "game_days" if value == "game_days" else "persistent"
+
+    @staticmethod
+    def _schedule_days_ahead(conn) -> int:
+        try:
+            return int(get_epg_settings(conn).team_schedule_days_ahead or 30)
+        except Exception:  # noqa: BLE001 - tests use a bare schema
+            return 30
+
+    def _game_day_verdict(self, conn, team: dict, timing) -> tuple[bool | None, str | None]:
+        """Should this team have a channel right now?
+
+        ``(True, why)`` when a game is inside its event-channel lifecycle window
+        (create threshold reached, delete threshold not), or a stream
+        membership is currently attached — stream evidence keeps a live
+        channel up through a schedule blip. ``(False, why)`` when the schedule
+        was read and holds no such game. ``(None, why)`` when it cannot be
+        read: no service, no timing rules, the team's guide errored this run,
+        or the provider raised — the caller then keeps the current state,
+        because a failed read must never tear a channel down (#826).
+        """
+        if self._sports_service is None or timing is None:
+            return None, "Schedule service unavailable"
+        if team.get("id") in self._unverified_team_ids:
+            return None, "Team guide failed this run; keeping channel state"
+        if not team.get("active", 1):
+            return False, "Team is inactive"
+        provider_team_id = team.get("provider_team_id")
+        leagues = self._team_leagues(team)
+        if not provider_team_id or not leagues:
+            return None, "Team has no provider id or leagues"
+        days = self._schedule_days_ahead(conn)
+        events: list[Any] = []
+        for league in sorted(leagues):
+            try:
+                events.extend(
+                    self._sports_service.get_team_schedule(str(provider_team_id), league, days)
+                    or []
+                )
+            except Exception as exc:  # noqa: BLE001 - provider blip, keep state
+                logger.debug(
+                    "[TEAM_CHANNEL] Schedule for %s/%s unavailable: %s",
+                    team.get("team_name"),
+                    league,
+                    exc,
+                )
+                return None, f"Schedule unavailable for {league}"
+        now = now_utc()
+        upcoming = None
+        for event in events:
+            start = getattr(event, "start_time", None)
+            if start is None:
+                continue
+            try:
+                create = timing.should_create_channel(event).should_act
+                delete = timing.should_delete_channel(event).should_act
+            except Exception:  # noqa: BLE001 - malformed event, ignore it
+                continue
+            if create and not delete:
+                label = getattr(event, "short_name", None) or getattr(event, "name", None)
+                return True, f"Game day: {label}" if label else "Game day"
+            try:
+                start_utc = to_utc(start)
+            except Exception:  # noqa: BLE001
+                continue
+            if start_utc > now and (upcoming is None or start_utc < upcoming):
+                upcoming = start_utc
+        try:
+            if active_stream_ids(conn, team["id"], now):
+                return True, "A matched stream is attached"
+        except Exception:  # noqa: BLE001 - tests use a bare schema
+            pass
+        if upcoming is not None:
+            return False, f"No game in the lifecycle window; next {to_db_utc(upcoming)} UTC"
+        return False, f"No game in the next {days} days"
+
+    def _hibernate(self, conn, team: dict, remote, channel_number: int, note, result) -> None:
+        """Remove the proven-owned Dispatcharr channel and keep a dormant row."""
+        stored_uuid = team.get("dispatcharr_uuid")
+        if stored_uuid and getattr(remote, "uuid", None) != stored_uuid:
+            self._record_error(
+                conn,
+                team,
+                "Mapped Dispatcharr channel UUID no longer matches Teamarr ownership",
+                sync_status="conflict",
+            )
+            result["conflicts"] += 1
+            return
+        if self._channels is None:  # sync() returns before this; typing guard
+            self._record_error(conn, team, "Dispatcharr connection not available")
+            result["errors"] += 1
+            return
+        deleted = self._channels.delete_channel(remote.id)
+        if not deleted.success:
+            self._record_error(conn, team, deleted.error or "Dispatcharr delete failed")
+            result["errors"] += 1
+            return
+        upsert_managed_team_channel(
+            conn,
+            team_id=team["id"],
+            dispatcharr_channel_id=None,
+            dispatcharr_uuid=None,
+            channel_number=channel_number,
+            sync_status="idle",
+            sync_message=note,
+        )
+        result["hibernated"] += 1
+        result["idle"] += 1
+        logger.info(
+            "[TEAM_CHANNEL] %s: channel removed until the next game day (%s)",
+            team.get("team_name"),
+            note,
+        )
 
     def associate_epg(self, epg_source_id: int) -> dict[str, int]:
         """Link refreshed Team EPG data to only locally-owned team channels."""
