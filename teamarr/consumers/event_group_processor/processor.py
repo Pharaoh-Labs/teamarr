@@ -802,39 +802,44 @@ class EventGroupProcessor(
             # Build stream dict for cleanup (fingerprint-based content change detection)
             current_streams = {sid: s for s in streams if (sid := s.get("id"))}
 
+            # The lifecycle step runs on the zero-match path too (#907): a
+            # rotated stream — same Dispatcharr id, new content — on a group
+            # that matched nothing this run must still be detached, or it stays
+            # on the old channel forever. _process_channels narrows itself to a
+            # changed-only cleanup when there are no matches, so the #450
+            # guarantee holds: absence from a zero-match pool never deletes.
+            if matched_streams and status_callback:
+                status_callback(f"Processing {len(matched_streams)} channels...")
+            lifecycle_result = self._process_channels(
+                matched_streams, group, conn, current_streams=current_streams
+            )
+            _mark("channels")
+            result.channels_created = len(lifecycle_result.created)
+            result.channels_existing = len(lifecycle_result.existing)
+            result.channels_skipped = len(lifecycle_result.skipped)
+            # += : the team-filter and feed-separation sweeps above already
+            # counted their deletions into this field.
+            result.channels_deleted += len(lifecycle_result.deleted)
+            result.channel_errors = len(lifecycle_result.errors)
+            # Add lifecycle exclusions to total
+            result.streams_excluded += len(lifecycle_result.excluded)
+
+            # Compute excluded breakdown by reason (lifecycle exclusions)
+            for excl in lifecycle_result.excluded:
+                reason = excl.get("reason", "")
+                if reason == "event_final":
+                    result.excluded_event_final += 1
+                elif reason == "event_past":
+                    result.excluded_event_past += 1
+                elif reason == "before_window":
+                    result.excluded_before_window += 1
+                elif reason == "league_not_included":
+                    result.excluded_league_not_included += 1
+
+            for error in lifecycle_result.errors:
+                result.errors.append(f"Channel error: {error}")
+
             if matched_streams:
-                if status_callback:
-                    status_callback(f"Processing {len(matched_streams)} channels...")
-                lifecycle_result = self._process_channels(
-                    matched_streams, group, conn, current_streams=current_streams
-                )
-                _mark("channels")
-                result.channels_created = len(lifecycle_result.created)
-                result.channels_existing = len(lifecycle_result.existing)
-                result.channels_skipped = len(lifecycle_result.skipped)
-                # += : the team-filter and feed-separation sweeps above already
-                # counted their deletions into this field.
-                result.channels_deleted += len(lifecycle_result.deleted)
-                result.channel_errors = len(lifecycle_result.errors)
-                # Add lifecycle exclusions to total
-                result.streams_excluded += len(lifecycle_result.excluded)
-
-                # Compute excluded breakdown by reason (lifecycle exclusions)
-                for excl in lifecycle_result.excluded:
-                    reason = excl.get("reason", "")
-                    if reason == "event_final":
-                        result.excluded_event_final += 1
-                    elif reason == "event_past":
-                        result.excluded_event_past += 1
-                    elif reason == "before_window":
-                        result.excluded_before_window += 1
-                    elif reason == "league_not_included":
-                        result.excluded_league_not_included += 1
-
-
-                for error in lifecycle_result.errors:
-                    result.errors.append(f"Channel error: {error}")
-
                 # Step 5: Generate XMLTV from matched streams
                 # Filter out streams excluded by lifecycle (event_final, event_past, etc.)
                 excluded_event_ids = {
@@ -907,6 +912,10 @@ class EventGroupProcessor(
         3. Create/update channels
         4. Sync existing channel settings
         5. Reassign channel numbers if needed
+
+        Runs on every group, including one that matched nothing this run
+        (#907): steps 1, 2 and 5 still apply, with step 2 narrowed to
+        changed-only, and step 3-4 skipped.
 
         Args:
             matched_streams: List of matched stream dicts with event data
@@ -981,7 +990,11 @@ class EventGroupProcessor(
             except Exception as e:
                 logger.debug("[EVENT_EPG] Error processing scheduled deletions: %s", e)
 
-        # V1 Parity Step 2: Cleanup deleted/missing/changed streams
+        # V1 Parity Step 2: Cleanup deleted/missing/changed streams.
+        # With no matches this run there is no event evidence, and a zero-match
+        # pool may be a mis-bound pattern or a half-refreshed M3U (#450) — so
+        # only a stream still PRESENT in the pool with changed content is
+        # detached (#907); absence is never read as removal on that path.
         if current_streams is not None:
             try:
                 cleanup_result = lifecycle_service.cleanup_deleted_streams(
@@ -989,19 +1002,28 @@ class EventGroupProcessor(
                     current_streams,
                     matched_streams=matched_streams,
                     is_channel_source=bool(getattr(group, "is_channel_source", False)),
+                    changed_only=not matched_streams,
                 )
                 combined_result.merge(cleanup_result)
                 if cleanup_result.deleted:
                     deleted_count = len(cleanup_result.deleted)
-                    logger.info(f"Deleted {deleted_count} channels with missing/changed streams")
+                    logger.info(
+                        "[EVENT_EPG] Group %s: deleted %d channel(s) with %s streams",
+                        group.name,
+                        deleted_count,
+                        "changed" if not matched_streams else "missing/changed",
+                    )
             except Exception as e:
                 logger.debug("[EVENT_EPG] Error cleaning up deleted streams: %s", e)
 
-        # V1 Parity Step 3-4: Create new channels and sync existing settings
-        process_result = lifecycle_service.process_matched_streams(
-            matched_streams, group_config, template_config
-        )
-        combined_result.merge(process_result)
+        # V1 Parity Step 3-4: Create new channels and sync existing settings.
+        # Nothing to create on a zero-match run; skipping the call also skips
+        # its per-batch resolver/logo-cache setup.
+        if matched_streams:
+            process_result = lifecycle_service.process_matched_streams(
+                matched_streams, group_config, template_config
+            )
+            combined_result.merge(process_result)
 
         # v59: Post-process global reassignment (skipped in sticky modes — see
         # above). Only needed when this group actually changed the channel set;

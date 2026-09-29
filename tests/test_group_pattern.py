@@ -398,9 +398,12 @@ class TestFindRebindSuggestions:
 #
 # A pattern that stops matching (provider rename escaping the regex, M3U
 # outage) must NEVER cascade into channel deletion. The guarantee lives in
-# _process_group_internal's short-circuits: an empty fetch — and an
-# all-filtered / zero-match run — returns before cleanup_deleted_streams or
-# any lifecycle call, so existing channels are retained untouched.
+# _process_group_internal's short-circuits: an empty fetch and an
+# all-filtered run return before cleanup_deleted_streams or any lifecycle
+# call. A zero-match run with a real pool DOES reach the lifecycle since
+# #907 — but only as a changed-only cleanup (a stream still present in the
+# pool under new content is detached; absence is never read as removal) and
+# never the create step.
 # ---------------------------------------------------------------------------
 
 
@@ -480,9 +483,18 @@ class TestCleanupSafety:
         assert result.errors == ["All streams filtered out by regex patterns"]
         assert result.channels_deleted == 0
 
-    def test_zero_matches_never_reaches_lifecycle(self, monkeypatch):
-        from datetime import date
+    def test_zero_matches_runs_changed_only_cleanup_never_create(self, monkeypatch):
+        """#907: a zero-match run reaches the lifecycle, but only its cleanup step.
 
+        The pool is real (fetch and filter both passed streams), so a stream
+        that rotated under the same Dispatcharr id must be detached. The #450
+        guarantee is preserved by the mode: ``changed_only=True`` and no
+        create call.
+        """
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from teamarr.consumers.lifecycle import StreamProcessResult
         from teamarr.consumers.matching.matcher import BatchMatchResult
         from teamarr.services.stream_filter import FilterResult
 
@@ -496,14 +508,45 @@ class TestCleanupSafety:
             lambda s, g: (list(streams), FilterResult(total_input=1, passed_count=1)),
         )
         monkeypatch.setattr(proc, "_match_streams", lambda *a, **k: BatchMatchResult())
-        monkeypatch.setattr(proc, "_process_channels", _tripwire("_process_channels"))
-        monkeypatch.setattr(proc, "_get_lifecycle_service", _tripwire("_get_lifecycle_service"))
+
+        lifecycle = MagicMock()
+        lifecycle.process_scheduled_deletions.return_value = StreamProcessResult()
+        cleanup = StreamProcessResult()
+        cleanup.deleted.append({"channel_id": 1, "reason": "1 content-changed"})
+        lifecycle.cleanup_deleted_streams.return_value = cleanup
+        monkeypatch.setattr(proc, "_get_lifecycle_service", lambda: lifecycle)
 
         result = proc._process_group_internal(conn, group, date.today())
 
         assert result.errors == []
-        assert result.channels_deleted == 0
         assert result.streams_matched == 0
+        lifecycle.cleanup_deleted_streams.assert_called_once()
+        kwargs = lifecycle.cleanup_deleted_streams.call_args.kwargs
+        assert kwargs["changed_only"] is True
+        assert kwargs["matched_streams"] == []
+        assert lifecycle.cleanup_deleted_streams.call_args.args[1] == {11: streams[0]}
+        lifecycle.process_matched_streams.assert_not_called()
+        assert result.channels_deleted == 1
+
+    def test_matched_run_keeps_full_cleanup(self, monkeypatch):
+        """The matched path is unchanged: missing streams still count (changed_only off)."""
+        from unittest.mock import MagicMock
+
+        from teamarr.consumers.lifecycle import StreamProcessResult
+
+        conn, group = _seeded_group_db()
+        proc = self._processor(conn)
+        lifecycle = MagicMock()
+        lifecycle.process_scheduled_deletions.return_value = StreamProcessResult()
+        lifecycle.cleanup_deleted_streams.return_value = StreamProcessResult()
+        lifecycle.process_matched_streams.return_value = StreamProcessResult()
+        monkeypatch.setattr(proc, "_get_lifecycle_service", lambda: lifecycle)
+
+        matched = [{"stream": {"id": 11, "name": "Arsenal vs Spurs"}, "event": None}]
+        proc._process_channels(matched, group, conn, current_streams={11: {"name": "x"}})
+
+        assert lifecycle.cleanup_deleted_streams.call_args.kwargs["changed_only"] is False
+        lifecycle.process_matched_streams.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

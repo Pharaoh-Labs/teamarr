@@ -42,7 +42,7 @@ Deletion times are **recalculated from current settings on every run** — chang
 
 The timing above is only one of several deletion paths. Each generation run also performs these cleanups:
 
-- **Vanished or rotated streams** — when a stream disappears from the M3U, its content changes, or it rotates to a different event, it's detached from the channel. The channel itself is deleted only when *no* valid streams remain. This runs regardless of delete timing.
+- **Vanished or rotated streams** — when a stream disappears from the M3U, its content changes, or it rotates to a different event, it's detached from the channel. The channel itself is deleted only when *no* valid streams remain. This runs regardless of delete timing, and also on a run where the source matched nothing — with one limit: on such a run only a stream that is still in the M3U under different content is detached, never one that is merely absent, so a mis-bound group pattern or a half-refreshed M3U cannot cascade into deletions.
 - **Disabled sources** — disabling a source detaches its streams stream-by-stream; a channel is deleted only if nothing else feeds it (consolidated channels survive).
 - **Unsubscribed leagues** — unchecking a league in [Subscriptions](../subscriptions) deletes that league's channels on the next run.
 - **Orphan cleanup** — Teamarr-tagged channels in Dispatcharr that aren't tracked locally are removed.
