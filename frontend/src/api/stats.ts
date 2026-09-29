@@ -33,4 +33,30 @@ export const statsApi = {
   clearAllRuns: async (): Promise<{ deleted: number; message: string }> => {
     return api.delete("/stats/runs")
   },
+
+  getDatabaseStatus: async (): Promise<DatabaseStatus> => {
+    return api.get("/stats/database")
+  },
+
+  compactDatabase: async (): Promise<CompactionState> => {
+    return api.post("/stats/database/compact")
+  },
+}
+
+export interface CompactionState {
+  running: boolean
+  started_at: string | null
+  finished_at: string | null
+  before_bytes: number | null
+  after_bytes: number | null
+  error: string | null
+}
+
+export interface DatabaseStatus {
+  path: string
+  file_bytes: number
+  reclaimable_bytes: number
+  run_count: number
+  detail_rows: Record<string, number>
+  compaction: CompactionState
 }

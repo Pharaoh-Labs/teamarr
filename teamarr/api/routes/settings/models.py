@@ -196,6 +196,8 @@ class ReconciliationSettingsModel(BaseModel):
     auto_fix_duplicates: bool = False
     default_duplicate_event_handling: str = "consolidate"
     channel_history_retention_days: int = 90
+    run_detail_retention_days: int = Field(default=7, ge=1, le=365)
+    run_history_retention_days: int = Field(default=30, ge=1, le=365)
 
 
 # =============================================================================

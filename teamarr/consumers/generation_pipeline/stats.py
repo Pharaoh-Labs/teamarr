@@ -33,7 +33,7 @@ def run_cleanup_tasks(
     """Run all post-generation cleanup: history, old runs, unused logos."""
     from teamarr.database.channels import cleanup_old_history, get_reconciliation_settings
 
-    results: dict = {"history": {}, "logos": {}}
+    results: dict = {"history": {}, "runs": {}, "logos": {}}
 
     # History cleanup
     try:
@@ -48,16 +48,33 @@ def run_cleanup_tasks(
         logger.warning("[CLEANUP] History cleanup failed: %s", e)
         results["history"] = {"error": str(e)}
 
-    # Old processing runs (>30 days)
+    # Run history (#906): per-stream detail rows on a short window, the run
+    # rows themselves on a longer one. Both configurable (Settings → Advanced).
     try:
-        from teamarr.database.stats import cleanup_old_runs
+        from teamarr.database.stats import cleanup_old_run_details, cleanup_old_runs
 
         with db_factory() as conn:
-            runs_deleted = cleanup_old_runs(conn, days=30)
+            cleanup_settings = get_reconciliation_settings(conn)
+            detail_days = int(cleanup_settings.get("run_detail_retention_days") or 7)
+            run_days = int(cleanup_settings.get("run_history_retention_days") or 30)
+            details_deleted = cleanup_old_run_details(conn, days=detail_days)
+            runs_deleted = cleanup_old_runs(conn, days=run_days)
+            results["runs"] = {"details_deleted": details_deleted, "runs_deleted": runs_deleted}
+            if details_deleted > 0:
+                logger.info(
+                    "[CLEANUP] Removed %d run detail row(s) older than %d day(s)",
+                    details_deleted,
+                    detail_days,
+                )
             if runs_deleted > 0:
-                logger.info("[CLEANUP] Removed %d old processing run(s)", runs_deleted)
+                logger.info(
+                    "[CLEANUP] Removed %d processing run(s) older than %d day(s)",
+                    runs_deleted,
+                    run_days,
+                )
     except Exception as e:
         logger.warning("[CLEANUP] Run history cleanup failed: %s", e)
+        results["runs"] = {"error": str(e)}
 
     # Unused logos
     try:

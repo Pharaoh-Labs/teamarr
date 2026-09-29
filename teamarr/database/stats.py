@@ -603,11 +603,36 @@ def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = 
     )
 
 
+def cleanup_old_run_details(conn: Connection, days: int = 7) -> int:
+    """Delete per-stream match/failure rows older than ``days`` (#906).
+
+    The run rows (``processing_runs``: counts, durations, status) are kept —
+    only their drill-down detail goes, so the history table still shows what
+    each older run did without the per-stream rows behind it. Those rows are
+    the bulk of the database (69% on a real install: one row per stream per
+    run, ~35× redundant because the same stream fails the same way every
+    run), and the multiplier is the generation interval, so a short schedule
+    needs a short detail window.
+
+    Returns:
+        Number of detail rows deleted (matched + failed).
+    """
+    cutoff = to_db_utc(now_utc() - timedelta(days=days))
+    deleted = 0
+    for table in ("epg_matched_streams", "epg_failed_matches"):
+        cursor = conn.execute(f"DELETE FROM {table} WHERE created_at < ?", (cutoff,))
+        deleted += cursor.rowcount
+    conn.commit()
+    return deleted
+
+
 def cleanup_old_runs(conn: Connection, days: int = 30) -> int:
     """Delete processing runs older than specified days.
 
     Full-EPG run sums are folded into lifetime_stats first so all-time
-    totals survive the rolling retention window.
+    totals survive the rolling retention window. Per-stream detail rows
+    cascade with the run; see cleanup_old_run_details for the shorter
+    detail window.
     """
     cutoff = to_db_utc(now_utc() - timedelta(days=days))
     _fold_runs_into_lifetime(conn, "created_at < ?", (cutoff,))

@@ -76,6 +76,9 @@ class ReconciliationSettings:
     auto_fix_duplicates: bool = False
     default_duplicate_event_handling: str = "consolidate"
     channel_history_retention_days: int = 90
+    # Run history (#906): per-stream detail rows vs the run rows themselves
+    run_detail_retention_days: int = 7
+    run_history_retention_days: int = 30
 
 
 @dataclass

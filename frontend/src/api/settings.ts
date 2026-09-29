@@ -98,6 +98,8 @@ export interface ReconciliationSettings {
   auto_fix_duplicates: boolean
   default_duplicate_event_handling: string
   channel_history_retention_days: number
+  run_detail_retention_days: number
+  run_history_retention_days: number
 }
 
 export interface DisplaySettings {

@@ -51,7 +51,8 @@ def get_reconciliation_settings(conn: Connection) -> dict:
         """SELECT reconcile_on_epg_generation, reconcile_on_startup,
                   auto_fix_orphan_teamarr, auto_fix_orphan_dispatcharr,
                   auto_fix_duplicates, default_duplicate_event_handling,
-                  channel_history_retention_days
+                  channel_history_retention_days,
+                  run_detail_retention_days, run_history_retention_days
            FROM settings WHERE id = 1"""
     )
     row = cursor.fetchone()
@@ -64,6 +65,8 @@ def get_reconciliation_settings(conn: Connection) -> dict:
             "auto_fix_duplicates": False,
             "default_duplicate_event_handling": "consolidate",
             "channel_history_retention_days": 90,
+            "run_detail_retention_days": 7,
+            "run_history_retention_days": 30,
         }
     return {
         "reconcile_on_epg_generation": bool(row["reconcile_on_epg_generation"]),
@@ -73,6 +76,8 @@ def get_reconciliation_settings(conn: Connection) -> dict:
         "auto_fix_duplicates": bool(row["auto_fix_duplicates"]),
         "default_duplicate_event_handling": row["default_duplicate_event_handling"],
         "channel_history_retention_days": row["channel_history_retention_days"] or 90,
+        "run_detail_retention_days": row["run_detail_retention_days"] or 7,
+        "run_history_retention_days": row["run_history_retention_days"] or 30,
     }
 
 
