@@ -274,6 +274,7 @@ class ChannelCleanup(_LifecycleHost):
         matched_streams: list[dict] | None = None,
         *,
         is_channel_source: bool = False,
+        changed_only: bool = False,
     ) -> StreamProcessResult:
         """Clean up channels for streams that no longer exist, changed content, or rotated events.
 
@@ -297,6 +298,17 @@ class ChannelCleanup(_LifecycleHost):
                 "removed from source" (#512) — a pool-construction gap would
                 cascade into channel deletion. Rotation checks still apply;
                 stale channels fall to their scheduled event-end deletion.
+            changed_only: Only act on streams that are PRESENT in
+                ``current_streams`` with different content; never read absence
+                from the pool as "removed from source". This is the zero-match
+                mode (#907): a group whose run matched nothing still has to
+                detach a rotated stream — a provider that reuses a Dispatcharr
+                stream id for the next event (WorldSBK → snooker) leaves the
+                old attachment on the old channel forever otherwise, because
+                nothing about that state ever changes between runs. But a
+                zero-match pool is also exactly what a pattern mis-bind or a
+                half-refreshed M3U looks like (#450), so on this path the
+                pool is evidence of what a stream IS, never of what is gone.
 
         Returns:
             StreamProcessResult with deleted channels and errors
@@ -345,6 +357,8 @@ class ChannelCleanup(_LifecycleHost):
                     if not streams:
                         # Legacy fallback: check primary_stream_id
                         primary_id = getattr(channel, "primary_stream_id", None)
+                        if changed_only:
+                            continue
                         if primary_id and primary_id not in current_ids_set:
                             success = self.delete_managed_channel(
                                 conn,
@@ -405,6 +419,10 @@ class ChannelCleanup(_LifecycleHost):
                             continue
 
                         if stream_id not in current_ids_set:
+                            if changed_only:
+                                # Absence is not evidence on the zero-match path.
+                                valid_streams.append(s)
+                                continue
                             # Stream no longer in M3U
                             missing_streams.append(s)
                             continue
@@ -443,8 +461,7 @@ class ChannelCleanup(_LifecycleHost):
                             if stream_event_map:
                                 matched_events = stream_event_map.get(stream_id)
                                 if matched_events and (
-                                    not channel_event_id
-                                    or channel_event_id in matched_events
+                                    not channel_event_id or channel_event_id in matched_events
                                 ):
                                     # Same event, just renamed — update stored name, keep
                                     update_stream_name(conn, channel.id, stream_id, current_name)
@@ -476,9 +493,7 @@ class ChannelCleanup(_LifecycleHost):
                         reasons = []
                         if missing_streams:
                             reasons.append(f"{len(missing_streams)} missing")
-                        rotated = [
-                            c for c in changed_streams if c.get("reason") == "event_rotated"
-                        ]
+                        rotated = [c for c in changed_streams if c.get("reason") == "event_rotated"]
                         content = [
                             c for c in changed_streams if c.get("reason") == "content_changed"
                         ]
@@ -610,8 +625,7 @@ class ChannelCleanup(_LifecycleHost):
                     all_dispatcharr = self._channel_manager.get_channels()
 
                 teamarr_channels = [
-                    c for c in all_dispatcharr
-                    if (c.tvg_id or "").startswith("teamarr-event-")
+                    c for c in all_dispatcharr if (c.tvg_id or "").startswith("teamarr-event-")
                 ]
 
                 if not teamarr_channels:
@@ -719,9 +733,7 @@ class ChannelCleanup(_LifecycleHost):
                     for channel in channels:
                         try:
                             active = get_channel_streams(conn, channel.id)
-                            from_group = [
-                                s for s in active if s.source_group_id == group_id
-                            ]
+                            from_group = [s for s in active if s.source_group_id == group_id]
 
                             # Detach only this group's streams (Dispatcharr + DB).
                             for stream in from_group:
