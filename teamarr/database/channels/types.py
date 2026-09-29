@@ -147,6 +147,10 @@ class ManagedChannelStream:
     dispatcharr_channel_group: str | None = None
     # Stable DP channel group id for channel-source stream-profile overrides.
     dispatcharr_channel_group_id: int | None = None
+    # (#893) The stream's own M3U group, for exception keywords with M3U-group
+    # sources. NULL on rows attached before the columns existed.
+    m3u_group_id: int | None = None
+    m3u_group_name: str | None = None
     added_at: datetime | None = None
     removed_at: datetime | None = None
     # Time-windowed membership (epic teamarr-183.5). NULL = full-life.
@@ -210,6 +214,8 @@ class ManagedChannelStream:
             feed_side=row.get("feed_side"),
             dispatcharr_channel_group=row.get("dispatcharr_channel_group"),
             dispatcharr_channel_group_id=row.get("dispatcharr_channel_group_id"),
+            m3u_group_id=row.get("m3u_group_id"),
+            m3u_group_name=row.get("m3u_group_name"),
             added_at=row.get("added_at"),
             removed_at=row.get("removed_at"),
             attach_at=row.get("attach_at"),

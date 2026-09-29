@@ -179,7 +179,7 @@ Core identifiers for teams, leagues, and matchups.
 | `{league_code}` | Raw league code | base | `nfl` |
 | `{sport}` | Sport display name | base | `Football` |
 | `{gracenote_category}` | Gracenote category for EPG; customizable per league (Settings → Advanced → Gracenote Category Overrides) | base | `NFL Football` |
-| `{exception_keyword}` | Exception keyword label (e.g., 'Spanish', '4K') | base | `4K` |
+| `{exception_keyword}` | Exception keyword label (e.g., 'Spanish', '4K'); on channels no keyword matched, the **Untagged label** from Channels → Dispatcharr Output, or empty | base | `4K` |
 
 ---
 

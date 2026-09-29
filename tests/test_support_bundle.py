@@ -72,6 +72,49 @@ def test_bundle_contains_contract_and_redacts_source_data(db_path, tmp_path):
     assert report["channels"]["managed_team_channel_streams"][0]["event_id"] == "event-2"
 
 
+def test_bundle_redacts_account_name_leaked_via_pinned_stream_snapshot(db_path, tmp_path):
+    """A pinned-stream name snapshot can carry the account name verbatim.
+
+    An exception keyword's ``streams`` source (#893) stores a picked stream's
+    display name as a snapshot for the UI — e.g. a provider that bakes the
+    account into the stream name ("DAZN 1 (Private Account)"). That account
+    name is only known to this bundle via ``event_epg_groups.m3u_account_name``
+    (the source's configured account): no ``managed_channel_streams`` row ever
+    carries it here, so it must still make it into the redaction set, or the
+    key-based redaction on the source's own account field masks it there while
+    the identical text survives verbatim inside the keyword snapshot.
+    """
+    from teamarr.database.exception_keywords import create_keyword
+
+    with get_connection(db_path) as conn:
+        conn.execute(
+            """INSERT INTO event_epg_groups (name, leagues, m3u_account_id, m3u_account_name)
+               VALUES (?, ?, ?, ?)""",
+            ("Spanish Sources", "[]", 501, "Private Account"),
+        )
+        create_keyword(
+            conn,
+            label="ES",
+            match_terms="",
+            streams=[{"id": 99, "name": "DAZN 1 (Private Account)"}],
+        )
+        conn.commit()
+
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    bundle = SupportBundleService(db_path, logs).create()
+    with zipfile.ZipFile(BytesIO(bundle)) as archive:
+        report = json.loads(archive.read("support-report.json"))
+
+    [keyword] = [
+        kw for kw in report["configuration"]["exception_keywords"] if kw["label"] == "ES"
+    ]
+    assert keyword["streams"] == [{"id": 99, "name": "DAZN 1 ([REDACTED])"}]
+
+    [source] = report["sources_and_subscriptions"]["sources"]
+    assert source["m3u_account_name"] == "[REDACTED]"
+
+
 def test_bundle_signals_media_server_failing(db_path, tmp_path):
     from teamarr.database.stats import create_run, save_run
 

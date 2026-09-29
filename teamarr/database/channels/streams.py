@@ -57,6 +57,8 @@ def add_stream_to_channel(
         "feed_side",  # 'home'/'away'; NULL = unknown. Drives home_feed/away_feed rules (#533)
         "dispatcharr_channel_group",  # DP channel group; drives dispatcharr_group rule (ybt.3)
         "dispatcharr_channel_group_id",  # Stable DP channel group id for profile overrides
+        "m3u_group_id",  # the stream's M3U group; exception keyword sources (#893)
+        "m3u_group_name",
         "attach_at",   # time-windowed membership (183.5); None = full-life
         "detach_at",
     ]
@@ -539,6 +541,60 @@ def update_stream_program_title(
         (epg_program_title, managed_channel_id, dispatcharr_stream_id, epg_program_title),
     )
     return cursor.rowcount > 0
+
+
+def update_stream_m3u_group(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+    m3u_group_id: int,
+    m3u_group_name: str | None,
+) -> bool:
+    """Backfill/refresh the M3U group of an attached stream (#893).
+
+    Keyword enforcement re-checks exception keywords from the stored row, so a
+    keyword that matches on M3U group needs the group there. Rows attached
+    before the columns existed carry NULL until the next generation that sees
+    the stream. A NULL name (the groups list failed to load) keeps the stored
+    name while the id is unchanged. Targets the active row; returns True when
+    a value changed.
+    """
+    cursor = conn.execute(
+        """UPDATE managed_channel_streams
+           SET m3u_group_name = CASE
+                   WHEN :name IS NULL AND m3u_group_id IS :id THEN m3u_group_name
+                   ELSE :name
+               END,
+               m3u_group_id = :id
+           WHERE managed_channel_id = :channel_id
+             AND dispatcharr_stream_id = :stream_id
+             AND removed_at IS NULL
+             AND (m3u_group_id IS NOT :id
+                  OR (:name IS NOT NULL AND m3u_group_name IS NOT :name))""",
+        {
+            "id": m3u_group_id,
+            "name": m3u_group_name,
+            "channel_id": managed_channel_id,
+            "stream_id": dispatcharr_stream_id,
+        },
+    )
+    return cursor.rowcount > 0
+
+
+def get_stored_m3u_group_names(conn: Connection) -> dict[int, str]:
+    """M3U group id -> name as stored on active stream rows (#893).
+
+    Stands in for Dispatcharr's groups list when that request fails, and
+    names rows attached while it was failing. Later rows win.
+    """
+    rows = conn.execute(
+        """SELECT m3u_group_id, m3u_group_name FROM managed_channel_streams
+           WHERE removed_at IS NULL
+             AND m3u_group_id IS NOT NULL
+             AND m3u_group_name IS NOT NULL
+           ORDER BY id"""
+    ).fetchall()
+    return {row["m3u_group_id"]: row["m3u_group_name"] for row in rows}
 
 
 def reorder_channel_streams(

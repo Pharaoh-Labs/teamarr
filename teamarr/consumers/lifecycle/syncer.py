@@ -58,6 +58,7 @@ class ChannelSyncer(_LifecycleHost):
         | top active stream   | stream_profile_id   | Override or global default    |
         """
         from teamarr.database.channels import (
+            keyword_display_value,
             log_channel_history,
             update_managed_channel,
         )
@@ -76,6 +77,10 @@ class ChannelSyncer(_LifecycleHost):
             update_data = {}
             db_updates = {}
             changes_made = []
+
+            from teamarr.database.settings import get_dispatcharr_settings as _get_ds
+
+            _ds = _get_ds(conn)
 
             # 1. Check channel name (template resolution) - V1 parity
             matched_keyword = getattr(existing, "exception_keyword", None)
@@ -102,6 +107,7 @@ class ChannelSyncer(_LifecycleHost):
                 event, template, matched_keyword, segment,
                 feed_team=sync_feed_team,
                 feed_label_style=sync_feed_label_style,
+                untagged_label=_ds.untagged_keyword_label,
             )
             if expected_name != current_channel.name:
                 update_data["name"] = expected_name
@@ -124,9 +130,6 @@ class ChannelSyncer(_LifecycleHost):
 
             # 3. Check channel_group_id (supports dynamic sport/league resolution)
             # Use global defaults from settings, then per-league overrides
-            from teamarr.database.settings import get_dispatcharr_settings as _get_ds
-
-            _ds = _get_ds(conn)
             channel_group_mode = _ds.default_channel_group_mode or "static"
             static_group_id = _ds.default_channel_group_id
             event_sport = getattr(event, "sport", None)
@@ -150,6 +153,9 @@ class ChannelSyncer(_LifecycleHost):
                 event_sport=event_sport,
                 event_league=event_league,
                 event=event,
+                exception_keyword=keyword_display_value(
+                    matched_keyword, _ds.untagged_keyword_label
+                ),
             )
 
             old_group_id = current_channel.channel_group_id
@@ -247,6 +253,7 @@ class ChannelSyncer(_LifecycleHost):
             self._sync_channel_logo(
                 conn, existing, event, template, matched_keyword, segment, changes_made,
                 feed_team=sync_feed_team,
+                untagged_label=_ds.untagged_keyword_label,
             )
 
             # 9. Sync stream_profile_id
@@ -322,7 +329,7 @@ class ChannelSyncer(_LifecycleHost):
         Dispatcharr profile semantics:
           [] = NO profiles, [0] = ALL profiles (sentinel), [1,2,...] = specific IDs
         """
-        from teamarr.database.channels import update_managed_channel
+        from teamarr.database.channels import keyword_display_value, update_managed_channel
         from teamarr.database.settings import get_dispatcharr_settings
 
         dispatcharr_settings = get_dispatcharr_settings(conn)
@@ -344,6 +351,10 @@ class ChannelSyncer(_LifecycleHost):
                 profile_ids=raw_group_profiles,
                 event_sport=event_sport,
                 event_league=event_league,
+                exception_keyword=keyword_display_value(
+                    getattr(existing, "exception_keyword", None),
+                    dispatcharr_settings.untagged_keyword_label,
+                ),
             )
             effective_profile_ids = resolved_profile_ids if resolved_profile_ids else []
         else:
@@ -469,12 +480,14 @@ class ChannelSyncer(_LifecycleHost):
         segment: str | None,
         changes_made: list[str],
         feed_team=None,
+        untagged_label: str | None = None,
     ) -> None:
         """Sync logo — handles both updates and removals."""
         from teamarr.database.channels import update_managed_channel
 
         logo_url = self._resolve_logo_url(
             event, template, matched_keyword, segment, feed_team=feed_team,
+            untagged_label=untagged_label,
         )
         current_logo_id = getattr(existing, "dispatcharr_logo_id", None)
         stored_logo_url = getattr(existing, "logo_url", None)

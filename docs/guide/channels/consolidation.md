@@ -26,8 +26,9 @@ Exception keywords let certain streams break out of the default behavior — use
 
 Each keyword has:
 
-- **Label** — the display name. It's appended to the variant channel's name, resolves the `{exception_keyword}` template variable, and is part of the channel's tvg-id.
-- **Match Terms** — comma-separated terms matched against stream names. For a stream matched through its EPG guide (e.g. a linear `ESPN 2` feed), the matched programme's title and subtitle are checked too, so a *ManningCast* keyword with the term `Peyton and Eli` catches `Monday Night Football with Peyton and Eli` even though the stream is only named `ESPN 2`. The stream name is checked first.
+- **Label** — the display name. It's appended to the variant channel's name, resolves the `{exception_keyword}` template variable (and the `{exception_keyword}` wildcard in [channel group patterns](output.md)), and is part of the channel's tvg-id.
+- **Match Terms** — comma-separated terms matched against stream names. For a stream matched through its EPG guide (e.g. a linear `ESPN 2` feed), the matched programme's title and subtitle are checked too, so a *ManningCast* keyword with the term `Peyton and Eli` catches `Monday Night Football with Peyton and Eli` even though the stream is only named `ESPN 2`. The stream name is checked first. Leave the terms empty when the keyword matches by [source](#match-sources) instead.
+- **Match sources** — optional; see below.
 - **Behavior** — one of three:
 
 | Behavior | Description |
@@ -37,6 +38,37 @@ Each keyword has:
 | **Ignore** | Matching streams are dropped entirely — no channel |
 
 - **Enabled** — an API-only flag (there's no UI toggle); keywords disabled via the API disappear from the card.
+
+### Match sources
+
+Many providers never put the language in the stream name: `Cruz Azul vs. Toluca` is Spanish only because it sits in the provider's `ES| VIX PPV` group. The **Match sources** button (sliders icon) on a keyword row lets it match on where a stream comes from:
+
+| Source | Matches |
+|--------|---------|
+| **M3U group regex** | The stream's M3U group name, case-insensitive (`^ES` for every group whose name starts with `ES`). A live preview lists the groups it matches. |
+| **M3U groups** | Groups picked from the list. Useful when a regex would also catch groups you don't want. |
+| **Stream name regex** | The stream name, for patterns the comma-separated terms can't express (`\(MX\)` for a literal `(MX)`). |
+| **Event groups** | Every stream matched through the chosen Teamarr event groups. |
+| **Pinned streams** | Individual streams, picked from an event group's raw streams. |
+
+A stream carries one keyword, so when several could apply, the most specific evidence wins. Sources are checked in this order and the first match is used:
+
+1. pinned streams
+2. the stream name — match terms, then the stream name regex
+3. the matched EPG programme's title (match terms)
+4. picked M3U groups
+5. the M3U group regex
+6. event groups
+
+So a stream named `Match 4K` in an `ES|` group lands on a *4K* keyword that matches the name, not on the *ES* keyword that matches the group. The event-name rule in the note below applies to match terms only; a regex you write is taken as intended.
+
+**Example — language by provider group.** Keyword `ES` (Sub-Consolidate), no match terms, M3U group regex `^(ES|LA|VE|BO)\|`. One event group per sport can now pull English and Spanish provider groups together: every stream from those groups lands on the `ES` channel, the rest on the main channel. With the `{exception_keyword}` [group wildcard](output.md) and an untagged label of `EN`, they are sorted into `EN: Soccer` and `ES: Soccer`.
+
+**Example — quality.** Keyword `4K` with the terms `4K, UHD` and the M3U group regex `^4K\|` catches both `Arsenal v Chelsea UHD` and every stream in the provider's `4K|` group, whatever it is named.
+
+### Naming untagged channels
+
+A channel no keyword matched has no label, so `{exception_keyword}: {matchup}` would render as ": Team A v Team B" for it. Set **Untagged label** (Channels → Dispatcharr Output) to give those channels a value — with `EN`, you get `EN: Team A v Team B` beside `ES: Team A v Team B`. The label applies to the channel name, logo URL and EPG display name, and to `{exception_keyword}` in group and profile patterns. It never changes a channel's tvg-id or which streams share a channel, and it does not trigger the automatic "(Label)" suffix, which only real keywords get.
 
 A fresh install ships with eight language keywords seeded (Spanish, French, German, Portuguese, Italian, Japanese, Korean, Chinese — all Sub-Consolidate), so alternate-language feeds split out of the box. Each seeded keyword is offered **once**: delete or rename one and it stays gone across restarts and upgrades. To get a deleted default back, add it again by hand.
 

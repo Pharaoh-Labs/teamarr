@@ -18,6 +18,7 @@ from datetime import date, datetime, timedelta
 from typing import overload
 
 from teamarr.core import Event, Programme
+from teamarr.database.channels import keyword_display_value
 from teamarr.database.templates import EventTemplateConfig
 from teamarr.services import SportsDataService
 from teamarr.templates.conditions import get_condition_selector
@@ -56,6 +57,9 @@ class EventEPGOptions:
     # Postponed event label
     # When True, prepends "Postponed: " to EPG title, subtitle, and description
     prepend_postponed_label: bool = True
+
+    # {exception_keyword} value for streams no keyword matched (None = empty)
+    untagged_keyword_label: str | None = None
 
 
 POSTPONED_LABEL = "Postponed: "
@@ -450,7 +454,9 @@ class EventEPGGenerator:
 
             # Build context using home team perspective
             # Inject exception_keyword into extra_vars so it resolves in all template fields
-            keyword_value = exception_keyword if exception_keyword else ""
+            keyword_value = keyword_display_value(
+                exception_keyword, options.untagged_keyword_label
+            )
             context = self._context_builder.build_for_event(
                 event=event,
                 team_id=event.home_team.id,

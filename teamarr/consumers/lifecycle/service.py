@@ -425,6 +425,9 @@ class ChannelLifecycleService(
         conn: Connection,
         event: Any = None,
         program_title: str | None = None,
+        *,
+        stream: dict | None = None,
+        event_group_id: int | None = None,
     ) -> tuple[str | None, str | None]:
         """Check if stream name matches any exception keyword.
 
@@ -434,6 +437,8 @@ class ChannelLifecycleService(
         the check skip terms the event is itself named with (#803).
         ``program_title`` is the matched EPG programme's title|sub_title for
         EPG-matched streams (#829), searched after the stream name.
+        ``stream`` (the fetched stream dict) and ``event_group_id`` feed the
+        keyword match sources (#893): pinned streams, M3U group, event group.
 
         Returns:
             Tuple of (matched_keyword, behavior) or (None, None)
@@ -451,8 +456,16 @@ class ChannelLifecycleService(
             if league not in memo:
                 memo[league] = get_keywords_for_league(conn, league, keywords)
             keywords = memo[league]
+        stream = stream or {}
         return check_exception_keyword(
-            stream_name, keywords, event_identity_text(event), program_title
+            stream_name,
+            keywords,
+            event_identity_text(event),
+            program_title,
+            stream_id=stream.get("id"),
+            m3u_group_id=stream.get("m3u_group_id"),
+            m3u_group_name=stream.get("m3u_group_name"),
+            event_group_id=event_group_id,
         )
 
     def _resolve_event_template(

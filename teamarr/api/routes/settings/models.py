@@ -106,6 +106,8 @@ class DispatcharrSettingsModel(BaseModel):
     default_channel_group_id: int | None = None
     # Channel group mode: 'static', 'sport', 'league', or custom pattern
     default_channel_group_mode: str | None = None
+    # {exception_keyword} value for channels no keyword matched (None = empty)
+    untagged_keyword_label: str | None = None
     # Dedicated output defaults for managed Team EPG channels.
     managed_team_channel_profile_ids: list[str | int] | None = None
     managed_team_channel_group_id: int | None = None
@@ -132,6 +134,7 @@ class DispatcharrSettingsUpdate(BaseModel):
     default_stream_profile_id: int | None = None
     default_channel_group_id: int | None = None
     default_channel_group_mode: str | None = None
+    untagged_keyword_label: str | None = None
     managed_team_channel_profile_ids: list[str | int] | None = None
     managed_team_channel_group_id: int | None = None
     cleanup_unused_logos: bool | None = None
