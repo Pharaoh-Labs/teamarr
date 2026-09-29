@@ -67,6 +67,9 @@ class ManagedTeamChannelSettings:
     range_start: int = 9000
     range_end: int | None = None
     priority_ids: list[int] = field(default_factory=list)
+    # "persistent" | "game_days" (#904); a team may override via
+    # teams.managed_channel_lifecycle.
+    lifecycle: str = "persistent"
 
 
 @dataclass

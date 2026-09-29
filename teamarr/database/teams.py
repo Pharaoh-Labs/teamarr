@@ -132,6 +132,7 @@ def create_team(
     active: bool,
     managed_channel_enabled: bool = False,
     managed_channel_number: int | None = None,
+    managed_channel_lifecycle: str | None = None,
 ) -> dict:
     """Create a new team.
 
@@ -160,8 +161,8 @@ def create_team(
             provider, provider_team_id, primary_league, leagues, sport,
             team_name, team_abbrev, team_logo_url, team_color,
             channel_id, channel_logo_url, template_id, active,
-            managed_channel_enabled, managed_channel_number
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            managed_channel_enabled, managed_channel_number, managed_channel_lifecycle
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             provider,
@@ -179,6 +180,7 @@ def create_team(
             active,
             managed_channel_enabled,
             managed_channel_number,
+            managed_channel_lifecycle,
         ),
     )
     team_id = cursor.lastrowid

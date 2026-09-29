@@ -84,6 +84,8 @@ Teamarr automatically **skips numbers already used by non-Teamarr channels** in 
 
 Persistent team channels (see [Teams → Managed Channels](../epg/teams#managed-channels)) are numbered from their own range, default `9000` upward, so event-channel blocks never consume it. Set the range here and, optionally, an ordered list of **priority teams** that are numbered first; the rest follow the Sport & League Order. A team, league or sport [pinned block](#pinned-blocks) still wins over this range for teams it covers. Automatic team numbers follow [Number Stability](#number-stability) like every other channel: Compact re-sorts them every run, Gapped and Strict hold them until the daily re-layout or a manual re-grid. A per-team override on the Teams page pins one outright.
 
+The **Lifecycle** control on the same card chooses between **Persistent** channels and **Game days only** channels that appear inside a game's lifecycle window and keep their reserved number, tvg-id and logo in between; see [Teams → Lifecycle](../epg/teams#lifecycle-persistent-or-game-days-only). Each team can override it in its edit dialog.
+
 ## Number Stability
 
 Controls whether a channel can be **renumbered while its event is live**. Dispatcharr relies on channel numbers staying put, so a game shouldn't jump numbers just because another event started or ended.

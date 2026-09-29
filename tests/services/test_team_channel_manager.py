@@ -192,7 +192,7 @@ def settings(monkeypatch):
 
 def _ok(**overrides):
     base = {"created": 0, "synced": 0, "deleted": 0, "conflicts": 0, "errors": 0,
-            "unavailable": False}
+            "idle": 0, "hibernated": 0, "unavailable": False}
     return {**base, **overrides}
 
 

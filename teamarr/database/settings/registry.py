@@ -402,6 +402,7 @@ GROUPS: dict[str, GroupSpec] = {
                     "range_start": "managed_team_channel_range_start",
                     "range_end": "managed_team_channel_range_end",
                     "priority_ids": "managed_team_channel_priority_ids",
+                    "lifecycle": "managed_team_channel_lifecycle",
                 },
             ),
             "Managed team channels",

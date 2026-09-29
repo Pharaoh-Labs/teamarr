@@ -35,11 +35,15 @@ def stage_prepare_team_channels(context: GenerationContext) -> None:
         if isinstance(context.dispatcharr_client, DispatcharrConnection)
         else None
     )
+    team_result = getattr(context, "team_result", None)
+    team_results = team_result.results if team_result else []
     context.team_channel_manager = TeamChannelManager(
         context.db_factory,
         team_channels.channels if team_channels else None,
         team_channels.epg if team_channels else None,
         team_channels.logos if team_channels else None,
+        sports_service=context.sports_service,
+        unverified_team_ids={r.team_id for r in team_results if r.errors},
     )
     context.report(
         "groups",

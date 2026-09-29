@@ -1,6 +1,7 @@
 """Pydantic models for API requests and responses."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +28,7 @@ class TeamCreate(BaseModel):
     active: bool = True
     managed_channel_enabled: bool = False
     managed_channel_number: int | None = None
+    managed_channel_lifecycle: Literal["persistent", "game_days"] | None = None
 
 
 class TeamUpdate(BaseModel):
@@ -42,6 +44,7 @@ class TeamUpdate(BaseModel):
     active: bool | None = None
     managed_channel_enabled: bool | None = None
     managed_channel_number: int | None = None
+    managed_channel_lifecycle: Literal["persistent", "game_days"] | None = None
     primary_league: str | None = None
     leagues: list[str] | None = None
 
@@ -70,6 +73,7 @@ class TeamResponse(BaseModel):
     managed_channel_assigned_number: int | None = None
     managed_channel_sync_status: str | None = None
     managed_channel_sync_message: str | None = None
+    managed_channel_lifecycle: str | None = None
     created_at: datetime
     updated_at: datetime
 

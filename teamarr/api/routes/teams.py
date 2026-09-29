@@ -135,6 +135,7 @@ def create_team(team: TeamCreate):
                 active=team.active,
                 managed_channel_enabled=team.managed_channel_enabled,
                 managed_channel_number=team.managed_channel_number,
+                managed_channel_lifecycle=team.managed_channel_lifecycle,
             )
         except Exception as e:
             if "UNIQUE constraint failed" in str(e):
@@ -208,6 +209,9 @@ def update_team(team_id: int, team: TeamUpdate):
     # Unlike other optional fields, null deliberately clears the manual override.
     if "managed_channel_number" in team.model_fields_set:
         updates["managed_channel_number"] = team.managed_channel_number
+    # Same for the lifecycle override: null means "inherit the global setting".
+    if "managed_channel_lifecycle" in team.model_fields_set:
+        updates["managed_channel_lifecycle"] = team.managed_channel_lifecycle
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 
