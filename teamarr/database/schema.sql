@@ -402,6 +402,11 @@ CREATE TABLE IF NOT EXISTS settings (
 
     -- Channel History
     channel_history_retention_days INTEGER DEFAULT 90,
+    -- Run history retention (#906): per-stream match/failure rows are pruned
+    -- after run_detail_retention_days; the run rows themselves (counts,
+    -- durations) after run_history_retention_days, folded into lifetime_stats.
+    run_detail_retention_days INTEGER DEFAULT 7,
+    run_history_retention_days INTEGER DEFAULT 30,
 
     -- Background Scheduler
     scheduler_enabled BOOLEAN DEFAULT 1,

@@ -77,7 +77,21 @@ Teamarr maintains several caches, each with a tile and a clear/refresh action. T
 | **Team & League Directory** | Cached teams and leagues from ESPN and TheSportsDB (enables offline matching) | **Refresh Directory** — pull the latest team/league data. A *Directory Stale* badge appears when the directory is over a week old |
 | **Game Data Cache** | Schedules, scores, and odds (shows active entries and pending writes) | **Clear Game Cache** |
 | **Stream Match Cache** | Stream-to-event fingerprint matches | **Clear Match Cache** |
-| **Run History** | Processing-run logs and statistics (auto-cleaned to 30 days after each run) | **Clear Run History** |
 
 {: .note }
 The Team & League Directory refreshes automatically on **every startup** unless the `SKIP_CACHE_REFRESH` environment variable is set. Manual refresh is useful after adding new leagues or when team rosters change significantly. Clearing the game-data or match caches forces fresh lookups on the next generation run.
+
+## Database & Run History
+
+Every generation run writes a summary row (counts, duration, status) plus one **detail row per stream** — the matched and unmatched stream lists you drill into from the Dashboard's Generation History. The detail rows are the bulk of the database, and they multiply with your generation interval: a source with 100 streams on a 5-minute schedule writes 28,800 detail rows a day. Retention is pruned automatically after each run on two windows:
+
+| Setting | Default | What it keeps |
+|---------|---------|---------------|
+| **Per-stream detail (days)** | 7 | The matched/unmatched stream lists behind each run. Older runs keep their summary but lose the drill-down. |
+| **Run summaries (days)** | 30 | The run rows themselves. Their totals are folded into the Dashboard's all-time accumulator before deletion, so lifetime counts never shrink. |
+
+Shrinking a window takes effect at the end of the next generation run. Short schedules (every 5–15 minutes) generally want a 1–3 day detail window.
+
+**Compact Database** rewrites the database file so space freed by pruning is returned to the filesystem — SQLite keeps freed pages inside the file otherwise, which is why cutting retention alone does not shrink the file on disk. The card shows the current size and how much is reclaimable. Compaction runs in the background, blocks generation until it finishes (a scheduled run that fires meanwhile is skipped, not failed), and needs free disk space roughly equal to the current file size while it runs.
+
+**Clear Run History** deletes every run and its detail rows immediately (all-time totals are preserved). Follow it with Compact Database to reclaim the space.

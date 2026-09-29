@@ -14,7 +14,9 @@ import {
   getDurationSettings,
   updateDurationSettings,
   getDisplaySettings,
+  getReconciliationSettings,
   updateDisplaySettings,
+  updateReconciliationSettings,
   getTeamFilterSettings,
   updateTeamFilterSettings,
   getExceptionKeywords,
@@ -136,6 +138,15 @@ export const useDurationSettings = settingsQueryHook("durations", getDurationSet
 export const useUpdateDurationSettings = settingsMutationHook(updateDurationSettings, [
   ["settings", "durations"],
 ])
+
+export const useReconciliationSettings = settingsQueryHook(
+  "reconciliation",
+  getReconciliationSettings,
+)
+export const useUpdateReconciliationSettings = settingsMutationHook(
+  updateReconciliationSettings,
+  [["settings", "reconciliation"]],
+)
 
 export const useDisplaySettings = settingsQueryHook("display", getDisplaySettings)
 export const useUpdateDisplaySettings = settingsMutationHook(updateDisplaySettings, [

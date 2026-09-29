@@ -97,6 +97,27 @@ export function useClearAllRuns() {
   })
 }
 
+// Database size + compaction (#906)
+
+export function useDatabaseStatus() {
+  return useQuery({
+    queryKey: ["database-status"],
+    queryFn: () => statsApi.getDatabaseStatus(),
+    refetchInterval: (query) => (query.state.data?.compaction.running ? 2000 : false),
+  })
+}
+
+export function useCompactDatabase() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => statsApi.compactDatabase(),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["database-status"] })
+    },
+  })
+}
+
 // Stream Match Cache
 
 export function useMatchCacheStats() {

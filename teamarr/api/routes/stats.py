@@ -9,7 +9,7 @@ Provides centralized access to all processing statistics:
 
 from typing import cast
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
 from teamarr.database import get_db
 from teamarr.database.stats import (
@@ -114,8 +114,34 @@ def get_runs(
 # MAINTENANCE
 # =============================================================================
 
-# NOTE: run cleanup has no endpoint — cleanup_old_runs(days=30) runs
-# automatically after each generation run (consumers/generation.py).
+# NOTE: run cleanup has no endpoint — cleanup_old_run_details / cleanup_old_runs
+# run automatically after each generation run on the retention windows in
+# Settings → Advanced (consumers/generation_pipeline/stats.py, #906).
+
+
+@router.get("/database")
+def database_status():
+    """Database file size, reclaimable space, history row counts and the
+    compaction job state (#906). Backs the Run History tile on Settings → Advanced."""
+    from teamarr.database.maintenance import get_database_status
+
+    return get_database_status()
+
+
+@router.post("/database/compact", status_code=status.HTTP_202_ACCEPTED)
+def compact_database_endpoint():
+    """Start a background VACUUM to return freed pages to the filesystem (#906).
+
+    Single-flight and exclusive with generation: 409 if either is running.
+    Poll GET /database for progress; the job needs roughly the file's size
+    again as temporary disk space.
+    """
+    from teamarr.database.maintenance import compact_database
+
+    try:
+        return compact_database()
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
 
 @router.delete("/runs")
