@@ -56,6 +56,8 @@ export interface DatabaseStatus {
   path: string
   file_bytes: number
   reclaimable_bytes: number
+  live_bytes: number
+  free_disk_bytes: number | null
   run_count: number
   detail_rows: Record<string, number>
   compaction: CompactionState
