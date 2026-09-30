@@ -603,8 +603,43 @@ def _fold_runs_into_lifetime(conn: Connection, where: str = "", params: tuple = 
     )
 
 
+# Per-stream detail tables, purged in committed batches (#906).
+_DETAIL_TABLES = ("epg_matched_streams", "epg_failed_matches")
+_DETAIL_DELETE_BATCH = 20_000
+
+
+def _delete_run_details(conn: Connection, run_filter: str = "", params: tuple = ()) -> int:
+    """Delete detail rows of the runs selected by ``run_filter``, in batches.
+
+    Keyed on ``run_id`` (indexed) rather than the rows' own ``created_at``
+    (not indexed — a full scan of the largest tables in the database), and
+    committed per batch: one transaction over millions of rows writes them
+    all to the WAL before it can checkpoint, and on a volume with less free
+    space than that the purge aborted with the disk full — a first purge
+    after the retention window shrinks is exactly that size. Batches let the
+    WAL checkpoint and be reused, so it stays a few MB regardless of backlog.
+
+    ``run_filter`` is a WHERE clause over ``processing_runs`` (empty = every
+    run). Commits as it goes — never call with uncommitted work on ``conn``.
+    """
+    runs = f"SELECT id FROM processing_runs {run_filter}"
+    deleted = 0
+    for table in _DETAIL_TABLES:
+        while True:
+            cursor = conn.execute(
+                f"DELETE FROM {table} WHERE id IN "
+                f"(SELECT id FROM {table} WHERE run_id IN ({runs}) LIMIT ?)",
+                (*params, _DETAIL_DELETE_BATCH),
+            )
+            conn.commit()
+            deleted += cursor.rowcount
+            if cursor.rowcount < _DETAIL_DELETE_BATCH:
+                break
+    return deleted
+
+
 def cleanup_old_run_details(conn: Connection, days: int = 7) -> int:
-    """Delete per-stream match/failure rows older than ``days`` (#906).
+    """Delete per-stream match/failure rows of runs older than ``days`` (#906).
 
     The run rows (``processing_runs``: counts, durations, status) are kept —
     only their drill-down detail goes, so the history table still shows what
@@ -618,23 +653,20 @@ def cleanup_old_run_details(conn: Connection, days: int = 7) -> int:
         Number of detail rows deleted (matched + failed).
     """
     cutoff = to_db_utc(now_utc() - timedelta(days=days))
-    deleted = 0
-    for table in ("epg_matched_streams", "epg_failed_matches"):
-        cursor = conn.execute(f"DELETE FROM {table} WHERE created_at < ?", (cutoff,))
-        deleted += cursor.rowcount
-    conn.commit()
-    return deleted
+    return _delete_run_details(conn, "WHERE created_at < ?", (cutoff,))
 
 
 def cleanup_old_runs(conn: Connection, days: int = 30) -> int:
     """Delete processing runs older than specified days.
 
     Full-EPG run sums are folded into lifetime_stats first so all-time
-    totals survive the rolling retention window. Per-stream detail rows
-    cascade with the run; see cleanup_old_run_details for the shorter
-    detail window.
+    totals survive the rolling retention window. Per-stream detail rows go
+    with the run — purged in batches first, so the run delete's cascade has
+    nothing left to carry in its one transaction; see cleanup_old_run_details
+    for the shorter detail window.
     """
     cutoff = to_db_utc(now_utc() - timedelta(days=days))
+    _delete_run_details(conn, "WHERE created_at < ?", (cutoff,))
     _fold_runs_into_lifetime(conn, "created_at < ?", (cutoff,))
     cursor = conn.execute("DELETE FROM processing_runs WHERE created_at < ?", (cutoff,))
     conn.commit()
@@ -643,6 +675,7 @@ def cleanup_old_runs(conn: Connection, days: int = 30) -> int:
 
 def clear_all_runs(conn: Connection) -> int:
     """Delete all processing runs (lifetime totals are preserved via fold)."""
+    _delete_run_details(conn)
     _fold_runs_into_lifetime(conn)
     cursor = conn.execute("DELETE FROM processing_runs")
     conn.commit()

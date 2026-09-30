@@ -327,7 +327,7 @@ function RunHistoryCard() {
                   ? `Last compaction failed: ${compaction.error}`
                   : compaction?.after_bytes != null && compaction.before_bytes != null
                     ? `Last compaction: ${formatBytes(compaction.before_bytes)} → ${formatBytes(compaction.after_bytes)}`
-                    : "SQLite keeps freed space inside the file until it is compacted. Needs free disk roughly equal to the file size."}
+                    : "SQLite keeps freed space inside the file until it is compacted. Needs free disk roughly equal to the compacted size."}
             </div>
             <Button
               variant="outline"

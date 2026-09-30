@@ -121,8 +121,9 @@ def get_runs(
 
 @router.get("/database")
 def database_status():
-    """Database file size, reclaimable space, history row counts and the
-    compaction job state (#906). Backs the Run History tile on Settings → Advanced."""
+    """Database file size, reclaimable and live space, free disk on its
+    volume, history row counts and the compaction job state (#906).
+    Backs the Run History tile on Settings → Advanced."""
     from teamarr.database.maintenance import get_database_status
 
     return get_database_status()
@@ -133,8 +134,9 @@ def compact_database_endpoint():
     """Start a background VACUUM to return freed pages to the filesystem (#906).
 
     Single-flight and exclusive with generation: 409 if either is running.
-    Poll GET /database for progress; the job needs roughly the file's size
-    again as temporary disk space.
+    409 also when the volume has less free space than the compacted file
+    needs (``live_bytes`` vs ``free_disk_bytes`` on GET /database). Poll
+    GET /database for progress.
     """
     from teamarr.database.maintenance import compact_database
 

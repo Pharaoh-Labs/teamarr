@@ -2,8 +2,8 @@
 
 SQLite never returns freed pages to the filesystem on its own, so cutting
 the run-history retention shrinks the database internally but leaves the
-file the same size; only VACUUM rewrites it. VACUUM needs roughly the file's
-size again as temporary space and holds writers out for its duration, so it
+file the same size; only VACUUM rewrites it. VACUUM needs roughly the compacted
+size again as free space and holds writers out for its duration, so it
 runs here as an explicit, single-flight background job that refuses to
 overlap a generation run (it takes the generation lock, so a scheduled run
 that fires mid-compaction is skipped as "already in progress" rather than
@@ -13,6 +13,7 @@ failing on a locked database).
 from __future__ import annotations
 
 import logging
+import shutil
 import sqlite3
 import threading
 from dataclasses import asdict, dataclass
@@ -52,6 +53,14 @@ def _file_bytes(path: Path) -> int:
     return total
 
 
+def _free_disk_bytes(path: Path) -> int | None:
+    """Free space on the volume holding the database (None if unreadable)."""
+    try:
+        return shutil.disk_usage(path.parent).free
+    except OSError:
+        return None
+
+
 def get_database_status(db_path: Path | str | None = None) -> dict:
     """Report file size, reclaimable free pages, history row counts and the
     compaction job state."""
@@ -59,6 +68,7 @@ def get_database_status(db_path: Path | str | None = None) -> dict:
     conn = sqlite3.connect(path, timeout=30.0)
     try:
         page_size = conn.execute("PRAGMA page_size").fetchone()[0]
+        page_count = conn.execute("PRAGMA page_count").fetchone()[0]
         freelist = conn.execute("PRAGMA freelist_count").fetchone()[0]
         counts = {}
         for table in _DETAIL_TABLES:
@@ -78,6 +88,8 @@ def get_database_status(db_path: Path | str | None = None) -> dict:
         "path": str(path),
         "file_bytes": _file_bytes(path),
         "reclaimable_bytes": page_size * freelist,
+        "live_bytes": page_size * (page_count - freelist),
+        "free_disk_bytes": _free_disk_bytes(path),
         "run_count": runs,
         "detail_rows": counts,
         "compaction": state,
@@ -101,11 +113,27 @@ def compact_database(db_path: Path | str | None = None, *, wait: bool = False) -
     Returns the compaction state. ``wait=True`` runs synchronously (tests).
 
     Raises:
-        RuntimeError: a compaction or a generation run is already in progress.
+        RuntimeError: a compaction or a generation run is already in progress,
+            or the volume is too full for the rewrite.
     """
     from teamarr.consumers.generation import _generation_lock
 
     path = resolve_db_path(db_path)
+    # VACUUM writes the compacted copy back through the WAL, so the volume
+    # needs the *live* size free (file minus reclaimable pages), not the file
+    # size. Refuse up front: a VACUUM that fills the disk halfway fails just
+    # the same, after holding generation out for the whole attempt.
+    try:
+        status = get_database_status(path)
+        free, needed = status["free_disk_bytes"], status["live_bytes"]
+    except sqlite3.Error:
+        free, needed = None, 0  # unreadable file: let the job report it
+    if free is not None and free < needed:
+        raise RuntimeError(
+            f"Not enough free disk space to compact: needs about {needed // 2**20} MB, "
+            f"{free // 2**20} MB free. Freed space inside the file is still reused by "
+            "new rows without compacting."
+        )
     with _state_lock:
         if _state.running:
             raise RuntimeError("Compaction already in progress")

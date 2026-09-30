@@ -79,6 +79,60 @@ def test_run_cleanup_cascades_details(db_conn):
     assert _counts(db_conn) == (0, 0, 0)
 
 
+def test_detail_cleanup_keys_on_the_run_not_the_row(db_conn):
+    """The window is the run's age (indexed via run_id); a row's own
+    created_at is never scanned — that scan was the unindexed full pass."""
+    old = _insert_run(db_conn, days_ago=10)
+    new = _insert_run(db_conn, days_ago=1)
+    _insert_details(db_conn, old, days_ago=1)  # row stamp inside the window
+    _insert_details(db_conn, new, days_ago=10)  # row stamp outside it
+
+    assert cleanup_old_run_details(db_conn, days=7) == 6
+    remaining = db_conn.execute("SELECT DISTINCT run_id FROM epg_failed_matches").fetchall()
+    assert [r[0] for r in remaining] == [new]
+
+
+@pytest.mark.parametrize("purge", ["details", "runs", "clear"])
+def test_purges_commit_in_batches(db_conn, monkeypatch, purge):
+    """One transaction over the whole backlog put every deleted row in the
+    WAL before it could checkpoint; on a volume with less free space than
+    that the purge died with the disk full (#906). Every path that removes
+    detail rows must commit per batch — including the run delete, whose
+    cascade would otherwise carry them all."""
+    from teamarr.database import stats
+
+    monkeypatch.setattr(stats, "_DETAIL_DELETE_BATCH", 4)
+    run = _insert_run(db_conn, days_ago=40)
+    _insert_details(db_conn, run, days_ago=40, n=10)
+    db_conn.commit()
+
+    largest = 0
+    statements: list[str] = []
+    db_conn.set_trace_callback(statements.append)
+    before = db_conn.total_changes
+    if purge == "details":
+        assert stats.cleanup_old_run_details(db_conn, days=7) == 20
+    elif purge == "runs":
+        assert stats.cleanup_old_runs(db_conn, days=30) == 1
+    else:
+        assert stats.clear_all_runs(db_conn) == 1
+    db_conn.set_trace_callback(None)
+
+    # Walk the statement log: no span between COMMITs deletes more than a batch.
+    pending = 0
+    for sql in statements:
+        if sql.startswith("DELETE FROM epg_"):
+            pending += 1
+            largest = max(largest, pending)
+        elif sql.startswith("COMMIT"):
+            pending = 0
+    assert largest == 1, "two detail DELETEs shared a transaction"
+    assert sum(s.startswith("DELETE FROM epg_") for s in statements) >= 6  # 10 rows / 4, x2
+    assert db_conn.total_changes - before >= 20
+    assert _counts(db_conn)[1:] == (0, 0)
+    assert not db_conn.in_transaction
+
+
 def test_settings_defaults_and_round_trip(db_conn):
     from teamarr.database.channels import get_reconciliation_settings
     from teamarr.database.settings import update_reconciliation_settings
@@ -161,6 +215,24 @@ def test_compact_shrinks_file_after_prune(db_path, db_conn):
     assert state["running"] is False
     assert state["after_bytes"] < before
     assert get_database_status(db_path)["reclaimable_bytes"] == 0
+
+
+def test_compact_refuses_when_volume_is_too_full(db_path, monkeypatch):
+    """VACUUM needs the live size free; failing halfway holds generation out
+    for nothing, so refuse up front and leave the lock alone (#906)."""
+    from teamarr.consumers.generation import _generation_lock
+    from teamarr.database import maintenance
+
+    monkeypatch.setattr(maintenance, "_free_disk_bytes", lambda path: 1024)
+
+    with pytest.raises(RuntimeError, match="Not enough free disk space"):
+        maintenance.compact_database(db_path, wait=True)
+    assert _generation_lock.acquire(blocking=False)
+    _generation_lock.release()
+
+    status = maintenance.get_database_status(db_path)
+    assert status["free_disk_bytes"] == 1024
+    assert 0 < status["live_bytes"] <= status["file_bytes"]
 
 
 def test_compact_refuses_during_generation(db_path):
