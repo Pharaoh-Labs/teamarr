@@ -62,6 +62,31 @@ def _missing_group_evidence(
     return any(kw.label == current_keyword and kw.uses_m3u_group for kw in keywords)
 
 
+def _pick_target(siblings: Any, current: Any, keyword: str | None) -> Any | None:
+    """The event's channel for ``keyword``, among every channel of that event.
+
+    Several can qualify — feed separation gives an event a HOME and an AWAY
+    channel per keyword, and 'separate' mode one per stream — so prefer the
+    channel the stream is already on (no move), then one on the same feed,
+    then one from the same event group, then the oldest. The last two only
+    break ties; they keep the choice the group-scoped lookup used to make
+    whenever it worked.
+    """
+    matches = [ch for ch in siblings if (ch.exception_keyword or None) == keyword]
+    if not matches:
+        return None
+    feed = getattr(current, "feed_team_id", None) or None
+    return min(
+        matches,
+        key=lambda ch: (
+            ch.id != current.id,
+            (getattr(ch, "feed_team_id", None) or None) != feed,
+            ch.event_epg_group_id != current.event_epg_group_id,
+            ch.id,
+        ),
+    )
+
+
 class KeywordEnforcer:
     """Enforces correct stream placement based on exception keywords.
 
@@ -134,15 +159,15 @@ class KeywordEnforcer:
                 # Get all active channels
                 channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
 
-                # Build lookup: (group_id, event_id, provider) → channels by keyword
-                channel_lookup: dict[tuple, dict[str | None, Any]] = {}
+                # An event's channels, whichever event group created each one.
+                # Channel identity is event-scoped (find_existing_channel), so
+                # the lookup has to be too: keyed on the group as well, a
+                # stream on a main channel made by one group could not see the
+                # keyword channel made by another, resolved its target to the
+                # channel it was already on, and stayed on both (#929).
+                channel_lookup: dict[tuple, list[Any]] = {}
                 for ch in channels:
-                    key = (ch.event_epg_group_id, ch.event_id, ch.event_provider)
-                    if key not in channel_lookup:
-                        channel_lookup[key] = {}
-                    # Use None as key for main channel (no keyword)
-                    kw = ch.exception_keyword if ch.exception_keyword else None
-                    channel_lookup[key][kw] = ch
+                    channel_lookup.setdefault((ch.event_id, ch.event_provider), []).append(ch)
 
                 # Check each channel's streams
                 for channel in channels:
@@ -216,18 +241,24 @@ class KeywordEnforcer:
                             continue
 
                         # Find target channel
-                        key = (channel.event_epg_group_id, channel.event_id, channel.event_provider)
-                        target_channel = None
+                        siblings = channel_lookup.get(
+                            (channel.event_id, channel.event_provider), ()
+                        )
+                        target_channel = _pick_target(siblings, channel, expected_keyword)
 
-                        if key in channel_lookup:
-                            target_channel = channel_lookup[key].get(expected_keyword)
-
-                            # Fallback to main if keyword channel doesn't exist
-                            if not target_channel and expected_keyword:
-                                target_channel = channel_lookup[key].get(None)
+                        # Fallback to main if keyword channel doesn't exist
+                        if not target_channel and expected_keyword:
+                            target_channel = _pick_target(siblings, channel, None)
 
                         if not target_channel:
                             # Can't move - target doesn't exist
+                            logger.warning(
+                                "[KEYWORD] No target channel for keyword '%s': stream '%s' "
+                                "stays on '%s'",
+                                expected_keyword,
+                                stream_name,
+                                channel.channel_name,
+                            )
                             result.errors.append(
                                 {
                                     "stream": stream_name,
@@ -324,11 +355,12 @@ class KeywordEnforcer:
             logger.exception("[KEYWORD_ERROR] %s", e)
             result.errors.append({"error": str(e)})
 
-        if result.moved_count > 0:
+        if result.moved_count > 0 or result.errors:
             logger.info(
-                "[KEYWORD] Moved %d streams, %d correct",
+                "[KEYWORD] Moved %d streams, %d correct, %d error(s)",
                 result.moved_count,
                 result.streams_correct,
+                len(result.errors),
             )
 
         return result
