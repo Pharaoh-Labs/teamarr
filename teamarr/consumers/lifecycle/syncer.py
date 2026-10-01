@@ -584,6 +584,8 @@ class ChannelSyncer(_LifecycleHost):
         """Associate EPG data with managed channels after EPG refresh.
 
         Looks up EPGData by tvg_id and calls set_channel_epg to link them.
+        This host-owned association intentionally covers both core and
+        plugin-owned channels; it does not change plugin identity or ordering.
 
         Args:
             epg_source_id: Optional EPG source ID (uses default from settings if not provided)

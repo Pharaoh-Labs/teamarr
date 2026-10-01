@@ -440,10 +440,10 @@ def get_managed_channel(channel_id: int):
         event_epg_group_id=channel.event_epg_group_id,
         event_id=channel.event_id,
         event_provider=channel.event_provider,
-        plugin_id=channel.plugin_id,
-        plugin_logical_key=channel.plugin_logical_key,
-        plugin_adoption_key=channel.plugin_adoption_key,
-        plugin_plan_generation=channel.plugin_plan_generation,
+        plugin_id=getattr(channel, "plugin_id", None),
+        plugin_logical_key=getattr(channel, "plugin_logical_key", None),
+        plugin_adoption_key=getattr(channel, "plugin_adoption_key", None),
+        plugin_plan_generation=getattr(channel, "plugin_plan_generation", None),
         tvg_id=channel.tvg_id,
         channel_name=channel.channel_name,
         channel_number=str(channel.channel_number) if channel.channel_number is not None else None,
@@ -682,7 +682,7 @@ def get_managed_channel_streams(channel_id: int):
                 s.stream_stats_updated_at is not None
                 and (
                     datetime.now(UTC)
-                    - datetime.fromisoformat(  # noqa: UP017
+                    - datetime.fromisoformat(
                         str(s.stream_stats_updated_at).replace("Z", "+00:00")
                     )
                 ).total_seconds()

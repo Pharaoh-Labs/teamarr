@@ -28,7 +28,11 @@ def _has_column(conn: Connection, table: str, column: str) -> bool:
 
 
 def _core_owner_clause(conn: Connection, prefix: str = "") -> str:
-    """Compatibility with legacy/minimal tables used by migration fixtures."""
+    """Compatibility with legacy/minimal tables used by migration fixtures.
+
+    Do not use the process-global _has_column cache: it can retain the schema
+    of a different connection (or a database before reconciliation).
+    """
     columns = {row[1] for row in conn.execute("PRAGMA table_info(managed_channels)")}
     return f" AND {prefix}plugin_id IS NULL" if "plugin_id" in columns else ""
 
@@ -271,7 +275,8 @@ def adopt_plugin_channel(
 
     The host supplies a Dispatcharr rename operation. If the channel has an
     external ID, that operation must succeed *before* its local identity/name
-    changes. Plan application and cross-system retry belong to Packet 8C.
+    changes. The plan applier owns retry/compensation if the local UPDATE
+    subsequently fails; this primitive cannot roll back the remote rename.
     """
     if not all((plugin_id, logical_key, adoption_key, channel_name, tvg_id)):
         raise ValueError("plugin adoption requires non-empty identities and channel details")

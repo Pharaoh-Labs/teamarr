@@ -2788,6 +2788,8 @@ def _migrate_v97_plugin_channel_identity(conn: sqlite3.Connection) -> None:
     """)
 
 
+# Historical helper from #862: exported and tested, but never registered in
+# _run_migrations. Do not confuse it with the v97 plugin-index migration above.
 def _migrate_v97_league_feed_separation(conn: sqlite3.Connection) -> None:
     """Add the nullable per-league feed separation override (#862)."""
     _add_column_if_not_exists(
