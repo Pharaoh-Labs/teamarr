@@ -536,6 +536,26 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
 # =============================================================================
 
 SPORT_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
+    # FloSports glues its vertical onto the brand ("flovolleyball: 2026
+    # Maryville College vs Rhodes College - Women's"), so none of the sport
+    # words below — all anchored on \b — can see it, and the stream went
+    # unhinted onto whatever game the two schools played that day: 4 `flofc:`
+    # soccer streams sat on college-football games (#923). First, so the
+    # vertical outranks a stray sport word later in the title. `flolive` names
+    # no sport and is deliberately absent; `floracing` is too — a "Racing"
+    # hint reroutes the stream to the racing matcher.
+    (r"\bflohockey\b", "Hockey"),
+    (r"\bflofc\b", "Soccer"),
+    (r"\bflofootball\b", "Football"),
+    (r"\bflohoops\b", "Basketball"),
+    (r"\bflovolleyball\b", "Volleyball"),
+    (r"\bflobaseball\b", "Baseball"),
+    (r"\bflosoftball\b", "Softball"),
+    (r"\bflorugby\b", "Rugby"),
+    (r"\bflowrestling\b", "Wrestling"),
+    (r"\bfloswimming\b", "Swimming"),
+    (r"\bflotrack\b", "Track and Field"),
+    (r"\bflogymnastics\b", "Gymnastics"),
     # Hockey variants - must come before generic patterns
     (r"\b(ice\s+)?hockey\b", "Hockey"),
     (r"\bnhl\b", "Hockey"),
