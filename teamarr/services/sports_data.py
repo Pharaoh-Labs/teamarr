@@ -717,6 +717,7 @@ class SportsDataService:
         # they must overlay from the fresh fetch (the scoreboard-parsed original
         # has them empty). The summary call is already made here; zero extra cost.
         "game_preview",
+        "series_summary",
         *GENERATED_PREVIEW_FIELDS,
     )
 

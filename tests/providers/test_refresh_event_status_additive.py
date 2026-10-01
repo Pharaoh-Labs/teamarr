@@ -149,6 +149,35 @@ class TestRefreshIsAdditive:
         # Empty broadcasts from summary shouldn't wipe the original list.
         assert result.broadcasts == ["FOX"]
 
+    def test_series_summary_from_summary_survives_refresh_without_losing_identity(self):
+        original = _make_event(season_type="postseason")
+        fresh = _make_event(
+            season_type=None,
+            series_summary="TB leads series 2-1",
+        )
+        service = SportsDataService(providers=[])
+        with (
+            patch.object(service, "get_event", return_value=fresh),
+            patch.object(service._cache, "delete"),
+        ):
+            result = service.refresh_event_status(original)
+
+        assert result.series_summary == "TB leads series 2-1"
+        assert result.season_type == "postseason"
+        assert result.home_team.short_name == "Rays"
+
+    def test_missing_series_summary_does_not_erase_existing_one(self):
+        original = _make_event(series_summary="Series tied 1-1")
+        fresh = _make_event(series_summary="")
+        service = SportsDataService(providers=[])
+        with (
+            patch.object(service, "get_event", return_value=fresh),
+            patch.object(service._cache, "delete"),
+        ):
+            result = service.refresh_event_status(original)
+
+        assert result.series_summary == "Series tied 1-1"
+
     def test_zero_score_overlays_from_fresh(self):
         """#680: a shutout side's 0 is a real score, not a missing value.
 

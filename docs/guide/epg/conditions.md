@@ -41,14 +41,22 @@ A set of condition rows can be saved as a reusable **preset** from the Condition
 
 Overrides are selected **per field, independently**: for each field (title, subtitle, artwork URL, channel logo URL, and description), the highest-priority matching row *that defines that field* wins. A row that only sets an artwork override leaves the description, title, and subtitle to lower-priority rows (and vice versa), and any field with no matching override falls back to the template's default value. Unlike descriptions, ties at the same priority resolve **deterministically** (first row wins) for titles, subtitles, artwork, and channel logos, so guide assets and titles don't change between EPG runs.
 
-**Example** — a playoff row that updates the guide title, description, and adds a Game Thumbs badge:
+**Example** — a playoff row that updates the guide title, description, and adds
+a Game Thumbs badge to both programme art and the event channel tile:
 ```json
 {"condition": "is_playoff", "priority": 15,
  "title": "{game_event_note}: {away_team} at {home_team}",
  "subtitle": "{series_summary}",
- "program_art_url": "{league_code}/{away_team|pascal}/{home_team|pascal}/thumb.png?badge={series_game|url}",
+ "program_art_url": "{league_code}/{away_team|pascal}/{home_team|pascal}/thumb.png?aspect=16-9&badge={series_game|url}",
+ "event_channel_logo_url": "{league_code}/{away_team|pascal}/{home_team|pascal}/thumb.png?aspect=16-9&badge={series_game|url}",
  "template": "{series_summary}. {away_team} take on {home_team} in {series_game}."}
 ```
+
+`GAME 2` is a custom badge in Game Thumbs: self-host with
+`ALLOW_CUSTOM_BADGES=true` or the image appears without the overlay. See the
+[setup and image-sink guidance](game-thumbs#playoff-game-badges-opt-in). The
+`event_channel_logo_url` override applies to event templates, not persistent
+team-channel logos.
 
 ## Priority System
 
