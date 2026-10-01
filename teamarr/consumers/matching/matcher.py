@@ -579,6 +579,15 @@ class StreamMatcher:
         else:
             self._prefetched_events = None
 
+        # Teach the identity index the batch's schedule before the first
+        # stream is looked up (#912): a cached failure is replayed without ever
+        # reaching the candidate loop that would have taught it, so the lesson
+        # — and the cache invalidation it triggers — has to come first.
+        if self._prefetched_events:
+            self._team_matcher.learn_events(
+                event for events in self._prefetched_events.values() for event in events
+            )
+
         result = BatchMatchResult(
             target_date=target_date,
             leagues_searched=self._search_leagues,

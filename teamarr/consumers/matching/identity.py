@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -274,60 +275,8 @@ class TeamIdentityIndex:
         self._known_leagues: set[str] = set()
 
         for name, short_name, abbrev, league, sport in rows:
-            identity = TeamIdentity(name=name, league=league, sport=sport)
             self._known_leagues.add(league)
-            name_norm = normalize_text(name)
-            short_norm = normalize_text(short_name) if short_name else ""
-            for form in {name_norm, short_norm}:
-                if not form:
-                    continue
-                self._identities.append(identity)
-                self._surfaces.append(form)
-            if name_norm:
-                self._exact.setdefault(name_norm, []).append(identity)
-            if short_norm and short_norm != name_norm:
-                self._partial.setdefault(short_norm, []).append(identity)
-                # "Milwaukee Brewers" / "Brewers" -> "milwaukee". Only when the
-                # short name is the tail of the full name, so a nickname that is
-                # not a suffix ("D-backs") does not manufacture a bogus prefix.
-                name_tokens = name_norm.split()
-                short_tokens = short_norm.split()
-                if len(short_tokens) < len(name_tokens) and (
-                    name_tokens[-len(short_tokens) :] == short_tokens
-                ):
-                    prefix = " ".join(name_tokens[: -len(short_tokens)])
-                    self._partial.setdefault(prefix, []).append(identity)
-            # "Fairmont State Falcons" -> "fairmont state" (#650). A leading run
-            # of a full name is a partial reading of it, and for college rows
-            # the trailing run is the mascot while the leading run is exactly
-            # what broadcasters write.
-            #
-            # The short-name prefix rule above cannot supply these keys: ESPN
-            # abbreviates the SCHOOL for college ("Fairmont State Falcons" ->
-            # "Fairmont St", "Eastern Washington Eagles" -> "E Washington"), so
-            # the short name is never a suffix of the full name and the rule
-            # never fires. That left the school-only form with no route to the
-            # football team at all, while NCAA soccer -- where ESPN publishes no
-            # mascots, so the full name IS the bare school -- held it as an
-            # *exact* identity. One such side narrowed the fixture to
-            # usa.ncaa.w.1 and vetoed college-football for 20 of 73 games.
-            #
-            # Every prefix, not just the mascot-dropped one, because mascots run
-            # to two words as often as one ("Central Connecticut Blue Devils").
-            # Stop at two tokens: a bare first word is the city/school reading,
-            # which the short_name rule already owns, and registering it here
-            # would enter every "north"/"saint" against thousands of teams.
-            #
-            # Safe by construction: partial readings only widen an identity set,
-            # and the gate is veto-only, so this can withdraw a veto but never
-            # manufacture a match.
-            full_tokens = name_norm.split()
-            for cut in range(len(full_tokens) - 1, 1, -1):
-                prefix = " ".join(full_tokens[:cut])
-                if prefix != short_norm:
-                    self._partial.setdefault(prefix, []).append(identity)
-            if abbrev:
-                self._by_abbrev.setdefault(normalize_text(abbrev), []).append(identity)
+            self._register(name, short_name, abbrev, league, sport)
 
         # Alias keys, normalized once so lookup and store agree. These carry the
         # forms providers never emit but streams love ("d-backs" -> Arizona,
@@ -339,6 +288,12 @@ class TeamIdentityIndex:
                 self._alias_tokens.append((tuple(key_norm.split()), normalize_text(value)))
 
         self._cache: dict[str, Resolution] = {}
+        # `learn` bookkeeping (#912): what has been taught already, and a
+        # counter `resolve` checks so an answer computed before a lesson is
+        # never stored after it.
+        self._learned: set[tuple[str, str | None, str | None, str | None, str, str]] = set()
+        self._learn_lock = threading.Lock()
+        self._epoch = 0
 
         # Refinement support (#799): which codes each identity answers to, and
         # the span map, built lazily on first use from the surface tables above.
@@ -357,6 +312,151 @@ class TeamIdentityIndex:
             tokens = normalize_text(label).split() if label else []
             if tokens:
                 self._labels.add(_canon_span(tokens))
+
+    def _register(
+        self,
+        name: str,
+        short_name: str | None,
+        abbrev: str | None,
+        league: str,
+        sport: str,
+    ) -> None:
+        """Enter one team's surface forms into the lookup tables."""
+        identity = TeamIdentity(name=name, league=league, sport=sport)
+        name_norm = normalize_text(name)
+        short_norm = normalize_text(short_name) if short_name else ""
+        for form in {name_norm, short_norm}:
+            if not form:
+                continue
+            self._identities.append(identity)
+            self._surfaces.append(form)
+        if name_norm:
+            self._exact.setdefault(name_norm, []).append(identity)
+        if short_norm and short_norm != name_norm:
+            self._partial.setdefault(short_norm, []).append(identity)
+            # "Milwaukee Brewers" / "Brewers" -> "milwaukee". Only when the
+            # short name is the tail of the full name, so a nickname that is
+            # not a suffix ("D-backs") does not manufacture a bogus prefix.
+            name_tokens = name_norm.split()
+            short_tokens = short_norm.split()
+            if len(short_tokens) < len(name_tokens) and (
+                name_tokens[-len(short_tokens) :] == short_tokens
+            ):
+                prefix = " ".join(name_tokens[: -len(short_tokens)])
+                self._partial.setdefault(prefix, []).append(identity)
+        # "Fairmont State Falcons" -> "fairmont state" (#650). A leading run
+        # of a full name is a partial reading of it, and for college rows
+        # the trailing run is the mascot while the leading run is exactly
+        # what broadcasters write.
+        #
+        # The short-name prefix rule above cannot supply these keys: ESPN
+        # abbreviates the SCHOOL for college ("Fairmont State Falcons" ->
+        # "Fairmont St", "Eastern Washington Eagles" -> "E Washington"), so
+        # the short name is never a suffix of the full name and the rule
+        # never fires. That left the school-only form with no route to the
+        # football team at all, while NCAA soccer -- where ESPN publishes no
+        # mascots, so the full name IS the bare school -- held it as an
+        # *exact* identity. One such side narrowed the fixture to
+        # usa.ncaa.w.1 and vetoed college-football for 20 of 73 games.
+        #
+        # Every prefix, not just the mascot-dropped one, because mascots run
+        # to two words as often as one ("Central Connecticut Blue Devils").
+        # Stop at two tokens: a bare first word is the city/school reading,
+        # which the short_name rule already owns, and registering it here
+        # would enter every "north"/"saint" against thousands of teams.
+        #
+        # Safe by construction: partial readings only widen an identity set,
+        # and the gate is veto-only, so this can withdraw a veto but never
+        # manufacture a match.
+        full_tokens = name_norm.split()
+        for cut in range(len(full_tokens) - 1, 1, -1):
+            prefix = " ".join(full_tokens[:cut])
+            if prefix != short_norm:
+                self._partial.setdefault(prefix, []).append(identity)
+        if abbrev:
+            self._by_abbrev.setdefault(normalize_text(abbrev), []).append(identity)
+
+    def learn(
+        self, teams: Iterable[tuple[str, str | None, str | None, str | None, str, str]]
+    ) -> list[tuple[str, str | None, str | None, str | None, str, str]]:
+        """Teach the index teams drawn from real events (#912).
+
+        ``teams`` are ``(name, short_name, abbrev, location, league, sport)``
+        for the competitors of events the matcher is holding. team_cache is a
+        snapshot of each provider's per-league team LIST, and that list is not
+        the truth about who plays where. ESPN's lags new programs — Vanderbilt
+        volleyball, UT Rio Grande Valley football and Delaware women's hockey
+        all had real games and no row — and its names move under us: 568 of
+        688 NCAA soccer rows gained a mascot in a month, which stranded every
+        bare school whose short name is a nickname ("Massachusetts" survived
+        only as the hockey row's short name, so the soccer game it named was
+        vetoed as hockey). An event is better evidence than either: a team
+        with a game in a league plays in that league, under the names the
+        event gives it.
+
+        That is this module's own premise taken one step further — "the
+        candidate event's own existence is the schedule evidence". Measured on
+        1,177 real ESPN events against a same-day cache: 21 vetoed from their
+        own league before, 0 after, crosstalk rejection unchanged (322/322).
+
+        ``location`` is the provider's bare school or city ("Massachusetts",
+        "Pittsburgh"): what event titles and most streams write, neither the
+        full name nor always the short name ("UMass", "Pitt"), and as a single
+        token below the two-token floor of the #650 prefix rule. It enters as
+        a partial reading, like every other bare label.
+
+        Veto-safe for the same reason every partial reading is: a taught fact
+        is true and only ever adds identities. It deliberately does NOT make a
+        league "known" (`knows_league`) — a league the cache never seeded holds
+        only the handful of teams its events happened to carry, and judging
+        streams against that is the #619 failure.
+
+        Returns the teams that changed the index. Calling it with the same
+        teams every run is a no-op, and it is safe while other threads resolve.
+        """
+        changed = []
+        with self._learn_lock:
+            for team in teams:
+                if team in self._learned:
+                    continue
+                self._learned.add(team)
+                name, short_name, abbrev, location, league, sport = team
+                name_norm = normalize_text(name) if name else ""
+                if not name_norm or not league:
+                    continue
+                identity = TeamIdentity(name=name, league=league, sport=sport)
+                short_norm = normalize_text(short_name) if short_name else ""
+                code = normalize_text(abbrev) if abbrev else ""
+                loc_norm = normalize_text(location) if location else ""
+                if loc_norm == name_norm:
+                    loc_norm = ""  # already the exact reading
+
+                new_names = identity not in self._exact.get(name_norm, ()) or bool(
+                    short_norm
+                    and short_norm != name_norm
+                    and identity not in self._partial.get(short_norm, ())
+                )
+                new_code = bool(code) and identity not in self._by_abbrev.get(code, ())
+                new_location = bool(loc_norm) and identity not in self._partial.get(loc_norm, ())
+                if not (new_names or new_code or new_location):
+                    continue
+                if new_names:
+                    # Re-entering a form the team already holds only repeats a
+                    # list entry, and `resolve` de-duplicates what it returns.
+                    self._register(name, short_name, None, league, sport)
+                if new_code:
+                    self._by_abbrev.setdefault(code, []).append(identity)
+                    self._abbrevs_of.setdefault(identity, set()).add(code)
+                if new_location:
+                    self._partial.setdefault(loc_norm, []).append(identity)
+                changed.append(team)
+            if changed:
+                # Bump before clearing, so a resolve already in flight cannot
+                # park its pre-lesson answer in the fresh memo.
+                self._epoch += 1
+                self._cache.clear()
+                self._span_map = None
+        return changed
 
     @classmethod
     def from_db(cls, conn: Connection) -> TeamIdentityIndex:
@@ -391,8 +491,10 @@ class TeamIdentityIndex:
             # a rebuilt entry is a few string ops.
             if len(self._cache) >= _RESOLVE_CACHE_MAX:
                 self._cache.clear()
+            epoch = self._epoch
             hit = self._resolve_uncached(norm)
-            self._cache[norm] = hit
+            if epoch == self._epoch:
+                self._cache[norm] = hit
         return hit
 
     def _alias_variants(self, norm: str) -> list[str]:
