@@ -10,7 +10,7 @@ import logging
 import os
 import re
 import threading
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
@@ -223,6 +223,30 @@ def reset_identity_index_cache() -> None:
     """
     global _identity_index_cache
     _identity_index_cache = None
+
+
+# Teams this process has already taught an identity index (#912). The index is
+# rebuilt every TTL window and re-taught the same schedule each time; only a
+# team never taught before is news, and only news invalidates cached verdicts.
+_taught_teams: set[tuple[str, str | None, str | None, str | None, str, str]] = set()
+_taught_teams_lock = threading.Lock()
+
+_PLACEHOLDER_TEAM_NAMES = frozenset({"tbd", "tba"})
+
+
+def _is_placeholder_team(team: Team) -> bool:
+    """A bracket slot, not a team: "TBD", or ESPN's "Padres/Cubs".
+
+    ESPN gives undecided playoff slots a negative id and a location of "TBD".
+    Teaching one would make "TBD vs TBD" a known fixture in every league with
+    an unplayed round.
+    """
+    return (
+        not team.name
+        or str(team.id).startswith("-")
+        or team.name.strip().lower() in _PLACEHOLDER_TEAM_NAMES
+        or (team.location or "").strip().lower() in _PLACEHOLDER_TEAM_NAMES
+    )
 
 
 @lru_cache(maxsize=32768)
@@ -538,6 +562,11 @@ class TeamMatcher:
         # "tried and unavailable".
         self._identity_index: TeamIdentityIndex | None = None
         self._identity_loaded = False
+        # Events whose teams this matcher has already taught the index (#912),
+        # so the per-stream call in the candidate loop costs a set lookup per
+        # event, and nothing at all for a shared candidate tuple seen before.
+        self._taught_event_keys: set[tuple[str, str]] = set()
+        self._taught_candidates: list[tuple[tuple[str, Event], ...]] = []
 
     def reload_aliases(self) -> None:
         """Reload aliases from database.
@@ -1168,6 +1197,7 @@ class TeamMatcher:
         if self._candidates_source is not prefetched_events:
             self._candidates_source = prefetched_events
             self._candidates_memo = {}
+            self._taught_candidates = []
             self._in_window_memo = {}
             self._token_index_memo = {}
             self._league_counts_memo = {}
@@ -1441,6 +1471,9 @@ class TeamMatcher:
         # Strip provider junk from both sides before anything reads them (#799).
         # Here, in the one loop, rather than at the entry points: #660 is the
         # standing lesson that a step added to a wrapper lands on one path.
+        # ...and before even that, let the index learn from the schedule in
+        # hand (#912): refinement and the fixture gate both read it.
+        self._teach_candidates(events)
         self._refine_sides(ctx)
 
         team1_normalized = normalize_for_matching(ctx.team1) if ctx.team1 else None
@@ -2460,6 +2493,83 @@ class TeamMatcher:
 
         self._identity_index = index
         return index
+
+    def _teach_candidates(self, events: Sequence[tuple[str, Event]]) -> None:
+        """Teach the identity index the teams of these candidates, once (#912).
+
+        The shared candidate tuples are memoized per batch, so identity tells
+        us a tuple was already taught and every stream after the first pays
+        nothing. Per-stream lists (the single-league fallback fetch) are new
+        objects each time and fall through to `learn_events`, which skips
+        events it has seen.
+        """
+        if isinstance(events, tuple):
+            if any(events is seen for seen in self._taught_candidates):
+                return
+            self._taught_candidates.append(events)
+        self.learn_events(event for _, event in events)
+
+    def learn_events(self, events: Iterable[Event]) -> None:
+        """Enter the teams of real events into the identity index (#912).
+
+        The fixture gate asks "which leagues do both sides play in?" of
+        team_cache, and team_cache is a provider's team LIST — incomplete (new
+        programs have games before they have a row) and renamed under us. The
+        events being matched against are the better evidence, so each one's
+        two teams are taught to the index under that event's league before
+        the gate reads it. See `TeamIdentityIndex.learn` for the measurements.
+
+        Called from the one candidate loop (#660) so every source type gets
+        it, and once at batch start by StreamMatcher so the lesson lands
+        before the negative cache is consulted for the batch's first stream.
+
+        When a team is taught for the first time in this process, cached
+        failures are dropped (#757): they were reached without that team, and
+        a cached failure short-circuits before the logic that would now pass
+        it. All of them, not just FIXTURE_NOT_IN_LEAGUE — side refinement
+        (#799) reads the same index, so a taught surface also turns a
+        NO_EVENT_FOUND into a match (3 of 14 recovered streams in the replay
+        that measured this were exactly that, and clearing by reason left
+        them failing). Re-teaching the same schedule after an index rebuild is
+        not news and clears nothing, so the negative cache keeps its value.
+        """
+        index = self._get_identity_index()
+        if index is None:
+            return
+        teams: set[tuple[str, str | None, str | None, str | None, str, str]] = set()
+        for event in events:
+            key = (event.league, event.id)
+            if key in self._taught_event_keys:
+                continue
+            self._taught_event_keys.add(key)
+            for team in (event.home_team, event.away_team):
+                if team is None or _is_placeholder_team(team):
+                    continue
+                teams.add(
+                    (
+                        team.name,
+                        team.short_name or None,
+                        team.abbreviation or None,
+                        team.location,
+                        event.league,
+                        team.sport or event.sport,
+                    )
+                )
+        if not teams:
+            return
+        changed = index.learn(teams)
+        if not changed:
+            return
+        with _taught_teams_lock:
+            fresh = [team for team in changed if team not in _taught_teams]
+            _taught_teams.update(changed)
+        logger.debug(
+            "[FIXTURE] Identity index learned %d team(s) from the schedule (%d new)",
+            len(changed),
+            len(fresh),
+        )
+        if fresh and self._cache is not None:
+            self._cache.clear_failed()
 
     def _refine_sides(self, ctx: MatchContext) -> None:
         """Strip provider junk from both extracted sides before anything reads them (#799).

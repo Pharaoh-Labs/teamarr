@@ -973,6 +973,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             sport=sport,
             logo_url=self._extract_logo(team_data),
             color=team_data.get("color"),
+            location=team_data.get("location") or None,
         )
 
     def _parse_status(self, status_data: dict) -> EventStatus:

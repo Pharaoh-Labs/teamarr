@@ -1,0 +1,9283 @@
+{
+ "captured": "2026-09-30",
+ "teams": [
+  [
+   "AD Cultura Correlha",
+   "Correlha",
+   "COR",
+   "por.taca.portugal",
+   "soccer"
+  ],
+  [
+   "App State Mountaineers",
+   "App State",
+   "APP",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "App State Mountaineers",
+   "App State",
+   "APP",
+   "college-football",
+   "football"
+  ],
+  [
+   "App State Mountaineers",
+   "App State",
+   "APP",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "App State Mountaineers",
+   "App State",
+   "APP",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "App State Mountaineers",
+   "App State",
+   "APP",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "App State Mountaineers",
+   "App State",
+   "APP",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "App State Mountaineers",
+   "App State",
+   "APP",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Athletico Paranaense",
+   "CAP",
+   "CAP",
+   "bra.camp.paranaense",
+   "soccer"
+  ],
+  [
+   "Athletico-PR",
+   "Athletico-PR",
+   "CAP",
+   "bra.1",
+   "soccer"
+  ],
+  [
+   "Athletico-PR",
+   "Athletico-PR",
+   "CAP",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Athletico-PR",
+   "Athletico-PR",
+   "CAP",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Atlético Coruña",
+   "Atl. Coruña",
+   "COR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Bahamas",
+   "Bahamas",
+   "BAH",
+   "concacaf.nations.league",
+   "soccer"
+  ],
+  [
+   "Bahamas",
+   "Bahamas",
+   "BAH",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "Bahamas",
+   "Bahamas",
+   "BAH",
+   "fifa.worldq.concacaf",
+   "soccer"
+  ],
+  [
+   "Bahamas Basketball",
+   "Bahamas Basketball",
+   "BAH",
+   "fiba",
+   "basketball"
+  ],
+  [
+   "Bahia",
+   "BAH",
+   "BAH",
+   "bra.camp.baiano",
+   "soccer"
+  ],
+  [
+   "Bahia",
+   "Bahia",
+   "BAH",
+   "bra.1",
+   "soccer"
+  ],
+  [
+   "Bahia",
+   "Bahia",
+   "BAH",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Bahia",
+   "Bahia",
+   "BAH",
+   "conmebol.libertadores",
+   "soccer"
+  ],
+  [
+   "Bahia de Feira",
+   "Bahia de Feira",
+   "BAH",
+   "bra.camp.baiano",
+   "soccer"
+  ],
+  [
+   "Bahrain Basketball",
+   "Bahrain Basketball",
+   "BAH",
+   "fiba",
+   "basketball"
+  ],
+  [
+   "Bordeaux",
+   "Bordeaux",
+   "BOR",
+   "fra.coupe_de_france",
+   "soccer"
+  ],
+  [
+   "Bordeaux Begles",
+   "Bordeaux Begles",
+   "UNI",
+   "ercc",
+   "rugby"
+  ],
+  [
+   "Bordeaux Begles",
+   "Bordeaux Begles",
+   "UNI",
+   "top14",
+   "rugby"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Bowling Green Falcons",
+   "Bowling Green",
+   "BGSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Bowling Green Hot Rods",
+   "Hot Rods",
+   "BG",
+   "milb-high-a",
+   "baseball"
+  ],
+  [
+   "Bowling Green KY",
+   "Bowling Green KY",
+   "KY",
+   "llb",
+   "baseball"
+  ],
+  [
+   "CA Batna",
+   "Batna",
+   "BAT",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "CA Independiente Siguatepeque",
+   "CA Indep",
+   "INDS",
+   "hon.1",
+   "soccer"
+  ],
+  [
+   "Cal Lutheran Kingsmen",
+   "Cal Lutheran",
+   "CLU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "college-football",
+   "football"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal Poly Mustangs",
+   "Cal Poly",
+   "CP",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Cal Poly Pomona Broncos",
+   "Cal Poly Pom",
+   "CPPM",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cal State Bakersfield Roadrunners",
+   "Bakersfield",
+   "CSUB",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cal State Bakersfield Roadrunners",
+   "Bakersfield",
+   "CSUB",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Cal State Bakersfield Roadrunners",
+   "Bakersfield",
+   "CSUB",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal State Bakersfield Roadrunners",
+   "Bakersfield",
+   "CSUB",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Cal State Bakersfield Roadrunners",
+   "Bakersfield",
+   "CSUB",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Cal State Bakersfield Roadrunners",
+   "Bakersfield",
+   "CSUB",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal State Bakersfield Roadrunners",
+   "Bakersfield",
+   "CSUB",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Cal State Fullerton Titans",
+   "Fullerton",
+   "CSUF",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cal State Fullerton Titans",
+   "Fullerton",
+   "CSUF",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Cal State Fullerton Titans",
+   "Fullerton",
+   "CSUF",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal State Fullerton Titans",
+   "Fullerton",
+   "CSUF",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Cal State Fullerton Titans",
+   "Fullerton",
+   "CSUF",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Cal State Fullerton Titans",
+   "Fullerton",
+   "CSUF",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal State Fullerton Titans",
+   "Fullerton",
+   "CSUF",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Cal State Los Angeles Golden Eagles",
+   "Cal State LA",
+   "CSLA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cal State Northridge Matadors",
+   "CSU Northridge",
+   "CSUN",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "California (PA) Vulcans",
+   "Cal (PA)",
+   "CAPA",
+   "college-football",
+   "football"
+  ],
+  [
+   "California Baptist Lancers",
+   "CA Baptist",
+   "CBU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "California Baptist Lancers",
+   "CA Baptist",
+   "CBU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "California Baptist Lancers",
+   "CA Baptist",
+   "CBU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "California Baptist Lancers",
+   "CA Baptist",
+   "CBU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "California Baptist Lancers",
+   "CA Baptist",
+   "CBU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "California Baptist Lancers",
+   "CA Baptist",
+   "CBU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "California Baptist Lancers",
+   "CA Baptist",
+   "CBU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "college-football",
+   "football"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "California Golden Bears",
+   "California",
+   "CAL",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "California Legion",
+   "California Legion",
+   "CAL",
+   "mlr",
+   "rugby"
+  ],
+  [
+   "California Redwoods",
+   "Redwoods",
+   "RED",
+   "pll",
+   "lacrosse"
+  ],
+  [
+   "Cape Breton, Eagles",
+   "Eagles",
+   "CAP",
+   "qmjhl",
+   "hockey"
+  ],
+  [
+   "Cape Verde Basketball",
+   "Cape Verde Basketball",
+   "CAP",
+   "fiba",
+   "basketball"
+  ],
+  [
+   "Capital",
+   "Capital",
+   "CAP",
+   "bra.camp.tocantinense",
+   "soccer"
+  ],
+  [
+   "Capital",
+   "Capital",
+   "CAP",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Capital CF",
+   "Capital CF",
+   "CAP",
+   "bra.camp.brasiliense",
+   "soccer"
+  ],
+  [
+   "Capital City Go-Go",
+   "Go-Go",
+   "CAP",
+   "nba-development",
+   "basketball"
+  ],
+  [
+   "Capitão Poço",
+   "Capitão Poço",
+   "CAP",
+   "bra.camp.paraense",
+   "soccer"
+  ],
+  [
+   "Capivariano",
+   "Capivariano",
+   "CAP",
+   "bra.camp.paulista",
+   "soccer"
+  ],
+  [
+   "Capixaba",
+   "Capixaba",
+   "CAP",
+   "bra.camp.capixaba",
+   "soccer"
+  ],
+  [
+   "Club Atlético La Paz",
+   "CA La Paz",
+   "PAZ",
+   "mex.2",
+   "soccer"
+  ],
+  [
+   "Club Deportivo Marathón",
+   "Marathón",
+   "MAR",
+   "concacaf.central.american.cup",
+   "soccer"
+  ],
+  [
+   "Club Deportivo Marathón",
+   "Marathón",
+   "MAR",
+   "hon.1",
+   "soccer"
+  ],
+  [
+   "Colorado Colorado Springs Mountain Lions",
+   "UC Col Springs",
+   "COSP",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Corhsam Town",
+   "Corhsam",
+   "COR",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Coria",
+   "Coria",
+   "COR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Corinthian",
+   "Corinthian",
+   "COR",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Corinthians",
+   "Corinthians",
+   "COR",
+   "bra.1",
+   "soccer"
+  ],
+  [
+   "Corinthians",
+   "Corinthians",
+   "COR",
+   "bra.camp.paulista",
+   "soccer"
+  ],
+  [
+   "Corinthians",
+   "Corinthians",
+   "COR",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Corinthians",
+   "Corinthians",
+   "COR",
+   "bra.supercopa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Corinthians",
+   "Corinthians",
+   "COR",
+   "conmebol.libertadores",
+   "soccer"
+  ],
+  [
+   "Corinthians",
+   "Corinthians",
+   "COR",
+   "fifa.w.champions_cup",
+   "soccer"
+  ],
+  [
+   "Corisabbá",
+   "Corisabbá",
+   "COR",
+   "bra.camp.piauiense",
+   "soccer"
+  ],
+  [
+   "Cornell (IA) Rams",
+   "Cornell (IA)",
+   "CNIA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cornell (IA) Rams",
+   "Cornell (IA)",
+   "CNIA",
+   "college-football",
+   "football"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "college-football",
+   "football"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Cornell Big Red",
+   "Cornell",
+   "COR",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Corumbaense",
+   "Corumbaense",
+   "COR",
+   "bra.camp.sulmatogrossense",
+   "soccer"
+  ],
+  [
+   "Coruxo",
+   "Coruxo",
+   "COR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Cruz Azul Hidalgo",
+   "CA Hidalgo",
+   "CAH",
+   "mex.2",
+   "soccer"
+  ],
+  [
+   "Córdoba",
+   "Córdoba",
+   "COR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Córdoba",
+   "Córdoba",
+   "COR",
+   "esp.2",
+   "soccer"
+  ],
+  [
+   "Delaware Blue Coats",
+   "Blue Coats",
+   "DEL",
+   "nba-development",
+   "basketball"
+  ],
+  [
+   "Delaware Blue Hens",
+   "Delaware",
+   "DEL",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Delaware Blue Hens",
+   "Delaware",
+   "DEL",
+   "college-football",
+   "football"
+  ],
+  [
+   "Delaware Blue Hens",
+   "Delaware",
+   "DEL",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Delaware Blue Hens",
+   "Delaware",
+   "DEL",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Delaware Blue Hens",
+   "Delaware",
+   "DEL",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Delaware Blue Hens",
+   "Delaware",
+   "DEL",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Delaware Fightin' Blue Hens",
+   "Delaware",
+   "DEL",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Delaware Fightin' Blue Hens",
+   "Delaware",
+   "DEL",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Delaware State Hornets",
+   "Delaware St",
+   "DSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Delaware State Hornets",
+   "Delaware St",
+   "DSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Delaware State Hornets",
+   "Delaware St",
+   "DSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Delaware State Hornets",
+   "Delaware St",
+   "DSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Delaware State Hornets",
+   "Delaware St",
+   "DSU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Delaware State Hornets",
+   "Delaware St",
+   "DSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Delaware State Hornets",
+   "Delaware St",
+   "DSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Delaware Valley Aggies",
+   "Del Val",
+   "DVU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Delfín",
+   "Delfín",
+   "DEL",
+   "ecu.1",
+   "soccer"
+  ],
+  [
+   "Delmarva Shorebirds",
+   "Shorebirds",
+   "DEL",
+   "milb-a",
+   "baseball"
+  ],
+  [
+   "Dong Tam Long An",
+   "Long An",
+   "DTLA",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "East",
+   "East",
+   "EAST",
+   "pll",
+   "lacrosse"
+  ],
+  [
+   "East Carolina Pirates",
+   "East Carolina",
+   "ECU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "East Carolina Pirates",
+   "East Carolina",
+   "ECU",
+   "college-football",
+   "football"
+  ],
+  [
+   "East Carolina Pirates",
+   "East Carolina",
+   "ECU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "East Carolina Pirates",
+   "East Carolina",
+   "ECU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "East Carolina Pirates",
+   "East Carolina",
+   "ECU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "East Carolina Pirates",
+   "East Carolina",
+   "ECU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "East Carolina Pirates",
+   "East Carolina",
+   "ECU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "East Central Tigers",
+   "East Central",
+   "ECNU",
+   "college-football",
+   "football"
+  ],
+  [
+   "East Cowes Victoria Athletic",
+   "East Cowes",
+   "ECV",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "East End Lions",
+   "East End",
+   "EEL",
+   "caf.confed",
+   "soccer"
+  ],
+  [
+   "East Fife",
+   "East Fife",
+   "EFIF",
+   "sco.challenge",
+   "soccer"
+  ],
+  [
+   "East Fife",
+   "East Fife",
+   "EFIF",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "East Grinstead Town",
+   "East Grinstead",
+   "EGT",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "East Kilbride",
+   "East Kilbride",
+   "KIL",
+   "sco.challenge",
+   "soccer"
+  ],
+  [
+   "East Kilbride",
+   "East Kilbride",
+   "KIL",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "East Stirlingshire",
+   "E Stirlingshire",
+   "EST",
+   "sco.tennents",
+   "soccer"
+  ],
+  [
+   "East Stroudsburg Warriors",
+   "E Stroudsburg",
+   "ESU",
+   "college-football",
+   "football"
+  ],
+  [
+   "East Tennessee State Buccaneers",
+   "ETSU",
+   "ETSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "East Tennessee State Buccaneers",
+   "ETSU",
+   "ETSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "East Tennessee State Buccaneers",
+   "ETSU",
+   "ETSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "East Tennessee State Buccaneers",
+   "ETSU",
+   "ETSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "East Tennessee State Buccaneers",
+   "ETSU",
+   "ETSU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "East Tennessee State Buccaneers",
+   "ETSU",
+   "ETSU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "East Tennessee State Buccaneers",
+   "ETSU",
+   "ETSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "East Tennessee State Bucs",
+   "ETSU",
+   "ETSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "East Texas A&M Lions",
+   "East Texas A&M",
+   "ETAM",
+   "college-football",
+   "football"
+  ],
+  [
+   "East Texas A&M Lions",
+   "East Texas A&M",
+   "ETAM",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "East Texas A&M Lions",
+   "East Texas A&M",
+   "ETAM",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "East Texas A&M Lions",
+   "East Texas A&M",
+   "ETAM",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "East Texas A&M Lions",
+   "East Texas A&M",
+   "ETAM",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "East Texas A&M Lions",
+   "East Texas A&M",
+   "TAMC",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "East Texas Baptist Tigers",
+   "E TX Baptist",
+   "ETBU",
+   "college-football",
+   "football"
+  ],
+  [
+   "FC Forli",
+   "Forli",
+   "FOR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "FC Martinenc",
+   "Martinenc",
+   "MAR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "FC St. Helens",
+   "St. Helens",
+   "HEL",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "FC VAN",
+   "VAN",
+   "FC ",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Fairfield Badgers",
+   "Fairfield",
+   "FAIR",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Fairfield CT",
+   "Fairfield CT",
+   "CT",
+   "llb",
+   "baseball"
+  ],
+  [
+   "Fairfield Stags",
+   "Fairfield",
+   "FAIR",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Fairfield Stags",
+   "Fairfield",
+   "FAIR",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Fairfield Stags",
+   "Fairfield",
+   "FAIR",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Fairfield Stags",
+   "Fairfield",
+   "FAIR",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Fairfield Stags",
+   "Fairfield",
+   "FAIR",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Fairfield Stags",
+   "Fairfield",
+   "FAIR",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Fairfield Stags",
+   "Fairfield",
+   "FAIR",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Florida A&M Rattlers",
+   "Florida A&M",
+   "FAMU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Florida A&M Rattlers",
+   "Florida A&M",
+   "FAMU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Florida A&M Rattlers",
+   "Florida A&M",
+   "FAMU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Florida A&M Rattlers",
+   "Florida A&M",
+   "FAMU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida A&M Rattlers",
+   "Florida A&M",
+   "FAMU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida A&M Rattlers",
+   "Florida A&M",
+   "FAMU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida Atlantic Owls",
+   "FAU",
+   "FAU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Florida Badgers FC",
+   "Florida Badgers",
+   "FLO",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "Florida College",
+   "Florida Col",
+   "FLC",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Florida Everblades",
+   "Everblades",
+   "FLA",
+   "echl",
+   "hockey"
+  ],
+  [
+   "Florida Gators",
+   "Florida",
+   "FLA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Florida Gators",
+   "Florida",
+   "FLA",
+   "college-football",
+   "football"
+  ],
+  [
+   "Florida Gators",
+   "Florida",
+   "FLA",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Florida Gators",
+   "Florida",
+   "FLA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida Gators",
+   "Florida",
+   "FLA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Florida Gators",
+   "Florida",
+   "FLA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida Gators",
+   "Florida",
+   "FLA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Florida Gulf Coast Eagles",
+   "FGCU",
+   "FGCU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Florida Gulf Coast Eagles",
+   "FGCU",
+   "FGCU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Florida Gulf Coast Eagles",
+   "FGCU",
+   "FGCU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida Gulf Coast Eagles",
+   "FGCU",
+   "FGCU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Florida Gulf Coast Eagles",
+   "FGCU",
+   "FGCU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Florida Gulf Coast Eagles",
+   "FGCU",
+   "FGCU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida Gulf Coast Eagles",
+   "FGCU",
+   "FGCU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida International Panthers",
+   "FIU",
+   "FIU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Florida Memorial Lions",
+   "FL Memorial",
+   "FMU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Florida Panthers",
+   "Panthers",
+   "FLA",
+   "nhl",
+   "hockey"
+  ],
+  [
+   "Florida Polytechnic",
+   "Florida Poly",
+   "FLP",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Florida Southern Moccasins",
+   "FL Southern",
+   "FSC",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Florida State Seminoles",
+   "Florida St",
+   "FSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Florida State Seminoles",
+   "Florida St",
+   "FSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Florida State Seminoles",
+   "Florida St",
+   "FSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Florida State Seminoles",
+   "Florida St",
+   "FSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida State Seminoles",
+   "Florida St",
+   "FSU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Florida State Seminoles",
+   "Florida St",
+   "FSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Florida State Seminoles",
+   "Florida St",
+   "FSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "college-football",
+   "football"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Fordham Rams",
+   "Fordham",
+   "FOR",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Foresters",
+   "Foresters",
+   "FOR",
+   "caf.champions",
+   "soccer"
+  ],
+  [
+   "Forfar Athletic",
+   "Forfar",
+   "FOR",
+   "sco.challenge",
+   "soccer"
+  ],
+  [
+   "Forfar Athletic",
+   "Forfar",
+   "FOR",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "Forge",
+   "Forge",
+   "FOR",
+   "can.1",
+   "soccer"
+  ],
+  [
+   "Forge FC",
+   "Forge",
+   "FOR",
+   "concacaf.champions",
+   "soccer"
+  ],
+  [
+   "Formartine United",
+   "Formartine",
+   "FOR",
+   "sco.challenge",
+   "soccer"
+  ],
+  [
+   "Formartine United",
+   "Formartine",
+   "FOR",
+   "sco.tennents",
+   "soccer"
+  ],
+  [
+   "Forssa",
+   "Forssa",
+   "FOR",
+   "svenska-cupen",
+   "soccer"
+  ],
+  [
+   "Fort Erie Meteors",
+   "Meteors",
+   "FEM",
+   "gohl",
+   "hockey"
+  ],
+  [
+   "Fort Hays Tigers",
+   "Fort Hays",
+   "FHSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Fort Lauderdale United FC",
+   "Fort Lauderdale",
+   "FLA",
+   "usa.w.usl.1",
+   "soccer"
+  ],
+  [
+   "Fort Lewis Skyhawks",
+   "Fort Lewis",
+   "FLWC",
+   "college-football",
+   "football"
+  ],
+  [
+   "Fort McMurray Barons",
+   "Barons",
+   "FTM",
+   "ajhl",
+   "hockey"
+  ],
+  [
+   "Fort Myers Mighty Mussels",
+   "Mighty Mussels",
+   "FTM",
+   "milb-a",
+   "baseball"
+  ],
+  [
+   "Fort Valley State Wildcats",
+   "Fort Valley St",
+   "FVSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Fort Valley State Wildcats",
+   "Fort Valley St",
+   "FVSU",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Fort Wayne",
+   "Fort Wayne",
+   "FOR",
+   "usa.usl.l1",
+   "soccer"
+  ],
+  [
+   "Fort Wayne",
+   "Fort Wayne",
+   "FOR",
+   "usa.usl.l1.cup",
+   "soccer"
+  ],
+  [
+   "Fort Wayne Komets",
+   "Komets",
+   "FW",
+   "echl",
+   "hockey"
+  ],
+  [
+   "Fort Wayne TinCaps",
+   "TinCaps",
+   "FW",
+   "milb-high-a",
+   "baseball"
+  ],
+  [
+   "Fortaleza",
+   "FOR",
+   "FOR",
+   "bra.camp.cearense",
+   "soccer"
+  ],
+  [
+   "Fortaleza",
+   "Fortaleza",
+   "FOR",
+   "bra.2",
+   "soccer"
+  ],
+  [
+   "Fortaleza",
+   "Fortaleza",
+   "FOR",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Fortaleza CEIF",
+   "Fortaleza",
+   "FOR",
+   "col.1",
+   "soccer"
+  ],
+  [
+   "Fortaleza CEIF",
+   "Fortaleza",
+   "FOR",
+   "col.copa",
+   "soccer"
+  ],
+  [
+   "Forte",
+   "Forte",
+   "FOR",
+   "bra.camp.capixaba",
+   "soccer"
+  ],
+  [
+   "Fortuna Sittard",
+   "Fortuna",
+   "FOR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Fortuna Sittard",
+   "Fortuna",
+   "FOR",
+   "ned.1",
+   "soccer"
+  ],
+  [
+   "Fortuna Sittard",
+   "Fortuna",
+   "FOR",
+   "ned.cup",
+   "soccer"
+  ],
+  [
+   "Fortune",
+   "Fortune",
+   "FOR",
+   "gam.1",
+   "soccer"
+  ],
+  [
+   "Forum Sport",
+   "Forum Sport",
+   "FOR",
+   "ned.w.knvb_cup",
+   "soccer"
+  ],
+  [
+   "Fullerton CA",
+   "Fullerton CA",
+   "CA",
+   "llb",
+   "baseball"
+  ],
+  [
+   "GA Sampaio",
+   "Sampaio",
+   "SAMP",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "fifa.friendly.w",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "fifa.worldq.uefa",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "fifa.wworldq.uefa",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "itm",
+   "rugby"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "rwc",
+   "rugby"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "uefa.euro",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "uefa.euroq",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "uefa.nations",
+   "soccer"
+  ],
+  [
+   "Georgia",
+   "Georgia",
+   "GEO",
+   "uefa.w.nations",
+   "soccer"
+  ],
+  [
+   "Georgia Basketball",
+   "Georgia Basketball",
+   "GEO",
+   "fiba",
+   "basketball"
+  ],
+  [
+   "Georgia Bulldogs",
+   "Georgia",
+   "UGA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Georgia Bulldogs",
+   "Georgia",
+   "UGA",
+   "college-football",
+   "football"
+  ],
+  [
+   "Georgia Bulldogs",
+   "Georgia",
+   "UGA",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Georgia Bulldogs",
+   "Georgia",
+   "UGA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia Bulldogs",
+   "Georgia",
+   "UGA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Georgia Bulldogs",
+   "Georgia",
+   "UGA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Georgia Lady Bulldogs",
+   "Georgia",
+   "UGA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "college-football",
+   "football"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia Southern Eagles",
+   "GA Southern",
+   "GASO",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "college-football",
+   "football"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia State Panthers",
+   "Georgia St",
+   "GAST",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Georgia Swarm",
+   "Swarm",
+   "GA",
+   "nll",
+   "lacrosse"
+  ],
+  [
+   "Georgia Tech Yellow Jackets",
+   "Georgia Tech",
+   "GT",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Georgia Tech Yellow Jackets",
+   "Georgia Tech",
+   "GT",
+   "college-football",
+   "football"
+  ],
+  [
+   "Georgia Tech Yellow Jackets",
+   "Georgia Tech",
+   "GT",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Georgia Tech Yellow Jackets",
+   "Georgia Tech",
+   "GT",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia Tech Yellow Jackets",
+   "Georgia Tech",
+   "GT",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Georgia Tech Yellow Jackets",
+   "Georgia Tech",
+   "GT",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Georgia U21",
+   "Georgia",
+   "GEO",
+   "uefa.euro_u21",
+   "soccer"
+  ],
+  [
+   "Georgia U21",
+   "Georgia",
+   "GEO",
+   "uefa.euro_u21_qual",
+   "soccer"
+  ],
+  [
+   "Hill City Howlers",
+   "Howlers",
+   "HC",
+   "milb-a",
+   "baseball"
+  ],
+  [
+   "Holy Cross (IN)",
+   "Holy Cross (IN)",
+   "HCR",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "college-football",
+   "football"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Holy Cross Crusaders",
+   "Holy Cross",
+   "HC",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Holy Family",
+   "Holy Family",
+   "HFU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Inter Miami CF",
+   "Miami",
+   "MIA",
+   "campeones.cup",
+   "soccer"
+  ],
+  [
+   "Inter Miami CF",
+   "Miami",
+   "MIA",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Inter Miami CF",
+   "Miami",
+   "MIA",
+   "concacaf.champions",
+   "soccer"
+  ],
+  [
+   "Inter Miami CF",
+   "Miami",
+   "MIA",
+   "concacaf.leagues.cup",
+   "soccer"
+  ],
+  [
+   "Inter Miami CF",
+   "Miami",
+   "MIA",
+   "fifa.cwc",
+   "soccer"
+  ],
+  [
+   "Inter Miami CF",
+   "Miami",
+   "MIA",
+   "usa.1",
+   "soccer"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Iona Gaels",
+   "Iona",
+   "IONA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Jaguares de Córdoba",
+   "Jaguares",
+   "COR",
+   "col.1",
+   "soccer"
+  ],
+  [
+   "Jaguares de Córdoba",
+   "Jaguares",
+   "COR",
+   "col.copa",
+   "soccer"
+  ],
+  [
+   "Kentucky Christian Knights",
+   "KCU",
+   "KYCHR",
+   "college-football",
+   "football"
+  ],
+  [
+   "Kentucky State Thorobreds",
+   "Kentucky St",
+   "KYST",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Kentucky State Thorobreds",
+   "Kentucky St",
+   "KYSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Kentucky State Thorobreds",
+   "Kentucky St",
+   "KYSU",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Kentucky Wesleyan Panthers",
+   "KY Wesleyan",
+   "KWC",
+   "college-football",
+   "football"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "college-football",
+   "football"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Kentucky Wildcats",
+   "Kentucky",
+   "UK",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "LSU Alexandria LSU ALEXANDRIA",
+   "LSU Alexandria",
+   "LSUA",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "LSU New Orleans Privateers",
+   "LSU N Orleans",
+   "NOLA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "LSU New Orleans Privateers",
+   "LSU N Orleans",
+   "NOLA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "LSU New Orleans Privateers",
+   "LSU N Orleans",
+   "NOLA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "LSU New Orleans Privateers",
+   "LSU N Orleans",
+   "UNO",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "LSU Tigers",
+   "LSU",
+   "LSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "LSU Tigers",
+   "LSU",
+   "LSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "LSU Tigers",
+   "LSU",
+   "LSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "LSU Tigers",
+   "LSU",
+   "LSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "LSU Tigers",
+   "LSU",
+   "LSU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "LSU Tigers",
+   "LSU",
+   "LSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "LSU Tigers",
+   "LSU",
+   "LSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Lincoln Stars",
+   "Stars",
+   "LIN",
+   "ushl",
+   "hockey"
+  ],
+  [
+   "Lincoln United",
+   "Lincoln",
+   "LIN",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Lindenwood Belleville Lynx",
+   "Lind Bellv",
+   "LINB",
+   "college-football",
+   "football"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "college-football",
+   "football"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Lindenwood Lions",
+   "Lindenwood",
+   "LIN",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Lindsay Lindsay Muskies",
+   "Lindsay Muskies",
+   "LIN",
+   "ojhl",
+   "hockey"
+  ],
+  [
+   "Lindö",
+   "Lindö",
+   "LIN",
+   "svenska-cupen",
+   "soccer"
+  ],
+  [
+   "Linfield",
+   "Linfield",
+   "LIN",
+   "nifl.1",
+   "soccer"
+  ],
+  [
+   "Linfield",
+   "Linfield",
+   "LIN",
+   "uefa.europa.conf_qual",
+   "soccer"
+  ],
+  [
+   "Linfield Wildcats",
+   "Linfield",
+   "LIN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Liniers",
+   "Liniers",
+   "LIN",
+   "arg.3",
+   "soccer"
+  ],
+  [
+   "Linköpings HC",
+   "Linköpings HC",
+   "LIN",
+   "shl",
+   "hockey"
+  ],
+  [
+   "Linlithgow Rose",
+   "Linlithgow",
+   "LIN",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "Linlithgow Rose",
+   "Linlithgow",
+   "LIN",
+   "sco.tennents",
+   "soccer"
+  ],
+  [
+   "Long Beach State 49ers",
+   "Long Beach St",
+   "LBSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Long Beach State 49ers",
+   "Long Beach St",
+   "LBSU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Long Beach State 49ers",
+   "Long Beach St",
+   "LBSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Long Beach State Beach",
+   "Long Beach St",
+   "LBSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Long Beach State Beach",
+   "Long Beach St",
+   "LBSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Long Beach State Beach",
+   "Long Beach St",
+   "LBSU",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Long Beach State Beach",
+   "Long Beach St",
+   "LBSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Long Eaton United",
+   "Long Eaton",
+   "LEU",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Long Island Nets",
+   "Nets",
+   "LIN",
+   "nba-development",
+   "basketball"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island",
+   "LIU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island University",
+   "LIU",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Long Island University Sharks",
+   "Long Island University",
+   "LIU",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Loudoun United FC",
+   "Loudoun",
+   "LOU",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "Loudoun United FC",
+   "Loudoun",
+   "LOU",
+   "usa.usl.1",
+   "soccer"
+  ],
+  [
+   "Loudoun United FC",
+   "Loudoun",
+   "LOU",
+   "usa.usl.l1.cup",
+   "soccer"
+  ],
+  [
+   "Loughborough Students",
+   "Loughborough",
+   "LOU",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Louisville Bats",
+   "Bats",
+   "LOU",
+   "milb-aaa",
+   "baseball"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Louisville Cardinals",
+   "Louisville",
+   "LOU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Louisville City FC",
+   "Louisville",
+   "LOU",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Louisville City FC",
+   "Louisville",
+   "LOU",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "Louisville City FC",
+   "Louisville",
+   "LOU",
+   "usa.usl.1",
+   "soccer"
+  ],
+  [
+   "Louisville City FC",
+   "Louisville",
+   "LOU",
+   "usa.usl.l1.cup",
+   "soccer"
+  ],
+  [
+   "Louisville KY",
+   "LVKENTUCKY",
+   "KY",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Louisville KY",
+   "Louisville KY",
+   "KY",
+   "llb",
+   "baseball"
+  ],
+  [
+   "Louisville Kings",
+   "Kings",
+   "LOU",
+   "ufl",
+   "football"
+  ],
+  [
+   "Louletano",
+   "Louletano",
+   "LOU",
+   "por.taca.portugal",
+   "soccer"
+  ],
+  [
+   "Manauara",
+   "Manauara",
+   "MAN",
+   "bra.camp.amazonense",
+   "soccer"
+  ],
+  [
+   "Manaus",
+   "Manaus",
+   "MAN",
+   "bra.camp.amazonense",
+   "soccer"
+  ],
+  [
+   "Manaus",
+   "Manaus",
+   "MAN",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Manawatu",
+   "Manawatu",
+   "MAN",
+   "npc",
+   "rugby"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "eng.1",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "eng.charity",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "eng.league_cup",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "eng.w.1",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "fifa.cwc",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "uefa.champions",
+   "soccer"
+  ],
+  [
+   "Manchester City",
+   "Man City",
+   "MNC",
+   "uefa.wchampions",
+   "soccer"
+  ],
+  [
+   "Manchester City U21",
+   "Man City U21",
+   "MNC",
+   "eng.trophy",
+   "soccer"
+  ],
+  [
+   "Manchester United",
+   "Man United",
+   "MAN",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Manchester United",
+   "Man United",
+   "MAN",
+   "eng.1",
+   "soccer"
+  ],
+  [
+   "Manchester United",
+   "Man United",
+   "MAN",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "Manchester United",
+   "Man United",
+   "MAN",
+   "eng.league_cup",
+   "soccer"
+  ],
+  [
+   "Manchester United",
+   "Man United",
+   "MAN",
+   "uefa.champions",
+   "soccer"
+  ],
+  [
+   "Manchester United",
+   "Man Utd",
+   "MAN",
+   "eng.w.1",
+   "soccer"
+  ],
+  [
+   "Manchester United",
+   "Man Utd",
+   "MAN",
+   "eng.w.league_cup",
+   "soccer"
+  ],
+  [
+   "Mangotsfield United",
+   "Mangotsfield",
+   "MAN",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Manhattan Jaspers",
+   "Manhattan",
+   "MAN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Manhattan Jaspers",
+   "Manhattan",
+   "MAN",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Manhattan Jaspers",
+   "Manhattan",
+   "MAN",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Manhattan Jaspers",
+   "Manhattan",
+   "MAN",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Manhattan Jaspers",
+   "Manhattan",
+   "MAN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Manhattan Jaspers",
+   "Manhattan",
+   "MAN",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Manhattan Jaspers",
+   "Manhattan",
+   "MAN",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Manitoba",
+   "Manitoba",
+   "MAN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Manta F.C.",
+   "Manta F.C.",
+   "MAN",
+   "ecu.1",
+   "soccer"
+  ],
+  [
+   "Manthey 1st Phorm",
+   "Manthey 1st Phorm",
+   "MAN",
+   "wec",
+   "racing"
+  ],
+  [
+   "Mantova",
+   "Mantova",
+   "MAN",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Mantova",
+   "Mantova",
+   "MAN",
+   "ita.2",
+   "soccer"
+  ],
+  [
+   "Mantova",
+   "Mantova",
+   "MAN",
+   "ita.coppa_italia",
+   "soccer"
+  ],
+  [
+   "Maracanã",
+   "Maracanã",
+   "MAR",
+   "bra.camp.cearense",
+   "soccer"
+  ],
+  [
+   "Maracanã",
+   "Maracanã",
+   "MAR",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Maracena",
+   "Maracena",
+   "MAR",
+   "esp.copa_del_rey",
+   "soccer"
+  ],
+  [
+   "Maranguape",
+   "Maranguape",
+   "MAR",
+   "bra.camp.cearense",
+   "soccer"
+  ],
+  [
+   "Maranhao",
+   "Maranhao",
+   "MAR",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Maranhão",
+   "Maranhão",
+   "MAR",
+   "bra.camp.maranhense",
+   "soccer"
+  ],
+  [
+   "Marchamalo",
+   "Marchamalo",
+   "MAR",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Marcílio Dias",
+   "Marcílio Dias",
+   "MAR",
+   "bra.camp.catarinense",
+   "soccer"
+  ],
+  [
+   "Margate",
+   "Margate",
+   "MAR",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Maricá",
+   "Maricá",
+   "MAR",
+   "bra.camp.carioca",
+   "soccer"
+  ],
+  [
+   "Marine",
+   "Marine",
+   "MAR",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Maringá",
+   "Maringá",
+   "MAR",
+   "bra.camp.paranaense",
+   "soccer"
+  ],
+  [
+   "Maringá",
+   "Maringá",
+   "MAR",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "Maritimo",
+   "Maritimo",
+   "MAR",
+   "por.1",
+   "soccer"
+  ],
+  [
+   "Maritimo",
+   "Maritimo",
+   "MAR",
+   "por.taca.portugal",
+   "soccer"
+  ],
+  [
+   "Markham Markham Royals",
+   "Markham Royals",
+   "MAR",
+   "ojhl",
+   "hockey"
+  ],
+  [
+   "Marquense",
+   "Marquense",
+   "MAR",
+   "gua.1",
+   "soccer"
+  ],
+  [
+   "Marsaxlokk FC",
+   "Marsaxlokk",
+   "MAR",
+   "uefa.europa.conf_qual",
+   "soccer"
+  ],
+  [
+   "Marseille",
+   "Marseille",
+   "MAR",
+   "fra.w.1",
+   "soccer"
+  ],
+  [
+   "Marske United",
+   "Marske Utd",
+   "MAR",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "Marumo Gallants",
+   "Marumo",
+   "MAR",
+   "rsa.1",
+   "soccer"
+  ],
+  [
+   "Maryville (MO) Saints",
+   "Maryville (MO)",
+   "MUMO",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Maryville (TN) Scots",
+   "Maryville (TN)",
+   "MCTN",
+   "college-football",
+   "football"
+  ],
+  [
+   "Marítimo de La Guaira",
+   "Marítimo de La Guaira",
+   "MAR",
+   "ven.2",
+   "soccer"
+  ],
+  [
+   "Mass Maritime Buccaneers",
+   "Mass Maritime",
+   "MMT",
+   "college-football",
+   "football"
+  ],
+  [
+   "Massachusetts MInutewomen",
+   "UMass",
+   "MASS",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Massachusetts MInutewomen",
+   "UMass",
+   "MASS",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Massachusetts Minutemen",
+   "Massachusetts",
+   "MASS",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Massachusetts Minutemen",
+   "UMass",
+   "MASS",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Massachusetts Minutemen",
+   "UMass",
+   "MASS",
+   "college-football",
+   "football"
+  ],
+  [
+   "Massachusetts Minutemen",
+   "UMass",
+   "MASS",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Massachusetts Minutemen",
+   "UMass",
+   "MASS",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Massachusetts Minutewomen",
+   "UMass",
+   "MASS",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "college-football",
+   "football"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Merrimack Warriors",
+   "Merrimack",
+   "MRMK",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Miami (FL) Hurricanes",
+   "Miami (FL) Hurricanes",
+   "MIA",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami (OH)",
+   "M-OH",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami OH",
+   "M-OH",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami OH",
+   "M-OH",
+   "college-football",
+   "football"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami OH",
+   "M-OH",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami OH",
+   "M-OH",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami OH",
+   "M-OH",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami OH",
+   "M-OH",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Miami (OH) RedHawks",
+   "Miami OH",
+   "M-OH",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Miami Dolphins",
+   "Dolphins",
+   "MIA",
+   "nfl",
+   "football"
+  ],
+  [
+   "Miami FC",
+   "Miami FC",
+   "MIA",
+   "usa.usl.1",
+   "soccer"
+  ],
+  [
+   "Miami FC",
+   "Miami FC",
+   "MIA",
+   "usa.usl.l1.cup",
+   "soccer"
+  ],
+  [
+   "Miami Heat",
+   "Heat",
+   "MIA",
+   "nba",
+   "basketball"
+  ],
+  [
+   "Miami Hurricanes",
+   "Miami",
+   "MIA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Miami Hurricanes",
+   "Miami",
+   "MIA",
+   "college-football",
+   "football"
+  ],
+  [
+   "Miami Hurricanes",
+   "Miami",
+   "MIA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Miami Hurricanes",
+   "Miami",
+   "MIA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Miami Hurricanes",
+   "Miami",
+   "MIA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Miami Hurricanes",
+   "Miami",
+   "MIA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Miami Marlins",
+   "Marlins",
+   "MIA",
+   "mlb",
+   "baseball"
+  ],
+  [
+   "Minnesota Duluth Bulldogs",
+   "Minn Duluth",
+   "UMD",
+   "college-football",
+   "football"
+  ],
+  [
+   "Minnesota Duluth Bulldogs",
+   "Minnesota Duluth",
+   "UMD",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Minnesota Duluth Bulldogs",
+   "Minnesota Duluth",
+   "UMD",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Minnesota Frost",
+   "Frost",
+   "MIN",
+   "pwhl",
+   "hockey"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "college-football",
+   "football"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Minnesota Golden Gophers",
+   "Minnesota",
+   "MINN",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Minnesota Lynx",
+   "Lynx",
+   "MIN",
+   "wnba",
+   "basketball"
+  ],
+  [
+   "Minnesota Morris Cougars",
+   "Minn Morris",
+   "MNMO",
+   "college-football",
+   "football"
+  ],
+  [
+   "Minnesota St Moorhead",
+   "Minn Moorhead",
+   "MSUM",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Minnesota St Moorhead Dragons",
+   "Minn Moorhead",
+   "MSUM",
+   "college-football",
+   "football"
+  ],
+  [
+   "Minnesota State Mavericks",
+   "Minnesota St",
+   "MANK",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Minnesota State Mavericks",
+   "Minnesota St",
+   "MNST",
+   "college-football",
+   "football"
+  ],
+  [
+   "Minnesota State Mavericks",
+   "Minnesota State",
+   "MNST",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Minnesota State Mavericks",
+   "Minnesota State",
+   "MNST",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Minnesota Timberwolves",
+   "Timberwolves",
+   "MIN",
+   "nba",
+   "basketball"
+  ],
+  [
+   "Minnesota Twins",
+   "Twins",
+   "MIN",
+   "mlb",
+   "baseball"
+  ],
+  [
+   "Minnesota United FC",
+   "Minnesota",
+   "MIN",
+   "concacaf.leagues.cup",
+   "soccer"
+  ],
+  [
+   "Minnesota United FC",
+   "Minnesota",
+   "MIN",
+   "usa.1",
+   "soccer"
+  ],
+  [
+   "Minnesota United FC",
+   "Minnesota",
+   "MIN",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "Minnesota Vikings",
+   "Vikings",
+   "MIN",
+   "nfl",
+   "football"
+  ],
+  [
+   "Minnesota Wild",
+   "Wild",
+   "MIN",
+   "nhl",
+   "hockey"
+  ],
+  [
+   "Minnesota-Crookston Golden Eagles",
+   "Minnesota-Crookston",
+   "MNCK",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Mississippi Valley State Delta Devils",
+   "Miss Valley St",
+   "MVSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Mississippi Valley State Delta Devils",
+   "Miss Valley St",
+   "MVSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Mississippi Valley State Delta Devils",
+   "Miss Valley St",
+   "MVSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Mississippi Valley State Delta Devils",
+   "Miss Valley St",
+   "MVSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Mississippi Valley State Delta Devils",
+   "Miss Valley St",
+   "MVSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Mississippi Valley State Devilettes",
+   "Miss Valley St",
+   "MVSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Missouri Baptist Spartans",
+   "Missouri Bapt",
+   "MOBU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Missouri S&T Miners",
+   "Missouri S&T",
+   "MOST",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Missouri S&T Miners",
+   "Missouri S&T",
+   "MS&T",
+   "college-football",
+   "football"
+  ],
+  [
+   "Missouri S&T Miners",
+   "Missouri S&T",
+   "MS&T",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Missouri Southern State Lions",
+   "Missouri So St",
+   "MSSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Missouri State Bears",
+   "Missouri St",
+   "MOST",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Missouri State Bears",
+   "Missouri St",
+   "MOST",
+   "college-football",
+   "football"
+  ],
+  [
+   "Missouri State Bears",
+   "Missouri St",
+   "MOST",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Missouri State Bears",
+   "Missouri St",
+   "MOST",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Missouri State Bears",
+   "Missouri St",
+   "MOST",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Missouri State Bears",
+   "Missouri St",
+   "MOST",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Missouri State Bears",
+   "Missouri St",
+   "MOST",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Missouri State Lady Bears",
+   "Missouri St",
+   "MOST",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Missouri Tigers",
+   "Missouri",
+   "MIZ",
+   "college-football",
+   "football"
+  ],
+  [
+   "Missouri Tigers",
+   "Missouri",
+   "MIZ",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Missouri Tigers",
+   "Missouri",
+   "MIZ",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Missouri Tigers",
+   "Missouri",
+   "MIZ",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Missouri Tigers",
+   "Missouri",
+   "MIZ",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Missouri Tigers",
+   "Missouri",
+   "MIZ",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Missouri Tigers",
+   "Missouri",
+   "MIZZ",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Missouri Western Griffons",
+   "MO Western",
+   "MOWE",
+   "college-football",
+   "football"
+  ],
+  [
+   "Missouri Western Griffons",
+   "MO Western",
+   "MOWT",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "caf.championship",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "caf.nations",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "caf.nations_qual",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "caf.w.nations",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "fifa.friendly.w",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "fifa.world",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "fifa.worldq.caf",
+   "soccer"
+  ],
+  [
+   "Morocco",
+   "Morocco",
+   "MAR",
+   "fifa.wwc",
+   "soccer"
+  ],
+  [
+   "Morocco U17",
+   "Morocco",
+   "MAR",
+   "fifa.world.u17",
+   "soccer"
+  ],
+  [
+   "Morocco U17",
+   "Morocco",
+   "MAR",
+   "fifa.wworld.u17",
+   "soccer"
+  ],
+  [
+   "Morocco U20",
+   "Morocco",
+   "MAR",
+   "fifa.world.u20",
+   "soccer"
+  ],
+  [
+   "Morocco U23",
+   "Morocco U23",
+   "MAR",
+   "fifa.olympics",
+   "soccer"
+  ],
+  [
+   "Nottingham Forest",
+   "Nottm Forest",
+   "FOR",
+   "eng.w.league_cup",
+   "soccer"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "college-football",
+   "football"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Ohio Bobcats",
+   "Ohio",
+   "OHIO",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Ohio Dominican Panthers",
+   "Ohio Dominican",
+   "OHDU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Ohio Northern",
+   "Ohio Northern",
+   "OHNU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Ohio Northern Polar Bears",
+   "Ohio Northern",
+   "OHNU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Ohio State Buckeyes",
+   "Ohio State",
+   "OSU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Ohio State Newark Titans",
+   "Osunewark",
+   "OSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Ohio Wesleyan Battling Bishops",
+   "Ohio Wesleyan",
+   "OWU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Old Dominion Monarchs",
+   "Old Dominion",
+   "ODU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Old Dominion Monarchs",
+   "Old Dominion",
+   "ODU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Old Dominion Monarchs",
+   "Old Dominion",
+   "ODU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Old Dominion Monarchs",
+   "Old Dominion",
+   "ODU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Old Dominion Monarchs",
+   "Old Dominion",
+   "ODU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Old Dominion Monarchs",
+   "Old Dominion",
+   "ODU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Old Dominion Monarchs",
+   "Old Dominion",
+   "ODU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Old Glory DC",
+   "Old Glory DC",
+   "OLD G",
+   "mlr",
+   "rugby"
+  ],
+  [
+   "Ole Miss Rebels",
+   "Ole Miss",
+   "MISS",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Ole Miss Rebels",
+   "Ole Miss",
+   "MISS",
+   "college-football",
+   "football"
+  ],
+  [
+   "Ole Miss Rebels",
+   "Ole Miss",
+   "MISS",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Ole Miss Rebels",
+   "Ole Miss",
+   "MISS",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Ole Miss Rebels",
+   "Ole Miss",
+   "MISS",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Ole Miss Rebels",
+   "Ole Miss",
+   "MISS",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Ole Miss Rebels",
+   "Ole Miss",
+   "MISS",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Palm City FL Florida",
+   "Florida",
+   "FL",
+   "llb",
+   "baseball"
+  ],
+  [
+   "Patronato",
+   "Patronato",
+   "CAP",
+   "arg.2",
+   "soccer"
+  ],
+  [
+   "Patronato",
+   "Patronato",
+   "CAP",
+   "arg.copa_de_la_superliga",
+   "soccer"
+  ],
+  [
+   "Perpignan",
+   "Perpignan",
+   "USA",
+   "epcr",
+   "rugby"
+  ],
+  [
+   "Perpignan",
+   "Perpignan",
+   "USA",
+   "top14",
+   "rugby"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "college-football",
+   "football"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Pittsburgh Panthers",
+   "Pitt",
+   "PITT",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Pittsburgh Penguins",
+   "Penguins",
+   "PIT",
+   "nhl",
+   "hockey"
+  ],
+  [
+   "Pittsburgh Pirates",
+   "Pirates",
+   "PIT",
+   "mlb",
+   "baseball"
+  ],
+  [
+   "Pittsburgh Riverhounds",
+   "Pittsburgh",
+   "PIT",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "Pittsburgh Riverhounds",
+   "Pittsburgh",
+   "PIT",
+   "usa.usl.1",
+   "soccer"
+  ],
+  [
+   "Pittsburgh Riverhounds",
+   "Pittsburgh",
+   "PIT",
+   "usa.usl.l1.cup",
+   "soccer"
+  ],
+  [
+   "Pittsburgh Steelers",
+   "Steelers",
+   "PIT",
+   "nfl",
+   "football"
+  ],
+  [
+   "Queen of the South",
+   "Queens",
+   "QOS",
+   "sco.2.promotion.relegation",
+   "soccer"
+  ],
+  [
+   "Queen of the South",
+   "Queens",
+   "QOS",
+   "sco.challenge",
+   "soccer"
+  ],
+  [
+   "Queen of the South",
+   "Queens",
+   "QOS",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "Queen's Park",
+   "Queen's Park",
+   "QUE",
+   "sco.2",
+   "soccer"
+  ],
+  [
+   "Queen's Park",
+   "Queen's Park",
+   "QUE",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "Queens Park Rangers",
+   "QPR",
+   "QPR",
+   "eng.2",
+   "soccer"
+  ],
+  [
+   "Queens Park Rangers",
+   "QPR",
+   "QPR",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "Queens Park Rangers",
+   "QPR",
+   "QPR",
+   "eng.league_cup",
+   "soccer"
+  ],
+  [
+   "Queens University Royals",
+   "Queens",
+   "QUC",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Queens University Royals",
+   "Queens",
+   "QUC",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Queens University Royals",
+   "Queens",
+   "QUC",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Queens University Royals",
+   "Queens",
+   "QUC",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Queens University Royals",
+   "Queens",
+   "QUC",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Queens University Royals",
+   "Queens",
+   "QUOC",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Queens University Royals",
+   "Queens",
+   "QUOC",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Quinnipiac Bobcats",
+   "Quinnipiac",
+   "QUIN",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Racing Louisville FC",
+   "Louisville",
+   "LOU",
+   "usa.nwsl",
+   "soccer"
+  ],
+  [
+   "Rensselaer Engineers",
+   "Rensselaer",
+   "RPI",
+   "college-football",
+   "football"
+  ],
+  [
+   "Rensselaer Engineers",
+   "Rensselaer",
+   "RPI",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Rensselaer Engineers",
+   "Rensselaer",
+   "RPI",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Rio Grande Valley Vipers",
+   "Vipers",
+   "RGV",
+   "nba-development",
+   "basketball"
+  ],
+  [
+   "Roman Glass St. George",
+   "St. George",
+   "RGG",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "SC Amiens",
+   "SC Amiens",
+   "AMI",
+   "fra.coupe_de_france",
+   "soccer"
+  ],
+  [
+   "SC Brühl St Gallen",
+   "Brühl St Gallen",
+   "BRU",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "SC Cambuur",
+   "Cambuur",
+   "CAM",
+   "ned.1",
+   "soccer"
+  ],
+  [
+   "SC Cambuur",
+   "Cambuur",
+   "CAM",
+   "ned.cup",
+   "soccer"
+  ],
+  [
+   "SC East Bengal",
+   "East Bengal",
+   "EBEN",
+   "afc.cup",
+   "soccer"
+  ],
+  [
+   "SC East Bengal",
+   "East Bengal",
+   "EBEN",
+   "afc.cup_qual",
+   "soccer"
+  ],
+  [
+   "SC East Bengal",
+   "East Bengal",
+   "EBEN",
+   "ind.1",
+   "soccer"
+  ],
+  [
+   "SC Farense",
+   "SC Farense",
+   "SCF",
+   "por.taca.portugal",
+   "soccer"
+  ],
+  [
+   "SC Freiburg",
+   "Freiburg",
+   "SCF",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "SC Freiburg",
+   "Freiburg",
+   "SCF",
+   "ger.1",
+   "soccer"
+  ],
+  [
+   "SC Freiburg",
+   "Freiburg",
+   "SCF",
+   "ger.dfb_pokal",
+   "soccer"
+  ],
+  [
+   "SC Freiburg",
+   "Freiburg",
+   "SCF",
+   "uefa.europa.conf",
+   "soccer"
+  ],
+  [
+   "SC Freiburg",
+   "Freiburg",
+   "SCF",
+   "uefa.europa.conf_qual",
+   "soccer"
+  ],
+  [
+   "SC Genemuiden",
+   "Genemuiden",
+   "GEN",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "SC Genemuiden",
+   "Genemuiden",
+   "GEN",
+   "ned.cup",
+   "soccer"
+  ],
+  [
+   "SC Kalsdorf",
+   "Kalsdorf",
+   "KAL",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "SC Maria da Fonte",
+   "Maria da Fonte",
+   "MDF",
+   "por.taca.portugal",
+   "soccer"
+  ],
+  [
+   "SC Paderborn 07",
+   "Paderborn",
+   "SCP",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "SC Paderborn 07",
+   "Paderborn",
+   "SCP",
+   "ger.1",
+   "soccer"
+  ],
+  [
+   "SC Paderborn 07",
+   "Paderborn",
+   "SCP",
+   "ger.dfb_pokal",
+   "soccer"
+  ],
+  [
+   "SC Paderborn 07",
+   "Paderborn",
+   "SCP",
+   "ger.playoff.relegation",
+   "soccer"
+  ],
+  [
+   "SC Penedense",
+   "Penedense",
+   "PENE",
+   "bra.copa_do_brazil",
+   "soccer"
+  ],
+  [
+   "SC Popesti-Leordei",
+   "Popesti",
+   "SC ",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "SC Rheindorf Altach",
+   "SC Rheindorf",
+   "SCR",
+   "aut.1",
+   "soccer"
+  ],
+  [
+   "SC St. Tönis",
+   "St. Tönis",
+   "STT",
+   "ger.dfb_pokal",
+   "soccer"
+  ],
+  [
+   "SC Verl 1924",
+   "SC Verl 1924",
+   "SCV",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "SC Verl 1924",
+   "SC Verl 1924",
+   "SCV",
+   "ger.dfb_pokal",
+   "soccer"
+  ],
+  [
+   "SC Vistula Garfield",
+   "SC Vistula",
+   "VIS",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "SC Wiedenbrück 2000",
+   "SC Wiedenbrück",
+   "SCW",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Sacred Heart Pioneers",
+   "Sacred Heart",
+   "SHU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Saint Francis (IN) Cougars",
+   "St Francis IN",
+   "SFIN",
+   "college-football",
+   "football"
+  ],
+  [
+   "Saint John's (MN) Johnnies",
+   "St Johns (MN)",
+   "STJM",
+   "college-football",
+   "football"
+  ],
+  [
+   "Saint Xavier",
+   "St. Xavier",
+   "STX",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Saint-Étienne",
+   "St. Étienne",
+   "ASSE",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Saint-Étienne",
+   "St. Étienne",
+   "ASSE",
+   "fra.1.promotion.relegation",
+   "soccer"
+  ],
+  [
+   "Saint-Étienne",
+   "St. Étienne",
+   "ASSE",
+   "fra.2",
+   "soccer"
+  ],
+  [
+   "Saint-Étienne",
+   "St. Étienne",
+   "ASSE",
+   "fra.coupe_de_france",
+   "soccer"
+  ],
+  [
+   "Sea Eagles",
+   "Sea Eagles",
+   "MAN",
+   "nrl",
+   "rugby"
+  ],
+  [
+   "Sheffield United",
+   "Sheffield Utd",
+   "SHU",
+   "eng.2",
+   "soccer"
+  ],
+  [
+   "Sheffield United",
+   "Sheffield Utd",
+   "SHU",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "Sheffield United",
+   "Sheffield Utd",
+   "SHU",
+   "eng.league_cup",
+   "soccer"
+  ],
+  [
+   "Sheffield United",
+   "Sheffield Utd",
+   "SHU",
+   "eng.w.league_cup",
+   "soccer"
+  ],
+  [
+   "Soul Tower Hamlets",
+   "ST Hamlets",
+   "STH",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "caf.championship",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "caf.cosafa",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "caf.nations",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "caf.nations_qual",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "caf.w.nations",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "fifa.friendly.w",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "fifa.world",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "fifa.worldq.caf",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "RSA",
+   "fifa.wwc",
+   "soccer"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "SOU",
+   "itm",
+   "rugby"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "SOU",
+   "natchamp",
+   "rugby"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "SOU",
+   "rwc",
+   "rugby"
+  ],
+  [
+   "South Africa",
+   "South Africa",
+   "SOU",
+   "trc",
+   "rugby"
+  ],
+  [
+   "South Africa 7s",
+   "South Africa 7s",
+   "SOU",
+   "om7s",
+   "rugby"
+  ],
+  [
+   "South Africa U20",
+   "South Africa",
+   "RSA",
+   "fifa.world.u20",
+   "soccer"
+  ],
+  [
+   "South Africa Women",
+   "South Africa Women",
+   "SOU",
+   "wrwc",
+   "rugby"
+  ],
+  [
+   "South Africa Women 7s",
+   "South Africa Women 7s",
+   "SOU",
+   "ow7s",
+   "rugby"
+  ],
+  [
+   "South Alabama Jaguars",
+   "South Alabama",
+   "USA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "South Alabama Jaguars",
+   "South Alabama",
+   "USA",
+   "college-football",
+   "football"
+  ],
+  [
+   "South Alabama Jaguars",
+   "South Alabama",
+   "USA",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "South Alabama Jaguars",
+   "South Alabama",
+   "USA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Alabama Jaguars",
+   "South Alabama",
+   "USA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Alabama Jaguars",
+   "South Alabama",
+   "USA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Alabama Jaguars",
+   "South Alabama",
+   "USA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "South Bend Cubs",
+   "Cubs",
+   "SB",
+   "milb-high-a",
+   "baseball"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "college-football",
+   "football"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Carolina Gamecocks",
+   "South Carolina",
+   "SC",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "South Carolina State Bulldogs",
+   "SC State",
+   "SCST",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "South Carolina State Bulldogs",
+   "SC State",
+   "SCST",
+   "college-football",
+   "football"
+  ],
+  [
+   "South Carolina State Bulldogs",
+   "SC State",
+   "SCST",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "South Carolina State Bulldogs",
+   "SC State",
+   "SCST",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Carolina State Bulldogs",
+   "SC State",
+   "SCST",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Carolina State Bulldogs",
+   "SC State",
+   "SCST",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "South Carolina State Lady Bulldogs",
+   "SC State",
+   "SCST",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Carolina Stingrays",
+   "Stingrays",
+   "SC",
+   "echl",
+   "hockey"
+  ],
+  [
+   "South Carolina Upstate Spartans",
+   "SC Upstate",
+   "SCUP",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "South Carolina Upstate Spartans",
+   "SC Upstate",
+   "SCUP",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "South Carolina Upstate Spartans",
+   "SC Upstate",
+   "UPST",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Carolina Upstate Spartans",
+   "SC Upstate",
+   "UPST",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "South Carolina Upstate Spartans",
+   "SC Upstate",
+   "UPST",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Carolina Upstate Spartans",
+   "SC Upstate",
+   "UPST",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Carolina Upstate Spartans",
+   "SC Upstate",
+   "UPST",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "South Carolina-Aiken",
+   "SC-Aiken",
+   "SCA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Chungcheong KOR S Chungcheong KOR",
+   "S Chungcheong KOR",
+   "KOR",
+   "llb",
+   "baseball"
+  ],
+  [
+   "South Dakota Coyotes",
+   "South Dakota",
+   "SDAK",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "South Dakota Coyotes",
+   "South Dakota",
+   "SDAK",
+   "college-football",
+   "football"
+  ],
+  [
+   "South Dakota Coyotes",
+   "South Dakota",
+   "SDAK",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "South Dakota Coyotes",
+   "South Dakota",
+   "SDAK",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Dakota Coyotes",
+   "South Dakota",
+   "SDAK",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Dakota Coyotes",
+   "South Dakota",
+   "SDAK",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Dakota Coyotes",
+   "South Dakota",
+   "SDAK",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "South Dakota Mines Hardrockers",
+   "SD Mines",
+   "SDMT",
+   "college-football",
+   "football"
+  ],
+  [
+   "South Dakota State Jackrabbits",
+   "S Dakota St",
+   "SDST",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "South Dakota State Jackrabbits",
+   "S Dakota St",
+   "SDST",
+   "college-football",
+   "football"
+  ],
+  [
+   "South Dakota State Jackrabbits",
+   "S Dakota St",
+   "SDST",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "South Dakota State Jackrabbits",
+   "S Dakota St",
+   "SDST",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Dakota State Jackrabbits",
+   "S Dakota St",
+   "SDST",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Dakota State Jackrabbits",
+   "S Dakota St",
+   "SDST",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Dakota State Jackrabbits",
+   "S Dakota St",
+   "SDST",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "South East Melbourne Phoenix",
+   "Phoenix",
+   "PNX",
+   "nbl",
+   "basketball"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "college-football",
+   "football"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "South Florida Bulls",
+   "South Florida",
+   "USF",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "South Georgia Tormenta FC",
+   "Tormenta FC",
+   "SGT",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "afc.asian.cup",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "afc.w.asian.cup",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "fifa.friendly.w",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "fifa.world",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "fifa.worldq.afc",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "fifa.wwc",
+   "soccer"
+  ],
+  [
+   "South Korea",
+   "South Korea",
+   "KOR",
+   "global.arnold.clark_cup",
+   "soccer"
+  ],
+  [
+   "South Korea Basketball",
+   "South Korea Basketball",
+   "SOU",
+   "fiba",
+   "basketball"
+  ],
+  [
+   "South Korea Basketball Women",
+   "South Korea Basketball Women",
+   "SOU",
+   "fiba-women",
+   "basketball"
+  ],
+  [
+   "South Korea U17",
+   "South Korea",
+   "KOR",
+   "fifa.world.u17",
+   "soccer"
+  ],
+  [
+   "South Korea U20",
+   "South Korea",
+   "KOR",
+   "fifa.world.u20",
+   "soccer"
+  ],
+  [
+   "South Liverpool",
+   "South Liverpool",
+   "SOL",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "South Park (Reigate)",
+   "South Park",
+   "SPR",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "South Portland ME Sportland",
+   "Sportland",
+   "ME",
+   "llb",
+   "baseball"
+  ],
+  [
+   "South Riding VA",
+   "South Riding VA",
+   "VA",
+   "llb",
+   "baseball"
+  ],
+  [
+   "South Riding Virginia S Riding Virginia",
+   "S Riding Virginia",
+   "VA",
+   "llb",
+   "baseball"
+  ],
+  [
+   "South Shields",
+   "South Shields",
+   "SOS",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "South Shields",
+   "South Shields",
+   "SOS",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "South Sudan",
+   "South Sudan",
+   "SSD",
+   "caf.nations_qual",
+   "soccer"
+  ],
+  [
+   "South Sudan",
+   "South Sudan",
+   "SSD",
+   "fifa.worldq.caf",
+   "soccer"
+  ],
+  [
+   "South Sudan Basketball",
+   "South Sudan Basketball",
+   "SOU",
+   "fiba",
+   "basketball"
+  ],
+  [
+   "Sporting Club Delhi",
+   "SC Delhi",
+   "SCD",
+   "ind.1",
+   "soccer"
+  ],
+  [
+   "St Albans City",
+   "St Albans City",
+   "ALB",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "St Albans City",
+   "St Albans City",
+   "ALB",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "St Andrew's",
+   "St Andrew's",
+   "STA",
+   "sco.tennents_qual",
+   "soccer"
+  ],
+  [
+   "St Cuthbert Wanderers",
+   "St Cuthbert",
+   "SCW",
+   "sco.tennents_qual",
+   "soccer"
+  ],
+  [
+   "St Helens",
+   "St Helens",
+   "ST",
+   "super-league",
+   "rugby"
+  ],
+  [
+   "St Johnstone",
+   "St Johnstone",
+   "STJ",
+   "sco.1",
+   "soccer"
+  ],
+  [
+   "St Johnstone",
+   "St Johnstone",
+   "STJ",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "St Kilda",
+   "St Kilda",
+   "STK",
+   "afl",
+   "australian-football"
+  ],
+  [
+   "St Mary's (TX)",
+   "St Mary's (TX)",
+   "STM",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "St Mirren",
+   "St Mirren",
+   "STM",
+   "sco.1",
+   "soccer"
+  ],
+  [
+   "St Mirren",
+   "St Mirren",
+   "STM",
+   "sco.1.promotion.relegation",
+   "soccer"
+  ],
+  [
+   "St Mirren",
+   "St Mirren",
+   "STM",
+   "sco.cis",
+   "soccer"
+  ],
+  [
+   "St Mirren B",
+   "St Mirren",
+   "STM",
+   "sco.challenge",
+   "soccer"
+  ],
+  [
+   "St. Ambrose",
+   "St. Ambrose",
+   "STA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "St. Ambrose Fighting Bees",
+   "St Ambrose",
+   "STAM",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Andrews Knights",
+   "St Andrews",
+   "STAU",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Blazey",
+   "St. Blazey",
+   "STB",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "St. Bonaventure Bonnies",
+   "St Bonaventure",
+   "SBON",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "St. Bonaventure Bonnies",
+   "St Bonaventure",
+   "SBU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "St. Bonaventure Bonnies",
+   "St Bonaventure",
+   "SBU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "St. Bonaventure Bonnies",
+   "St Bonaventure",
+   "SBU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "St. Bonaventure Bonnies",
+   "St Bonaventure",
+   "SBU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "St. Bonaventure Bonnies",
+   "St Bonaventure",
+   "SBU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "St. Cadoc's",
+   "St. Cadoc's",
+   "STC",
+   "sco.tennents_qual",
+   "soccer"
+  ],
+  [
+   "St. Catharines Falcons",
+   "Falcons",
+   "SCF",
+   "gohl",
+   "hockey"
+  ],
+  [
+   "St. Cloud State",
+   "St. Cloud",
+   "SCS",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "St. Cloud State Huskies",
+   "St. Cloud State",
+   "SCSU",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Cloud State Huskies",
+   "St. Cloud State",
+   "SCSU",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Francis (BKN) Terriers",
+   "St Francis BK",
+   "SFBK",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "St. Francis (IL) Fighting Saints",
+   "St Francis IL",
+   "SFIL",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Francis Brooklyn Terriers",
+   "St Francis BK",
+   "SFBK",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "St. Francis Brooklyn Terriers",
+   "St Francis BK",
+   "SFBK",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "St. Gallen",
+   "St. Gallen",
+   "FCSG",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "St. Gallen",
+   "St. Gallen",
+   "FCSG",
+   "sui.1",
+   "soccer"
+  ],
+  [
+   "St. Gallen",
+   "St. Gallen",
+   "FCSG",
+   "uefa.europa.conf_qual",
+   "soccer"
+  ],
+  [
+   "St. Gallen",
+   "St. Gallen",
+   "FCSG",
+   "uefa.europa_qual",
+   "soccer"
+  ],
+  [
+   "St. George UT St. George Utah",
+   "St. George Utah",
+   "UT",
+   "llb",
+   "baseball"
+  ],
+  [
+   "St. Gregory Cavaliers",
+   "St Gregorys",
+   "STGR",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "St. Gregory Cavaliers",
+   "St Gregorys",
+   "STGR",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "St. Ives Town",
+   "St. Ives",
+   "STI",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "St. John Fisher",
+   "St John Fisher",
+   "STJF",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "St. John Fisher Cardinals",
+   "St John Fisher",
+   "STJF",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. John's Red Storm",
+   "St John's",
+   "SJU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "St. John's Red Storm",
+   "St John's",
+   "SJU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "St. John's Red Storm",
+   "St John's",
+   "SJU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "St. John's Red Storm",
+   "St John's",
+   "SJU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "St. John's Red Storm",
+   "St John's",
+   "SJU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "St. John's Red Storm",
+   "St John's",
+   "SJU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "St. John's Red Storm",
+   "St John's",
+   "SJU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "St. Joseph's",
+   "St. Joseph's",
+   "STJ",
+   "uefa.europa.conf_qual",
+   "soccer"
+  ],
+  [
+   "St. Kitts and Nevis",
+   "St Kitts & Nevis",
+   "SKN",
+   "concacaf.nations.league",
+   "soccer"
+  ],
+  [
+   "St. Kitts and Nevis",
+   "St Kitts & Nevis",
+   "SKN",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "St. Kitts and Nevis",
+   "St Kitts & Nevis",
+   "SKN",
+   "fifa.worldq.concacaf",
+   "soccer"
+  ],
+  [
+   "St. Lawrence Saints",
+   "St Lawrence",
+   "USL",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Lawrence Saints",
+   "St. Lawrence",
+   "USL",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Lawrence Saints",
+   "St. Lawrence",
+   "USL",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Louis Battlehawks",
+   "Battlehawks",
+   "STL",
+   "ufl",
+   "football"
+  ],
+  [
+   "St. Louis Blues",
+   "Blues",
+   "STL",
+   "nhl",
+   "hockey"
+  ],
+  [
+   "St. Louis CITY SC",
+   "St. Louis",
+   "STL",
+   "usa.1",
+   "soccer"
+  ],
+  [
+   "St. Louis CITY SC",
+   "St. Louis",
+   "STL",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "St. Louis Cardinals",
+   "Cardinals",
+   "STL",
+   "mlb",
+   "baseball"
+  ],
+  [
+   "St. Lucia",
+   "St Lucia",
+   "LCA",
+   "concacaf.nations.league",
+   "soccer"
+  ],
+  [
+   "St. Lucia",
+   "St Lucia",
+   "LCA",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "St. Lucia",
+   "St Lucia",
+   "LCA",
+   "fifa.worldq.concacaf",
+   "soccer"
+  ],
+  [
+   "St. Lucie Mets",
+   "Mets",
+   "SLU",
+   "milb-a",
+   "baseball"
+  ],
+  [
+   "St. Martin",
+   "St. Martin",
+   "SMN",
+   "concacaf.nations.league",
+   "soccer"
+  ],
+  [
+   "St. Martin",
+   "St. Martin",
+   "SMN",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "St. Mary's (TX) Rattlers",
+   "St Mary's (TX)",
+   "STMY",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "St. Marys Lincolns",
+   "Lincolns",
+   "SMY",
+   "gohl",
+   "hockey"
+  ],
+  [
+   "St. Michael'S College Purple Knights",
+   "St. Michael'S College",
+   "ST.",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Michael'S College Purple Knights",
+   "St. Michael'S College",
+   "ST.",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Michaels St. Michaels Buzzers",
+   "St. Michaels Buzzers",
+   "STM",
+   "ojhl",
+   "hockey"
+  ],
+  [
+   "St. Neots Town",
+   "St. Neots",
+   "NEO",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "St. Norbert Green Knights",
+   "St Norbert",
+   "STNC",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Olaf Oles",
+   "St Olaf",
+   "OLAF",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Olaf Oles",
+   "St Olaf",
+   "ST.",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "St. Paul Saints",
+   "Saints",
+   "STP",
+   "milb-aaa",
+   "baseball"
+  ],
+  [
+   "St. Pauli",
+   "St. Pauli",
+   "STP",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "St. Pauli",
+   "St. Pauli",
+   "STP",
+   "ger.2",
+   "soccer"
+  ],
+  [
+   "St. Pauli",
+   "St. Pauli",
+   "STP",
+   "ger.dfb_pokal",
+   "soccer"
+  ],
+  [
+   "St. Petersburg Glory Eagles",
+   "U of Faith",
+   "UFFL",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Pölten",
+   "St. Pölten",
+   "SKN",
+   "uefa.w.europa",
+   "soccer"
+  ],
+  [
+   "St. Pölten",
+   "St. Pölten",
+   "SKN",
+   "uefa.wchampions_qual",
+   "soccer"
+  ],
+  [
+   "St. Scholastica Saints",
+   "St Scholastica",
+   "CSS",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Thomas (FL)",
+   "St. Thomas FL",
+   "STFL",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "St. Thomas (FL) Bobcats",
+   "St Thomas FL",
+   "STFL",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "St. Thomas Aquinas Spartans",
+   "St Thm Aquinas",
+   "STAC",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "St. Thomas Stars",
+   "Stars",
+   "STT",
+   "gohl",
+   "hockey"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "college-football",
+   "football"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St Thomas",
+   "STMN",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "St. Thomas Tommies",
+   "St. Thomas",
+   "STMN",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Thomas-Minnesota Tommies",
+   "St. Thomas-Minnesota",
+   "STMN",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "St. Vincent and the Grenadines",
+   "St. Vincent ",
+   "VIN",
+   "concacaf.gold_qual",
+   "soccer"
+  ],
+  [
+   "St. Vincent and the Grenadines",
+   "St. Vincent ",
+   "VIN",
+   "concacaf.nations.league",
+   "soccer"
+  ],
+  [
+   "St. Vincent and the Grenadines",
+   "St. Vincent ",
+   "VIN",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "St. Vincent and the Grenadines",
+   "St. Vincent ",
+   "VIN",
+   "fifa.worldq.concacaf",
+   "soccer"
+  ],
+  [
+   "State College of Florida SCOF",
+   "St Coll of FL",
+   "STA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "college-football",
+   "football"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Stetson Hatters",
+   "Stetson",
+   "STET",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Torrance CA California",
+   "California",
+   "CA",
+   "llb",
+   "baseball"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "college-football",
+   "football"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Davis Aggies",
+   "UC Davis",
+   "UCD",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Irvine Anteaters",
+   "UC Irvine",
+   "UCI",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UC Riverside Highlanders",
+   "UC Riverside",
+   "UCR",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UC Riverside Highlanders",
+   "UC Riverside",
+   "UCR",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Riverside Highlanders",
+   "UC Riverside",
+   "UCR",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UC Riverside Highlanders",
+   "UC Riverside",
+   "UCR",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UC Riverside Highlanders",
+   "UC Riverside",
+   "UCR",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Riverside Highlanders",
+   "UC Riverside",
+   "UCR",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UC Riverside Highlanders",
+   "UC Riverside",
+   "UCRV",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UC San Diego Tritons",
+   "UC San Diego",
+   "UCSD",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UC San Diego Tritons",
+   "UC San Diego",
+   "UCSD",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UC San Diego Tritons",
+   "UC San Diego",
+   "UCSD",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC San Diego Tritons",
+   "UC San Diego",
+   "UCSD",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UC San Diego Tritons",
+   "UC San Diego",
+   "UCSD",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UC San Diego Tritons",
+   "UC San Diego",
+   "UCSD",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UC San Diego Tritons",
+   "UC San Diego",
+   "UCSD",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "mens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UC Santa Barbara Gauchos",
+   "Santa Barbara",
+   "UCSB",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UMASS DARTMOUTH",
+   "UMass Dartmouth",
+   "MDAR",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "UMass Dartmouth Corsairs",
+   "UMass Dartmth",
+   "MDAR",
+   "college-football",
+   "football"
+  ],
+  [
+   "UMass Lowell River Hawks",
+   "UMass Lowell",
+   "UML",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UMass Lowell River Hawks",
+   "UMass Lowell",
+   "UML",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UMass Lowell River Hawks",
+   "UMass Lowell",
+   "UML",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UMass Lowell River Hawks",
+   "UMass Lowell",
+   "UML",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "UMass Lowell River Hawks",
+   "UMass Lowell",
+   "UML",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UMass Lowell River Hawks",
+   "UMass Lowell",
+   "UML",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UMass Lowell River Hawks",
+   "UMass Lowell",
+   "UML",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UNLV Lady Rebels",
+   "UNLV",
+   "UNLV",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UNLV Rebels",
+   "UNLV",
+   "UNLV",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UNLV Rebels",
+   "UNLV",
+   "UNLV",
+   "college-football",
+   "football"
+  ],
+  [
+   "UNLV Rebels",
+   "UNLV",
+   "UNLV",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UNLV Rebels",
+   "UNLV",
+   "UNLV",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UNLV Rebels",
+   "UNLV",
+   "UNLV",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UNLV Rebels",
+   "UNLV",
+   "UNLV",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UNLV Rebels",
+   "UNLV",
+   "UNLV",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "US Lusitanos Saint-Maur",
+   "US Lusitanos",
+   "USL",
+   "fra.coupe_de_france",
+   "soccer"
+  ],
+  [
+   "US Sestri Levante",
+   "Sestri Levante",
+   "USL",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "UT Arlington Mavericks",
+   "UT Arlington",
+   "UTA",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UT Arlington Mavericks",
+   "UT Arlington",
+   "UTA",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UT Arlington Mavericks",
+   "UT Arlington",
+   "UTA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UT Arlington Mavericks",
+   "UT Arlington",
+   "UTA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UT Arlington Mavericks",
+   "UT Arlington",
+   "UTA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UT Martin Skyhawks",
+   "UT Martin",
+   "UTM",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UT Martin Skyhawks",
+   "UT Martin",
+   "UTM",
+   "college-football",
+   "football"
+  ],
+  [
+   "UT Martin Skyhawks",
+   "UT Martin",
+   "UTM",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "UT Martin Skyhawks",
+   "UT Martin",
+   "UTM",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UT Martin Skyhawks",
+   "UT Martin",
+   "UTM",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UT Martin Skyhawks",
+   "UT Martin",
+   "UTM",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UT Martin Skyhawks",
+   "UT Martin",
+   "UTM",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "UT Permian Basin Falcons",
+   "UT Prmian Basn",
+   "UTPB",
+   "college-football",
+   "football"
+  ],
+  [
+   "UT Rio Grande Valley Vaqueros",
+   "UT Rio Grande",
+   "RGV",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "UT Rio Grande Valley Vaqueros",
+   "UT Rio Grande",
+   "RGV",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UT Rio Grande Valley Vaqueros",
+   "UT Rio Grande",
+   "RGV",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "UT Rio Grande Valley Vaqueros",
+   "UT Rio Grande",
+   "RGV",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "UT Rio Grande Valley Vaqueros",
+   "UT Rio Grande",
+   "RGV",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "UT Rio Grande Valley Vaqueros",
+   "UT Rio Grande",
+   "RGV",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "Vancouver Canadians",
+   "Canadians",
+   "VAN",
+   "milb-high-a",
+   "baseball"
+  ],
+  [
+   "Vancouver Canucks",
+   "Canucks",
+   "VAN",
+   "nhl",
+   "hockey"
+  ],
+  [
+   "Vancouver FC",
+   "Vancouver FC",
+   "VAN",
+   "can.1",
+   "soccer"
+  ],
+  [
+   "Vancouver Giants",
+   "Giants",
+   "VAN",
+   "whl",
+   "hockey"
+  ],
+  [
+   "Vancouver Goldeneyes",
+   "Goldeneyes",
+   "VAN",
+   "pwhl",
+   "hockey"
+  ],
+  [
+   "Vancouver Rise FC",
+   "Vancouver",
+   "VAN",
+   "can.w.nsl",
+   "soccer"
+  ],
+  [
+   "Vancouver Rise FC Academy",
+   "Vancouver",
+   "VAN",
+   "concacaf.w.champions_cup",
+   "soccer"
+  ],
+  [
+   "Vancouver Warriors",
+   "Warriors",
+   "VAN",
+   "nll",
+   "lacrosse"
+  ],
+  [
+   "Vancouver Whitecaps",
+   "Vancouver",
+   "VAN",
+   "concacaf.champions",
+   "soccer"
+  ],
+  [
+   "Vancouver Whitecaps",
+   "Vancouver",
+   "VAN",
+   "concacaf.leagues.cup",
+   "soccer"
+  ],
+  [
+   "Vancouver Whitecaps",
+   "Vancouver",
+   "VAN",
+   "usa.1",
+   "soccer"
+  ],
+  [
+   "Vanderbilt Commodores",
+   "Vanderbilt",
+   "VAN",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Vanderbilt Commodores",
+   "Vanderbilt",
+   "VAN",
+   "college-football",
+   "football"
+  ],
+  [
+   "Vanderbilt Commodores",
+   "Vanderbilt",
+   "VAN",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Vanderbilt Commodores",
+   "Vanderbilt",
+   "VAN",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Vanderbilt Commodores",
+   "Vanderbilt",
+   "VAN",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Vanderbilt Commodores",
+   "Vanderbilt Commodores",
+   "VAN",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Vanuatu",
+   "Vanuatu",
+   "VAN",
+   "fifa.friendly",
+   "soccer"
+  ],
+  [
+   "Vanuatu",
+   "Vanuatu",
+   "VAN",
+   "fifa.friendly.w",
+   "soccer"
+  ],
+  [
+   "Vanuatu",
+   "Vanuatu",
+   "VAN",
+   "fifa.worldq.ofc",
+   "soccer"
+  ],
+  [
+   "Vanuatu United",
+   "Vanuatu Utd",
+   "VAN",
+   "club.friendly",
+   "soccer"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "mens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "Vermont Catamounts",
+   "Vermont",
+   "UVM",
+   "womens-college-hockey",
+   "hockey"
+  ],
+  [
+   "Vermont Green",
+   "Vermont",
+   "VTG",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "Vermont State Castleton Spartans",
+   "VTSU Castleton",
+   "VTSC",
+   "college-football",
+   "football"
+  ],
+  [
+   "West",
+   "West",
+   "WEST",
+   "pll",
+   "lacrosse"
+  ],
+  [
+   "West Alabama Tigers",
+   "West Alabama",
+   "UWA",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Auckland Town FC",
+   "West Auckland",
+   "WES",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "West Bromwich Albion",
+   "West Brom",
+   "WBA",
+   "eng.2",
+   "soccer"
+  ],
+  [
+   "West Bromwich Albion",
+   "West Brom",
+   "WBA",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "West Bromwich Albion",
+   "West Brom",
+   "WBA",
+   "eng.league_cup",
+   "soccer"
+  ],
+  [
+   "West Chester",
+   "West Chester",
+   "WCHT",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "West Chester",
+   "West Chester",
+   "WCU",
+   "usa.open",
+   "soccer"
+  ],
+  [
+   "West Chester Golden Rams",
+   "West Chester",
+   "WCHT",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Chester PA",
+   "West Chester PA",
+   "PA",
+   "llb",
+   "baseball"
+  ],
+  [
+   "West Coast",
+   "West Coast",
+   "WCE",
+   "afl",
+   "australian-football"
+  ],
+  [
+   "West Didsbury & Chorlton",
+   "WD&C",
+   "WDC",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "West Essex",
+   "West Essex",
+   "WES",
+   "eng.fa_qual",
+   "soccer"
+  ],
+  [
+   "West Florida Argonauts",
+   "West Florida",
+   "UWF",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Florida Argonauts",
+   "West Florida",
+   "UWF",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "West Florida Argonauts",
+   "West Florida",
+   "UWF",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "West Florida Argonauts",
+   "West Florida",
+   "UWF",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "West Florida Argonauts",
+   "West Florida",
+   "UWF",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "West Georgia Wolves",
+   "West Georgia",
+   "WES",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "West Georgia Wolves",
+   "West Georgia",
+   "WES",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "West Georgia Wolves",
+   "West Georgia",
+   "WGA",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Georgia Wolves",
+   "West Georgia",
+   "WGA",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "West Georgia Wolves",
+   "West Georgia",
+   "WGA",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "West Georgia Wolves",
+   "West Georgia",
+   "WGA",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "West Georgia Wolves",
+   "West Georgia",
+   "WGA",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "West Ham United",
+   "West Ham",
+   "WHU",
+   "eng.2",
+   "soccer"
+  ],
+  [
+   "West Ham United",
+   "West Ham",
+   "WHU",
+   "eng.fa",
+   "soccer"
+  ],
+  [
+   "West Ham United",
+   "West Ham",
+   "WHU",
+   "eng.league_cup",
+   "soccer"
+  ],
+  [
+   "West Ham United",
+   "West Ham ",
+   "WHU",
+   "eng.w.1",
+   "soccer"
+  ],
+  [
+   "West Ham United",
+   "West Ham ",
+   "WHU",
+   "eng.w.league_cup",
+   "soccer"
+  ],
+  [
+   "West Kelowna Warriors",
+   "Warriors",
+   "WK",
+   "bchl",
+   "hockey"
+  ],
+  [
+   "West Kent Steamers",
+   "Steamers",
+   "WKS",
+   "mhl",
+   "hockey"
+  ],
+  [
+   "West Liberty Hilltoppers",
+   "West Liberty",
+   "WLU",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Memphis Crusaders",
+   "C of Faith",
+   "FAI",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Michigan Whitecaps",
+   "Whitecaps",
+   "WM",
+   "milb-high-a",
+   "baseball"
+  ],
+  [
+   "West Side OH Ohio",
+   "Ohio",
+   "OH",
+   "llb",
+   "baseball"
+  ],
+  [
+   "West Texas Buffaloes",
+   "West Texas",
+   "WTAM",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Valley ID West Valley Idaho",
+   "West Valley Idaho",
+   "ID",
+   "llb",
+   "baseball"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "college-baseball",
+   "baseball"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "college-softball",
+   "baseball"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "mens-college-basketball",
+   "basketball"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "usa.ncaa.m.1",
+   "soccer"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "usa.ncaa.w.1",
+   "soccer"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "womens-college-basketball",
+   "basketball"
+  ],
+  [
+   "West Virginia Mountaineers",
+   "West Virginia",
+   "WVU",
+   "womens-college-volleyball",
+   "volleyball"
+  ],
+  [
+   "West Virginia State Yellow Jackets",
+   "W Virginia St",
+   "WVSU",
+   "college-football",
+   "football"
+  ],
+  [
+   "West Virginia Wesleyan Bobcats",
+   "WV Wesleyan",
+   "WVWC",
+   "college-football",
+   "football"
+  ],
+  [
+   "Western Oregon Wolves",
+   "West Oregon",
+   "WORU",
+   "college-football",
+   "football"
+  ],
+  [
+   "Çorum FK",
+   "Çorum FK",
+   "COR",
+   "tur.1",
+   "soccer"
+  ]
+ ],
+ "cases": [
+  {
+   "league": "college-football",
+   "sport": "football",
+   "side_a": "East Texas A&M",
+   "side_b": "UT Rio Grande Valley",
+   "form": "location",
+   "event": "UT Rio Grande Valley Vaqueros at East Texas A&M Lions",
+   "teams": [
+    [
+     "East Texas A&M Lions",
+     "East Texas A&M",
+     "ETAM",
+     "East Texas A&M"
+    ],
+    [
+     "UT Rio Grande Valley Vaqueros",
+     "UT Rio Grande",
+     "RGV",
+     "UT Rio Grande Valley"
+    ]
+   ]
+  },
+  {
+   "league": "college-football",
+   "sport": "football",
+   "side_a": "East Texas A&M",
+   "side_b": "UT Rio Grande",
+   "form": "short",
+   "event": "UT Rio Grande Valley Vaqueros at East Texas A&M Lions",
+   "teams": [
+    [
+     "East Texas A&M Lions",
+     "East Texas A&M",
+     "ETAM",
+     "East Texas A&M"
+    ],
+    [
+     "UT Rio Grande Valley Vaqueros",
+     "UT Rio Grande",
+     "RGV",
+     "UT Rio Grande Valley"
+    ]
+   ]
+  },
+  {
+   "league": "college-football",
+   "sport": "football",
+   "side_a": "East Texas A&M Lions",
+   "side_b": "UT Rio Grande Valley Vaqueros",
+   "form": "display",
+   "event": "UT Rio Grande Valley Vaqueros at East Texas A&M Lions",
+   "teams": [
+    [
+     "East Texas A&M Lions",
+     "East Texas A&M",
+     "ETAM",
+     "East Texas A&M"
+    ],
+    [
+     "UT Rio Grande Valley Vaqueros",
+     "UT Rio Grande",
+     "RGV",
+     "UT Rio Grande Valley"
+    ]
+   ]
+  },
+  {
+   "league": "mens-college-hockey",
+   "sport": "hockey",
+   "side_a": "St. Lawrence Saints",
+   "side_b": "Maryville (Mo) Saints",
+   "form": "display",
+   "event": "Maryville (Mo) Saints at St. Lawrence Saints",
+   "teams": [
+    [
+     "St. Lawrence Saints",
+     "St. Lawrence",
+     "USL",
+     "St. Lawrence"
+    ],
+    [
+     "Maryville (Mo) Saints",
+     "Maryville (Mo)",
+     "MAR",
+     "Maryville (Mo)"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-hockey",
+   "sport": "hockey",
+   "side_a": "Delaware",
+   "side_b": "Lindenwood",
+   "form": "location",
+   "event": "Lindenwood Lions at Delaware Blue Hens",
+   "teams": [
+    [
+     "Delaware Blue Hens",
+     "Delaware",
+     "DEL",
+     "Delaware"
+    ],
+    [
+     "Lindenwood Lions",
+     "Lindenwood",
+     "LIN",
+     "Lindenwood"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-hockey",
+   "sport": "hockey",
+   "side_a": "Delaware Blue Hens",
+   "side_b": "Lindenwood Lions",
+   "form": "display",
+   "event": "Lindenwood Lions at Delaware Blue Hens",
+   "teams": [
+    [
+     "Delaware Blue Hens",
+     "Delaware",
+     "DEL",
+     "Delaware"
+    ],
+    [
+     "Lindenwood Lions",
+     "Lindenwood",
+     "LIN",
+     "Lindenwood"
+    ]
+   ]
+  },
+  {
+   "league": "usa.ncaa.m.1",
+   "sport": "soccer",
+   "side_a": "Cornell",
+   "side_b": "Massachusetts",
+   "form": "location",
+   "event": "Massachusetts at Cornell",
+   "teams": [
+    [
+     "Cornell Big Red",
+     "Cornell",
+     "COR",
+     "Cornell"
+    ],
+    [
+     "Massachusetts MInutewomen",
+     "UMass",
+     "MASS",
+     "Massachusetts"
+    ]
+   ]
+  },
+  {
+   "league": "usa.ncaa.w.1",
+   "sport": "soccer",
+   "side_a": "Bowling Green",
+   "side_b": "Massachusetts",
+   "form": "location",
+   "event": "Massachusetts at Bowling Green",
+   "teams": [
+    [
+     "Bowling Green Falcons",
+     "Bowling Green",
+     "BGSU",
+     "Bowling Green"
+    ],
+    [
+     "Massachusetts MInutewomen",
+     "UMass",
+     "MASS",
+     "Massachusetts"
+    ]
+   ]
+  },
+  {
+   "league": "usa.ncaa.w.1",
+   "sport": "soccer",
+   "side_a": "Pittsburgh",
+   "side_b": "Miami",
+   "form": "location",
+   "event": "Miami at Pittsburgh",
+   "teams": [
+    [
+     "Pittsburgh Panthers",
+     "Pitt",
+     "PITT",
+     "Pittsburgh"
+    ],
+    [
+     "Miami Hurricanes",
+     "Miami",
+     "MIA",
+     "Miami"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "LSU",
+   "side_b": "Vanderbilt",
+   "form": "location",
+   "event": "Vanderbilt Commodores at LSU Tigers",
+   "teams": [
+    [
+     "LSU Tigers",
+     "LSU",
+     "LSU",
+     "LSU"
+    ],
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "LSU Tigers",
+   "side_b": "Vanderbilt Commodores",
+   "form": "display",
+   "event": "Vanderbilt Commodores at LSU Tigers",
+   "teams": [
+    [
+     "LSU Tigers",
+     "LSU",
+     "LSU",
+     "LSU"
+    ],
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "California Baptist",
+   "side_b": "UC San Diego",
+   "form": "location",
+   "event": "UC San Diego Tritons at California Baptist Lancers",
+   "teams": [
+    [
+     "California Baptist Lancers",
+     "CA Baptist",
+     "CBU",
+     "California Baptist"
+    ],
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "CA Baptist",
+   "side_b": "UC San Diego",
+   "form": "short",
+   "event": "UC San Diego Tritons at California Baptist Lancers",
+   "teams": [
+    [
+     "California Baptist Lancers",
+     "CA Baptist",
+     "CBU",
+     "California Baptist"
+    ],
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "California Baptist Lancers",
+   "side_b": "UC San Diego Tritons",
+   "form": "display",
+   "event": "UC San Diego Tritons at California Baptist Lancers",
+   "teams": [
+    [
+     "California Baptist Lancers",
+     "CA Baptist",
+     "CBU",
+     "California Baptist"
+    ],
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Stetson",
+   "side_b": "West Florida",
+   "form": "location",
+   "event": "West Florida Argonauts at Stetson Hatters",
+   "teams": [
+    [
+     "Stetson Hatters",
+     "Stetson",
+     "STET",
+     "Stetson"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Stetson Hatters",
+   "side_b": "West Florida Argonauts",
+   "form": "display",
+   "event": "West Florida Argonauts at Stetson Hatters",
+   "teams": [
+    [
+     "Stetson Hatters",
+     "Stetson",
+     "STET",
+     "Stetson"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Georgia Southern",
+   "side_b": "Old Dominion",
+   "form": "location",
+   "event": "Old Dominion Monarchs at Georgia Southern Eagles",
+   "teams": [
+    [
+     "Georgia Southern Eagles",
+     "GA Southern",
+     "GASO",
+     "Georgia Southern"
+    ],
+    [
+     "Old Dominion Monarchs",
+     "Old Dominion",
+     "ODU",
+     "Old Dominion"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "GA Southern",
+   "side_b": "Old Dominion",
+   "form": "short",
+   "event": "Old Dominion Monarchs at Georgia Southern Eagles",
+   "teams": [
+    [
+     "Georgia Southern Eagles",
+     "GA Southern",
+     "GASO",
+     "Georgia Southern"
+    ],
+    [
+     "Old Dominion Monarchs",
+     "Old Dominion",
+     "ODU",
+     "Old Dominion"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Georgia Southern Eagles",
+   "side_b": "Old Dominion Monarchs",
+   "form": "display",
+   "event": "Old Dominion Monarchs at Georgia Southern Eagles",
+   "teams": [
+    [
+     "Georgia Southern Eagles",
+     "GA Southern",
+     "GASO",
+     "Georgia Southern"
+    ],
+    [
+     "Old Dominion Monarchs",
+     "Old Dominion",
+     "ODU",
+     "Old Dominion"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Sacred Heart",
+   "side_b": "Merrimack",
+   "form": "location",
+   "event": "Merrimack Warriors at Sacred Heart Pioneers",
+   "teams": [
+    [
+     "Sacred Heart Pioneers",
+     "Sacred Heart",
+     "SHU",
+     "Sacred Heart"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Sacred Heart Pioneers",
+   "side_b": "Merrimack Warriors",
+   "form": "display",
+   "event": "Merrimack Warriors at Sacred Heart Pioneers",
+   "teams": [
+    [
+     "Sacred Heart Pioneers",
+     "Sacred Heart",
+     "SHU",
+     "Sacred Heart"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Fairfield",
+   "side_b": "Merrimack",
+   "form": "location",
+   "event": "Merrimack Warriors at Fairfield Stags",
+   "teams": [
+    [
+     "Fairfield Stags",
+     "Fairfield",
+     "FAIR",
+     "Fairfield"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Fairfield Stags",
+   "side_b": "Merrimack Warriors",
+   "form": "display",
+   "event": "Merrimack Warriors at Fairfield Stags",
+   "teams": [
+    [
+     "Fairfield Stags",
+     "Fairfield",
+     "FAIR",
+     "Fairfield"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC Riverside",
+   "side_b": "UC San Diego",
+   "form": "location",
+   "event": "UC San Diego Tritons at UC Riverside Highlanders",
+   "teams": [
+    [
+     "UC Riverside Highlanders",
+     "UC Riverside",
+     "UCR",
+     "UC Riverside"
+    ],
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC Riverside Highlanders",
+   "side_b": "UC San Diego Tritons",
+   "form": "display",
+   "event": "UC San Diego Tritons at UC Riverside Highlanders",
+   "teams": [
+    [
+     "UC Riverside Highlanders",
+     "UC Riverside",
+     "UCR",
+     "UC Riverside"
+    ],
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Florida Gulf Coast",
+   "side_b": "West Florida",
+   "form": "location",
+   "event": "West Florida Argonauts at Florida Gulf Coast Eagles",
+   "teams": [
+    [
+     "Florida Gulf Coast Eagles",
+     "FGCU",
+     "FGCU",
+     "Florida Gulf Coast"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "FGCU",
+   "side_b": "West Florida",
+   "form": "short",
+   "event": "West Florida Argonauts at Florida Gulf Coast Eagles",
+   "teams": [
+    [
+     "Florida Gulf Coast Eagles",
+     "FGCU",
+     "FGCU",
+     "Florida Gulf Coast"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Florida Gulf Coast Eagles",
+   "side_b": "West Florida Argonauts",
+   "form": "display",
+   "event": "West Florida Argonauts at Florida Gulf Coast Eagles",
+   "teams": [
+    [
+     "Florida Gulf Coast Eagles",
+     "FGCU",
+     "FGCU",
+     "Florida Gulf Coast"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Ole Miss",
+   "side_b": "Vanderbilt",
+   "form": "location",
+   "event": "Vanderbilt Commodores at Ole Miss Rebels",
+   "teams": [
+    [
+     "Ole Miss Rebels",
+     "Ole Miss",
+     "MISS",
+     "Ole Miss"
+    ],
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Ole Miss Rebels",
+   "side_b": "Vanderbilt Commodores",
+   "form": "display",
+   "event": "Vanderbilt Commodores at Ole Miss Rebels",
+   "teams": [
+    [
+     "Ole Miss Rebels",
+     "Ole Miss",
+     "MISS",
+     "Ole Miss"
+    ],
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-hockey",
+   "sport": "hockey",
+   "side_a": "Minnesota St",
+   "side_b": "Rensselaer",
+   "form": "short",
+   "event": "Rensselaer Engineers at Minnesota State Mavericks",
+   "teams": [
+    [
+     "Minnesota State Mavericks",
+     "Minnesota St",
+     "MNST",
+     "Minnesota State"
+    ],
+    [
+     "Rensselaer Engineers",
+     "Rensselaer",
+     "RPI",
+     "Rensselaer"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-hockey",
+   "sport": "hockey",
+   "side_a": "Holy Cross",
+   "side_b": "Delaware",
+   "form": "location",
+   "event": "Delaware Blue Hens at Holy Cross Crusaders",
+   "teams": [
+    [
+     "Holy Cross Crusaders",
+     "Holy Cross",
+     "HC",
+     "Holy Cross"
+    ],
+    [
+     "Delaware Blue Hens",
+     "Delaware",
+     "DEL",
+     "Delaware"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-hockey",
+   "sport": "hockey",
+   "side_a": "Holy Cross Crusaders",
+   "side_b": "Delaware Blue Hens",
+   "form": "display",
+   "event": "Delaware Blue Hens at Holy Cross Crusaders",
+   "teams": [
+    [
+     "Holy Cross Crusaders",
+     "Holy Cross",
+     "HC",
+     "Holy Cross"
+    ],
+    [
+     "Delaware Blue Hens",
+     "Delaware",
+     "DEL",
+     "Delaware"
+    ]
+   ]
+  },
+  {
+   "league": "usa.ncaa.m.1",
+   "sport": "soccer",
+   "side_a": "Pittsburgh",
+   "side_b": "Louisville",
+   "form": "location",
+   "event": "Louisville at Pittsburgh",
+   "teams": [
+    [
+     "Pittsburgh Panthers",
+     "Pitt",
+     "PITT",
+     "Pittsburgh"
+    ],
+    [
+     "Louisville Cardinals",
+     "Louisville",
+     "LOU",
+     "Louisville"
+    ]
+   ]
+  },
+  {
+   "league": "usa.ncaa.m.1",
+   "sport": "soccer",
+   "side_a": "Vermont",
+   "side_b": "Massachusetts",
+   "form": "location",
+   "event": "Massachusetts at Vermont",
+   "teams": [
+    [
+     "Vermont Catamounts",
+     "Vermont",
+     "UVM",
+     "Vermont"
+    ],
+    [
+     "Massachusetts MInutewomen",
+     "UMass",
+     "MASS",
+     "Massachusetts"
+    ]
+   ]
+  },
+  {
+   "league": "usa.ncaa.w.1",
+   "sport": "soccer",
+   "side_a": "Ohio",
+   "side_b": "Massachusetts",
+   "form": "location",
+   "event": "Massachusetts at Ohio",
+   "teams": [
+    [
+     "Ohio Bobcats",
+     "Ohio",
+     "OHIO",
+     "Ohio"
+    ],
+    [
+     "Massachusetts MInutewomen",
+     "UMass",
+     "MASS",
+     "Massachusetts"
+    ]
+   ]
+  },
+  {
+   "league": "bra.1",
+   "sport": "soccer",
+   "side_a": "Athletico Paranaense",
+   "side_b": "Bahia",
+   "form": "location",
+   "event": "Bahia at Athletico Paranaense",
+   "teams": [
+    [
+     "Athletico-PR",
+     "Athletico-PR",
+     "CAP",
+     "Athletico Paranaense"
+    ],
+    [
+     "Bahia",
+     "Bahia",
+     "BAH",
+     "Bahia"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UNLV",
+   "side_b": "UC San Diego",
+   "form": "location",
+   "event": "UC San Diego Tritons at UNLV Rebels",
+   "teams": [
+    [
+     "UNLV Rebels",
+     "UNLV",
+     "UNLV",
+     "UNLV"
+    ],
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UNLV Rebels",
+   "side_b": "UC San Diego Tritons",
+   "form": "display",
+   "event": "UC San Diego Tritons at UNLV Rebels",
+   "teams": [
+    [
+     "UNLV Rebels",
+     "UNLV",
+     "UNLV",
+     "UNLV"
+    ],
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Fort Valley State",
+   "side_b": "South Carolina State",
+   "form": "location",
+   "event": "South Carolina State Bulldogs at Fort Valley State Wildcats",
+   "teams": [
+    [
+     "Fort Valley State Wildcats",
+     "Fort Valley St",
+     "FOR",
+     "Fort Valley State"
+    ],
+    [
+     "South Carolina State Bulldogs",
+     "SC State",
+     "SCST",
+     "South Carolina State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Fort Valley St",
+   "side_b": "SC State",
+   "form": "short",
+   "event": "South Carolina State Bulldogs at Fort Valley State Wildcats",
+   "teams": [
+    [
+     "Fort Valley State Wildcats",
+     "Fort Valley St",
+     "FOR",
+     "Fort Valley State"
+    ],
+    [
+     "South Carolina State Bulldogs",
+     "SC State",
+     "SCST",
+     "South Carolina State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Fort Valley State Wildcats",
+   "side_b": "South Carolina State Bulldogs",
+   "form": "display",
+   "event": "South Carolina State Bulldogs at Fort Valley State Wildcats",
+   "teams": [
+    [
+     "Fort Valley State Wildcats",
+     "Fort Valley St",
+     "FOR",
+     "Fort Valley State"
+    ],
+    [
+     "South Carolina State Bulldogs",
+     "SC State",
+     "SCST",
+     "South Carolina State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Vanderbilt",
+   "side_b": "Kentucky",
+   "form": "location",
+   "event": "Kentucky Wildcats at Vanderbilt Commodores",
+   "teams": [
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ],
+    [
+     "Kentucky Wildcats",
+     "Kentucky",
+     "UK",
+     "Kentucky"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Vanderbilt Commodores",
+   "side_b": "Kentucky Wildcats",
+   "form": "display",
+   "event": "Kentucky Wildcats at Vanderbilt Commodores",
+   "teams": [
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ],
+    [
+     "Kentucky Wildcats",
+     "Kentucky",
+     "UK",
+     "Kentucky"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Old Dominion",
+   "side_b": "App State",
+   "form": "location",
+   "event": "App State Mountaineers at Old Dominion Monarchs",
+   "teams": [
+    [
+     "Old Dominion Monarchs",
+     "Old Dominion",
+     "ODU",
+     "Old Dominion"
+    ],
+    [
+     "App State Mountaineers",
+     "App State",
+     "APP",
+     "App State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Old Dominion Monarchs",
+   "side_b": "App State Mountaineers",
+   "form": "display",
+   "event": "App State Mountaineers at Old Dominion Monarchs",
+   "teams": [
+    [
+     "Old Dominion Monarchs",
+     "Old Dominion",
+     "ODU",
+     "Old Dominion"
+    ],
+    [
+     "App State Mountaineers",
+     "App State",
+     "APP",
+     "App State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Manhattan",
+   "side_b": "Merrimack",
+   "form": "location",
+   "event": "Merrimack Warriors at Manhattan Jaspers",
+   "teams": [
+    [
+     "Manhattan Jaspers",
+     "Manhattan",
+     "MAN",
+     "Manhattan"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Manhattan Jaspers",
+   "side_b": "Merrimack Warriors",
+   "form": "display",
+   "event": "Merrimack Warriors at Manhattan Jaspers",
+   "teams": [
+    [
+     "Manhattan Jaspers",
+     "Manhattan",
+     "MAN",
+     "Manhattan"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC San Diego",
+   "side_b": "Cal State Fullerton",
+   "form": "location",
+   "event": "Cal State Fullerton Titans at UC San Diego Tritons",
+   "teams": [
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ],
+    [
+     "Cal State Fullerton Titans",
+     "Fullerton",
+     "CSUF",
+     "Cal State Fullerton"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC San Diego",
+   "side_b": "Fullerton",
+   "form": "short",
+   "event": "Cal State Fullerton Titans at UC San Diego Tritons",
+   "teams": [
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ],
+    [
+     "Cal State Fullerton Titans",
+     "Fullerton",
+     "CSUF",
+     "Cal State Fullerton"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC San Diego Tritons",
+   "side_b": "Cal State Fullerton Titans",
+   "form": "display",
+   "event": "Cal State Fullerton Titans at UC San Diego Tritons",
+   "teams": [
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ],
+    [
+     "Cal State Fullerton Titans",
+     "Fullerton",
+     "CSUF",
+     "Cal State Fullerton"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Queens University",
+   "side_b": "West Florida",
+   "form": "location",
+   "event": "West Florida Argonauts at Queens University Royals",
+   "teams": [
+    [
+     "Queens University Royals",
+     "Queens",
+     "QUC",
+     "Queens University"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Queens",
+   "side_b": "West Florida",
+   "form": "short",
+   "event": "West Florida Argonauts at Queens University Royals",
+   "teams": [
+    [
+     "Queens University Royals",
+     "Queens",
+     "QUC",
+     "Queens University"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Queens University Royals",
+   "side_b": "West Florida Argonauts",
+   "form": "display",
+   "event": "West Florida Argonauts at Queens University Royals",
+   "teams": [
+    [
+     "Queens University Royals",
+     "Queens",
+     "QUC",
+     "Queens University"
+    ],
+    [
+     "West Florida Argonauts",
+     "West Florida",
+     "UWF",
+     "West Florida"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Iona",
+   "side_b": "Merrimack",
+   "form": "location",
+   "event": "Merrimack Warriors at Iona Gaels",
+   "teams": [
+    [
+     "Iona Gaels",
+     "Iona",
+     "IONA",
+     "Iona"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Iona Gaels",
+   "side_b": "Merrimack Warriors",
+   "form": "display",
+   "event": "Merrimack Warriors at Iona Gaels",
+   "teams": [
+    [
+     "Iona Gaels",
+     "Iona",
+     "IONA",
+     "Iona"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC San Diego",
+   "side_b": "Long Beach State",
+   "form": "location",
+   "event": "Long Beach State 49ers at UC San Diego Tritons",
+   "teams": [
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ],
+    [
+     "Long Beach State 49ers",
+     "Long Beach St",
+     "LBSU",
+     "Long Beach State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC San Diego",
+   "side_b": "Long Beach St",
+   "form": "short",
+   "event": "Long Beach State 49ers at UC San Diego Tritons",
+   "teams": [
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ],
+    [
+     "Long Beach State 49ers",
+     "Long Beach St",
+     "LBSU",
+     "Long Beach State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "UC San Diego Tritons",
+   "side_b": "Long Beach State 49ers",
+   "form": "display",
+   "event": "Long Beach State 49ers at UC San Diego Tritons",
+   "teams": [
+    [
+     "UC San Diego Tritons",
+     "UC San Diego",
+     "UCSD",
+     "UC San Diego"
+    ],
+    [
+     "Long Beach State 49ers",
+     "Long Beach St",
+     "LBSU",
+     "Long Beach State"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Missouri",
+   "side_b": "Vanderbilt",
+   "form": "location",
+   "event": "Vanderbilt Commodores at Missouri Tigers",
+   "teams": [
+    [
+     "Missouri Tigers",
+     "Missouri",
+     "MIZ",
+     "Missouri"
+    ],
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Missouri Tigers",
+   "side_b": "Vanderbilt Commodores",
+   "form": "display",
+   "event": "Vanderbilt Commodores at Missouri Tigers",
+   "teams": [
+    [
+     "Missouri Tigers",
+     "Missouri",
+     "MIZ",
+     "Missouri"
+    ],
+    [
+     "Vanderbilt Commodores",
+     "Vanderbilt",
+     "VAN",
+     "Vanderbilt"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Quinnipiac",
+   "side_b": "Merrimack",
+   "form": "location",
+   "event": "Merrimack Warriors at Quinnipiac Bobcats",
+   "teams": [
+    [
+     "Quinnipiac Bobcats",
+     "Quinnipiac",
+     "QUIN",
+     "Quinnipiac"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "womens-college-volleyball",
+   "sport": "volleyball",
+   "side_a": "Quinnipiac Bobcats",
+   "side_b": "Merrimack Warriors",
+   "form": "display",
+   "event": "Merrimack Warriors at Quinnipiac Bobcats",
+   "teams": [
+    [
+     "Quinnipiac Bobcats",
+     "Quinnipiac",
+     "QUIN",
+     "Quinnipiac"
+    ],
+    [
+     "Merrimack Warriors",
+     "Merrimack",
+     "MRMK",
+     "Merrimack"
+    ]
+   ]
+  },
+  {
+   "league": "top14",
+   "sport": "rugby",
+   "side_a": "Bordeaux",
+   "side_b": "Perpignan",
+   "form": "short",
+   "event": "Bordeaux vs Perpignan",
+   "teams": [
+    [
+     "Bordeaux",
+     "Bordeaux",
+     "BORDE",
+     null
+    ],
+    [
+     "Perpignan",
+     "Perpignan",
+     "PERPI",
+     null
+    ]
+   ]
+  }
+ ]
+}
