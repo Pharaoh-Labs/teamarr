@@ -556,6 +556,11 @@ SPORT_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\bfloswimming\b", "Swimming"),
     (r"\bflotrack\b", "Track and Field"),
     (r"\bflogymnastics\b", "Gymnastics"),
+    # Field hockey is its own sport, and no provider carries it (#925). It has
+    # to be named before the hockey pattern below, whose optional "ice" lets
+    # it match the bare word: "Field Hockey: Iowa at Michigan" was hinted
+    # Hockey, which kept ice-hockey games in play for schools that play both.
+    (r"\bfield\s+hockey\b", "Field Hockey"),
     # Hockey variants - must come before generic patterns
     (r"\b(ice\s+)?hockey\b", "Hockey"),
     (r"\bnhl\b", "Hockey"),

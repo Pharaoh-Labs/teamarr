@@ -249,6 +249,22 @@ def _is_placeholder_team(team: Team) -> bool:
     )
 
 
+_WEEKDAY_WORDS = (
+    frozenset({"mon", "monday"}),
+    frozenset({"tue", "tues", "tuesday"}),
+    frozenset({"wed", "weds", "wednesday"}),
+    frozenset({"thu", "thur", "thurs", "thursday"}),
+    frozenset({"fri", "friday"}),
+    frozenset({"sat", "saturday"}),
+    frozenset({"sun", "sunday"}),
+)
+
+
+def _weekday_words(stream_date: date | None) -> frozenset[str]:
+    """The ways a stream might write the weekday its own date falls on."""
+    return _WEEKDAY_WORDS[stream_date.weekday()] if stream_date else frozenset()
+
+
 @lru_cache(maxsize=32768)
 def _local_date(instant: datetime, tz: ZoneInfo) -> date:
     """The calendar date an instant falls on in ``tz``, memoized.
@@ -2594,8 +2610,11 @@ class TeamMatcher:
         index = self._get_identity_index()
         if index is None:
             return
-        refined1 = index.refine_side(ctx.team1, anchor="end")
-        refined2 = index.refine_side(ctx.team2, anchor="start")
+        # A weekday written beside the stream's own date belongs to the date,
+        # not the team (#925): "UCLA at Maryland Sun @ Sep 27".
+        junk = _weekday_words(ctx.classified.normalized.extracted_date)
+        refined1 = index.refine_side(ctx.team1, anchor="end", junk=junk)
+        refined2 = index.refine_side(ctx.team2, anchor="start", junk=junk)
         if refined1:
             ctx.team1 = refined1
             ctx.classified.team1 = refined1

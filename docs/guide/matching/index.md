@@ -133,6 +133,8 @@ Some keywords are ambiguous across sports — "football" could mean American Foo
 
 When entering multiple sports, separate them with commas. They display as individual badges in the table.
 
+Field hockey is recognised as its own sport rather than as hockey; no provider carries it, so those streams are filtered as unsupported instead of being tried against ice hockey games.
+
 FloSports streams are hinted by their vertical out of the box: `flofc:` is Soccer, `flofootball:` Football, `flohockey:` Hockey, `flovolleyball:` Volleyball, `flohoops:` Basketball, and so on. `flolive:` names no sport and gets no hint.
 
 ### Separators
