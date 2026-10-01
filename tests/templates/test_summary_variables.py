@@ -7,6 +7,8 @@ passthrough extractors: game_recap, game_event_note, soccer_match_note.
 
 from datetime import datetime
 
+from teamarr.config import set_global_matchup_order
+from teamarr.core import SEASON_POSTSEASON, SEASON_REGULAR
 from teamarr.core.types import Event, EventStatus, Team
 from teamarr.providers.espn.provider import ESPNProvider
 from teamarr.templates.context import (
@@ -19,7 +21,10 @@ from teamarr.templates.variables.summary import (
     extract_game_event_note,
     extract_game_preview,
     extract_game_recap,
+    extract_series_game,
+    extract_series_score,
     extract_series_summary,
+    extract_series_summary_short,
 )
 
 
@@ -155,6 +160,9 @@ def test_extractors_empty_when_unset():
         extract_soccer_match_note,
         extract_game_preview,
         extract_series_summary,
+        extract_series_game,
+        extract_series_score,
+        extract_series_summary_short,
     ):
         assert fn(ctx, gc) == ""
 
@@ -169,5 +177,86 @@ def test_extractors_safe_without_event():
         extract_soccer_match_note,
         extract_game_preview,
         extract_series_summary,
+        extract_series_game,
+        extract_series_score,
+        extract_series_summary_short,
     ):
         assert fn(ctx, gc) == ""
+
+
+def test_series_game_in_postseason():
+    ctx, gc = _ctx(_event(
+        season_type=SEASON_POSTSEASON,
+        game_event_note="AL Wild Card - Game 2",
+    ))
+    assert extract_series_game(ctx, gc) == "Game 2"
+
+    ctx2, gc2 = _ctx(_event(
+        season_type=SEASON_POSTSEASON,
+        game_event_note="Stanley Cup Final - Game 7",
+    ))
+    assert extract_series_game(ctx2, gc2) == "Game 7"
+
+
+def test_series_game_empty_in_regular_season():
+    ctx, gc = _ctx(_event(
+        season_type=SEASON_REGULAR,
+        game_event_note="AL Wild Card - Game 2",
+    ))
+    assert extract_series_game(ctx, gc) == ""
+
+
+def test_series_game_empty_when_no_game_number():
+    ctx, gc = _ctx(_event(
+        season_type=SEASON_POSTSEASON,
+        game_event_note="Super Bowl LIX",
+    ))
+    assert extract_series_game(ctx, gc) == ""
+
+
+def test_series_score_and_summary_short_postseason():
+    # Away is A, Home is B
+    set_global_matchup_order("auto")
+    ctx, gc = _ctx(_event(
+        season_type=SEASON_POSTSEASON,
+        sport="baseball",
+        series_summary="B leads 2-1",
+    ))
+    # In away-first (baseball auto): A (Away, 1 win) - B (Home, 2 wins) -> "1-2"
+    assert extract_series_score(ctx, gc) == "1-2"
+    assert extract_series_summary_short(ctx, gc) == "A 1 - B 2"
+
+
+def test_series_score_and_summary_short_tied():
+    ctx, gc = _ctx(_event(
+        season_type=SEASON_POSTSEASON,
+        sport="baseball",
+        series_summary="Series tied 1-1",
+    ))
+    assert extract_series_score(ctx, gc) == "1-1"
+    assert extract_series_summary_short(ctx, gc) == "Tied 1-1"
+
+
+def test_series_score_and_summary_short_home_first_localization():
+    set_global_matchup_order("home_first")
+    try:
+        ctx, gc = _ctx(_event(
+            season_type=SEASON_POSTSEASON,
+            sport="baseball",
+            series_summary="B leads 2-1",
+        ))
+        # In home-first: B (Home, 2 wins) - A (Away, 1 win) -> "2-1"
+        assert extract_series_score(ctx, gc) == "2-1"
+        assert extract_series_summary_short(ctx, gc) == "B 2 - A 1"
+    finally:
+        set_global_matchup_order("auto")
+
+
+def test_series_score_and_summary_short_empty_in_regular_season():
+    ctx, gc = _ctx(_event(
+        season_type=SEASON_REGULAR,
+        sport="baseball",
+        series_summary="B leads 2-1",
+    ))
+    assert extract_series_score(ctx, gc) == ""
+    assert extract_series_summary_short(ctx, gc) == ""

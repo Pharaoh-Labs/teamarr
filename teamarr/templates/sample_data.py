@@ -1556,6 +1556,13 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
             "The Flint Tropics visit the Pinchy Crabs at The Crab Pot Pavilion."
         ),
         "series_summary": "Tropics lead series 3-1",
+        "series_game": "Game 4",
+        "series_game.next": "Game 5",
+        "series_game.last": "Game 7",
+        "series_score": "1-3",
+        "series_score.last": "4-2",
+        "series_summary_short": "GMT 1 - FLI 3",
+        "series_summary_short.last": "FLI 4 - MHC 2",
         "home_last_five": "4-1",
         "away_last_five": "2-3",
         "last_five_summary": (

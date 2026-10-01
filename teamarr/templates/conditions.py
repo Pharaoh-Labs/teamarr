@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ConditionOption:
-    """A single conditional row (description, plus optional title/subtitle).
+    """A single conditional row (description, plus optional title/subtitle/art overrides).
 
     ``template`` keeps its historical meaning of "the description string" —
     renaming the JSON key would break every stored template.
@@ -79,6 +79,9 @@ class ConditionOption:
     condition_value: str | None = None
     title: str | None = None
     subtitle: str | None = None
+    program_art_url: str | None = None
+    event_channel_logo_url: str | None = None
+    art_url: str | None = None
 
     @property
     def is_default(self) -> bool:
@@ -89,12 +92,20 @@ class ConditionOption:
         """The row's text for a selectable field ('' when not defined)."""
         if field == "description":
             return self.template or ""
+        if field in ("program_art_url", "art_url"):
+            return self.program_art_url or self.art_url or ""
         return getattr(self, field, None) or ""
 
 
 # Fields the selector can pick per row. Order matters only for trace-reason
 # readability; each field's selection is independent.
-SELECTABLE_FIELDS = ("description", "title", "subtitle")
+SELECTABLE_FIELDS = (
+    "description",
+    "title",
+    "subtitle",
+    "program_art_url",
+    "event_channel_logo_url",
+)
 
 
 class ConditionEvaluator:
@@ -747,6 +758,9 @@ class ConditionalDescriptionSelector:
                     condition_value=item.get("condition_value"),
                     title=item.get("title"),
                     subtitle=item.get("subtitle"),
+                    program_art_url=item.get("program_art_url"),
+                    event_channel_logo_url=item.get("event_channel_logo_url"),
+                    art_url=item.get("art_url"),
                 )
             )
 

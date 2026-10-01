@@ -107,6 +107,12 @@ base URL.
 The racing starter ships without program art: race weekends have no home/away
 matchup for the cover path to compose from.
 
+Playoff `GAME 2` channel-tile badges are **opt-in**: add an `is_playoff`
+channel-logo override to your event template after configuring a Game Thumbs
+instance that supports custom badges. They are not enabled on starters by
+default, since Game Thumbs ignores custom badge text unless configured to
+allow it. See [Playoff game badges](../epg/game-thumbs#playoff-game-badges-opt-in).
+
 ## Deleting and restoring starters
 
 Starter templates you **delete** stay deleted, and starters you **rename**

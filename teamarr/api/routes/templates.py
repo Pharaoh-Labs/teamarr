@@ -40,6 +40,7 @@ from teamarr.templates.validation import (
     validate_fields,
     warnings_as_dicts,
 )
+from teamarr.utilities.art_url import apply_art_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,13 @@ def preview_template(req: TemplatePreviewRequest):
         def _index_for(field: str) -> int | None:
             return next((r["index"] for r in trace if field in r["selected_for"]), None)
 
+        art_key = (
+            "program_art_url"
+            if "program_art_url" in selected_fields
+            else ("art_url" if "art_url" in selected_fields else None)
+        )
+        logo_key = "event_channel_logo_url" if "event_channel_logo_url" in selected_fields else None
+
         conditional = {
             "rendered": _render(selected_fields.get("description", "")),
             "selected_index": _index_for("description"),
@@ -210,6 +218,18 @@ def preview_template(req: TemplatePreviewRequest):
                 _render(selected_fields["subtitle"]) if "subtitle" in selected_fields else None
             ),
             "selected_subtitle_index": _index_for("subtitle"),
+            "rendered_art_url": (
+                apply_art_base_url(_render(selected_fields[art_key]), resolver.art_base_url)
+                if art_key
+                else None
+            ),
+            "selected_art_url_index": _index_for(art_key) if art_key else None,
+            "rendered_channel_logo_url": (
+                apply_art_base_url(_render(selected_fields[logo_key]), resolver.art_base_url)
+                if logo_key
+                else None
+            ),
+            "selected_channel_logo_index": _index_for(logo_key) if logo_key else None,
             "rows": trace,
         }
 

@@ -32,7 +32,14 @@ function firedFields(trace?: ConditionRowTrace): string[] {
 
 function firesLabel(fields: string[]): string {
   if (fields.length === 1 && fields[0] === "description") return "fires"
-  const short = fields.map((f) => (f === "description" ? "desc" : f === "subtitle" ? "sub" : "title"))
+  const short = fields.map((f) => {
+    if (f === "description") return "desc"
+    if (f === "subtitle") return "sub"
+    if (f === "title") return "title"
+    if (f === "program_art_url" || f === "art_url") return "art"
+    if (f === "event_channel_logo_url") return "logo"
+    return f
+  })
   return `fires: ${short.join("+")}`
 }
 
@@ -280,12 +287,26 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                           <span className="ml-1 text-[10px] text-amber-500">(ESPN)</span>
                         )}
                       </span>
-                      {(cond.title || cond.subtitle) && (
+                      {(cond.title || cond.subtitle || cond.program_art_url || cond.event_channel_logo_url) && (
                         <span
                           className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-500/20 text-violet-400"
-                          title={`Also overrides ${[cond.title && "title", cond.subtitle && "subtitle"].filter(Boolean).join(" + ")}`}
+                          title={`Also overrides ${[
+                            cond.title && "title",
+                            cond.subtitle && "subtitle",
+                            cond.program_art_url && "art",
+                            cond.event_channel_logo_url && "logo",
+                          ]
+                            .filter(Boolean)
+                            .join(" + ")}`}
                         >
-                          {[cond.title && "T", cond.subtitle && "S"].filter(Boolean).join("·")}
+                          {[
+                            cond.title && "T",
+                            cond.subtitle && "S",
+                            cond.program_art_url && "A",
+                            cond.event_channel_logo_url && "L",
+                          ]
+                            .filter(Boolean)
+                            .join("·")}
                         </span>
                       )}
                       {firedFields(trace).length > 0 ? (
@@ -431,6 +452,40 @@ export function ConditionsTab({ formData, setFormData, resolveTemplate, isTeamTe
                               </div>
                             )}
                           </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">Artwork URL Override <span className="text-muted-foreground">(optional)</span></Label>
+                            <Input
+                              value={cond.program_art_url || ""}
+                              onChange={(e) => updateCondition(idx, "program_art_url", e.target.value)}
+                              placeholder="{league_id}/{away_team|pascal}/{home_team|pascal}/cover.png..."
+                              className="font-mono text-sm"
+                            />
+                            {cond.program_art_url && (
+                              <div className="mt-1 px-2 py-1 bg-secondary/50 border-l-2 border-violet-500 rounded-sm">
+                                <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-2">Preview:</span>
+                                <span className="text-sm italic">{resolveTemplate(cond.program_art_url)}</span>
+                              </div>
+                            )}
+                          </div>
+                          {!isTeamTemplate && (
+                            <div>
+                              <Label className="text-xs">Channel Logo URL Override <span className="text-muted-foreground">(optional)</span></Label>
+                              <Input
+                                value={cond.event_channel_logo_url || ""}
+                                onChange={(e) => updateCondition(idx, "event_channel_logo_url", e.target.value)}
+                                placeholder="{league_code}/{away_team|pascal}/{home_team|pascal}/logo.png..."
+                                className="font-mono text-sm"
+                              />
+                              {cond.event_channel_logo_url && (
+                                <div className="mt-1 px-2 py-1 bg-secondary/50 border-l-2 border-violet-500 rounded-sm">
+                                  <span className="text-[10px] text-muted-foreground uppercase font-semibold mr-2">Preview:</span>
+                                  <span className="text-sm italic">{resolveTemplate(cond.event_channel_logo_url)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                         {trace && (
                           <p className={`text-[11px] ${

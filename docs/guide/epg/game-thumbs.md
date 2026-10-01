@@ -43,6 +43,41 @@ The shipped [starter templates](../templates/defaults) use these Game Thumbs que
 - `logo=true` to include team logos, `fallback=true` to serve a generic image when a team is unknown
 - a `badge=` overlay parameter on event channel logos
 
+### Playoff game badges (opt-in)
+
+To put a `GAME 2` badge on a matchup **channel tile**, add a row to an
+**event** template's Conditions tab with **Condition = Playoff/postseason game**
+(`is_playoff`). Set **Channel Logo URL Override** to:
+
+```text
+{league_code}/{away_team|pascal}/{home_team|pascal}/thumb.png?aspect=16-9&style=6&logo=true&fallback=true&badge={series_game|url}
+```
+
+Set **Game-Thumbs Base URL** under EPG → Output first. The `thumb.png` route
+provides a wide matchup image for tiles; use `logo.png` instead if your client
+expects a square channel logo. For the programme's EPG cover/thumbnail *as well*,
+set the row's **Artwork URL Override** to a suitable `thumb.png` or `cover.png`
+path with the same `badge={series_game|url}` query parameter. The two overrides
+are independent; a programme `<icon>` does not set the channel's icon.
+
+{: .important }
+> **Custom text requires a self-hosted Game Thumbs instance with
+> `ALLOW_CUSTOM_BADGES=true`.** Game Thumbs' default badge allowlist accepts
+> keywords such as `PLAYOFFS` and `4K`, but not `GAME 2`. Without that setting,
+> it still serves the image **without** the game-number overlay. The hosted
+> instance may not permit custom badges; check your resolved URL in a browser.
+
+For Docker, set `-e ALLOW_CUSTOM_BADGES=true` when starting Game Thumbs (or
+`ALLOW_CUSTOM_BADGES: "true"` in its Compose environment). This setting belongs
+to the **Game Thumbs container**, not Teamarr.
+
+`{series_game}` is populated only for postseason events whose provider note
+includes a game number; for other games it is empty. Teamarr constructs the
+URL but does not render the badge or the matchup artwork itself. Starters are
+not automatically changed to use custom badges, so existing channel art keeps
+working when Game Thumbs runs with its default configuration. The guide's
+`LIVE`/`UPCOMING` labels are displayed by the viewing app, not by Game Thumbs.
+
 ## Resources
 
 - **Documentation**: [game-thumbs-docs.swvn.io](https://game-thumbs-docs.swvn.io)

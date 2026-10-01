@@ -198,18 +198,21 @@ class IdleOffseasonContent(BaseModel):
 
 
 class ConditionalDescriptionEntry(BaseModel):
-    """A conditional row: description, plus optional title/subtitle overrides.
+    """A conditional row: description, plus optional title/subtitle/art overrides.
 
     ``template`` is the description string (historical name — it is the
-    stored JSON key). ``title``/``subtitle`` (#370 part 2) are optional
-    per-field overrides selected independently by the same condition.
+    stored JSON key). ``title``/``subtitle``/``program_art_url`` (#370 part 2)
+    are optional per-field overrides selected independently by the same condition.
     """
 
     condition: str | None = None  # None for default descriptions (priority=100)
     condition_value: str | None = None
-    template: str = ""  # description; may be empty when the row only overrides title/subtitle
+    template: str = ""  # description; may be empty when the row only overrides title/subtitle/art
     title: str | None = None
     subtitle: str | None = None
+    program_art_url: str | None = None
+    event_channel_logo_url: str | None = None
+    art_url: str | None = None
     priority: int = 50
     label: str | None = None  # Optional label for default descriptions
 
@@ -433,7 +436,7 @@ class TemplateConditionalPreview(BaseModel):
     """Rendered conditional fields plus the per-row selection trace.
 
     ``rendered``/``selected_index`` keep their historical description-only
-    meaning; the title/subtitle pairs (#370 part 2) are None when no matching
+    meaning; the title/subtitle/art pairs (#370 part 2) are None when no matching
     row defines that field.
     """
 
@@ -443,6 +446,10 @@ class TemplateConditionalPreview(BaseModel):
     selected_title_index: int | None = None
     rendered_subtitle: str | None = None
     selected_subtitle_index: int | None = None
+    rendered_art_url: str | None = None
+    selected_art_url_index: int | None = None
+    rendered_channel_logo_url: str | None = None
+    selected_channel_logo_index: int | None = None
     rows: list[ConditionRowTrace]
 
 

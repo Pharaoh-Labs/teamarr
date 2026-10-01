@@ -42,6 +42,8 @@ export interface ConditionalDescription {
   template: string
   title?: string | null
   subtitle?: string | null
+  program_art_url?: string | null
+  event_channel_logo_url?: string | null
   priority: number
   label?: string  // Optional label for fallback descriptions
 }
@@ -235,6 +237,10 @@ export interface ConditionalPreview {
   selected_title_index: number | null
   rendered_subtitle: string | null
   selected_subtitle_index: number | null
+  rendered_art_url?: string | null
+  selected_art_url_index?: number | null
+  rendered_channel_logo_url?: string | null
+  selected_channel_logo_index?: number | null
   rows: ConditionRowTrace[]
 }
 

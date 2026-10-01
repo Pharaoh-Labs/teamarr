@@ -477,11 +477,16 @@ class TeamEPGGenerator:
         subtitle = prepend_postponed_label(subtitle, event, options.prepend_postponed_label)
         description = prepend_postponed_label(description, event, options.prepend_postponed_label)
 
-        # Icon: template program_art_url > channel logo > home team logo
+        # Icon: conditional override > template program_art_url > channel logo > home team logo
         # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
-        if options.template.program_art_url:
+        art_template = (
+            conditional_fields.get("program_art_url")
+            or conditional_fields.get("art_url")
+            or options.template.program_art_url
+        )
+        if art_template:
             icon = self._resolver.resolve_art(
-                options.template.program_art_url, context, variables=variables
+                art_template, context, variables=variables
             )
         else:
             icon = logo_url or (event.home_team.logo_url if event.home_team else None)
