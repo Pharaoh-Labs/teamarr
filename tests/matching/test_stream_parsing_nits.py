@@ -44,7 +44,7 @@ class TestFieldHockeyIsNotIceHockey:
         [
             "(US) (BTN+ 010) | Field Hockey: Iowa at Michigan (2026-10-02 16:50:00)",
             "BIG10+ 02: Field Hockey La Salle at Rutgers Sun @ Sep 27 12:00PM ET",
-            "Flo Sports 16: flolive: 2026 Dickinson vs Juniata - Field Hockey (Dickinson v Juniata)",
+            "Flo Sports 16: flolive: 2026 Dickinson vs Juniata - Field Hockey (Dickinson)",
         ],
     )
     def test_field_hockey_is_its_own_sport(self, name):
