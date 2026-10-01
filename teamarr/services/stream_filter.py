@@ -48,6 +48,7 @@ UNSUPPORTED_SPORTS = frozenset(
     [
         "Swimming",
         "Diving",
+        "Field Hockey",
         "Gymnastics",
         "Wrestling",
         "Track and Field",

@@ -710,6 +710,9 @@ def _parse_time_match(match: re.Match) -> tuple[time | None, str | None]:
 # =============================================================================
 
 
+_LANGUAGE_PREFIX = re.compile(r"\ben\s+espa[ñn]ol\s*[-–:]\s*", re.IGNORECASE)
+
+
 def normalize_stream(stream_name: str) -> NormalizedStream:
     """Full normalization pipeline for stream names.
 
@@ -754,6 +757,11 @@ def normalize_stream(stream_name: str) -> NormalizedStream:
 
     # Step 2.5: Drop video-quality tags before anything looks at prefixes (#651)
     text = strip_quality_tags(text)
+
+    # Step 2.55: A language marker glued to the first team (#925): ESPN+ writes
+    # "En Español-Burgos vs. Eldense". Only the dash/colon form — a trailing
+    # "(Español)" is handled as a parenthetical downstream.
+    text = _LANGUAGE_PREFIX.sub("", text)
 
     # Step 2.6: A trailing guide kick-off clock is not part of either team.
     text = strip_kickoff_suffix(text)

@@ -582,7 +582,9 @@ class TeamIdentityIndex:
                 return True
         return False
 
-    def refine_side(self, side: str, *, anchor: str) -> str | None:
+    def refine_side(
+        self, side: str, *, anchor: str, junk: AbstractSet[str] = frozenset()
+    ) -> str | None:
         """The slice of ``side`` that names a team, or None to leave it alone.
 
         Finds the longest run of tokens that is a known surface (ties go to the
@@ -592,6 +594,13 @@ class TeamIdentityIndex:
         run could name has a claim on any token outside it. None when the side
         is already a surface, contains none, or the remainder might matter — in
         every such case the existing fuzzy path scores the untouched side.
+
+        ``junk`` are normalized words the caller knows are not part of a name
+        for THIS stream — the weekday its own date falls on (#925) — and so may
+        sit flush against the span like a competition label does. Both other
+        guards still apply, which is the point of doing it here rather than in
+        a regex: "Maryland Sun @ Sep 27" loses its Sunday, "Connecticut Sun"
+        on a Sunday is a surface in its own right and is never touched.
         """
         raw_tokens = side.split()
         if len(raw_tokens) < 2:
@@ -631,11 +640,13 @@ class TeamIdentityIndex:
         if self._claims_remainder(remainder, span_tokens, identities):
             return None
         lo, hi = owner[start], owner[start + n - 1]
-        if not self._bounded(raw_tokens[:lo][::-1]) or not self._bounded(raw_tokens[hi + 1 :]):
+        if not self._bounded(raw_tokens[:lo][::-1], junk) or not self._bounded(
+            raw_tokens[hi + 1 :], junk
+        ):
             return None
         return " ".join(raw_tokens[lo : hi + 1])
 
-    def _bounded(self, outward: list[str]) -> bool:
+    def _bounded(self, outward: list[str], junk: AbstractSet[str] = frozenset()) -> bool:
         """Is the stripped text separated from the span by a real boundary?
 
         ``outward`` is the remainder on one side, nearest token first. A plain
@@ -658,6 +669,8 @@ class TeamIdentityIndex:
         if not run:
             return True
         words = [piece for token in run for piece in normalize_text(token).split()]
+        if junk and all(word in junk for word in words):
+            return True
         return _canon_span(words) in self._labels or _canon_span(words[::-1]) in self._labels
 
     def _resolve_uncached(self, norm: str) -> Resolution:
