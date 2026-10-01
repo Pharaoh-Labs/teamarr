@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 from teamarr.consumers.matching.classifier import StreamCategory
 from teamarr.consumers.matching.epg_index import EPGProgramIndex
-from teamarr.consumers.matching.matcher import MatchedStreamResult
+from teamarr.consumers.matching.matcher import MatchedStreamResult, StreamMatcher
 from teamarr.consumers.matching.result import FailedReason, MatchMethod, MatchOutcome
 from teamarr.dispatcharr.types import DispatcharrProgram
 from tests.fakes import make_stream_matcher
@@ -650,13 +650,15 @@ def test_reconcile_keeps_specific_name_failure():
     assert out[0].detail == "near-miss: Cubs at Cardinals 95/100"
 
 
-def test_reconcile_no_programmes_leaves_result_untouched():
+def test_reconcile_no_programmes_is_no_epg_channel():
+    """No programmes to read is its own verdict (#877); the name path's skip
+    used to be all the row said. The skip itself still rides alongside."""
     index = EPGProgramIndex({"espn": []})
     m = _bare_matcher(index)
     name = [_result(matched=False)]
     name[0].exclusion_reason = "name_match_disabled"
     out = m._reconcile_epg(name, [], "espn")
-    assert out[0].failed_reason is None
+    assert out[0].failed_reason == FailedReason.NO_EPG_CHANNEL
     assert out[0].exclusion_reason == "name_match_disabled"
 
 
@@ -668,3 +670,83 @@ def test_reconcile_matched_stream_gets_no_failure_diagnosis(monkeypatch):
     name = [_result(matched=True)]
     out = m._reconcile_epg(name, [], "espn")
     assert out[0].failed_reason is None
+
+
+# ============================== #877: no guide at all is its own verdict
+
+
+def _skipped(exclusion="team_streams_disabled"):
+    return MatchedStreamResult(
+        stream_name="ITV1 HD RT", stream_id=945, matched=False, exclusion_reason=exclusion
+    )
+
+
+def test_unresolved_tvg_id_reports_no_epg_channel_not_the_name_skip():
+    """"ITV1 HD RT" in an EPG-only group persisted as
+    skipped:team_streams_disabled — the name path's leftover, pointing at a
+    setting that has nothing to do with a linear channel finding no guide."""
+    m = _bare_matcher(EPGProgramIndex({}), team_streams_enabled=False)
+    out = m._reconcile_epg([_skipped()], [], "itv1.uk")
+    assert out[0].failed_reason == FailedReason.NO_EPG_CHANNEL
+    assert "itv1.uk" in out[0].detail
+    assert "team_streams_disabled" in out[0].detail  # kept for triage
+
+
+def test_stream_without_a_tvg_id_reports_no_epg_channel():
+    results = [_skipped("unclassifiable")]
+    StreamMatcher._mark_no_epg_channel(results, None)
+    assert results[0].failed_reason == FailedReason.NO_EPG_CHANNEL
+    assert "no tvg-id" in results[0].detail
+
+
+def test_no_epg_channel_never_replaces_a_real_verdict():
+    failed = MatchedStreamResult(
+        stream_name="x",
+        stream_id=1,
+        matched=False,
+        failed_reason=FailedReason.NO_EVENT_FOUND,
+        detail="best=...",
+    )
+    matched = _result(matched=True)
+    StreamMatcher._mark_no_epg_channel([failed, matched], None)
+    assert failed.failed_reason == FailedReason.NO_EVENT_FOUND
+    assert failed.detail == "best=..."
+    assert matched.failed_reason is None
+
+
+def test_a_guide_that_was_read_keeps_no_epg_program_match(monkeypatch):
+    """Programmes existed and none bound: that is the #683 verdict, not this one."""
+    index = EPGProgramIndex({"espn": [_prog(), _prog(start=BASE + timedelta(hours=4))]})
+    m = _bare_matcher(index)
+    monkeypatch.setattr(
+        m, "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
+    )
+    epg = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+    out = m._reconcile_epg([_skipped()], epg, "espn")
+    assert out[0].failed_reason == FailedReason.NO_EPG_PROGRAM_MATCH
+
+
+def _runnable(m, monkeypatch, db_factory):
+    """Let a service-less matcher run match_all over a temp database."""
+    from teamarr.consumers.stream_match_cache import StreamMatchCache
+
+    m._cache = StreamMatchCache(db_factory)
+    m._generation_provided = True
+    monkeypatch.setattr(m, "_load_league_event_types", lambda: None)
+    monkeypatch.setattr(m, "_match_single", lambda **kw: [_skipped()])
+    return m
+
+
+def test_match_all_marks_streams_without_tvg_id_in_an_epg_group(monkeypatch, db_factory):
+    matcher = _bare_matcher(EPGProgramIndex({}), team_streams_enabled=False)
+    m = _runnable(matcher, monkeypatch, db_factory)
+    result = m.match_all([{"id": 945, "name": "ITV1 HD RT"}], date(2026, 6, 1))
+    assert [r.failed_reason for r in result.results] == [FailedReason.NO_EPG_CHANNEL]
+
+
+def test_match_all_leaves_non_epg_groups_alone(monkeypatch, db_factory):
+    m = _runnable(_bare_matcher(None, team_streams_enabled=False), monkeypatch, db_factory)
+    result = m.match_all([{"id": 945, "name": "ITV1 HD RT"}], date(2026, 6, 1))
+    assert result.results[0].failed_reason is None
+    assert result.results[0].exclusion_reason == "team_streams_disabled"
