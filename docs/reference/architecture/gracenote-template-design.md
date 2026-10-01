@@ -106,8 +106,9 @@ with per-sport shapes — so it became the two honest vars above rather than one
 normalized field. `{game_recap}` prefers ESPN's `shortLinkText` (a clean, EPG-sized
 headline that carries the score) over the long `.description` wire body, falling back
 to the body with the AP dateline em dash stripped. Per-event `{game_preview}` (summary
-`article` type Preview) and `{series_summary}` (`seasonseries[0].summary`) are the
-gated Tier-2 follow-ups.
+`article` type Preview) and `{series_summary}` (from `seasonseries` via
+`select_series`, which prioritizes the active playoff series over a completed
+regular-season one, #920) are the gated Tier-2 follow-ups.
 
 **`gracenote_category` gaps** (majors match perfectly): curate **UFC** (`"Ultimate
 Fighting Championship Mma"` → "UFC ...") and the **56 import-enabled fallback leagues**

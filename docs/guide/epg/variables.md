@@ -486,7 +486,7 @@ Dedicated prose for additional sports, including hockey, can be added separately
 once representative provider payloads are available for validation.
 
 {: .note }
-Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. In main descriptions, gate them with condition rows (`has_preview`, `has_recap`, …); in filler registers, use [filler condition rows](conditions#filler-condition-rows) — the starter set's postgame `has_recap → {game_recap.last}` row is the canonical example. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` and `{series_summary}` come from the per-event summary fetch that EPG generation already makes (no extra API calls).
+Because these populate only for some games, pair them with other content or a static fallback so a template never renders blank. In main descriptions, gate them with condition rows (`has_preview`, `has_recap`, …); in filler registers, use [filler condition rows](conditions#filler-condition-rows) — the starter set's postgame `has_recap → {game_recap.last}` row is the canonical example. `{game_recap}` and `{game_event_note}` come free from the scoreboard; `{game_preview}` comes from the per-event summary fetch that EPG generation already makes (no extra API calls), and `{series_summary}` arrives both there and straight from the scoreboard for playoff games.
 
 ---
 

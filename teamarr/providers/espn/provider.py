@@ -753,8 +753,17 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             article = data.get("article") or {}
             if article.get("type") == "Preview":
                 event.game_preview = self._editorial_text(article)
+            from teamarr.providers.espn.preview import apply_generated_preview_fields, select_series
+
+            # seasonseries is authoritative over any competition.series value
+            # _parse_event filled above, and the explicit "" clears it when the
+            # payload has no usable series. apply_generated_preview_fields
+            # below re-derives the identical selection (same data + event.id),
+            # so the two cannot drift apart by construction.
             series = data.get("seasonseries") or []
-            event.series_summary = (series[0].get("summary") if series else "") or ""
+            chosen_series = select_series(series, event.id)
+            summary_text = chosen_series.get("summary") if chosen_series else ""
+            event.series_summary = str(summary_text) if summary_text else ""
             # Structured preview (tvnk.15): recent-form W-L per team from
             # lastFiveGames — available days ahead, unlike preview prose.
             home_form, away_form = self._parse_last_five(
@@ -764,8 +773,6 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             event.away_last_five = away_form
             # Typed provider facts used by public variables and the optional
             # generated-preview formatter. Betting payloads are never parsed.
-            from teamarr.providers.espn.preview import apply_generated_preview_fields
-
             apply_generated_preview_fields(data, event)
         return event
 
@@ -874,6 +881,17 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             season_type = self._parse_season_type(season_data)
             season_year = season_data.get("year")
 
+            comp_series = competition.get("series")
+            series_summary = ""
+            if isinstance(comp_series, dict):
+                series_summary = str(comp_series.get("summary") or "")
+            elif isinstance(comp_series, list):
+                from teamarr.providers.espn.preview import select_series
+
+                chosen_series = select_series(comp_series, event_id)
+                if chosen_series and chosen_series.get("summary"):
+                    series_summary = str(chosen_series["summary"])
+
             return Event(
                 id=event_id,
                 provider=self.name,
@@ -892,6 +910,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 odds_data=odds_data,
                 season_type=season_type,
                 season_year=season_year,
+                series_summary=series_summary,
                 game_recap=game_recap,
                 game_event_note=game_event_note,
                 soccer_match_note=soccer_match_note,
