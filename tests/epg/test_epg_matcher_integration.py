@@ -686,9 +686,9 @@ def test_unresolved_tvg_id_reports_no_epg_channel_not_the_name_skip():
     skipped:team_streams_disabled — the name path's leftover, pointing at a
     setting that has nothing to do with a linear channel finding no guide."""
     m = _bare_matcher(EPGProgramIndex({}), team_streams_enabled=False)
-    out = m._reconcile_epg([_skipped()], [], "itv1.uk")
+    out = m._reconcile_epg([_skipped()], [], "ITV1-RT")
     assert out[0].failed_reason == FailedReason.NO_EPG_CHANNEL
-    assert "itv1.uk" in out[0].detail
+    assert "ITV1-RT" in out[0].detail
     assert "team_streams_disabled" in out[0].detail  # kept for triage
 
 
