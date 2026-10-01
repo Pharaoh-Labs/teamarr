@@ -133,6 +133,8 @@ Some keywords are ambiguous across sports — "football" could mean American Foo
 
 When entering multiple sports, separate them with commas. They display as individual badges in the table.
 
+FloSports streams are hinted by their vertical out of the box: `flofc:` is Soccer, `flofootball:` Football, `flohockey:` Hockey, `flovolleyball:` Volleyball, `flohoops:` Basketball, and so on. `flolive:` names no sport and gets no hint.
+
 ### Separators
 
 Matchup delimiters that split a stream name into two teams. Teamarr ships with built-in separators (`vs`, `@`, `at`, `x`, `contra`, and others), and this section lets you add locale-specific ones your provider uses.

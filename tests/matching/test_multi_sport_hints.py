@@ -158,3 +158,73 @@ class TestStreamFilterMultiSport:
         # Multi-sport hint — should NOT be filtered since Soccer and Football are supported
         sports = sport if isinstance(sport, list) else [sport] if sport else []
         assert not all(s in UNSUPPORTED_SPORTS for s in sports)
+
+
+# ---------------------------------------------------------------------------
+# FloSports verticals (#923)
+# ---------------------------------------------------------------------------
+
+
+class TestFloVerticalIsASportHint:
+    """FloSports glues its vertical onto the brand: ``flovolleyball: 2026
+    Maryville College vs Rhodes College - Women's``. Every sport word is
+    anchored on ``\\b``, so none of them saw it; the stream went unhinted onto
+    whatever game the two schools played that day, and 4 ``flofc:`` soccer
+    streams sat on college-football games in a replay of prod's streams."""
+
+    @staticmethod
+    def _detect(text: str):
+        from teamarr.services.detection_keywords import DetectionKeywordService
+
+        DetectionKeywordService.invalidate_cache()
+        return DetectionKeywordService.detect_sport(text)
+
+    def test_verticals_name_their_sport(self):
+        cases = {
+            "flofc: 2026 Catawba vs Tusculum - Men's": "Soccer",
+            "flovolleyball: 2026 Maryville College vs Rhodes College - Women's": "Volleyball",
+            "flohockey: 2026 Shawinigan Cataractes vs Rimouski Oceanic": "Hockey",
+            "flofootball: 2026 Schreiner vs Centenary (LA)": "Football",
+            "flohoops: 2026 Hofstra vs Towson": "Basketball",
+            "florugby: 2026 Toulon vs RC Vannes": "Rugby",
+        }
+        for text, sport in cases.items():
+            assert self._detect(text) == sport, text
+
+    def test_flofootball_is_american_football_not_the_ambiguous_word(self):
+        """Bare 'football' means Soccer or Football; Flo's football vertical
+        is the American game and its soccer vertical is flofc."""
+        assert self._detect("flofootball: 2026 Brevard College vs Guilford") == "Football"
+
+    def test_the_vertical_outranks_a_sport_word_later_in_the_title(self):
+        assert self._detect("flofc: 2026 Football Club Dallas vs Hockey Town FC") == "Soccer"
+
+    def test_flolive_names_no_sport(self):
+        assert self._detect("flolive: 2026 Central Michigan vs Davenport - Ultimate") is None
+
+    def test_floracing_is_not_hinted(self):
+        """A 'Racing' hint would reroute the stream to the racing matcher."""
+        assert self._detect("floracing: 2026 IMCA Creek Classic at 141 Speedway") is None
+
+    def test_unsupported_verticals_are_filtered_as_unsupported(self):
+        from teamarr.services.stream_filter import UNSUPPORTED_SPORTS
+
+        for text in (
+            "flowrestling: 2026 Final X Wrestle-Offs",
+            "floswimming: 2026 Pomona-Pitzer vs Claremont M-S - Men's Water Polo",
+            "flotrack: 2026 Michael Pretorius Invitational",
+        ):
+            assert self._detect(text) in UNSUPPORTED_SPORTS, text
+
+    def test_real_flo_stream_carries_the_hint_through_classification(self):
+        from teamarr.consumers.matching.classifier import classify_stream
+
+        classified = classify_stream(
+            "Flo Sports 389: flovolleyball: 2026 Maryville College vs Rhodes College - Women's"
+            " (Maryville College vs Rhodes College) @ 26 Sep 04:00 PM ET"
+        )
+        assert classified.sport_hint == "Volleyball"
+
+    def test_a_soccer_vertical_stream_refuses_a_football_game(self):
+        assert _sport_hint_matches("Soccer", "soccer")
+        assert not _sport_hint_matches("Soccer", "football")
