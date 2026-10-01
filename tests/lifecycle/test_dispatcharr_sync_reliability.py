@@ -855,6 +855,91 @@ class TestReconciliationProfileDrift:
         assert profile_drift[0]["actual"] == []
 
 
+class TestReconciliationAllProfilesSentinel:
+    """A stored [0] means "every profile" (#910). Dispatcharr reads it back as
+    the concrete id list, so comparing the two literally reported every
+    all-profiles channel as drift on every pass and re-PATCHed [0] to no
+    effect. Same rule as the syncer (#894)."""
+
+    @staticmethod
+    def _detect(recon_conn, dispatcharr_profiles, catalog):
+        recon_conn.execute(
+            "INSERT INTO managed_channels "
+            "(id, event_epg_group_id, event_id, event_provider, channel_name, "
+            "tvg_id, dispatcharr_channel_id, dispatcharr_uuid, channel_group_id, "
+            "channel_number, channel_profile_ids) "
+            "VALUES (1, 1, '123', 'espn', 'Test', 'teamarr-event-123', "
+            "100, 'uuid-100', 10, '5001', '[0]')"
+        )
+        recon_conn.commit()
+        cm = MagicMock()
+        cm.get_channel.return_value = _make_dispatcharr_channel(
+            streams=(), channel_profile_ids=dispatcharr_profiles
+        )
+        if isinstance(catalog, Exception):
+            cm.list_profiles.side_effect = catalog
+        else:
+            cm.list_profiles.return_value = [MagicMock(id=i) for i in catalog]
+        reconciler = ChannelReconciler(db_factory=lambda: recon_conn, channel_manager=cm)
+        issues = reconciler._detect_drift(recon_conn)
+        fields = [
+            d
+            for issue in issues
+            for d in issue.details["drift_fields"]
+            if d["field"] == "channel_profile_ids"
+        ]
+        return fields, cm
+
+    def test_member_of_every_profile_is_in_sync(self, recon_conn):
+        fields, _ = self._detect(recon_conn, [1, 2, 3], catalog=[1, 2, 3])
+        assert fields == []
+
+    def test_missing_from_one_profile_is_drift(self, recon_conn):
+        fields, _ = self._detect(recon_conn, [1, 3], catalog=[1, 2, 3])
+        assert fields == [{"field": "channel_profile_ids", "expected": [0], "actual": [1, 3]}]
+
+    def test_dropped_from_all_profiles_is_drift_without_the_catalog(self, recon_conn):
+        fields, cm = self._detect(recon_conn, [], catalog=RuntimeError("down"))
+        assert [f["actual"] for f in fields] == [[]]
+
+    def test_unreadable_catalog_is_not_churned(self, recon_conn):
+        """Cannot be judged, so it is not reported — a blip must not queue a
+        PATCH for every all-profiles channel."""
+        fields, _ = self._detect(recon_conn, [1, 2], catalog=RuntimeError("down"))
+        assert fields == []
+
+    def test_catalog_is_read_once_per_pass(self, recon_conn):
+        recon_conn.execute(
+            "INSERT INTO managed_channels "
+            "(id, event_epg_group_id, event_id, event_provider, channel_name, "
+            "tvg_id, dispatcharr_channel_id, dispatcharr_uuid, channel_group_id, "
+            "channel_number, channel_profile_ids) "
+            "VALUES (2, 1, '124', 'espn', 'Test 2', 'teamarr-event-123', "
+            "100, 'uuid-100', 10, '5001', '[0]')"
+        )
+        _, cm = self._detect(recon_conn, [1, 2, 3], catalog=[1, 2, 3])
+        assert cm.get_channel.call_count == 2
+        assert cm.list_profiles.call_count == 1
+
+    def test_explicit_profile_lists_still_compare_literally(self, recon_conn):
+        recon_conn.execute(
+            "INSERT INTO managed_channels "
+            "(id, event_epg_group_id, event_id, event_provider, channel_name, "
+            "tvg_id, dispatcharr_channel_id, dispatcharr_uuid, channel_group_id, "
+            "channel_number, channel_profile_ids) "
+            "VALUES (1, 1, '123', 'espn', 'Test', 'teamarr-event-123', "
+            "100, 'uuid-100', 10, '5001', '[1, 2]')"
+        )
+        recon_conn.commit()
+        cm = MagicMock()
+        cm.get_channel.return_value = _make_dispatcharr_channel(
+            streams=(), channel_profile_ids=[2, 1]
+        )
+        reconciler = ChannelReconciler(db_factory=lambda: recon_conn, channel_manager=cm)
+        assert reconciler._detect_drift(recon_conn) == []
+        cm.list_profiles.assert_not_called()
+
+
 class TestReconciliationDriftAutoFix:
     """Drift auto-fix pushes stream corrections to Dispatcharr."""
 

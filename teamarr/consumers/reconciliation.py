@@ -422,6 +422,16 @@ class ChannelReconciler:
 
         return issues
 
+    def _all_profile_ids(self) -> set[int] | None:
+        """Every channel-profile id in Dispatcharr, or None if unreadable."""
+        try:
+            with self._dispatcharr_lock:
+                ids = {p.id for p in self._channel_manager.list_profiles()}
+        except Exception as e:  # noqa: BLE001 — a failed read must not fail the pass
+            logger.debug("[DRIFT] Profile catalog fetch failed: %s", e)
+            return None
+        return ids or None
+
     def _detect_drift(
         self,
         conn: Connection,
@@ -442,6 +452,9 @@ class ChannelReconciler:
 
         issues = []
         channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
+        # Full profile catalog, fetched at most once per pass and only if a
+        # channel stores the ALL-profiles sentinel (#910).
+        profile_catalog: list[set[int] | None] = []
 
         for channel in channels:
             if not channel.dispatcharr_channel_id:
@@ -528,7 +541,24 @@ class ChannelReconciler:
                     elif isinstance(raw_db_profiles, list):
                         db_profile_ids = raw_db_profiles
                 dispatcharr_profiles = list(dispatcharr_channel.channel_profile_ids)
-                if sorted(db_profile_ids) != sorted(dispatcharr_profiles):
+                if db_profile_ids == [0]:
+                    # [0] is the ALL-profiles sentinel on write; Dispatcharr
+                    # reads back the concrete id list, so a literal comparison
+                    # never matched and every such channel was "drift" on
+                    # every pass — re-PATCHed with [0] to no effect, burying
+                    # real drift (#910). Same rule as the syncer (#894): in
+                    # sync means a member of every profile; an EMPTY list is
+                    # real drift and needs no catalog; an unreadable catalog
+                    # cannot be judged, so it is not churned.
+                    if not profile_catalog:
+                        profile_catalog.append(self._all_profile_ids())
+                    all_ids = profile_catalog[0]
+                    profiles_drifted = not dispatcharr_profiles or (
+                        all_ids is not None and not set(dispatcharr_profiles) >= all_ids
+                    )
+                else:
+                    profiles_drifted = sorted(db_profile_ids) != sorted(dispatcharr_profiles)
+                if profiles_drifted:
                     drift_fields.append(
                         {
                             "field": "channel_profile_ids",
