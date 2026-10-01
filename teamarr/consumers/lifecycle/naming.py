@@ -11,6 +11,7 @@ import logging
 from teamarr.consumers.event_epg import POSTPONED_LABEL, is_event_postponed
 from teamarr.core import Event
 from teamarr.database.channels import keyword_display_value
+from teamarr.templates.conditions import get_condition_selector
 from teamarr.utilities.art_url import apply_art_base_url
 
 from ._host import _LifecycleHost
@@ -255,13 +256,31 @@ class ChannelNaming(_LifecycleHost):
         """
         logo_url = None
         if template:
-            # Handle both dict and dataclass template types
-            if hasattr(template, "event_channel_logo_url"):
-                # EventTemplateConfig dataclass
-                logo_url = template.event_channel_logo_url
-            elif hasattr(template, "get"):
-                # Dict with event_channel_logo_url
-                logo_url = template.get("event_channel_logo_url")
+            # Check conditional overrides first
+            conds = getattr(template, "conditional_descriptions", None)
+            if not conds and hasattr(template, "get"):
+                conds = template.get("conditional_descriptions")
+            if conds:
+                context = self._context_builder.build_for_event(
+                    event=event,
+                    team_id=event.home_team.id if event.home_team else "",
+                    league=event.league,
+                    card_segment=segment,
+                )
+                context.feed_team = feed_team
+                selector = get_condition_selector()
+                cond_fields = selector.select_fields(conds, context, context.game_context)
+                if cond_fields.get("event_channel_logo_url"):
+                    logo_url = cond_fields["event_channel_logo_url"]
+
+            if not logo_url:
+                # Handle both dict and dataclass template types
+                if hasattr(template, "event_channel_logo_url"):
+                    # EventTemplateConfig dataclass
+                    logo_url = template.event_channel_logo_url
+                elif hasattr(template, "get"):
+                    # Dict with event_channel_logo_url
+                    logo_url = template.get("event_channel_logo_url")
 
         if logo_url:
             # Resolve template variables if present

@@ -165,10 +165,16 @@ class EventEPGGenerator:
             # Use template-configured logo if set (no fallback to team logo)
             # Resolve template variables in logo URL (e.g., {league_id}, {home_team_pascal})
             channel_icon = None
-            if options.template.event_channel_logo_url:
-                channel_icon = self._resolver.resolve_art(
-                    options.template.event_channel_logo_url, context
+            cond_logo = None
+            if options.template.conditional_descriptions:
+                selector = get_condition_selector()
+                cond_fields = selector.select_fields(
+                    options.template.conditional_descriptions, context, context.game_context
                 )
+                cond_logo = cond_fields.get("event_channel_logo_url")
+            logo_tpl = cond_logo or options.template.event_channel_logo_url
+            if logo_tpl:
+                channel_icon = self._resolver.resolve_art(logo_tpl, context)
 
             channel_info = EventChannelInfo(
                 channel_id=channel_id,
@@ -309,12 +315,17 @@ class EventEPGGenerator:
         subtitle = prepend_postponed_label(subtitle, event, options.prepend_postponed_label)
         description = prepend_postponed_label(description, event, options.prepend_postponed_label)
 
-        # Icon: use template program_art_url if set (no fallback to team logo)
+        # Icon: conditional override > template program_art_url (no fallback to team logo)
         # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
+        art_template = (
+            conditional_fields.get("program_art_url")
+            or conditional_fields.get("art_url")
+            or template.program_art_url
+        )
         icon = None
-        if template.program_art_url:
+        if art_template:
             icon = self._resolver.resolve_art(
-                template.program_art_url, context, variables=variables
+                art_template, context, variables=variables
             )
 
         # Resolve categories (may contain {sport} variable)
@@ -488,9 +499,17 @@ class EventEPGGenerator:
             # Use template-configured logo if set (no fallback to team logo)
             # Resolve template variables in logo URL (e.g., {league_id}, {home_team_pascal})
             channel_icon = None
-            if event_template.event_channel_logo_url:
+            cond_logo = None
+            if event_template.conditional_descriptions:
+                selector = get_condition_selector()
+                cond_fields = selector.select_fields(
+                    event_template.conditional_descriptions, context, context.game_context
+                )
+                cond_logo = cond_fields.get("event_channel_logo_url")
+            logo_tpl = cond_logo or event_template.event_channel_logo_url
+            if logo_tpl:
                 channel_icon = self._resolver.resolve_art(
-                    event_template.event_channel_logo_url, context, variables=variables
+                    logo_tpl, context, variables=variables
                 )
 
             channel_info = EventChannelInfo(

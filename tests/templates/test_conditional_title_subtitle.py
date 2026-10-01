@@ -87,6 +87,39 @@ class TestPerFieldSelection:
         assert trace[0]["selected_for"] == ["description", "title", "subtitle"]
         assert trace[0]["selected"] is True
 
+    def test_row_overrides_artwork_and_channel_logo(self):
+        sel = ConditionalDescriptionSelector()
+        ctx = _ctx(is_home=True)
+        options = [
+            {
+                "condition": "is_home",
+                "priority": 30,
+                "program_art_url": "https://art.example.com/{team_abbrev}.png",
+                "event_channel_logo_url": "https://logo.example.com/{team_abbrev}.png",
+                "template": "",
+            },
+            {"priority": 100, "template": "Default desc"},
+        ]
+        fields, trace = sel.select_fields_with_trace(options, ctx, ctx.game_context)
+        assert fields == {
+            "program_art_url": "https://art.example.com/{team_abbrev}.png",
+            "event_channel_logo_url": "https://logo.example.com/{team_abbrev}.png",
+            "description": "Default desc",
+        }
+        assert "program_art_url" in trace[0]["selected_for"]
+        assert "event_channel_logo_url" in trace[0]["selected_for"]
+        assert trace[0]["selected"] is False  # not description winner
+        assert trace[1]["selected"] is True  # description winner
+
+    def test_art_url_legacy_alias_supported(self):
+        sel = ConditionalDescriptionSelector()
+        ctx = _ctx(is_home=True)
+        options = [
+            {"condition": "is_home", "priority": 30, "art_url": "https://art.example.com/legacy.png"},
+        ]
+        fields, trace = sel.select_fields_with_trace(options, ctx, ctx.game_context)
+        assert fields["program_art_url"] == "https://art.example.com/legacy.png"
+
     def test_fields_fall_through_independently(self):
         """A title-only winner leaves description to a lower-priority row."""
         sel = ConditionalDescriptionSelector()
@@ -228,6 +261,38 @@ class TestPreviewEndpoint:
         assert cond["selected_title_index"] is None
         assert cond["rendered_subtitle"] is None
         assert cond["selected_subtitle_index"] is None
+        assert cond["rendered_art_url"] is None
+        assert cond["selected_art_url_index"] is None
+        assert cond["rendered_channel_logo_url"] is None
+        assert cond["selected_channel_logo_index"] is None
+
+    def test_preview_reports_art_and_channel_logo_winners(self):
+        client = TestClient(app)
+        resp = client.post(
+            "/api/v1/templates/preview",
+            json={
+                "league": "nba",
+                "live": False,
+                "template_type": "team",
+                "fields": {},
+                "conditional_descriptions": [
+                    {
+                        "priority": 100,
+                        "template": "Desc",
+                        "program_art_url": "https://art.example.com/{team_name}.png",
+                        "event_channel_logo_url": "https://logo.example.com/{team_name}.png",
+                    },
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        cond = resp.json()["conditional"]
+        assert cond["rendered_art_url"] is not None
+        assert "Flint Tropics" in cond["rendered_art_url"]
+        assert cond["selected_art_url_index"] == 0
+        assert cond["rendered_channel_logo_url"] is not None
+        assert "Flint Tropics" in cond["rendered_channel_logo_url"]
+        assert cond["selected_channel_logo_index"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -243,6 +308,21 @@ class TestRowFieldValidation:
         )
         assert "conditional_descriptions[0].title" in results
 
+    def test_bad_variable_in_art_url_is_flagged_under_field_key(self):
+        results = validate_conditional_descriptions(
+            [
+                {
+                    "condition": "is_home",
+                    "program_art_url": "{bad_var}",
+                    "event_channel_logo_url": "{bad_logo}",
+                    "template": "ok",
+                }
+            ],
+            is_event_template=False,
+        )
+        assert "conditional_descriptions[0].program_art_url" in results
+        assert "conditional_descriptions[0].event_channel_logo_url" in results
+
     def test_clean_title_and_subtitle_produce_no_warnings(self):
         results = validate_conditional_descriptions(
             [{"condition": "is_home", "title": "{team_name}",
@@ -250,3 +330,4 @@ class TestRowFieldValidation:
             is_event_template=False,
         )
         assert results == {}
+

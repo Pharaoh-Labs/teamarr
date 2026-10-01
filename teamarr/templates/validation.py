@@ -177,9 +177,9 @@ def validate_conditional_descriptions(
             )
         if warnings:
             results[f"conditional_descriptions[{i}]"] = warnings
-        # Optional per-row title/subtitle overrides (#370 part 2) are template
+        # Optional per-row title/subtitle/art overrides (#370 part 2) are template
         # strings too — validate each under its own key.
-        for field in ("title", "subtitle"):
+        for field in ("title", "subtitle", "program_art_url", "event_channel_logo_url", "art_url"):
             text = _get(entry, field)
             if not text:
                 continue

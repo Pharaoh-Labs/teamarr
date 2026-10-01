@@ -10,7 +10,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 266 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 269 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
 
 ## Team vs Event Templates
 
@@ -463,6 +463,9 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 | `{home_points_allowed_per_game}` / `{away_points_allowed_per_game}` | Basketball points allowed per game | base, .next, .last | `87.0` |
 | `{game_event_note}` | Marquee/playoff designation. Empty for ordinary regular-season games | base, .next, .last | `NBA Finals - Game 5` |
 | `{series_summary}` | Playoff/season-series state. Empty when there's no series context | base, .next, .last | `Series tied 1-1` |
+| `{series_summary_short}` | Compact playoff series summary with team abbreviations and scores (or `Tied X-X`), formatted per matchup order setting. Empty for regular-season games | base, .next, .last | `BOS 2 - NYY 1` |
+| `{series_score}` | Playoff series score formatted per matchup order setting (e.g. `1-2` or `2-1`). Empty for regular-season games | base, .next, .last | `1-2` |
+| `{series_game}` | Current playoff series game (e.g. `Game 2`, `Game 5`). Empty for regular-season games or when not in postseason | base, .next, .last | `Game 2` |
 | `{home_last_five}` | Home team's W-L over its last five games (populates days ahead) | base, .next, .last | `4-1` |
 | `{away_last_five}` | Away team's W-L over its last five games | base, .next, .last | `2-3` |
 | `{last_five_summary}` | Recent-form prose for both teams; empty without data — pair with `has_structured_preview` | base, .next, .last | `The Rays have won 2 of their last five; the Red Sox have won 4 of their last five.` |
