@@ -103,6 +103,7 @@ export function getFailedReasonLabel(reason: string): string {
     tennis_tournament_mismatch: "Different tournament",
     tennis_matchup_unknown: "Tennis matchup not known",
     no_epg_program_match: "No guide programme matched",
+    no_epg_channel: "No guide found for this stream",
     date_mismatch: "Date mismatch",
     candidates_gated: "No candidate in window",
     event_beyond_window: "Event beyond match window",

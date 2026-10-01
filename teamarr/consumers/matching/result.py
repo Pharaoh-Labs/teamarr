@@ -139,6 +139,12 @@ class FailedReason(Enum):
     # summary in detail so a miss is diagnosable from the failure row — the
     # rows that used to land as the bare "unmatched" catch-all.
     NO_EPG_PROGRAM_MATCH = "no_epg_program_match"
+    # EPG path found no guide to read for the stream at all (#877): no tvg-id,
+    # or one that resolved to no programmes. Distinct from the above, where a
+    # guide was read and nothing in it bound. Without it the row kept the name
+    # path's skip ("team_streams_disabled"), which sends the user to a setting
+    # that has nothing to do with it.
+    NO_EPG_CHANNEL = "no_epg_channel"
 
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
@@ -473,6 +479,7 @@ FAILED_DISPLAY: dict[FailedReason | None, str] = {
     FailedReason.TENNIS_TOURNAMENT_MISMATCH: "Stream names a different tournament",
     FailedReason.TENNIS_MATCHUP_UNKNOWN: "Tennis matchup not known",
     FailedReason.NO_EPG_PROGRAM_MATCH: "No guide programme matched",
+    FailedReason.NO_EPG_CHANNEL: "No guide found for this stream",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 

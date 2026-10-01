@@ -619,6 +619,9 @@ class StreamMatcher:
                         target_date=target_date,
                     )
                     match_results = self._reconcile_epg(match_results, epg_results, tvg_id)
+                elif self._epg_index is not None:
+                    # EPG-enabled group, but nothing to look a guide up by.
+                    self._mark_no_epg_channel(match_results, None)
 
                 # Track cache stats and accumulate (TEAM_ONLY may return multiple results)
                 any_matched = False
@@ -1390,6 +1393,28 @@ class StreamMatcher:
             logger.debug("[EPG_MATCH] tennis matchup not known: %s — %s", epg_input[:60], detail)
         return matched
 
+    @staticmethod
+    def _mark_no_epg_channel(results: list[MatchedStreamResult], tvg_id: str | None) -> None:
+        """Say that the EPG path had no guide to read for this stream (#877).
+
+        In an EPG-enabled group a stream with no tvg-id, or one whose tvg-id
+        resolved to no programmes, never reaches the programme matcher — and
+        the stored reason used to be whatever the NAME path left behind:
+        "ITV1 HD RT" persisted as skipped:team_streams_disabled, a setting
+        that has nothing to do with why a linear channel found no game. Only
+        a name-path skip is replaced; a real failure or filter verdict is more
+        specific and stays. The skip is kept in ``detail`` for triage.
+        """
+        for r in results:
+            if r.matched or r.failed_reason is not None or r.filtered_reason is not None:
+                continue
+            r.failed_reason = FailedReason.NO_EPG_CHANNEL
+            r.detail = (
+                f"EPG: tvg-id '{tvg_id}' has no guide programmes in the window"
+                if tvg_id
+                else "EPG: stream carries no tvg-id"
+            ) + (f" (name path: {r.exclusion_reason})" if r.exclusion_reason else "")
+
     def _reconcile_epg(
         self,
         name_results: list[MatchedStreamResult],
@@ -1428,6 +1453,13 @@ class StreamMatcher:
                 elif no_match:
                     r.failed_reason = FailedReason.NO_EPG_PROGRAM_MATCH
                     r.detail = no_match
+            if (
+                not unknown
+                and not no_match
+                and self._epg_index is not None
+                and not self._epg_index.programs_for(tvg_id)
+            ):
+                self._mark_no_epg_channel(name_results, tvg_id)
         if self._epg_index is not None and self._epg_index.is_linear(tvg_id):
             return epg_matched if epg_matched else name_results
         if not name_matched and epg_matched:
