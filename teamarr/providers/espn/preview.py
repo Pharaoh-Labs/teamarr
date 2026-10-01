@@ -131,6 +131,73 @@ def _leader_blocks(data: dict, competition: dict) -> list[dict]:
     return blocks
 
 
+def select_series(series_list: list[dict], event_id: str | None = None) -> dict | None:
+    """Select the active/relevant series entry from a seasonseries list.
+
+    Prioritizes:
+    1. Series whose events explicitly contain event_id
+    2. Active playoff series (type in ('playoff', 'postseason') and not completed)
+    3. Any playoff series (type in ('playoff', 'postseason'))
+    4. Series with type == 'current'
+    5. Any uncompleted series (not completed)
+    6. Series with type == 'season'
+    7. First candidate with a non-empty summary
+    """
+    candidates = [
+        item
+        for item in series_list
+        if isinstance(item, dict) and item.get("type") != "preseason" and item.get("summary")
+    ]
+    if not candidates:
+        return None
+
+    if event_id:
+
+        def _has_event(item: dict) -> bool:
+            for ev in item.get("events") or []:
+                if isinstance(ev, dict) and str(ev.get("id")) == str(event_id):
+                    return True
+                if isinstance(ev, str) and str(ev) == str(event_id):
+                    return True
+            return False
+
+        matched = next((item for item in candidates if _has_event(item)), None)
+        if matched:
+            return matched
+
+    matched = next(
+        (
+            item
+            for item in candidates
+            if item.get("type") in ("playoff", "postseason") and not item.get("completed", False)
+        ),
+        None,
+    )
+    if matched:
+        return matched
+
+    matched = next(
+        (item for item in candidates if item.get("type") in ("playoff", "postseason")),
+        None,
+    )
+    if matched:
+        return matched
+
+    matched = next((item for item in candidates if item.get("type") == "current"), None)
+    if matched:
+        return matched
+
+    matched = next((item for item in candidates if not item.get("completed", False)), None)
+    if matched:
+        return matched
+
+    matched = next((item for item in candidates if item.get("type") == "season"), None)
+    if matched:
+        return matched
+
+    return candidates[0]
+
+
 def apply_generated_preview_fields(data: dict[str, Any], event: Event) -> None:
     """Populate typed preview fields on ``event`` from an ESPN summary."""
     competition = ((data.get("header") or {}).get("competitions") or [{}])[0]
@@ -188,13 +255,7 @@ def apply_generated_preview_fields(data: dict[str, Any], event: Event) -> None:
             if stats.get(espn_name):
                 setattr(event, f"{side}_{suffix}", stats[espn_name])
 
-    series_options = [
-        item for item in data.get("seasonseries") or [] if item.get("type") != "preseason"
-    ]
-    series = next((item for item in series_options if item.get("type") == "current"), None)
-    series = series or next(
-        (item for item in series_options if item.get("type") == "season"), None
-    )
+    series = select_series(data.get("seasonseries") or [], getattr(event, "id", None))
     if series and series.get("summary"):
         # Raw provider text — {series_summary} is a public variable and public
         # variables are never rewritten by our code (#613). The prose builder
