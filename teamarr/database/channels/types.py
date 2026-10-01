@@ -12,7 +12,9 @@ from datetime import datetime
 class ManagedChannel:
     """A managed channel owned by an event.
 
-    Channel identity: (event_id, event_provider, exception_keyword, primary_stream_id).
+    Core identity: (event_id, event_provider, exception_keyword, primary_stream_id).
+    Plugin identity: (plugin_id, plugin_logical_key). Both are independent of
+    channel number, stream selection, and display name.
     The event_epg_group_id tracks which source group supplied the first stream (provenance).
     """
 
@@ -22,6 +24,10 @@ class ManagedChannel:
     event_provider: str
     tvg_id: str
     channel_name: str
+    plugin_id: str | None = None
+    plugin_logical_key: str | None = None
+    plugin_adoption_key: str | None = None
+    plugin_plan_generation: int | None = None
     channel_number: str | None = None
     logo_url: str | None = None
 
@@ -83,6 +89,10 @@ class ManagedChannel:
             event_provider=row["event_provider"],
             tvg_id=row["tvg_id"],
             channel_name=row["channel_name"],
+            plugin_id=row.get("plugin_id"),
+            plugin_logical_key=row.get("plugin_logical_key"),
+            plugin_adoption_key=row.get("plugin_adoption_key"),
+            plugin_plan_generation=row.get("plugin_plan_generation"),
             channel_number=row.get("channel_number"),
             logo_url=row.get("logo_url"),
             dispatcharr_channel_id=row.get("dispatcharr_channel_id"),
@@ -187,6 +197,7 @@ class ManagedChannelStream:
     def from_row(cls, row: dict) -> "ManagedChannelStream":
         """Create from database row dict."""
         import json as _json
+
         raw_stats = row.get("stream_stats")
         stream_stats = None
         if isinstance(raw_stats, str):

@@ -132,7 +132,7 @@ class KeywordEnforcer:
                 stored_group_names = get_stored_m3u_group_names(conn)
 
                 # Get all active channels
-                channels = get_all_managed_channels(conn, include_deleted=False)
+                channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
 
                 # Build lookup: (group_id, event_id, provider) → channels by keyword
                 channel_lookup: dict[tuple, dict[str | None, Any]] = {}

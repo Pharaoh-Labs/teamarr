@@ -308,11 +308,16 @@ def _get_all_used_channels(conn: Connection) -> set[int]:
     Returns:
         Set of all used channel numbers across all groups.
     """
+    plugin_clause = (
+        " OR mc.plugin_id IS NOT NULL"
+        if _table_has_column(conn, "managed_channels", "plugin_id")
+        else ""
+    )
     cursor = conn.execute(
-        """SELECT mc.channel_number
+        f"""SELECT mc.channel_number
            FROM managed_channels mc
            LEFT JOIN event_epg_groups g ON mc.event_epg_group_id = g.id
-           WHERE (g.enabled = 1 OR mc.event_epg_group_id IS NULL)
+            WHERE (g.enabled = 1 OR mc.event_epg_group_id IS NULL{plugin_clause})
              AND mc.deleted_at IS NULL"""
     )
 
@@ -452,6 +457,11 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         if _table_has_column(conn, "managed_channels", "channel_number_locked")
         else "0 AS channel_number_locked"
     )
+    plugin_clause = (
+        " OR mc.plugin_id IS NOT NULL"
+        if _table_has_column(conn, "managed_channels", "plugin_id")
+        else ""
+    )
     cursor = conn.execute(f"""
         SELECT
             mc.id,
@@ -471,7 +481,7 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
             mc.created_at
         FROM managed_channels mc
         LEFT JOIN event_epg_groups g ON mc.event_epg_group_id = g.id
-        WHERE (g.enabled = 1 OR mc.event_epg_group_id IS NULL)
+        WHERE (g.enabled = 1 OR mc.event_epg_group_id IS NULL{plugin_clause})
           AND mc.deleted_at IS NULL
     """)
 

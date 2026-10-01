@@ -7,6 +7,7 @@ Provides CRUD operations for the managed_channels table and related tables
 # Types
 # CRUD operations
 from .crud import (
+    adopt_plugin_channel,
     create_managed_channel,
     find_any_channel_for_event,
     find_existing_channel,
@@ -17,6 +18,7 @@ from .crud import (
     get_managed_channel_by_event,
     get_managed_channel_by_tvg_id,
     get_managed_channels_for_group,
+    get_plugin_channel,
     mark_channel_deleted,
     update_managed_channel,
 )
@@ -75,11 +77,13 @@ __all__ = [
     "ManagedChannelStream",
     # CRUD
     "create_managed_channel",
+    "adopt_plugin_channel",
     "get_managed_channel",
     "get_managed_channel_by_tvg_id",
     "get_managed_channel_by_event",
     "get_managed_channel_by_dispatcharr_id",
     "get_managed_channels_for_group",
+    "get_plugin_channel",
     "get_channels_pending_deletion",
     "get_all_managed_channels",
     "update_managed_channel",

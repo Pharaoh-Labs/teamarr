@@ -188,7 +188,7 @@ class ChannelCleanup(_LifecycleHost):
 
         from teamarr.database.channels import get_all_managed_channels, update_managed_channel
 
-        channels = get_all_managed_channels(conn, include_deleted=False)
+        channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
         updated_count = 0
 
         # Get timing settings

@@ -8,6 +8,8 @@ Sports EPG generator. Uses **bd (beads)** for issue tracking. Start with `bd rea
 
 When changing support-bundle schemas, archive layout, collection limits, redaction, or signal codes, update the implementation, tests, user documentation, bundled `AGENTS.md`, and this instruction in the same change. Never add a generic database dump or relax exclusions for stream URLs, M3U account names, credentials, or tokens without an explicit security decision. Redaction is key-name based and recurses into JSON-typed columns (`emby_servers`, `jellyfin_servers`, …) — a new column that stores nested credentials as text is covered only because `_sanitize` parses JSON strings (#686); never bypass that path. Key-name redaction alone does not catch a value that appears inside *another* field's text (a pinned-stream name snapshot carrying the M3U account name, #900): the substring pass is fed by `_account_names_from`, and every table that stores an M3U account name (`managed_channel_streams`, `managed_team_channel_streams`, `event_epg_groups.m3u_account_name`) must be unioned into it — add any new one there in the same change.
 
+Support-bundle v2 adds `owner_type` and nullable plugin identity/adoption fields to bounded managed event-channel rows. Keep those fields redacted through `_sanitize`; do not include raw plan payloads, stream URLs, or M3U account names.
+
 ## CRITICAL: Database Safety
 
 **NEVER delete `teamarr.db` or `data/teamarr.db`.** The database contains user-configured teams, templates, settings, and history that cannot be recreated. Schema changes use migrations (`INSERT OR REPLACE`, `ALTER TABLE`) - deleting the database is NEVER required and will cause data loss.
@@ -236,7 +238,7 @@ Documentation epic: `bd list --parent teamarr-nv4`
 | Version | `pyproject.toml` line 7 |
 | Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v96) |
+| Schema version | `teamarr/database/schema.sql` (v97) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 

@@ -230,6 +230,8 @@ class KeywordOrderingEnforcer:
                                    AND m.event_epg_group_id = k.event_epg_group_id
             WHERE m.deleted_at IS NULL
               AND k.deleted_at IS NULL
+              AND m.plugin_id IS NULL
+              AND k.plugin_id IS NULL
               AND (m.exception_keyword IS NULL OR m.exception_keyword = '')
               AND k.exception_keyword IS NOT NULL
               AND k.exception_keyword != ''

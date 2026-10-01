@@ -558,7 +558,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 96
+    schema_version INTEGER DEFAULT 97
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -847,6 +847,11 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     -- Event Reference (provider-agnostic)
     event_id TEXT NOT NULL,
     event_provider TEXT NOT NULL,
+    -- NULL = core event channel; plugin identity is (plugin_id, plugin_logical_key).
+    plugin_id TEXT,
+    plugin_logical_key TEXT,
+    plugin_adoption_key TEXT,
+    plugin_plan_generation INTEGER,
 
     -- Channel Info
     tvg_id TEXT NOT NULL,  -- Not UNIQUE: soft-deleted records can share tvg_id with active
@@ -918,13 +923,19 @@ CREATE INDEX IF NOT EXISTS idx_managed_channels_delete ON managed_channels(sched
 CREATE INDEX IF NOT EXISTS idx_managed_channels_dispatcharr ON managed_channels(dispatcharr_channel_id);
 CREATE INDEX IF NOT EXISTS idx_managed_channels_tvg ON managed_channels(tvg_id);
 CREATE INDEX IF NOT EXISTS idx_managed_channels_sync ON managed_channels(sync_status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mc_plugin_logical_key
+    ON managed_channels(plugin_id, plugin_logical_key)
+    WHERE plugin_id IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_mc_plugin_adoption_key
+    ON managed_channels(plugin_id, plugin_adoption_key)
+    WHERE plugin_id IS NOT NULL AND deleted_at IS NULL;
 
 -- Event-scoped unique: one channel per (event, keyword, feed_team, stream) regardless of source group
 -- Includes primary_stream_id to support 'separate' duplicate handling mode
 -- (allows multiple channels per event when each has a different primary stream, keyword, or feed team)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mc_unique_event_v2
     ON managed_channels(event_id, event_provider, COALESCE(exception_keyword, ''), COALESCE(feed_team_id, ''), primary_stream_id)
-    WHERE deleted_at IS NULL;
+    WHERE deleted_at IS NULL AND plugin_id IS NULL;
 
 CREATE TRIGGER IF NOT EXISTS update_managed_channels_timestamp
 AFTER UPDATE ON managed_channels
