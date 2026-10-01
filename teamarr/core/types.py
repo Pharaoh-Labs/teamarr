@@ -187,7 +187,10 @@ class Event:
     # Per-event tier — from the summary endpoint (overlaid by refresh_event_status,
     # which already fetches it, so zero extra calls).
     game_preview: str = ""  # summary article[type=Preview].description (pregame)
-    series_summary: str = ""  # summary seasonseries[0].summary, e.g. "Series tied 1-1"
+    # Active-series state via select_series (#920) — active playoff series
+    # outranks a completed regular-season one; also populated from scoreboard
+    # competition.series for paths that never hit the summary endpoint.
+    series_summary: str = ""  # e.g. "Series tied 1-1"
     # Structured preview (tvnk.15): recent form from summary lastFiveGames —
     # W-L over each team's last five ("4-1"). Available days ahead, unlike
     # preview prose which only populates ~T-0/T-1.

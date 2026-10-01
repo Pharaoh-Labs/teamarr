@@ -59,6 +59,28 @@ def test_select_series_prioritizes_active_playoff_without_event_id():
     assert chosen["summary"] == "Series tied 1-1"
 
 
+def test_select_series_accepts_postseason_spelling():
+    series_list = [
+        {"type": "season", "summary": "IND wins series 2-1", "completed": True},
+        {"type": "postseason", "summary": "Series tied 1-1", "completed": False},
+    ]
+    chosen = select_series(series_list, event_id=None)
+    assert chosen is not None
+    assert chosen["summary"] == "Series tied 1-1"
+
+
+def test_select_series_completed_playoff_still_outranks_season():
+    # No event_id match and the playoff series is completed, so selection
+    # falls to priority 3 (any playoff) — still ahead of the season series.
+    series_list = [
+        {"type": "season", "summary": "IND wins series 2-1", "completed": True},
+        {"type": "playoff", "summary": "LV wins series 3-1", "completed": True},
+    ]
+    chosen = select_series(series_list, event_id=None)
+    assert chosen is not None
+    assert chosen["summary"] == "LV wins series 3-1"
+
+
 def test_select_series_filters_out_preseason():
     series_list = [
         {"type": "preseason", "summary": "Preseason tied 1-1"},

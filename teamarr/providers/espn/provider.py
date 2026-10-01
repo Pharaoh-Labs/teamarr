@@ -755,6 +755,11 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 event.game_preview = self._editorial_text(article)
             from teamarr.providers.espn.preview import apply_generated_preview_fields, select_series
 
+            # seasonseries is authoritative over any competition.series value
+            # _parse_event filled above, and the explicit "" clears it when the
+            # payload has no usable series. apply_generated_preview_fields
+            # below re-derives the identical selection (same data + event.id),
+            # so the two cannot drift apart by construction.
             series = data.get("seasonseries") or []
             chosen_series = select_series(series, event.id)
             summary_text = chosen_series.get("summary") if chosen_series else ""
