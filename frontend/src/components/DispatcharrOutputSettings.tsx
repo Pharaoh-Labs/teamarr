@@ -211,7 +211,7 @@ export function DispatcharrOutputSettings() {
               ))}
             </Select>
             <p className="text-xs text-muted-foreground">
-              Managed team channels do not inherit event-channel group settings.
+              Managed team channels do not inherit global event-channel group settings, but will use per-league overrides if configured below.
             </p>
           </div>
           {saveButton}

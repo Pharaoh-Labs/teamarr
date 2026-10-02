@@ -87,7 +87,7 @@ def conn():
             sync_message TEXT, last_verified_at TEXT, updated_at TEXT
         );
         CREATE TABLE subscription_league_config (
-            league_code TEXT PRIMARY KEY, channel_profile_ids TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, league_code TEXT UNIQUE, channel_profile_ids TEXT,
             channel_group_id INTEGER, channel_group_mode TEXT, matchup_order TEXT
         );
         CREATE TABLE channel_sort_priorities (

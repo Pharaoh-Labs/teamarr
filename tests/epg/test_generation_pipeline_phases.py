@@ -82,7 +82,11 @@ def test_prepare_team_channels_builds_the_manager_and_announces_group_processing
     assert created == [
         (
             (context.db_factory, None, None, None),
-            {"sports_service": context.sports_service, "unverified_team_ids": set()},
+            {
+                "dynamic_resolver": None,
+                "sports_service": context.sports_service,
+                "unverified_team_ids": set(),
+            },
         )
     ]
     assert context.team_channel_manager == "manager"

@@ -37,11 +37,20 @@ def stage_prepare_team_channels(context: GenerationContext) -> None:
     )
     team_result = getattr(context, "team_result", None)
     team_results = team_result.results if team_result else []
+    dynamic_resolver = None
+    if team_channels:
+        from teamarr.consumers.lifecycle.dynamic_resolver import DynamicResolver
+
+        dynamic_resolver = DynamicResolver()
+        with context.db_factory() as conn:
+            dynamic_resolver.initialize(context.db_factory, conn)
+
     context.team_channel_manager = TeamChannelManager(
         context.db_factory,
         team_channels.channels if team_channels else None,
         team_channels.epg if team_channels else None,
         team_channels.logos if team_channels else None,
+        dynamic_resolver=dynamic_resolver,
         sports_service=context.sports_service,
         unverified_team_ids={r.team_id for r in team_results if r.errors},
     )

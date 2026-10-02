@@ -130,7 +130,7 @@ def conn():
             sync_message TEXT, last_verified_at TEXT, updated_at TEXT
         );
         CREATE TABLE subscription_league_config (
-            league_code TEXT PRIMARY KEY, channel_profile_ids TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT, league_code TEXT UNIQUE, channel_profile_ids TEXT,
             channel_group_id INTEGER, channel_group_mode TEXT, matchup_order TEXT
         );
         CREATE TABLE channel_sort_priorities (
@@ -568,6 +568,138 @@ def test_configured_profiles_are_compared_as_sets_and_all_profiles_is_never_push
     )
     TeamChannelManager(_factory(conn), channels).sync()
     assert channels.updated == [(10, {"channel_profile_ids": [3]})]
+
+
+def test_channel_group_uses_global_default_when_no_league_override(conn, settings, monkeypatch):
+    import teamarr.services.team_channel_manager as module
+
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
+    channels = FakeChannels()
+    monkeypatch.setattr(
+        module,
+        "get_dispatcharr_settings",
+        lambda _: SimpleNamespace(
+            default_stream_profile_id=None,
+            managed_team_channel_group_id=15,
+            managed_team_channel_profile_ids=None,
+        ),
+    )
+    result = TeamChannelManager(_factory(conn), channels).sync()
+    assert result["created"] == 1
+    assert channels.created[0]["channel_group_id"] == 15
+
+
+def test_channel_group_uses_per_league_static_override(conn, settings, monkeypatch):
+    import teamarr.services.team_channel_manager as module
+
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
+    conn.execute(
+        "INSERT INTO subscription_league_config "
+        "(league_code, channel_group_id, channel_group_mode) "
+        "VALUES ('nba', 20, 'static')"
+    )
+    channels = FakeChannels()
+    monkeypatch.setattr(
+        module,
+        "get_dispatcharr_settings",
+        lambda _: SimpleNamespace(
+            default_stream_profile_id=None,
+            managed_team_channel_group_id=15,
+            managed_team_channel_profile_ids=None,
+        ),
+    )
+    result = TeamChannelManager(_factory(conn), channels).sync()
+    assert result["created"] == 1
+    assert channels.created[0]["channel_group_id"] == 20
+
+
+def test_channel_group_uses_per_league_dynamic_pattern_override(conn, settings, monkeypatch):
+    import teamarr.services.team_channel_manager as module
+
+    conn.execute("ALTER TABLE teams ADD COLUMN sport TEXT")
+    conn.execute(
+        "INSERT INTO teams "
+        "(id, active, managed_channel_enabled, channel_id, team_name, primary_league, sport) "
+        "VALUES (1, 1, 1, 'team-blue', 'Blue', 'nba', 'basketball')"
+    )
+    conn.execute(
+        "INSERT INTO subscription_league_config "
+        "(league_code, channel_group_id, channel_group_mode) "
+        "VALUES ('nba', NULL, '{sport}')"
+    )
+    channels = FakeChannels()
+    monkeypatch.setattr(
+        module,
+        "get_dispatcharr_settings",
+        lambda _: SimpleNamespace(
+            default_stream_profile_id=None,
+            managed_team_channel_group_id=15,
+            managed_team_channel_profile_ids=None,
+        ),
+    )
+    mock_resolver = SimpleNamespace(
+        resolve_channel_group=lambda mode, static_group_id, event_sport, event_league: (
+            42 if mode == "{sport}" and event_sport == "basketball" else None
+        )
+    )
+    result = TeamChannelManager(_factory(conn), channels, dynamic_resolver=mock_resolver).sync()
+    assert result["created"] == 1
+    assert channels.created[0]["channel_group_id"] == 42
+
+
+def test_channel_group_falls_back_when_league_config_has_no_group_override(
+    conn, settings, monkeypatch
+):
+    import teamarr.services.team_channel_manager as module
+
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
+    conn.execute(
+        "INSERT INTO subscription_league_config (league_code, matchup_order) "
+        "VALUES ('nba', 'auto')"
+    )
+    channels = FakeChannels()
+    monkeypatch.setattr(
+        module,
+        "get_dispatcharr_settings",
+        lambda _: SimpleNamespace(
+            default_stream_profile_id=None,
+            managed_team_channel_group_id=15,
+            managed_team_channel_profile_ids=None,
+        ),
+    )
+    result = TeamChannelManager(_factory(conn), channels).sync()
+    assert result["created"] == 1
+    assert channels.created[0]["channel_group_id"] == 15
+
+
+def test_channel_group_per_league_override_sync_update(conn, settings, monkeypatch):
+    import teamarr.services.team_channel_manager as module
+
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
+    conn.execute(
+        "INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL, NULL)"
+    )
+    conn.execute(
+        "INSERT INTO subscription_league_config "
+        "(league_code, channel_group_id, channel_group_mode) "
+        "VALUES ('nba', 25, 'static')"
+    )
+    remote = RemoteChannel(
+        10, "owned", "Blue", "9000", tvg_id="team-blue", channel_group_id=15,
+    )
+    channels = FakeChannels([remote])
+    monkeypatch.setattr(
+        module,
+        "get_dispatcharr_settings",
+        lambda _: SimpleNamespace(
+            default_stream_profile_id=None,
+            managed_team_channel_group_id=15,
+            managed_team_channel_profile_ids=None,
+        ),
+    )
+    result = TeamChannelManager(_factory(conn), channels).sync()
+    assert result["synced"] == 1
+    assert channels.updated == [(10, {"channel_group_id": 25})]
 
 
 # ---------------------------------------------------------------------------
