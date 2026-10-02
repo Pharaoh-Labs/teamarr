@@ -14,6 +14,7 @@ from teamarr.database.exception_keywords import (
     ExceptionKeyword,
     get_all_keywords,
     set_keyword_enabled,
+    set_keyword_order,
 )
 from teamarr.database.exception_keywords import (
     create_keyword as db_create_keyword,
@@ -151,6 +152,7 @@ class ExceptionKeywordResponse(BaseModel):
     stream_pattern: str | None = None
     streams: list[SourceRef] = []
     event_group_ids: list[int] = []
+    sort_order: int | None = None
 
 
 def _refs(items: list[dict]) -> list[SourceRef]:
@@ -173,6 +175,7 @@ def _to_response(kw: ExceptionKeyword) -> "ExceptionKeywordResponse":
         stream_pattern=kw.stream_pattern,
         streams=_refs(kw.streams),
         event_group_ids=kw.event_group_ids,
+        sort_order=kw.sort_order,
     )
 
 
@@ -189,6 +192,12 @@ class ExceptionKeywordListResponse(BaseModel):
 
     keywords: list[ExceptionKeywordResponse]
     total: int
+
+
+class ExceptionKeywordOrder(BaseModel):
+    """Keyword ids in precedence order, highest first (#931)."""
+
+    keyword_ids: list[int] = Field(..., min_length=1)
 
 
 # =============================================================================
@@ -210,6 +219,32 @@ def list_keywords(
     return ExceptionKeywordListResponse(
         keywords=responses,
         total=len(keywords),
+    )
+
+
+@router.put("/order", response_model=ExceptionKeywordListResponse)
+def reorder_keywords(request: ExceptionKeywordOrder):
+    """Set the precedence order of exception keywords (#931).
+
+    When several keywords match one stream by the same kind of evidence, the
+    one earlier in ``keyword_ids`` wins. An Ignore keyword outranks the others
+    wherever it sits, and a pinned stream outranks everything. Keywords left
+    out of the list sort after the listed ones, by label. Returns the full
+    list (disabled keywords included) in its new order.
+    """
+    with get_db() as conn:
+        known = {kw.id for kw in get_all_keywords(conn, include_disabled=True)}
+        unknown = [kid for kid in request.keyword_ids if kid not in known]
+        if unknown:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Keyword(s) not found: {', '.join(map(str, unknown))}",
+            )
+        set_keyword_order(conn, request.keyword_ids)
+        keywords = get_all_keywords(conn, include_disabled=True)
+
+    return ExceptionKeywordListResponse(
+        keywords=[_to_response(kw) for kw in keywords], total=len(keywords)
     )
 
 

@@ -41,6 +41,8 @@ class ExceptionKeyword:
     stream_pattern: str | None = None
     streams: list[dict] = field(default_factory=list)
     event_group_ids: list[int] = field(default_factory=list)
+    # Precedence among keywords matching one stream (#931); None = unordered.
+    sort_order: int | None = None
 
     @property
     def match_term_list(self) -> list[str]:
@@ -136,6 +138,18 @@ def _row_to_keyword(row) -> ExceptionKeyword:
         stream_pattern=col("stream_pattern") or None,
         streams=_load_json_list(col("streams")),
         event_group_ids=_load_json_list(col("event_group_ids")),
+        sort_order=col("sort_order"),
+    )
+
+
+def _in_precedence_order(keywords: list[ExceptionKeyword]) -> list[ExceptionKeyword]:
+    """Keywords in the order they are tried (#931): the user's order first,
+    then never-ordered ones by label. Sorted here rather than in SQL so a
+    database that has not been reconciled yet (no ``sort_order`` column) reads
+    exactly as it always did."""
+    return sorted(
+        keywords,
+        key=lambda kw: (kw.sort_order is None, kw.sort_order or 0, kw.label.lower()),
     )
 
 
@@ -162,7 +176,7 @@ def get_all_keywords(conn: Connection, include_disabled: bool = False) -> list[E
                WHERE enabled = 1 ORDER BY label"""
         )
 
-    return [_row_to_keyword(row) for row in cursor.fetchall()]
+    return _in_precedence_order([_row_to_keyword(row) for row in cursor.fetchall()])
 
 
 def get_keyword(conn: Connection, keyword_id: int) -> ExceptionKeyword | None:
@@ -200,7 +214,29 @@ def get_keywords_by_behavior(
            ORDER BY label""",
         (behavior,),
     )
-    return [_row_to_keyword(row) for row in cursor.fetchall()]
+    return _in_precedence_order([_row_to_keyword(row) for row in cursor.fetchall()])
+
+
+def set_keyword_order(conn: Connection, keyword_ids: list[int]) -> int:
+    """Store the user's precedence order (#931): first id wins over the rest.
+
+    Ids are numbered in the order given. A keyword left out keeps no order of
+    its own and sorts after every listed one, by label — so a client working
+    from a stale list cannot scramble what it did not see.
+
+    Returns:
+        Number of keywords ordered.
+    """
+    conn.execute("UPDATE consolidation_exception_keywords SET sort_order = NULL")
+    ordered = 0
+    for position, keyword_id in enumerate(dict.fromkeys(keyword_ids)):
+        cursor = conn.execute(
+            "UPDATE consolidation_exception_keywords SET sort_order = ? WHERE id = ?",
+            (position, keyword_id),
+        )
+        ordered += cursor.rowcount
+    conn.commit()
+    return ordered
 
 
 # =============================================================================

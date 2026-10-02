@@ -278,6 +278,8 @@ export interface ExceptionKeyword extends KeywordMatchSources {
   behavior: "consolidate" | "separate" | "ignore"
   enabled: boolean
   created_at: string | null
+  // Precedence among keywords matching one stream (#931); null = never ordered
+  sort_order: number | null
 }
 
 export interface ExceptionKeywordListResponse {
@@ -580,6 +582,13 @@ export async function updateExceptionKeyword(
 
 export async function deleteExceptionKeyword(id: number): Promise<void> {
   return api.delete(`/keywords/${id}`)
+}
+
+/** Set keyword precedence: the first id wins when several match one stream (#931). */
+export async function reorderExceptionKeywords(
+  keywordIds: number[]
+): Promise<ExceptionKeywordListResponse> {
+  return api.put("/keywords/order", { keyword_ids: keywordIds })
 }
 
 // Channel Numbering Settings API

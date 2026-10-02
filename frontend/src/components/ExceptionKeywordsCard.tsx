@@ -1,6 +1,16 @@
 import { Fragment, useState } from "react"
 import { toast } from "sonner"
-import { Check, X, Pencil, Trash2, LoaderCircle, Plus, SlidersHorizontal } from "lucide-react"
+import {
+  Check,
+  X,
+  Pencil,
+  Trash2,
+  LoaderCircle,
+  Plus,
+  SlidersHorizontal,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -20,7 +30,11 @@ import {
   useDeleteExceptionKeyword,
   useChannelNumberingSettings,
 } from "@/hooks/useSettings"
-import { updateExceptionKeyword, type KeywordMatchSources } from "@/api/settings"
+import {
+  updateExceptionKeyword,
+  reorderExceptionKeywords,
+  type KeywordMatchSources,
+} from "@/api/settings"
 import { KeywordSourcesEditor } from "@/components/KeywordSourcesEditor"
 import { EMPTY_SOURCES, countSources } from "@/lib/keyword-sources"
 
@@ -43,6 +57,26 @@ export function ExceptionKeywordsCard() {
   // Which keyword's match-sources editor is open; "new" = the add row (#893)
   const [sourcesFor, setSourcesFor] = useState<number | "new" | null>(null)
   const [savingSources, setSavingSources] = useState(false)
+  const [reordering, setReordering] = useState(false)
+
+  // Precedence (#931): when several keywords match one stream, the one higher
+  // in this list wins — except that an Ignore keyword always wins.
+  const handleMove = async (index: number, delta: -1 | 1) => {
+    const keywords = keywordsQuery.data?.keywords ?? []
+    const target = index + delta
+    if (target < 0 || target >= keywords.length) return
+    const ids = keywords.map((k) => k.id)
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    setReordering(true)
+    try {
+      await reorderExceptionKeywords(ids)
+      await keywordsQuery.refetch()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reorder keywords")
+    } finally {
+      setReordering(false)
+    }
+  }
 
   const createNewKeyword = async (sources?: KeywordMatchSources) => {
     try {
@@ -140,6 +174,8 @@ export function ExceptionKeywordsCard() {
           Streams matching these terms, or coming from the M3U groups, event groups or pinned streams set under
           {" "}<SlidersHorizontal className="inline h-3 w-3" /> Match sources, get special handling during consolidation.
           The label is used for channel naming, the {"{exception_keyword}"} template variable and group patterns.
+          When several keywords match one stream, an Ignore keyword always wins; otherwise the one higher in
+          this list does.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -147,6 +183,7 @@ export function ExceptionKeywordsCard() {
           <Table>
             <TableHeader className="bg-muted">
               <TableRow>
+                <TableHead className="w-16">Order</TableHead>
                 <TableHead className="w-12">On</TableHead>
                 <TableHead className="w-32">Label</TableHead>
                 <TableHead>Match Terms (comma-separated)</TableHead>
@@ -155,9 +192,35 @@ export function ExceptionKeywordsCard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {keywordsQuery.data?.keywords.map((kw) => (
+              {keywordsQuery.data?.keywords.map((kw, index, all) => (
                 <Fragment key={kw.id}>
                 <TableRow className={kw.enabled === false ? "opacity-50" : undefined}>
+                  <TableCell>
+                    <div className="flex">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => handleMove(index, -1)}
+                        disabled={reordering || index === 0}
+                        title="Move up (higher precedence)"
+                        aria-label={`Move ${kw.label} up`}
+                      >
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => handleMove(index, 1)}
+                        disabled={reordering || index === all.length - 1}
+                        title="Move down (lower precedence)"
+                        aria-label={`Move ${kw.label} down`}
+                      >
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Checkbox
                       checked={kw.enabled !== false}
@@ -273,7 +336,7 @@ export function ExceptionKeywordsCard() {
                 </TableRow>
                 {sourcesFor === kw.id && (
                   <TableRow>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                       <KeywordSourcesEditor
                         initial={{
                           m3u_group_pattern: kw.m3u_group_pattern,
@@ -293,7 +356,7 @@ export function ExceptionKeywordsCard() {
               ))}
               {(!keywordsQuery.data?.keywords || keywordsQuery.data.keywords.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-4 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-4 text-center text-muted-foreground">
                     No exception keywords defined
                   </TableCell>
                 </TableRow>

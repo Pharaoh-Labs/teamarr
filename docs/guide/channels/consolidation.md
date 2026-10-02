@@ -62,6 +62,15 @@ A stream carries one keyword, so when several could apply, the most specific evi
 
 So a stream named `Match 4K` in an `ES|` group lands on a *4K* keyword that matches the name, not on the *ES* keyword that matches the group. The event-name rule in the note below applies to match terms only; a regex you write is taken as intended.
 
+### When several keywords match
+
+Two rules sit on top of that order:
+
+- **Ignore always wins.** If any **Ignore** keyword matches a stream, by its name, its guide programme or any of its sources, the stream is dropped, whatever else it matches. A Spanish 4K stream is ignored when *Spanish* is set to Ignore; it does not slip through to the *4K* channel. The one exception is a pinned stream, which always goes to the keyword it is pinned to.
+- **Otherwise the higher keyword wins.** When two keywords match by the same kind of evidence, such as `ManningCast` and `4K` both appearing in the stream name, the one higher in the Exception Keywords list is used. Use the up and down arrows in the **Order** column to change it. Until you reorder anything, the list is alphabetical.
+
+With `ManningCast` above `4K`, a `ManningCast 4K` stream joins the ManningCast channel; swap them and it joins the 4K channel instead.
+
 **Example — language by provider group.** Keyword `ES` (Sub-Consolidate), no match terms, M3U group regex `^(ES|LA|VE|BO)\|`. One event group per sport can now pull English and Spanish provider groups together: every stream from those groups lands on the `ES` channel, the rest on the main channel. With the `{exception_keyword}` [group wildcard](output.md) and an untagged label of `EN`, they are sorted into `EN: Soccer` and `ES: Soccer`.
 
 **Example — quality.** Keyword `4K` with the terms `4K, UHD` and the M3U group regex `^4K\|` catches both `Arsenal v Chelsea UHD` and every stream in the provider's `4K|` group, whatever it is named.
