@@ -48,6 +48,8 @@ class SubscriptionLeagueConfig:
     included_divisions: list[str] | None = None
     # #862: None inherits the global feed separation setting.
     feed_separation_enabled: bool | None = None
+    # #881: None inherits the source's playoff bypass, then the global default.
+    bypass_filter_for_playoffs: bool | None = None
 
 
 @dataclass
@@ -502,20 +504,23 @@ def upsert_league_config(
     matchup_order: str | None = None,
     included_divisions: list[str] | None = None,
     feed_separation_enabled: bool | None = None,
+    bypass_filter_for_playoffs: bool | None = None,
 ) -> SubscriptionLeagueConfig:
     """Create or update per-league config. Returns the saved config."""
     conn.execute(
         """INSERT INTO subscription_league_config
            (league_code, channel_profile_ids, channel_group_id,
-             channel_group_mode, matchup_order, included_divisions, feed_separation_enabled)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+             channel_group_mode, matchup_order, included_divisions, feed_separation_enabled,
+             bypass_filter_for_playoffs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(league_code) DO UPDATE SET
                channel_profile_ids = excluded.channel_profile_ids,
                channel_group_id = excluded.channel_group_id,
                channel_group_mode = excluded.channel_group_mode,
                matchup_order = excluded.matchup_order,
                 included_divisions = excluded.included_divisions,
-                feed_separation_enabled = excluded.feed_separation_enabled
+                feed_separation_enabled = excluded.feed_separation_enabled,
+                bypass_filter_for_playoffs = excluded.bypass_filter_for_playoffs
         """,
         (
             league_code,
@@ -527,6 +532,7 @@ def upsert_league_config(
             matchup_order,
             json.dumps(included_divisions) if included_divisions is not None else None,
             feed_separation_enabled,
+            bypass_filter_for_playoffs,
         ),
     )
     logger.info("[LEAGUE_CONFIG] Upserted config for %s", league_code)
@@ -575,4 +581,23 @@ def _build_league_config(row) -> SubscriptionLeagueConfig:
             and row["feed_separation_enabled"] is not None
             else None
         ),
+        bypass_filter_for_playoffs=(
+            bool(row["bypass_filter_for_playoffs"])
+            if "bypass_filter_for_playoffs" in row.keys()
+            and row["bypass_filter_for_playoffs"] is not None
+            else None
+        ),
     )
+
+
+def get_league_playoff_bypass_overrides(conn: Connection) -> dict[str, bool]:
+    """Leagues that override the playoff / All-Star team-filter bypass (#881).
+
+    Only leagues with an explicit choice appear; a league missing from the
+    map inherits the source's setting, then the global default.
+    """
+    return {
+        config.league_code: config.bypass_filter_for_playoffs
+        for config in get_league_configs(conn)
+        if config.bypass_filter_for_playoffs is not None
+    }

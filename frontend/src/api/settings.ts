@@ -692,6 +692,9 @@ export interface SubscriptionLeagueConfig {
   matchup_order: string | null // "auto" | "away_first" | "home_first"; null = global setting
   included_divisions: string[] | null // #811: null = every division ESPN files under the league
   feed_separation_enabled: boolean | null // #862: null = global setting
+  // #881: true = always include this league's playoff/All-Star games,
+  // false = leave them to the team filter, null = source then global setting
+  bypass_filter_for_playoffs: boolean | null
 }
 
 export interface LeagueDivision {
@@ -722,6 +725,7 @@ export async function upsertLeagueConfig(
     matchup_order?: string | null
     included_divisions?: string[] | null
     feed_separation_enabled?: boolean | null
+    bypass_filter_for_playoffs?: boolean | null
   }
 ): Promise<SubscriptionLeagueConfig> {
   return api.put(`/league-configs/${encodeURIComponent(leagueCode)}`, data)

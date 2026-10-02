@@ -38,6 +38,8 @@ class TeamFiltering:
 
         When bypass_filter_for_playoffs is enabled, playoff games (season_type='postseason')
         and All-Star games (detected via is_all_star_event) bypass the team filter entirely.
+        A league can override that either way (#881): the event's league setting
+        wins over the source's, which wins over the global default.
 
         Args:
             matched_streams: List of {'stream': ..., 'event': ...} dicts
@@ -55,6 +57,14 @@ class TeamFiltering:
         # No filter configured
         if not include_teams and not exclude_teams:
             return matched_streams, 0
+
+        # Per-league overrides (#881): "I follow MiLB teams but don't want every
+        # MiLB playoff game" while MLB/NFL playoffs still bypass the filter. The
+        # league is the most specific statement about the event itself, so it
+        # outranks the source-level switch.
+        from teamarr.database.subscription import get_league_playoff_bypass_overrides
+
+        league_bypass = get_league_playoff_bypass_overrides(conn)
 
         filter_list = include_teams if include_teams else exclude_teams
         # The empty-filter guard above guarantees one of the two lists is truthy,
@@ -76,7 +86,7 @@ class TeamFiltering:
                 continue
 
             # Bypass filter for playoff and All-Star games if setting is enabled
-            if bypass_playoffs and (
+            if league_bypass.get(event.league, bypass_playoffs) and (
                 event.season_type == SEASON_POSTSEASON or is_all_star_event(event)
             ):
                 filtered.append(match)

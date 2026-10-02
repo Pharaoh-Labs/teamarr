@@ -827,7 +827,11 @@ CREATE TABLE IF NOT EXISTS subscription_league_config (
     -- (see COLLEGE_SCOREBOARD_DIVISIONS). A dropped division is never fetched.
     included_divisions JSON DEFAULT NULL,
     -- Feed separation override (#862): NULL = use global setting
-    feed_separation_enabled BOOLEAN DEFAULT NULL
+    feed_separation_enabled BOOLEAN DEFAULT NULL,
+    -- Playoff / All-Star team-filter bypass override (#881): NULL = use the
+    -- source's setting, then the global default; 1 = always include this
+    -- league's postseason and All-Star games; 0 = leave them to the team filter
+    bypass_filter_for_playoffs BOOLEAN DEFAULT NULL
 );
 
 

@@ -96,6 +96,7 @@ class LeagueConfigResponse(BaseModel):
     matchup_order: str | None = None  # #692: None = global setting
     included_divisions: list[str] | None = None  # #811: None = every division
     feed_separation_enabled: bool | None = None  # #862: None = global setting
+    bypass_filter_for_playoffs: bool | None = None  # #881: None = source/global setting
 
 
 class LeagueConfigUpdate(BaseModel):
@@ -107,6 +108,9 @@ class LeagueConfigUpdate(BaseModel):
     matchup_order: str | None = None  # #692: 'auto' | 'away_first' | 'home_first'
     included_divisions: list[str] | None = None  # #811: None = every division
     feed_separation_enabled: bool | None = None  # #862: None = global setting
+    # #881: True = always include this league's playoff and All-Star games,
+    # False = leave them to the team filter, None = source then global setting
+    bypass_filter_for_playoffs: bool | None = None
 
 
 class LeagueDivision(BaseModel):
@@ -379,6 +383,7 @@ def list_league_configs():
                 matchup_order=c.matchup_order,
                 included_divisions=c.included_divisions,
                 feed_separation_enabled=c.feed_separation_enabled,
+                bypass_filter_for_playoffs=c.bypass_filter_for_playoffs,
             )
             for c in configs
         ],
@@ -391,7 +396,12 @@ def list_league_configs():
     response_model=LeagueConfigResponse,
 )
 def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate):
-    """Create or update per-league subscription config."""
+    """Create or update per-league subscription config.
+
+    A full replace: a field left out is stored as NULL, i.e. "inherit".
+    ``bypass_filter_for_playoffs`` (#881) overrides the playoff / All-Star
+    team-filter bypass for this league: league, then source, then global.
+    """
     if request.matchup_order is not None and request.matchup_order not in MATCHUP_ORDER_MODES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -409,6 +419,7 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
             matchup_order=request.matchup_order,
             included_divisions=included_divisions,
             feed_separation_enabled=request.feed_separation_enabled,
+            bypass_filter_for_playoffs=request.bypass_filter_for_playoffs,
         )
     set_league_matchup_order(league_code, config.matchup_order)  # render-time cache (#692)
 
@@ -420,6 +431,7 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
         matchup_order=config.matchup_order,
         included_divisions=config.included_divisions,
         feed_separation_enabled=config.feed_separation_enabled,
+        bypass_filter_for_playoffs=config.bypass_filter_for_playoffs,
     )
 
 
