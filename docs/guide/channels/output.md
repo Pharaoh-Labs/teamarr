@@ -54,7 +54,7 @@ A few failure modes are handled gracefully: a pattern whose wildcard can't resol
 
 ## Managed Team EPG Channels
 
-Persistent team channels have their own **channel group** and **channel profiles**, set on this page. They deliberately do not inherit the event-channel defaults above: leave the profiles empty for every profile, or narrow them the same way (existing profiles, `{sport}`, `{league}`). The default stream profile applies to team channels too.
+Persistent team channels have their own **channel group** and **channel profiles**, set on this page. They deliberately do not inherit the global event-channel defaults above, though they do respect per-league channel group overrides configured in [Per-League Channel Config](#per-league-channel-config) below (falling back to the managed-team channel group when no league override is set). Leave the profiles empty for every profile, or narrow them the same way (existing profiles, `{sport}`, `{league}`). The default stream profile applies to team channels too.
 
 ## Per-League Channel Config
 

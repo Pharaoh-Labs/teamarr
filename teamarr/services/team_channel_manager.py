@@ -158,6 +158,9 @@ class TeamChannelManager:
             managed_priorities = {
                 team_id: index for index, team_id in enumerate(settings.priority_ids)
             }
+            from teamarr.database.subscription import get_league_configs
+
+            league_configs = {lc.league_code: lc for lc in get_league_configs(conn)}
             sort_priorities = get_all_sort_priorities(conn)
             sport_order = {
                 priority.sport.lower(): priority.sort_priority
@@ -299,7 +302,9 @@ class TeamChannelManager:
                         "channel_number": channel_number,
                         "stream_ids": [],
                         "tvg_id": team["channel_id"],
-                        "channel_group_id": self._channel_group(dispatcharr),
+                        "channel_group_id": self._channel_group(
+                            conn, dispatcharr, team, league_configs
+                        ),
                         "channel_profile_ids": self._channel_profiles(dispatcharr, team),
                         "stream_profile_id": dispatcharr.default_stream_profile_id,
                     }
@@ -341,7 +346,9 @@ class TeamChannelManager:
                     result["created"] += 1
                     continue
 
-                changes = self._changes(remote, team, channel_number, dispatcharr, conn)
+                changes = self._changes(
+                    remote, team, channel_number, dispatcharr, conn, league_configs
+                )
                 if changes:
                     update_result = self._channels.update_channel(remote.id, changes)
                     if not update_result.success:
@@ -932,9 +939,52 @@ class TeamChannelManager:
             number += 1
         return None, None
 
-    @staticmethod
-    def _channel_group(dispatcharr):
-        """Return the managed-team-only group, never an event-channel default."""
+    def _channel_group(
+        self,
+        conn: Any,
+        dispatcharr: Any,
+        team: dict[str, Any],
+        league_configs: dict[str, Any] | None = None,
+    ) -> int | None:
+        """Resolve channel group for a managed team channel.
+
+        Checks per-league override from subscription_league_config first.
+        If no per-league override applies, falls back to the global
+        managed_team_channel_group_id. Never falls back to the global
+        event-channel default.
+        """
+        league_code = team.get("primary_league")
+        if league_code:
+            if league_configs is not None:
+                lc = league_configs.get(league_code)
+            else:
+                from teamarr.database.subscription import get_league_config
+
+                lc = get_league_config(conn, league_code)
+
+            if lc is not None:
+                if lc.channel_group_mode is not None:
+                    if self._resolver is not None:
+                        try:
+                            resolved = self._resolver.resolve_channel_group(
+                                mode=lc.channel_group_mode,
+                                static_group_id=lc.channel_group_id,
+                                event_sport=team.get("sport"),
+                                event_league=league_code,
+                            )
+                            if resolved is not None:
+                                return resolved
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning(
+                                "[TEAM_CHANNEL] Could not resolve group pattern '%s': %s",
+                                lc.channel_group_mode,
+                                exc,
+                            )
+                    elif lc.channel_group_mode == "static" and lc.channel_group_id is not None:
+                        return lc.channel_group_id
+                elif lc.channel_group_id is not None:
+                    return lc.channel_group_id
+
         return dispatcharr.managed_team_channel_group_id
 
     def _channel_profiles(self, dispatcharr, team) -> list[int]:
@@ -974,7 +1024,15 @@ class TeamChannelManager:
             return list(_ALL_PROFILES)
         return resolved
 
-    def _changes(self, remote, team, number, dispatcharr, conn) -> dict:
+    def _changes(
+        self,
+        remote,
+        team,
+        number,
+        dispatcharr,
+        conn,
+        league_configs: dict[str, Any] | None = None,
+    ) -> dict:
         desired: dict[str, Any] = {
             "name": self._channel_name(conn, team),
             "channel_number": number,
@@ -982,7 +1040,7 @@ class TeamChannelManager:
         }
         # Output defaults are enforced only when configured; None means the
         # user has not narrowed them and whatever Dispatcharr has stands.
-        group_id = self._channel_group(dispatcharr)
+        group_id = self._channel_group(conn, dispatcharr, team, league_configs)
         if group_id is not None:
             desired["channel_group_id"] = group_id
         if dispatcharr.default_stream_profile_id is not None:
