@@ -849,6 +849,11 @@ class TeamChannelManager:
 
         with self._db_factory() as conn:
             for team, service, rows in plans:
+                # The service was built on the first connection, which is
+                # closed by now; team_feed rules and the league-sport lookup
+                # read the database while scoring (#938).
+                if hasattr(service, "conn"):
+                    service.conn = conn
                 channel_id = team["dispatcharr_channel_id"]
                 for row in rows:
                     stream = ManagedChannelStream(

@@ -41,9 +41,10 @@ def stage_prepare_team_channels(context: GenerationContext) -> None:
     if team_channels:
         from teamarr.consumers.lifecycle.dynamic_resolver import DynamicResolver
 
+        # No connection handed over (#938): the resolver loads its names on
+        # the first resolve, long after a `with` block here would have closed.
         dynamic_resolver = DynamicResolver()
-        with context.db_factory() as conn:
-            dynamic_resolver.initialize(context.db_factory, conn)
+        dynamic_resolver.initialize(context.db_factory)
 
     context.team_channel_manager = TeamChannelManager(
         context.db_factory,
