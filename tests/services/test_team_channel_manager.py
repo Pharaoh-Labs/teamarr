@@ -602,6 +602,49 @@ def test_channel_group_uses_global_default_when_no_league_override(conn, setting
     assert channels.created[0]["channel_group_id"] == 15
 
 
+@pytest.mark.parametrize(
+    "league_row",
+    [
+        "('nba', 20, 'static')",
+        "('nba', NULL, '09 TEAMARR {league}')",
+    ],
+    ids=["static override", "pattern override"],
+)
+def test_channel_group_ignores_league_overrides_by_default(conn, settings, monkeypatch, league_row):
+    """Per-League Channel Config was written for event channels. Following it
+    unconditionally (#935) moved existing team channels out of their dedicated
+    group for anyone who already had per-league groups, so it is opt-in (#940):
+    with the setting off, or absent, a team channel keeps its own group."""
+    import teamarr.services.team_channel_manager as module
+
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
+    conn.execute(
+        "INSERT INTO subscription_league_config "
+        f"(league_code, channel_group_id, channel_group_mode) VALUES {league_row}"
+    )
+    resolver = SimpleNamespace(
+        resolve_channel_group=lambda **kwargs: pytest.fail("league group must not be resolved")
+    )
+    for dispatcharr in (
+        SimpleNamespace(
+            default_stream_profile_id=None,
+            managed_team_channel_group_id=15,
+            managed_team_channel_profile_ids=None,
+            managed_team_channel_league_groups=False,
+        ),
+        # Settings object from before the field existed.
+        SimpleNamespace(
+            default_stream_profile_id=None,
+            managed_team_channel_group_id=15,
+            managed_team_channel_profile_ids=None,
+        ),
+    ):
+        monkeypatch.setattr(module, "get_dispatcharr_settings", lambda _, d=dispatcharr: d)
+        manager = TeamChannelManager(_factory(conn), FakeChannels(), dynamic_resolver=resolver)
+        team = {"primary_league": "nba", "sport": "basketball"}
+        assert manager._channel_group(conn, dispatcharr, team) == 15
+
+
 def test_channel_group_uses_per_league_static_override(conn, settings, monkeypatch):
     import teamarr.services.team_channel_manager as module
 
@@ -618,6 +661,7 @@ def test_channel_group_uses_per_league_static_override(conn, settings, monkeypat
         lambda _: SimpleNamespace(
             default_stream_profile_id=None,
             managed_team_channel_group_id=15,
+            managed_team_channel_league_groups=True,
             managed_team_channel_profile_ids=None,
         ),
     )
@@ -647,6 +691,7 @@ def test_channel_group_uses_per_league_dynamic_pattern_override(conn, settings, 
         lambda _: SimpleNamespace(
             default_stream_profile_id=None,
             managed_team_channel_group_id=15,
+            managed_team_channel_league_groups=True,
             managed_team_channel_profile_ids=None,
         ),
     )
@@ -677,6 +722,7 @@ def test_channel_group_falls_back_when_league_config_has_no_group_override(
         lambda _: SimpleNamespace(
             default_stream_profile_id=None,
             managed_team_channel_group_id=15,
+            managed_team_channel_league_groups=True,
             managed_team_channel_profile_ids=None,
         ),
     )
@@ -707,6 +753,7 @@ def test_channel_group_per_league_override_sync_update(conn, settings, monkeypat
         lambda _: SimpleNamespace(
             default_stream_profile_id=None,
             managed_team_channel_group_id=15,
+            managed_team_channel_league_groups=True,
             managed_team_channel_profile_ids=None,
         ),
     )

@@ -52,6 +52,7 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
             untagged_keyword_label=(update.untagged_keyword_label or "").strip() or None,
             managed_team_channel_profile_ids=update.managed_team_channel_profile_ids,
             managed_team_channel_group_id=update.managed_team_channel_group_id,
+            managed_team_channel_league_groups=update.managed_team_channel_league_groups,
             cleanup_unused_logos=update.cleanup_unused_logos,
         )
 

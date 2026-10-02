@@ -86,6 +86,7 @@ export function DispatcharrOutputSettings() {
       untagged_keyword_label: settings.dispatcharr.untagged_keyword_label,
       managed_team_channel_profile_ids: settings.dispatcharr.managed_team_channel_profile_ids,
       managed_team_channel_group_id: settings.dispatcharr.managed_team_channel_group_id,
+      managed_team_channel_league_groups: settings.dispatcharr.managed_team_channel_league_groups,
       cleanup_unused_logos: settings.dispatcharr.cleanup_unused_logos,
     })
   }
@@ -133,6 +134,7 @@ export function DispatcharrOutputSettings() {
         untagged_keyword_label: dispatcharr.untagged_keyword_label?.trim() || null,
         managed_team_channel_profile_ids: profileIdsToApi(managedTeamProfileIds, allProfileIds),
         managed_team_channel_group_id: dispatcharr.managed_team_channel_group_id,
+        managed_team_channel_league_groups: dispatcharr.managed_team_channel_league_groups,
         cleanup_unused_logos: dispatcharr.cleanup_unused_logos,
       }
       if (dispatcharr.password) {
@@ -211,7 +213,26 @@ export function DispatcharrOutputSettings() {
               ))}
             </Select>
             <p className="text-xs text-muted-foreground">
-              Managed team channels do not inherit global event-channel group settings, but will use per-league overrides if configured below.
+              Managed team channels do not inherit the global event-channel group settings.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Grouping</Label>
+            <Select
+              value={dispatcharr.managed_team_channel_league_groups ? "league" : "own"}
+              onChange={(e) => setDispatcharr({
+                ...dispatcharr,
+                managed_team_channel_league_groups: e.target.value === "league",
+              })}
+              className="w-64"
+            >
+              <option value="own">Own group</option>
+              <option value="league">Group with league</option>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {dispatcharr.managed_team_channel_league_groups
+                ? "A team channel uses its league's channel group from Per-League Channel Config below, and the group above when that league has none."
+                : "Every team channel goes in the group above. Per-league channel groups apply to event channels only."}
             </p>
           </div>
           {saveButton}

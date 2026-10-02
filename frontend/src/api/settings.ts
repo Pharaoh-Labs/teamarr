@@ -21,6 +21,8 @@ export interface DispatcharrSettings {
   // Dedicated output defaults for managed Team EPG channels.
   managed_team_channel_profile_ids: (number | string)[] | null
   managed_team_channel_group_id: number | null
+  // false = team channels keep their own group; true = group with their league (#940)
+  managed_team_channel_league_groups: boolean
   // Clean up ALL unused logos in Dispatcharr after generation
   cleanup_unused_logos: boolean
 }

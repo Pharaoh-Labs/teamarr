@@ -79,6 +79,7 @@ def update_dispatcharr_settings(
     untagged_keyword_label: str | None | object = _NOT_PROVIDED,
     managed_team_channel_profile_ids: list[int] | None | object = _NOT_PROVIDED,
     managed_team_channel_group_id: int | None | object = _NOT_PROVIDED,
+    managed_team_channel_league_groups: bool | None = None,
     cleanup_unused_logos: bool | None = None,
 ) -> bool:
     """Update Dispatcharr settings.
@@ -97,6 +98,7 @@ def update_dispatcharr_settings(
         username=username,
         password=password,
         epg_id=epg_id,
+        managed_team_channel_league_groups=managed_team_channel_league_groups,
         cleanup_unused_logos=cleanup_unused_logos,
     ) | _skip_missing(
         default_channel_profile_ids=default_channel_profile_ids,
