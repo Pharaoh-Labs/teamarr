@@ -41,6 +41,8 @@ class DispatcharrChannel:
     streams: tuple[int, ...] = field(default_factory=tuple)
     stream_profile_id: int | None = None
     channel_profile_ids: tuple[int, ...] | None = None  # None = not in API response
+    # The EPGData row this channel's guide comes from; None = not linked (#855)
+    epg_data_id: int | None = None
 
     @classmethod
     def from_api(cls, data: dict) -> "DispatcharrChannel":
@@ -68,6 +70,7 @@ class DispatcharrChannel:
             streams=streams,
             stream_profile_id=data.get("stream_profile_id"),
             channel_profile_ids=profile_ids,
+            epg_data_id=data.get("epg_data_id"),
         )
 
 
@@ -330,6 +333,20 @@ class DispatcharrStreamProfile:
             command=data.get("command", ""),
             is_active=data.get("is_active", True),
         )
+
+
+@dataclass
+class EpgAssociationOutcome:
+    """What `ChannelManager.apply_epg_associations` did (#855).
+
+    ``changed_channel_ids`` are the channels whose guide mapping was new or
+    different — the only ones Dispatcharr still has to parse programmes for.
+    """
+
+    applied: int = 0
+    failed_channel_ids: tuple[int, ...] = ()
+    changed_channel_ids: frozenset[int] = frozenset()
+    batched: bool = False
 
 
 @dataclass

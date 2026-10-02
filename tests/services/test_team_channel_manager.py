@@ -96,6 +96,19 @@ class FakeChannels:
         self.epg_assignments.append((channel_id, epg_id))
         return self.epg_result
 
+    def apply_epg_associations(self, associations):
+        """Shape of ChannelManager.apply_epg_associations (#855)."""
+        from teamarr.dispatcharr.types import EpgAssociationOutcome
+
+        failed = [
+            cid for cid, eid in associations if not self.set_channel_epg(cid, eid).success
+        ]
+        return EpgAssociationOutcome(
+            applied=len(associations) - len(failed),
+            failed_channel_ids=tuple(failed),
+            changed_channel_ids=frozenset(c for c, _ in associations if c not in failed),
+        )
+
 
 _MEMBERSHIP_TABLE = """
     CREATE TABLE managed_team_channel_streams (
@@ -755,7 +768,14 @@ def test_associates_only_owned_channels_and_counts_rejections(conn, settings):
     channels = FakeChannels()
 
     result = TeamChannelManager(_factory(conn), channels, object()).associate_epg(12)
-    assert result == {"associated": 1, "not_found": 0, "errors": 0}
+    # A newly linked team channel is reported so the run can wait for its
+    # programmes before refreshing media servers (#855).
+    assert result == {
+        "associated": 1,
+        "not_found": 0,
+        "errors": 0,
+        "new_tvg_ids": ["team-blue"],
+    }
     assert channels.epg_assignments == [(10, 42)]
 
     channels.epg_result = SimpleNamespace(success=False, error="boom")
