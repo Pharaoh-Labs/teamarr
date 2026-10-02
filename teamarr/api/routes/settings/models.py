@@ -111,6 +111,8 @@ class DispatcharrSettingsModel(BaseModel):
     # Dedicated output defaults for managed Team EPG channels.
     managed_team_channel_profile_ids: list[str | int] | None = None
     managed_team_channel_group_id: int | None = None
+    # False = team channels keep their own group; True = group with their league (#940)
+    managed_team_channel_league_groups: bool = False
     # Clean up ALL unused logos in Dispatcharr after generation
     cleanup_unused_logos: bool = False
 
@@ -137,6 +139,7 @@ class DispatcharrSettingsUpdate(BaseModel):
     untagged_keyword_label: str | None = None
     managed_team_channel_profile_ids: list[str | int] | None = None
     managed_team_channel_group_id: int | None = None
+    managed_team_channel_league_groups: bool | None = None
     cleanup_unused_logos: bool | None = None
 
     @field_validator(

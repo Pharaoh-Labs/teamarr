@@ -959,13 +959,19 @@ class TeamChannelManager:
     ) -> int | None:
         """Resolve channel group for a managed team channel.
 
-        Checks per-league override from subscription_league_config first.
-        If no per-league override applies, falls back to the global
-        managed_team_channel_group_id. Never falls back to the global
-        event-channel default.
+        By default every team channel goes in the dedicated
+        managed_team_channel_group_id. With "group with league" on
+        (managed_team_channel_league_groups, #940) the team's league override
+        from subscription_league_config is checked first, falling back to the
+        dedicated group when that league has none. Never falls back to the
+        global event-channel default.
+
+        The per-league table was written for event channels, so following it
+        is opt-in: unconditionally (#935) it moved existing team channels out
+        of their group for anyone who already had per-league groups.
         """
         league_code = team.get("primary_league")
-        if league_code:
+        if league_code and getattr(dispatcharr, "managed_team_channel_league_groups", False):
             if league_configs is not None:
                 lc = league_configs.get(league_code)
             else:

@@ -33,6 +33,11 @@ class DispatcharrSettings:
     # inherit event-channel defaults: None means no group / all profiles.
     managed_team_channel_profile_ids: list[int | str] | None = None
     managed_team_channel_group_id: int | None = None
+    # False = every team channel goes in the group above. True = a team channel
+    # uses its league's group from Per-League Channel Config when that league
+    # has one (#933). Off by default: that table was written for event
+    # channels, and following it moved existing team channels on upgrade (#940).
+    managed_team_channel_league_groups: bool = False
     # When True, call Dispatcharr's /api/channels/logos/cleanup/ after generation
     # This removes ALL unused logos in Dispatcharr, not just ones Teamarr uploaded
     cleanup_unused_logos: bool = False

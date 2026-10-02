@@ -393,6 +393,10 @@ CREATE TABLE IF NOT EXISTS settings (
     untagged_keyword_label TEXT DEFAULT NULL, -- {exception_keyword} value for channels with no keyword (NULL = empty)
     managed_team_channel_profile_ids JSON,    -- Dedicated channel profiles for managed team channels
     managed_team_channel_group_id INTEGER,    -- Dedicated channel group for managed team channels
+    -- 0 = team channels always use the group above (the behaviour up to v2.19.0);
+    -- 1 = a team channel uses its league's group from subscription_league_config
+    -- when that league has one, and the group above otherwise (#933/#940)
+    managed_team_channel_league_groups BOOLEAN DEFAULT 0,
     cleanup_unused_logos BOOLEAN DEFAULT 0,   -- Call Dispatcharr's cleanup API after generation
 
     -- Reconciliation Settings
