@@ -326,6 +326,87 @@ class EPGManager:
         )
         return False
 
+    def has_programmes(self, tvg_id: str) -> bool | None:
+        """Does Dispatcharr hold at least one programme for this guide channel?
+
+        One row is enough to answer, so this asks for a single-row page and
+        never walks the rest. None when the answer could not be read.
+        """
+        query = urlencode({"tvg_id": tvg_id, "page_size": 1})
+        response = self._client.get(f"{self._PROGRAMS_SEARCH_PATH}?{query}")
+        if response is None or response.status_code != 200:
+            return None
+        try:
+            data = response.json()
+        except ValueError:
+            return None
+        if isinstance(data, dict):
+            return bool(data.get("count") or data.get("results"))
+        return bool(data)
+
+    def wait_for_programmes(
+        self,
+        tvg_ids: list[str],
+        timeout: float = 90.0,
+        poll_interval: float = 3.0,
+        cancellation_check: Callable[[], bool] | None = None,
+    ) -> dict:
+        """Wait until Dispatcharr has parsed programmes for newly linked channels (#855).
+
+        Linking a channel to its EPG entry only QUEUES the programme parse on
+        Dispatcharr's side. A media server refreshed before that parse lands
+        reads the channel with an empty guide and keeps it until its own next
+        refresh — Channels DVR showed new event channels with no programmes
+        until someone refreshed by hand. So after a run links new channels,
+        hold the run until each of them has at least one programme.
+
+        Bounded: on timeout the run carries on and the miss is reported, since
+        a late guide is better than a stuck generation. A build without the
+        programme-search endpoint cannot be asked, and is not waited on.
+
+        Returns:
+            ``{"waited_for", "ready", "missing", "seconds", "timed_out"}``, or
+            ``{"waited_for": n, "supported": False}`` when it cannot be checked.
+        """
+        pending = list(dict.fromkeys(t for t in tvg_ids if t))
+        total = len(pending)
+        if not pending:
+            return {"waited_for": 0, "ready": 0, "missing": [], "seconds": 0.0, "timed_out": False}
+        if not self.supports_program_search():
+            return {"waited_for": total, "supported": False}
+
+        started = time.monotonic()
+        cancelled = False
+        while True:
+            pending = [tvg_id for tvg_id in pending if not self.has_programmes(tvg_id)]
+            elapsed = time.monotonic() - started
+            cancelled = bool(cancellation_check and cancellation_check())
+            if not pending or cancelled or elapsed >= timeout:
+                break
+            time.sleep(min(poll_interval, max(timeout - elapsed, 0.0)))
+
+        elapsed = time.monotonic() - started
+        if pending:
+            logger.warning(
+                "[EPG] %d of %d new channel(s) still have no programmes after %.0fs%s: %s",
+                len(pending),
+                total,
+                elapsed,
+                " (cancelled)" if cancelled else "",
+                ", ".join(pending[:5]),
+            )
+        else:
+            logger.info(
+                "[EPG] Programmes present for %d new channel(s) after %.1fs", total, elapsed
+            )
+        return {
+            "waited_for": total,
+            "ready": total - len(pending),
+            "missing": pending[:10],
+            "seconds": round(elapsed, 1),
+            "timed_out": bool(pending) and not cancelled,
+        }
+
     def search_programs(
         self,
         tvg_id: str | None = None,

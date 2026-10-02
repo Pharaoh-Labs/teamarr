@@ -15,6 +15,10 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 # Preserve the established façade logger name for log-based diagnostics.
 logger = logging.getLogger("teamarr.consumers.generation")
 
+# How long a run waits for Dispatcharr to parse programmes for channels it has
+# just linked to their EPG entry, before refreshing media servers anyway (#855).
+NEW_CHANNEL_PROGRAMME_WAIT_SECONDS = 90
+
 
 def stage_lifecycle_prepare(
     context: GenerationContext,
@@ -46,7 +50,8 @@ def stage_dispatcharr_epg(
         if isinstance(context.dispatcharr_client, DispatcharrConnection)
         else context.dispatcharr_client
     )
-    refresh = EPGManager(raw_client).wait_for_refresh(
+    epg_manager = EPGManager(raw_client)
+    refresh = epg_manager.wait_for_refresh(
         context.settings.dispatcharr.epg_id,
         timeout=300,
         cancellation_check=cancellation_requested,
@@ -60,12 +65,31 @@ def stage_dispatcharr_epg(
     context.result.epg_association = context.lifecycle_service.associate_epg_with_channels(
         context.settings.dispatcharr.epg_id
     )
+    new_tvg_ids = list(context.result.epg_association.pop("new_tvg_ids", None) or [])
     try:
-        context.result.epg_association["managed_team_channels"] = (
-            context.team_channel_manager.associate_epg(context.settings.dispatcharr.epg_id)
+        team_association = context.team_channel_manager.associate_epg(
+            context.settings.dispatcharr.epg_id
         )
+        new_tvg_ids += team_association.pop("new_tvg_ids", None) or []
+        context.result.epg_association["managed_team_channels"] = team_association
     except Exception as exc:  # noqa: BLE001 - per-step isolation
         logger.exception("[GENERATION] Managed team EPG association failed: %s", exc)
+
+    # Linking a channel only queues its programme parse in Dispatcharr. The
+    # media-server refresh comes later in this run, and one that reads the
+    # guide first shows the new channel with no programmes (#855).
+    if new_tvg_ids:
+        context.report(
+            "dispatcharr", 97, f"Waiting for guide data on {len(new_tvg_ids)} new channel(s)..."
+        )
+        try:
+            context.result.epg_association["programme_wait"] = epg_manager.wait_for_programmes(
+                new_tvg_ids,
+                timeout=NEW_CHANNEL_PROGRAMME_WAIT_SECONDS,
+                cancellation_check=cancellation_requested,
+            )
+        except Exception as exc:  # noqa: BLE001 - a failed wait must not fail the run
+            logger.warning("[GENERATION] Programme wait failed: %s", exc)
 
 
 def stage_deletions(context: GenerationContext) -> None:

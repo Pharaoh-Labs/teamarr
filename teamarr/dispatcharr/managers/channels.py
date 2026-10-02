@@ -12,6 +12,7 @@ from teamarr.dispatcharr.types import (
     DispatcharrChannel,
     DispatcharrChannelProfile,
     DispatcharrStreamProfile,
+    EpgAssociationOutcome,
     OperationResult,
 )
 
@@ -132,6 +133,8 @@ class ChannelManager:
         self._client = client
         self._url = client._base_url
         self._lock = threading.Lock()
+        # None = not probed yet; False once batch-set-epg answers 404/405 (#855)
+        self._batch_epg_supported: bool | None = None
 
         # Initialize cache for this URL if not exists
         if self._url not in self._caches:
@@ -528,6 +531,98 @@ class ChannelManager:
         return OperationResult(
             success=False,
             error=self._client.parse_api_error(response),
+        )
+
+    def batch_set_channel_epg(self, associations: list[tuple[int, int]]) -> OperationResult | None:
+        """Link many channels to their EPG data in one request (#855).
+
+        ``POST /api/channels/channels/batch-set-epg/``. Dispatcharr applies
+        only the mappings that actually change and queues ONE programme parse
+        per changed EPG entry; the per-channel ``set-epg`` queues a parse for
+        every call, changed or not.
+
+        Returns:
+            OperationResult (``data`` carries ``channels_updated`` and
+            ``programs_refreshed``), or None when this Dispatcharr build has
+            no such endpoint — callers fall back to ``set_channel_epg``.
+        """
+        if self._batch_epg_supported is False:
+            return None
+        response = self._client.post(
+            "/api/channels/channels/batch-set-epg/",
+            {
+                "associations": [
+                    {"channel_id": channel_id, "epg_data_id": epg_data_id}
+                    for channel_id, epg_data_id in associations
+                ]
+            },
+        )
+        if response is not None and response.status_code in (404, 405):
+            self._batch_epg_supported = False
+            logger.info(
+                "[EPG] batch-set-epg not available on this Dispatcharr build; "
+                "associating changed channels one by one"
+            )
+            return None
+        if response is None or response.status_code != 200:
+            return OperationResult(success=False, error=self._client.parse_api_error(response))
+        self._batch_epg_supported = True
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+        return OperationResult(success=True, data=data if isinstance(data, dict) else {})
+
+    def apply_epg_associations(
+        self, associations: list[tuple[int, int]]
+    ) -> EpgAssociationOutcome:
+        """Make each ``(channel_id, epg_data_id)`` mapping true, touching only what changed.
+
+        Every run used to call ``set-epg`` on every managed channel. On the
+        Dispatcharr side each call queues a full parse of the XMLTV file,
+        changed or not, so the one parse a brand-new channel needed sat behind
+        hundreds of redundant ones — and the media-server refresh that follows
+        read a guide with no programmes for it (#855).
+
+        Changed mappings are worked out from the channel list already cached
+        for the run (an unknown channel counts as changed). With
+        ``batch-set-epg`` everything is sent in one request and Dispatcharr's
+        own count of updated channels is the authority; on a build without it
+        only the changed channels get a ``set-epg`` call.
+        """
+        if not associations:
+            return EpgAssociationOutcome()
+        current = {ch.id: ch.epg_data_id for ch in self.get_channels()}
+        changed = [(cid, eid) for cid, eid in associations if current.get(cid) != eid]
+
+        batch = self.batch_set_channel_epg(associations)
+        if batch is not None and batch.success:
+            updated = (batch.data or {}).get("channels_updated")
+            changed_ids = frozenset(cid for cid, _ in changed) if updated != 0 else frozenset()
+            return EpgAssociationOutcome(
+                applied=len(associations), changed_channel_ids=changed_ids, batched=True
+            )
+        if batch is not None:
+            logger.warning(
+                "[EPG] batch-set-epg failed (%s); associating changed channels one by one",
+                batch.error,
+            )
+
+        failed: list[int] = []
+        for channel_id, epg_data_id in changed:
+            try:
+                outcome = self.set_channel_epg(channel_id, epg_data_id)
+            except Exception as e:  # noqa: BLE001 — one channel must not stop the rest
+                logger.debug("[EPG] set-epg raised for channel %s: %s", channel_id, e)
+                failed.append(channel_id)
+                continue
+            if outcome is not None and not getattr(outcome, "success", True):
+                failed.append(channel_id)
+        failed_set = set(failed)
+        return EpgAssociationOutcome(
+            applied=len(associations) - len(failed),
+            failed_channel_ids=tuple(failed),
+            changed_channel_ids=frozenset(cid for cid, _ in changed if cid not in failed_set),
         )
 
     # ========================================================================

@@ -494,7 +494,7 @@ class TeamChannelManager:
             note,
         )
 
-    def associate_epg(self, epg_source_id: int) -> dict[str, int]:
+    def associate_epg(self, epg_source_id: int) -> dict:
         """Link refreshed Team EPG data to only locally-owned team channels."""
         result = {"associated": 0, "not_found": 0, "errors": 0}
         if not self._channels or not self._epg:
@@ -507,30 +507,36 @@ class TeamChannelManager:
         if not teams:
             return result
         lookup = self._channels.build_epg_lookup(epg_source_id)
+        associations: list[tuple[int, int]] = []
+        team_by_channel: dict[int, dict] = {}
         for team in teams:
             epg_data = lookup.get(team["channel_id"])
             if not epg_data or not epg_data.get("id"):
                 result["not_found"] += 1
                 continue
-            try:
-                outcome = self._channels.set_channel_epg(
-                    team["dispatcharr_channel_id"], epg_data["id"]
-                )
-            except Exception:
-                logger.exception(
-                    "[TEAM_CHANNEL] EPG association failed for %s", team["team_name"]
-                )
-                result["errors"] += 1
-                continue
-            if outcome is not None and not getattr(outcome, "success", True):
-                logger.warning(
-                    "[TEAM_CHANNEL] EPG association rejected for %s: %s",
-                    team["team_name"],
-                    getattr(outcome, "error", None),
-                )
-                result["errors"] += 1
-                continue
-            result["associated"] += 1
+            associations.append((team["dispatcharr_channel_id"], epg_data["id"]))
+            team_by_channel[team["dispatcharr_channel_id"]] = team
+        try:
+            # Only new or changed mappings reach Dispatcharr as work (#855).
+            outcome = self._channels.apply_epg_associations(associations)
+        except Exception:
+            logger.exception("[TEAM_CHANNEL] EPG association failed")
+            result["errors"] += len(associations)
+            return result
+        for channel_id in outcome.failed_channel_ids:
+            logger.warning(
+                "[TEAM_CHANNEL] EPG association rejected for %s",
+                team_by_channel.get(channel_id, {}).get("team_name", channel_id),
+            )
+        result["errors"] += len(outcome.failed_channel_ids)
+        result["associated"] += outcome.applied
+        new_tvg_ids = sorted(
+            team_by_channel[cid]["channel_id"]
+            for cid in outcome.changed_channel_ids
+            if cid in team_by_channel
+        )
+        if new_tvg_ids:
+            result["new_tvg_ids"] = new_tvg_ids
         return result
 
     def remove_team_channel(self, team_id: int) -> tuple[bool, str | None]:

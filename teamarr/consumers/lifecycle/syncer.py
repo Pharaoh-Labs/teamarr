@@ -596,7 +596,9 @@ class ChannelSyncer(_LifecycleHost):
     def associate_epg_with_channels(self, epg_source_id: int | None = None) -> dict:
         """Associate EPG data with managed channels after EPG refresh.
 
-        Looks up EPGData by tvg_id and calls set_channel_epg to link them.
+        Looks up EPGData by tvg_id and links each channel to it. Only mappings
+        that changed reach Dispatcharr as work (#855) — see
+        `ChannelManager.apply_epg_associations`.
         This host-owned association intentionally covers both core and
         plugin-owned channels; it does not change plugin identity or ordering.
 
@@ -604,58 +606,59 @@ class ChannelSyncer(_LifecycleHost):
             epg_source_id: Optional EPG source ID (uses default from settings if not provided)
 
         Returns:
-            Dict with success/error counts
+            Dict with success/error counts, ``updated`` (mappings that were new
+            or different) and ``new_tvg_ids`` — the guide channels Dispatcharr
+            still has to parse programmes for.
         """
         from teamarr.database.channels import get_all_managed_channels
 
         if not self._channel_manager or not self._epg_manager:
             return {"error": "Dispatcharr not configured"}
 
-        result = {"associated": 0, "not_found": 0, "errors": 0}
+        result: dict = {"associated": 0, "not_found": 0, "errors": 0, "updated": 0}
 
         with self._db_factory() as conn:
             # Get all active managed channels
             channels = get_all_managed_channels(conn, include_deleted=False)
 
-            if not channels:
-                return result
+        if not channels:
+            return result
 
-            # Build EPG data lookup from Dispatcharr (via ChannelManager)
-            epg_lookup = self._channel_manager.build_epg_lookup(epg_source_id)
+        # Build EPG data lookup from Dispatcharr (via ChannelManager)
+        epg_lookup = self._channel_manager.build_epg_lookup(epg_source_id)
 
-            for channel in channels:
-                if not channel.dispatcharr_channel_id or not channel.tvg_id:
-                    continue
+        associations: list[tuple[int, int]] = []
+        tvg_by_channel: dict[int, str] = {}
+        for channel in channels:
+            if not channel.dispatcharr_channel_id or not channel.tvg_id:
+                continue
+            epg_data_id = (epg_lookup.get(channel.tvg_id) or {}).get("id")
+            if not epg_data_id:
+                result["not_found"] += 1
+                continue
+            associations.append((channel.dispatcharr_channel_id, epg_data_id))
+            tvg_by_channel[channel.dispatcharr_channel_id] = channel.tvg_id
 
-                # Look up EPG data by tvg_id
-                epg_data = epg_lookup.get(channel.tvg_id)
+        try:
+            with self._dispatcharr_lock:
+                outcome = self._channel_manager.apply_epg_associations(associations)
+        except Exception as e:  # noqa: BLE001 — association must not fail the run
+            logger.warning("[LIFECYCLE] EPG association failed: %s", e)
+            result["errors"] = len(associations)
+            return result
 
-                if not epg_data:
-                    result["not_found"] += 1
-                    continue
-
-                # Associate EPG with channel
-                epg_data_id = epg_data.get("id")
-                if not epg_data_id:
-                    result["not_found"] += 1
-                    continue
-
-                try:
-                    with self._dispatcharr_lock:
-                        self._channel_manager.set_channel_epg(
-                            channel.dispatcharr_channel_id,
-                            epg_data_id,
-                        )
-                    result["associated"] += 1
-                except Exception as e:
-                    logger.debug(
-                        "[LIFECYCLE] Failed to associate EPG for channel %s: %s",
-                        channel.channel_name,
-                        e,
-                    )
-                    result["errors"] += 1
+        result["associated"] = outcome.applied
+        result["errors"] = len(outcome.failed_channel_ids)
+        result["updated"] = len(outcome.changed_channel_ids)
+        result["new_tvg_ids"] = sorted(
+            tvg_by_channel[cid] for cid in outcome.changed_channel_ids if cid in tvg_by_channel
+        )
 
         if result["associated"]:
-            logger.info("[LIFECYCLE] Associated EPG data with %d channels", result["associated"])
+            logger.info(
+                "[LIFECYCLE] EPG data linked for %d channels (%d new or changed)",
+                result["associated"],
+                result["updated"],
+            )
 
         return result
