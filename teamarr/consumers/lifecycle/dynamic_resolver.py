@@ -80,13 +80,19 @@ class DynamicResolver:
     def initialize(
         self,
         db_factory: Any,
-        db_conn: SQLiteConnection,
+        db_conn: SQLiteConnection | None = None,
     ) -> None:
         """Initialize the resolver with connections.
 
         Args:
             db_factory: Database factory (for getting Dispatcharr connection)
-            db_conn: Database connection for sport/league lookups
+            db_conn: Database connection for sport/league lookups. It must stay
+                open for as long as the resolver is used: names are loaded
+                lazily on the first resolve, and conference lookups read it
+                per event. Pass None when the resolver outlives the caller's
+                connection (#938) — it then opens a short-lived one of its
+                own for the name load, and conference wildcards stay
+                unresolved (static-group fallback).
         """
         self._db_factory = db_factory
         self._db_conn = db_conn
@@ -104,30 +110,15 @@ class DynamicResolver:
         if self._initialized:
             return
 
-        # Load sport display names
+        # Load sport and league display names. Without a caller-held
+        # connection, use a short-lived one of our own (#938): the team
+        # channel path was handed one that had already closed by the time the
+        # first resolve ran, so every per-league group override failed.
         if self._db_conn:
-            self._sport_display_names = get_sport_display_names_from_db(self._db_conn)
-
-            cursor = self._db_conn.execute(
-                "SELECT league_code, display_name, league_alias FROM leagues"
-            )
-            for row in cursor.fetchall():
-                self._league_display_names[row["league_code"]] = row["display_name"]
-                # league_alias with fallback to display_name (matches {league} template variable)
-                alias = row["league_alias"] or row["display_name"]
-                if alias:
-                    self._league_aliases[row["league_code"]] = alias
-
-            # Fallback: discovered leagues from league_cache (not in static leagues table)
-            cursor = self._db_conn.execute(
-                "SELECT league_slug, league_name FROM league_cache"
-            )
-            for row in cursor.fetchall():
-                slug = row["league_slug"]
-                if slug not in self._league_display_names and row["league_name"]:
-                    self._league_display_names[slug] = row["league_name"]
-                if slug not in self._league_aliases and row["league_name"]:
-                    self._league_aliases[slug] = row["league_name"]
+            self._load_names(self._db_conn)
+        elif self._db_factory:
+            with self._db_factory() as conn:
+                self._load_names(conn)
 
         # Load existing Dispatcharr groups and profiles
         dispatcharr = self._get_dispatcharr()
@@ -158,6 +149,27 @@ class DynamicResolver:
             len(self._sport_display_names),
             len(self._league_display_names),
         )
+
+    def _load_names(self, conn: SQLiteConnection) -> None:
+        """Sport and league display names, for the {sport}/{league} wildcards."""
+        self._sport_display_names = get_sport_display_names_from_db(conn)
+
+        cursor = conn.execute("SELECT league_code, display_name, league_alias FROM leagues")
+        for row in cursor.fetchall():
+            self._league_display_names[row["league_code"]] = row["display_name"]
+            # league_alias with fallback to display_name (matches {league} template variable)
+            alias = row["league_alias"] or row["display_name"]
+            if alias:
+                self._league_aliases[row["league_code"]] = alias
+
+        # Fallback: discovered leagues from league_cache (not in static leagues table)
+        cursor = conn.execute("SELECT league_slug, league_name FROM league_cache")
+        for row in cursor.fetchall():
+            slug = row["league_slug"]
+            if slug not in self._league_display_names and row["league_name"]:
+                self._league_display_names[slug] = row["league_name"]
+            if slug not in self._league_aliases and row["league_name"]:
+                self._league_aliases[slug] = row["league_name"]
 
     def _get_dispatcharr(self):
         """Get the Dispatcharr connection from factory."""
