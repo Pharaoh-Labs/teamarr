@@ -68,11 +68,14 @@ Override channel profiles, channel groups, group modes, and the [matchup order](
 | **Channel Group** | Default or specific group | Which Dispatcharr channel group to assign channels to |
 | **Channel Group Mode** | Default, Static, Dynamic by Sport, Dynamic by League, Custom | How the channel group is determined |
 | **Divisions** | All (default) or a subset | Which divisions of an NCAA league to ingest at all — college football and both college basketballs only |
+| **Playoff & All-Star Games** | Default, Always include, Follow team filter | Whether this league's postseason and All-Star games skip the [team filter](../subscriptions#default-team-filter) |
 
 When Channel Group Mode is set to **Custom**, a pattern field appears where you can enter a template like `{sport} - {league}` that dynamically creates groups.
 
 {: .note }
 Per-league overrides take precedence over the global defaults above. Use the **X** button to clear an override and revert to the default.
+
+**Playoff & All-Star Games** overrides the "Include all playoff & All-Star games" switch for one league. *Always include* lets that league's postseason and All-Star games through the team filter even when the switch is off; *Follow team filter* keeps them subject to it even when the switch is on, so you can follow a few MiLB teams without getting every MiLB playoff game while MLB playoffs still come through. The league's choice wins over a source's own setting, which wins over the global one. It only matters while a team filter is active.
 
 **Divisions** narrows what Teamarr fetches for the NCAA leagues ESPN splits across division scoreboards: college football (**Division I (FBS & FCS)** / **Division II & III**), men's and women's college basketball, and women's college volleyball (**NCAA Division I** / **Non-NCAA Division I**). Every other NCAA league fetches a single Division I slate, so it has nothing to select. Deselecting a division means those games are never requested — no matching cost, no channels, and no lower-division events falling back into your default group because `{division}` can't name them. ESPN files a game under a division when *either* side belongs to it, so cross-division fixtures (an FCS team hosting a Division II opponent) survive with Division I alone; only games played entirely inside a dropped division disappear. Leave every division checked — the default — and nothing changes.
 

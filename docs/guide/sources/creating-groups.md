@@ -51,7 +51,7 @@ Narrow this source's matches to specific teams:
 
 - **Use default team filter** — inherit the global filter from [Subscriptions → Teams](../subscriptions#default-team-filter).
 - Or define a source-specific filter: choose **Include only selected teams** or **Exclude selected teams**, then pick teams.
-- **Include all playoff & All-Star games** — bypass the team filter for postseason and All-Star events, so you never miss them.
+- **Include all playoff & All-Star games** — bypass the team filter for postseason and All-Star events, so you never miss them. A league can override this either way in [Per-League Channel Config](../channels/output#per-league-channel-config); the league's choice wins over the source's.
 
 ## Custom Regex
 

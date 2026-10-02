@@ -56,6 +56,7 @@ function LeagueConfigRow({
     matchup_order?: string | null
     included_divisions?: string[] | null
     feed_separation_enabled?: boolean | null
+    bypass_filter_for_playoffs?: boolean | null
   }) => Promise<void>
   onClear: () => Promise<void>
 }) {
@@ -64,6 +65,8 @@ function LeagueConfigRow({
   const [localGroupMode, setLocalGroupMode] = useState<string | null>(null)
   const [localMatchupOrder, setLocalMatchupOrder] = useState<string | null>(null)
   const [localFeedSeparationEnabled, setLocalFeedSeparationEnabled] = useState<boolean | null>(null)
+  // #881: per-league playoff / All-Star team-filter bypass; null = inherit
+  const [localPlayoffBypass, setLocalPlayoffBypass] = useState<boolean | null>(null)
   // #811: the divisions still ingested. Held as the checked set (null config =
   // all of them), so the UI never has to special-case "no override".
   const [localDivisions, setLocalDivisions] = useState<string[]>([])
@@ -87,6 +90,7 @@ function LeagueConfigRow({
       setLocalGroupMode(config.channel_group_mode)
       setLocalMatchupOrder(config.matchup_order ?? null)
       setLocalFeedSeparationEnabled(config.feed_separation_enabled)
+      setLocalPlayoffBypass(config.bypass_filter_for_playoffs ?? null)
       setLocalDivisions(config.included_divisions ?? divisions.map((d) => d.key))
     } else if (isExpanded && !config) {
       setLocalProfileIds([])
@@ -94,6 +98,7 @@ function LeagueConfigRow({
       setLocalGroupMode(null)
       setLocalMatchupOrder(null)
       setLocalFeedSeparationEnabled(null)
+      setLocalPlayoffBypass(null)
       setLocalDivisions(divisions.map((d) => d.key))
     }
   }
@@ -139,6 +144,7 @@ function LeagueConfigRow({
         channel_group_mode: localGroupMode,
         matchup_order: localMatchupOrder,
         feed_separation_enabled: localFeedSeparationEnabled,
+        bypass_filter_for_playoffs: localPlayoffBypass,
         // All of them is stored as "no override" so the selection still means
         // everything if ESPN's slate gains a division later.
         included_divisions:
@@ -190,6 +196,13 @@ function LeagueConfigRow({
               : config.feed_separation_enabled ? "Enabled" : "Disabled"}
           </span>
         </td>
+        <td className="px-3 py-1.5">
+          <span className={cn("text-xs", !hasOverride && "text-muted-foreground")}>
+            {config?.bypass_filter_for_playoffs === null || config?.bypass_filter_for_playoffs === undefined
+              ? "Default"
+              : config.bypass_filter_for_playoffs ? "Always include" : "Team filter"}
+          </span>
+        </td>
         <td className="px-3 py-1.5 text-right">
           {hasOverride && (
             <Button
@@ -209,7 +222,7 @@ function LeagueConfigRow({
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={9} className="px-4 py-3 bg-muted/20 border-t-0">
+          <td colSpan={10} className="px-4 py-3 bg-muted/20 border-t-0">
             <div className="space-y-4 max-w-2xl">
               {/* Channel Profiles */}
               <div>
@@ -367,6 +380,31 @@ function LeagueConfigRow({
                 </Select>
               </div>
 
+              {/* Playoff & All-Star bypass (#881) */}
+              <div>
+                <Label className="text-sm font-medium">Playoff &amp; All-Star Games</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Whether this league&apos;s playoff and All-Star games skip the team filter.
+                  Default inherits the source&apos;s setting, then the global one
+                  (Subscriptions → Teams). Only matters while a team filter is active.
+                </p>
+                <Select
+                  value={
+                    localPlayoffBypass === null ? "" : localPlayoffBypass ? "include" : "filter"
+                  }
+                  onChange={(e) =>
+                    setLocalPlayoffBypass(
+                      e.target.value === "" ? null : e.target.value === "include"
+                    )
+                  }
+                  className="w-64"
+                >
+                  <option value="">Default (inherit)</option>
+                  <option value="include">Always include</option>
+                  <option value="filter">Follow team filter</option>
+                </Select>
+              </div>
+
               {/* Matchup Order (#692) */}
               <div>
                 <Label className="text-sm font-medium">Matchup Order</Label>
@@ -492,7 +530,7 @@ export function PerLeagueChannelConfig() {
       <CardHeader>
         <CardTitle>Per-League Channel Config</CardTitle>
         <CardDescription>
-          Override channel profiles, channel group, and group mode per league. Leagues without overrides inherit the global defaults above.
+          Override channel profiles, channel group, group mode and playoff handling per league. Leagues without overrides inherit the global defaults above.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -527,6 +565,7 @@ export function PerLeagueChannelConfig() {
                 <th className="px-3 py-2 text-left font-medium">Group Mode</th>
                 <th className="px-3 py-2 text-left font-medium">Matchup Order</th>
                 <th className="px-3 py-2 text-left font-medium">Feed Separation</th>
+                <th className="px-3 py-2 text-left font-medium">Playoffs</th>
                 <th className="px-3 py-2 text-right font-medium w-16"></th>
               </tr>
             </thead>
@@ -578,7 +617,7 @@ export function PerLeagueChannelConfig() {
                 })}
               {filteredLeagues.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-4 text-center text-muted-foreground">
+                  <td colSpan={10} className="px-3 py-4 text-center text-muted-foreground">
                     {leagueSearch ? "No leagues match your search" : "No subscribed leagues"}
                   </td>
                 </tr>
