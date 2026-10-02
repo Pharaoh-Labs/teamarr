@@ -139,7 +139,11 @@ def check_exception_keyword(
     Keywords can also match on where a stream comes from (#893): providers
     often mark a feed's language only in the M3U group they file it under
     ("ES| DAZN"). Sources are checked from the most specific evidence to the
-    least, and the first hit wins:
+    least, and the first hit wins — with one rule above that order (#931): if
+    any **Ignore** keyword matches by any of 2-6, the stream is ignored. A
+    stream the user did not want is not kept because it is also 4K. Within one
+    kind of evidence, ties go to the keyword higher in the user's order
+    (``keywords`` arrives sorted that way). A pin (1) outranks everything:
 
     1. a stream the user pinned to the keyword (``stream_id``)
     2. the stream name — match terms, then the keyword's stream regex
@@ -171,6 +175,39 @@ def check_exception_keyword(
             if stream_id in kw.stream_id_set:
                 return (kw.label, kw.behavior)
 
+    sources = (stream_name, event_text, program_title, m3u_group_id, m3u_group_name, event_group_id)
+    winner = _first_keyword_match(keywords, *sources)
+    if winner is None:
+        return (None, None)
+    if winner.behavior != "ignore":
+        # An Ignore keyword outranks everything but a pin (#931). The first
+        # match used to win outright, and "first" within one kind of evidence
+        # was alphabetical: a Spanish 4K stream went to the 4K channel because
+        # "4K" sorts before "Spanish", and a stream filed under an ignored M3U
+        # group was kept whenever its name carried any other keyword.
+        ignored = _first_keyword_match(
+            [kw for kw in keywords if kw.behavior == "ignore"], *sources
+        )
+        if ignored is not None:
+            winner = ignored
+    return (winner.label, winner.behavior)
+
+
+def _first_keyword_match(
+    keywords: list[ExceptionKeyword],
+    stream_name: str,
+    event_text: str | None,
+    program_title: str | None,
+    m3u_group_id: int | None,
+    m3u_group_name: str | None,
+    event_group_id: int | None,
+) -> ExceptionKeyword | None:
+    """First keyword matching by evidence order, then by list order.
+
+    Evidence runs from the most specific to the least (see
+    `check_exception_keyword`); within one kind, ``keywords`` is already in
+    precedence order — race feeds, then the user's order (#931).
+    """
     event_lower = event_text.lower() if event_text else ""
     for text, use_regex in ((stream_name, True), (program_title, False)):
         if not text:
@@ -182,25 +219,25 @@ def check_exception_keyword(
                 if event_lower and re.search(pattern, event_lower):
                     continue
                 if re.search(pattern, text_lower):
-                    return (kw.label, kw.behavior)
+                    return kw
         if use_regex:
             for kw in keywords:
                 if kw.stream_regex and kw.stream_regex.search(text):
-                    return (kw.label, kw.behavior)
+                    return kw
 
     if m3u_group_id is not None:
         for kw in keywords:
             if m3u_group_id in kw.m3u_group_id_set:
-                return (kw.label, kw.behavior)
+                return kw
 
     if m3u_group_name:
         for kw in keywords:
             if kw.m3u_group_regex and kw.m3u_group_regex.search(m3u_group_name):
-                return (kw.label, kw.behavior)
+                return kw
 
     if event_group_id is not None:
         for kw in keywords:
             if event_group_id in kw.event_group_id_set:
-                return (kw.label, kw.behavior)
+                return kw
 
-    return (None, None)
+    return None

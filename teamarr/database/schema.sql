@@ -1828,7 +1828,12 @@ CREATE TABLE IF NOT EXISTS consolidation_exception_keywords (
     m3u_groups JSON,                          -- picked Dispatcharr M3U groups
     stream_pattern TEXT,                      -- regex on the stream name
     streams JSON,                             -- picked Dispatcharr streams
-    event_group_ids JSON                      -- Teamarr event groups whose streams get this keyword
+    event_group_ids JSON,                     -- Teamarr event groups whose streams get this keyword
+
+    -- User-set precedence among keywords that match the same stream (#931):
+    -- lower wins. NULL = never ordered, sorted by label after the ordered ones,
+    -- which is the alphabetical order every install had before.
+    sort_order INTEGER
 );
 
 -- Default language keywords are NOT seeded here (#726): executescript runs on

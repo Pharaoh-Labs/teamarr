@@ -27,7 +27,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 | `stats.py` | 5 | Generation run stats, live game stats, homepage widget KPIs, processing history, cleanup |
 | `sort_priorities.py` | 10 | Stream ordering rules (m3u, group, regex-based priority) |
 | `aliases.py` | 7 | Team alias CRUD for stream matching |
-| `keywords.py` | 6 | Game event keywords (pregame, postgame, filler) |
+| `keywords.py` | 7 | Game event keywords (pregame, postgame, filler) |
 | `detection_keywords.py` | 9 | Detection keyword CRUD, import/export |
 | `leagues.py` | 9 | Custom league CRUD |
 | `subscription.py` | 9 | Global/per-group subscription config, soccer mode |
