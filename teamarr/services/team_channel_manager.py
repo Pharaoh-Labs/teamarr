@@ -496,7 +496,7 @@ class TeamChannelManager:
 
     def associate_epg(self, epg_source_id: int) -> dict:
         """Link refreshed Team EPG data to only locally-owned team channels."""
-        result = {"associated": 0, "not_found": 0, "errors": 0}
+        result: dict = {"associated": 0, "not_found": 0, "errors": 0}
         if not self._channels or not self._epg:
             return result
         with self._db_factory() as conn:
