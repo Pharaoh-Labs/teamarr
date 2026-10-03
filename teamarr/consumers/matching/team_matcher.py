@@ -432,6 +432,30 @@ def _has_shared_name_token(stream_norm: str, event_team) -> bool:
     )
 
 
+# How far a stream's stated start may sit from the event's (#956). Measured on
+# a week of production matches where the stream's timezone was known: 971
+# pairs fell within 6 hours, none between 6 and 17, and 95 at 17 or more —
+# every one of those the wrong day's game. Without a known timezone the stated
+# time is not evidence (one provider stamps every stream 03:00), so the gate
+# does not apply there.
+STATED_TIME_GATE_HOURS = 14
+
+
+def _stated_start_gap_hours(ctx: "MatchContext", event) -> float:
+    """Hours between the start a stream states and the event's start.
+
+    0 when the stream does not state both a date and a time, or its timezone
+    is unknown — the caller only gates on a positive answer.
+    """
+    normalized = ctx.classified.normalized
+    if not (normalized.extracted_date and normalized.extracted_time and ctx.stream_tz):
+        return 0.0
+    stated = datetime.combine(
+        normalized.extracted_date, normalized.extracted_time, tzinfo=ctx.stream_tz
+    )
+    return abs((event.start_time - stated).total_seconds()) / 3600
+
+
 def _exact_name_forms(team) -> frozenset[str]:
     """The normalized forms a stream can write that ARE this team's name."""
     return frozenset(
@@ -1710,6 +1734,21 @@ class TeamMatcher:
                 match_result
                 and stream_date_dist > 1
                 and ctx.classified.normalized.extracted_date_trusted
+            ):
+                date_rejected += 1
+                continue
+
+            # Stated-time gate (#956). The one-day slack above exists because a
+            # date alone cannot say which side of midnight a game falls on. A
+            # stream that states its start to the minute, in a timezone we
+            # know, can: a gap of most of a day is another game — yesterday's
+            # leg of a series, a leftover listing, or the same schools in a
+            # different sport the next afternoon.
+            if (
+                match_result
+                and ctx.stream_tz is not None
+                and ctx.classified.normalized.extracted_date_trusted
+                and _stated_start_gap_hours(ctx, event) > STATED_TIME_GATE_HOURS
             ):
                 date_rejected += 1
                 continue

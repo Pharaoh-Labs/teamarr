@@ -22,6 +22,7 @@ Common causes:
 - **League not subscribed** — The stream's league isn't in your [Subscription](subscriptions) (or a Source's subscription override). This is the most common cause — add the league under Subscriptions and regenerate. Newly-created custom leagues are auto-subscribed, but check the Custom Leagues list for a **Not subscribed** badge.
 - **Team name mismatch** — Your IPTV provider uses a non-standard name. Add a team alias under [Matching → Custom Rules](matching/) to map it to the official name.
 - **Date mismatch** — Streams with dates in DD/MM format may be parsed as MM/DD. Use [custom regex extractors](sources/creating-groups#custom-regex) with named groups (`(?P<day>...)/(?P<month>...)`) to teach Teamarr the format.
+- **Date mismatch on a stream that states its start time** — When a stream name gives a date *and* a time and its timezone is known (a marker such as `ET` in the name, or the source's **Stream Timezone**), Teamarr will not match it to a game more than 14 hours from that time. This stops a stream for tonight's game binding to last night's leg of the same series, or to the same two schools in another sport the next day. If correct matches start failing this way, the source's Stream Timezone is probably set wrong.
 
 ### Streams matching the wrong event
 
