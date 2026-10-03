@@ -34,6 +34,7 @@ export function FeedSeparationCard() {
     away_terms: [],
     detect_team_names: false,
     label_style: "team_name",
+    unlabeled_streams: "separate",
   })
 
   // Sport options come from the subscribed leagues, not the full sports table —
@@ -184,6 +185,29 @@ export function FeedSeparationCard() {
               </Select>
               <p className="text-xs text-muted-foreground">
                 How feed labels appear in channel names
+              </p>
+            </div>
+
+            {/* Streams with no home/away label (#828) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="feed-unlabeled-streams">Streams With No Home/Away Label</Label>
+              <Select
+                id="feed-unlabeled-streams"
+                value={feedSeparation.unlabeled_streams ?? "separate"}
+                onChange={(e) =>
+                  setFeedSeparation({
+                    ...feedSeparation,
+                    unlabeled_streams: e.target.value as FeedSeparationSettings["unlabeled_streams"],
+                  })
+                }
+              >
+                <option value="separate">Give them their own channel</option>
+                <option value="ignore">Ignore them</option>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Applies only to a game that has a home or away feed. A game with no labelled
+                feed keeps its single channel. Ignoring also drops national broadcasts for
+                those games, since they are neither home nor away.
               </p>
             </div>
           </div>

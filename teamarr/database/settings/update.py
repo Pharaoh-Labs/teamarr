@@ -503,12 +503,21 @@ def update_feed_separation_settings(
     away_terms: list[str] | None = None,
     detect_team_names: bool | None = None,
     label_style: str | None = None,
+    unlabeled_streams: str | None = None,
 ) -> bool:
     """Update feed separation settings.
 
     Returns:
-        True if updated (False on invalid label_style or unknown sport code)
+        True if updated (False on invalid label_style, unlabeled_streams or
+        unknown sport code)
     """
+    if unlabeled_streams is not None and unlabeled_streams not in ("separate", "ignore"):
+        logger.warning(
+            "[FEED_SEP] Invalid unlabeled_streams '%s', must be 'separate' or 'ignore'",
+            unlabeled_streams,
+        )
+        return False
+
     if label_style is not None:
         valid_styles = ("team_name", "short_name", "home_away")
         if label_style not in valid_styles:
@@ -541,6 +550,7 @@ def update_feed_separation_settings(
         away_terms=away_terms,
         detect_team_names=detect_team_names,
         label_style=label_style,
+        unlabeled_streams=unlabeled_streams,
     )
     return _apply(conn, "feed_separation", provided)
 

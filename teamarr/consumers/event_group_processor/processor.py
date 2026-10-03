@@ -759,6 +759,45 @@ class EventGroupProcessor(
                 feed_separation_disabled_leagues,
             )
 
+            # Step 4b: streams of unknown side on a game that has separated
+            # feeds (#828). 'separate' keeps today's third channel; 'ignore'
+            # skips them and removes that channel.
+            unlabelled_feed_events: set[str] = set()
+            if feed_settings.enabled and feed_settings.unlabeled_streams == "ignore":
+                matched_streams, dropped_unlabelled, _ = self._drop_unlabelled_feed_streams(
+                    matched_streams,
+                    conn,
+                    feed_settings.sports,
+                    feed_separation_disabled_leagues,
+                )
+                # Only games a stream was actually dropped for this run: their
+                # unlabelled channel has nothing left to carry.
+                unlabelled_feed_events = {
+                    eid for entry in dropped_unlabelled if (eid := self._entry_event_id(entry))
+                }
+                if dropped_unlabelled:
+                    result.streams_excluded += len(dropped_unlabelled)
+                    logger.info(
+                        "[EVENT_EPG] Group %s: ignored %d stream(s) with no home/away "
+                        "label on games that have separated feeds",
+                        group.name,
+                        len(dropped_unlabelled),
+                    )
+                    if run_id is not None:
+                        from teamarr.database.stats import mark_matched_streams_excluded
+
+                        mark_matched_streams_excluded(
+                            conn,
+                            run_id,
+                            group.id,
+                            [
+                                (entry["stream"]["id"], str(entry["event"].id))
+                                for entry in dropped_unlabelled
+                                if entry.get("stream", {}).get("id") is not None
+                            ],
+                            "unlabeled_feed",
+                        )
+
             # Sort channels: sport → league → time → event_id (fixed order since v59)
             matched_streams = self._sort_matched_streams(matched_streams)
 
@@ -822,6 +861,12 @@ class EventGroupProcessor(
                 if feed_settings.enabled
                 else set()
             )
+            unlabelled_cleanup = self._cleanup_unlabelled_feed_channels(
+                group, conn, unlabelled_feed_events
+            )
+            if unlabelled_cleanup:
+                result.channels_deleted += unlabelled_cleanup
+
             feed_cleanup_count = self._cleanup_feed_separated_channels(
                 group, conn, passed_event_ids, separated_event_ids
             )

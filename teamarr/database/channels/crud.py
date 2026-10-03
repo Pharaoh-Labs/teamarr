@@ -684,3 +684,17 @@ def find_any_channel_for_event(
     if row:
         return ManagedChannel.from_row(dict(row))
     return None
+
+
+def get_feed_separated_event_ids(conn: Connection) -> set[str]:
+    """Event ids (segment-aware) that currently have a feed-separated channel.
+
+    Across every source group: channel identity is event-scoped, so a game's
+    feed channels routinely belong to a different group than the one asking
+    (#828, #929).
+    """
+    rows = conn.execute(
+        f"""SELECT DISTINCT event_id FROM managed_channels
+            WHERE deleted_at IS NULL AND feed_team_id IS NOT NULL{_core_owner_clause(conn)}"""
+    ).fetchall()
+    return {str(row["event_id"]) for row in rows}

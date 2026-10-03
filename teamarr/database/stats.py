@@ -1205,3 +1205,28 @@ def source_matching_health(
         )
     health.sort(key=lambda item: item["streams"], reverse=True)
     return health
+
+
+def mark_matched_streams_excluded(
+    conn: Connection,
+    run_id: int,
+    group_id: int,
+    pairs: list[tuple[int, str]],
+    reason: str,
+) -> int:
+    """Flag already-saved matched rows as excluded, with the reason.
+
+    Match details are written before the steps that can still drop a matched
+    stream (feed-separation policy, #828); this records that verdict on the
+    same rows so Run History shows why the stream is on no channel.
+    ``pairs`` are (stream_id, event_id).
+    """
+    if not pairs:
+        return 0
+    cursor = conn.executemany(
+        """UPDATE epg_matched_streams
+           SET excluded = 1, exclusion_reason = ?
+           WHERE run_id = ? AND group_id = ? AND stream_id = ? AND event_id = ?""",
+        [(reason, run_id, group_id, stream_id, event_id) for stream_id, event_id in pairs],
+    )
+    return cursor.rowcount

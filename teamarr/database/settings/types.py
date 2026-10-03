@@ -355,6 +355,9 @@ class FeedSeparationSettings:
     away_terms: list[str] = field(default_factory=lambda: ["AWAY"])
     detect_team_names: bool = True  # Also match team names as feed indicators
     label_style: str = "team_name"  # 'team_name', 'short_name', 'home_away'
+    # (#828) What to do with a stream of unknown side on a game that has a
+    # separated feed: 'separate' (own channel) or 'ignore' (skipped).
+    unlabeled_streams: str = "separate"
 
 
 @dataclass
