@@ -314,6 +314,7 @@ class ChannelCleanup(_LifecycleHost):
             StreamProcessResult with deleted channels and errors
         """
         from teamarr.consumers.stream_match_cache import compute_fingerprint
+        from teamarr.database.channel_numbers import get_global_consolidation_mode
         from teamarr.database.channels import (
             get_channel_streams,
             get_managed_channels_for_group,
@@ -331,6 +332,10 @@ class ChannelCleanup(_LifecycleHost):
         # map kept only the last one, so every other channel it fed looked
         # "rotated" and was deleted and recreated each generation.
         stream_event_map: dict[int, set[str]] = {}
+        # And the other way round, event_id → stream ids matched to it this
+        # run: a channel about to lose every stream is kept when one of these
+        # is on its way in (#955).
+        event_stream_map: dict[str, set[int]] = {}
         if matched_streams:
             for ms in matched_streams:
                 stream_info = ms.get("stream", {})
@@ -344,11 +349,16 @@ class ChannelCleanup(_LifecycleHost):
                 if sid and event:
                     eid = f"{event.id}-{segment}" if segment else str(event.id)
                     stream_event_map.setdefault(sid, set()).add(eid)
+                    event_stream_map.setdefault(eid, set()).add(sid)
 
         try:
             with self._db_factory() as conn:
                 # Get all active channels for the group (including cross-group streams)
                 channels = get_managed_channels_for_group(conn, group_id)
+                # A replacement stream joins the existing channel only when
+                # streams consolidate per event; in separate mode it gets a
+                # channel of its own, so there is nothing to keep this one for.
+                consolidating = get_global_consolidation_mode(conn) == "consolidate"
 
                 for channel in channels:
                     # Get streams associated with this channel
@@ -488,7 +498,35 @@ class ChannelCleanup(_LifecycleHost):
                     # Combine missing and changed streams for removal
                     streams_to_remove = missing_streams + [c["stream"] for c in changed_streams]
 
-                    if not valid_streams and streams_to_remove:
+                    # A provider that re-issues a game under a new stream id
+                    # every hour ("NHL GP 06" → "GP 10" → "GP 09") leaves the
+                    # channel's only stream missing while the same run has
+                    # already matched its replacement. Deleting here and
+                    # creating in the next step gave the event a new
+                    # Dispatcharr channel each time — 42 in two weeks on a
+                    # live install (#955). Keep the channel; the stale stream
+                    # is removed below and the create step attaches the new
+                    # one to the channel it finds. If nothing does attach
+                    # (keyword or feed channel the replacement does not
+                    # belong to), the empty channel goes on the next run.
+                    removing_ids = {
+                        getattr(s, "dispatcharr_stream_id", None) for s in streams_to_remove
+                    }
+                    replacement_arriving = bool(
+                        consolidating
+                        and channel_event_id
+                        and event_stream_map.get(channel_event_id, set()) - removing_ids
+                    )
+                    if not valid_streams and streams_to_remove and replacement_arriving:
+                        logger.info(
+                            "[LIFECYCLE] Keeping channel '%s': %d stream(s) gone, "
+                            "replacement matched for event %s this run",
+                            channel.channel_name,
+                            len(streams_to_remove),
+                            channel_event_id,
+                        )
+
+                    if not valid_streams and streams_to_remove and not replacement_arriving:
                         # All streams gone or changed - delete channel
                         reasons = []
                         if missing_streams:
