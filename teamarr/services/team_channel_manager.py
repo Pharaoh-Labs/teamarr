@@ -935,6 +935,7 @@ class TeamChannelManager:
             from teamarr.consumers.lifecycle import get_lifecycle_settings
             from teamarr.consumers.lifecycle.timing import ChannelLifecycleManager
             from teamarr.database.settings import get_all_settings
+            from teamarr.database.subscription import get_league_create_timing_overrides
 
             lifecycle = get_lifecycle_settings(conn)
             all_settings = get_all_settings(conn)
@@ -946,6 +947,7 @@ class TeamChannelManager:
                 default_duration_hours=all_settings.durations.default,
                 sport_durations=asdict(all_settings.durations),
                 include_final_events=False,
+                league_create_overrides=get_league_create_timing_overrides(conn),
             )
         except Exception as exc:  # noqa: BLE001 - tests use a bare schema
             logger.debug("[TEAM_CHANNEL] Lifecycle timing unavailable: %s", exc)

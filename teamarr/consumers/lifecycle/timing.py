@@ -178,6 +178,7 @@ class ChannelLifecycleManager:
         sport_durations: dict[str, float] | None = None,
         include_final_events: bool = False,
         create_postponed: bool = True,
+        league_create_overrides: dict[str, tuple[str, int | None]] | None = None,
     ):
         self.create_timing = create_timing
         self.delete_timing = delete_timing
@@ -187,6 +188,9 @@ class ChannelLifecycleManager:
         self.sport_durations = sport_durations or {}
         self.include_final_events = include_final_events
         self.create_postponed = create_postponed
+        # Per-league creation window (#851): league code -> (timing, buffer
+        # minutes or None for the global buffer). Deletion stays global.
+        self.league_create_overrides = league_create_overrides or {}
 
     def should_create_channel(
         self,
@@ -304,6 +308,8 @@ class ChannelLifecycleManager:
         - same_day: Midnight (00:00) of event day
         - before_event: event_start - pre_buffer_minutes
 
+        The event's league may override the timing and the buffer (#851).
+
         Racing anchors `event.start_time` to the weekend's first session, so
         per-session channels must derive their threshold from their own
         session start (`segment_start`) or the race-day channel is created as
@@ -312,8 +318,15 @@ class ChannelLifecycleManager:
         """
         event_start = to_user_tz(segment_start or event.start_time)
 
-        if self.create_timing == "before_event":
-            return event_start - timedelta(minutes=self.pre_buffer_minutes)
+        create_timing, pre_buffer_minutes = self.create_timing, self.pre_buffer_minutes
+        override = self.league_create_overrides.get(event.league)
+        if override:
+            create_timing = override[0]
+            if override[1] is not None:
+                pre_buffer_minutes = override[1]
+
+        if create_timing == "before_event":
+            return event_start - timedelta(minutes=pre_buffer_minutes)
 
         # same_day: start of event day (midnight)
         return event_start.replace(hour=0, minute=0, second=0, microsecond=0)

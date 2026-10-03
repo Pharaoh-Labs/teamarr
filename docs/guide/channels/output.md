@@ -58,7 +58,7 @@ Persistent team channels have their own **channel group** and **channel profiles
 
 ## Per-League Channel Config
 
-Override channel profiles, channel groups, group modes, and the [matchup order](../settings/general.md#matchup-order) on a per-league basis. The **Subscribed only** toggle is on by default, so the table opens with just your subscribed leagues (turn it off to see all; the search field filters within whatever's visible). Click a league row to expand its configuration.
+Override channel profiles, channel groups, group modes, the [matchup order](../settings/general.md#matchup-order), and the [create timing](lifecycle.md#per-league-create-timing) on a per-league basis. The **Subscribed only** toggle is on by default, so the table opens with just your subscribed leagues (turn it off to see all; the search field filters within whatever's visible). Click a league row to expand its configuration.
 
 ### Available Overrides
 
@@ -69,6 +69,7 @@ Override channel profiles, channel groups, group modes, and the [matchup order](
 | **Channel Group Mode** | Default, Static, Dynamic by Sport, Dynamic by League, Custom | How the channel group is determined |
 | **Divisions** | All (default) or a subset | Which divisions of an NCAA league to ingest at all — college football and both college basketballs only |
 | **Playoff & All-Star Games** | Default, Always include, Follow team filter | Whether this league's postseason and All-Star games skip the [team filter](../subscriptions#default-team-filter) |
+| **Create Timing** | Default, Same day, Before event + buffer (0–336 hours) | When this league's event channels are created — see [Per-league create timing](lifecycle.md#per-league-create-timing) |
 
 When Channel Group Mode is set to **Custom**, a pattern field appears where you can enter a template like `{sport} - {league}` that dynamically creates groups.
 

@@ -97,6 +97,8 @@ class LeagueConfigResponse(BaseModel):
     included_divisions: list[str] | None = None  # #811: None = every division
     feed_separation_enabled: bool | None = None  # #862: None = global setting
     bypass_filter_for_playoffs: bool | None = None  # #881: None = source/global setting
+    channel_create_timing: str | None = None  # #851: None = global setting
+    channel_pre_buffer_minutes: int | None = None  # #851: None = global buffer
 
 
 class LeagueConfigUpdate(BaseModel):
@@ -111,6 +113,10 @@ class LeagueConfigUpdate(BaseModel):
     # #881: True = always include this league's playoff and All-Star games,
     # False = leave them to the team filter, None = source then global setting
     bypass_filter_for_playoffs: bool | None = None
+    # #851: 'same_day' | 'before_event', None = global create timing. The
+    # buffer is kept for 'before_event' only; None there = the global buffer.
+    channel_create_timing: str | None = None
+    channel_pre_buffer_minutes: int | None = None
 
 
 class LeagueDivision(BaseModel):
@@ -384,6 +390,8 @@ def list_league_configs():
                 included_divisions=c.included_divisions,
                 feed_separation_enabled=c.feed_separation_enabled,
                 bypass_filter_for_playoffs=c.bypass_filter_for_playoffs,
+                channel_create_timing=c.channel_create_timing,
+                channel_pre_buffer_minutes=c.channel_pre_buffer_minutes,
             )
             for c in configs
         ],
@@ -401,11 +409,25 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
     A full replace: a field left out is stored as NULL, i.e. "inherit".
     ``bypass_filter_for_playoffs`` (#881) overrides the playoff / All-Star
     team-filter bypass for this league: league, then source, then global.
+    ``channel_create_timing`` / ``channel_pre_buffer_minutes`` (#851) override
+    when this league's event channels are created; deletion stays global.
     """
     if request.matchup_order is not None and request.matchup_order not in MATCHUP_ORDER_MODES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid matchup_order. Valid: {sorted(MATCHUP_ORDER_MODES)}",
+        )
+    if request.channel_create_timing not in (None, "same_day", "before_event"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid channel_create_timing. Valid: ['before_event', 'same_day']",
+        )
+    if request.channel_pre_buffer_minutes is not None and not (
+        0 <= request.channel_pre_buffer_minutes <= 20160
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="channel_pre_buffer_minutes must be between 0 and 20160",
         )
     included_divisions = _validate_included_divisions(league_code, request.included_divisions)
 
@@ -420,6 +442,8 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
             included_divisions=included_divisions,
             feed_separation_enabled=request.feed_separation_enabled,
             bypass_filter_for_playoffs=request.bypass_filter_for_playoffs,
+            channel_create_timing=request.channel_create_timing,
+            channel_pre_buffer_minutes=request.channel_pre_buffer_minutes,
         )
     set_league_matchup_order(league_code, config.matchup_order)  # render-time cache (#692)
 
@@ -432,6 +456,8 @@ def upsert_league_config_endpoint(league_code: str, request: LeagueConfigUpdate)
         included_divisions=config.included_divisions,
         feed_separation_enabled=config.feed_separation_enabled,
         bypass_filter_for_playoffs=config.bypass_filter_for_playoffs,
+        channel_create_timing=config.channel_create_timing,
+        channel_pre_buffer_minutes=config.channel_pre_buffer_minutes,
     )
 
 

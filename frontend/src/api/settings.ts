@@ -704,6 +704,10 @@ export interface SubscriptionLeagueConfig {
   // #881: true = always include this league's playoff/All-Star games,
   // false = leave them to the team filter, null = source then global setting
   bypass_filter_for_playoffs: boolean | null
+  // #851: "same_day" | "before_event"; null = global create timing. The buffer
+  // is kept for "before_event" only; null there = the global pre-event buffer.
+  channel_create_timing: string | null
+  channel_pre_buffer_minutes: number | null
 }
 
 export interface LeagueDivision {
@@ -735,6 +739,8 @@ export async function upsertLeagueConfig(
     included_divisions?: string[] | null
     feed_separation_enabled?: boolean | null
     bypass_filter_for_playoffs?: boolean | null
+    channel_create_timing?: string | null
+    channel_pre_buffer_minutes?: number | null
   }
 ): Promise<SubscriptionLeagueConfig> {
   return api.put(`/league-configs/${encodeURIComponent(leagueCode)}`, data)
