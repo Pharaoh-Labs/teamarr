@@ -161,7 +161,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 97** (not every version number has a migration block — column-only versions are handled by reconciliation)
+**Current schema version: 98** (not every version number has a migration block — column-only versions are handled by reconciliation)
 
 | Version | Type | Description |
 |---------|------|-------------|
@@ -172,3 +172,4 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 | 95 | Data | Managed team channels (#810): seeds `team_channel_name` / `team_channel_logo_url` defaults on existing team templates; tables and columns come from reconciliation |
 | 96 | Data | Migrates supported HockeyTech leagues to Bell Media |
 | 97 | Index | Adds plugin channel ownership columns via reconciliation and rebuilds the active event identity index for core-owned rows only; adds plugin logical-key uniqueness and adoption-key lookup indexes |
+| 98 | Data | Retires the template "Use Global Default" duration mode (#946): rewrites `game_duration_mode = 'default'` to `'sport'` |

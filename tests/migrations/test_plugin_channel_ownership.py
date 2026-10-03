@@ -198,7 +198,7 @@ def test_upgrade_rebuilds_old_event_index_without_losing_core_channels(db_path):
         )
         assert get_managed_channel(conn, core).plugin_id is None
         assert _create(conn, plugin_id="planner.one", logical_key="event:1", adoption_key="slot:1")
-        assert conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 97
+        assert conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 98
 
 
 def test_plugin_ownership_remains_visible_to_numbering_and_api(db_path, monkeypatch):

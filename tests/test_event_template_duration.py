@@ -106,12 +106,6 @@ class TestTemplateDurationOverride:
         durations = {"racing": 3.0}
         assert get_effective_duration("racing", durations, 3.0, CUSTOM_11H) == 11.0
         assert get_effective_duration("racing", durations, 3.0, SPORT_MODE) == 3.0
-        assert (
-            get_effective_duration(
-                "racing", durations, 3.0, EventTemplateConfig(game_duration_mode="default")
-            )
-            == 3.0
-        )
 
     def test_conversion_preserves_duration_fields(self):
         """template_to_event_config must not drop the duration fields (#946)."""
@@ -336,3 +330,110 @@ class TestProgrammeDuration:
         apply_template_race_duration(match, template_duration_override(CUSTOM_11H))
         programme = _generate(match, CUSTOM_11H)
         assert programme.stop == QUALI_START + timedelta(hours=1.0)
+
+
+# ---------------------------------------------------------------------------
+# "Use Global Default" mode is retired
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultModeRetired:
+    """The programme honored 'default' while the filler and the delete time
+    did not, leaving a guide gap or overlap. The mode is gone: a stored
+    'default' reads as 'sport' on every path."""
+
+    def test_stored_default_reads_as_sport(self):
+        durations = {"football": 3.5}
+        legacy = EventTemplateConfig(game_duration_mode="default")
+        assert get_effective_duration("football", durations, 3.0, legacy) == 3.5
+        assert get_effective_duration("football", durations, 3.0, {**legacy.__dict__}) == 3.5
+        assert template_duration_override(legacy) is None
+
+    def test_api_coerces_default_to_sport(self):
+        from teamarr.api.models import TemplateCreate, TemplateUpdate
+
+        assert TemplateCreate(name="t", game_duration_mode="default").game_duration_mode == "sport"
+        assert TemplateUpdate(game_duration_mode="default").game_duration_mode == "sport"
+        assert TemplateUpdate(game_duration_mode="custom").game_duration_mode == "custom"
+        assert TemplateUpdate().game_duration_mode is None
+
+    def test_migration_rewrites_default_rows(self):
+        import sqlite3
+
+        from teamarr.database.migrations.versioned import (
+            _migrate_v98_retire_default_duration_mode,
+        )
+
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE templates (id INTEGER PRIMARY KEY, game_duration_mode TEXT)")
+        conn.executemany(
+            "INSERT INTO templates (game_duration_mode) VALUES (?)",
+            [("default",), ("custom",), ("sport",)],
+        )
+        _migrate_v98_retire_default_duration_mode(conn)
+        modes = [r[0] for r in conn.execute("SELECT game_duration_mode FROM templates ORDER BY id")]
+        assert modes == ["sport", "custom", "sport"]
+
+
+# ---------------------------------------------------------------------------
+# Sync keeps the stored end estimate current when the override is removed
+# ---------------------------------------------------------------------------
+
+
+class TestSyncEndEstimate:
+    """Cleanup re-derives delete times from `event_end_estimate`. The sync
+    only rewrote it while a custom duration was set, so switching a template
+    back from Custom left the long estimate in place and the two passes
+    disagreed on every run."""
+
+    def _sync(self, db_factory, db_conn, existing, template):
+        from unittest.mock import MagicMock, patch
+
+        from teamarr.consumers.lifecycle.service import ChannelLifecycleService
+        from tests.fakes import make_event
+
+        lifecycle = ChannelLifecycleService(
+            db_factory=db_factory,
+            sports_service=MagicMock(),
+            channel_manager=MagicMock(),
+            logo_manager=MagicMock(),
+            epg_manager=MagicMock(),
+        )
+        event = make_event(sport="football", league="nfl")
+        with (
+            patch.object(lifecycle, "_generate_channel_name", return_value="n"),
+            patch.object(lifecycle, "_sync_channel_profiles"),
+            patch.object(lifecycle, "_sync_channel_logo"),
+            patch.object(lifecycle, "_sync_stream_profile"),
+            patch("teamarr.database.channels.update_managed_channel") as update,
+        ):
+            lifecycle._sync_channel_settings(
+                conn=db_conn,
+                existing=existing,
+                stream={"id": 1},
+                event=event,
+                group_config={},
+                template=template,
+            )
+        written = {}
+        for call in update.call_args_list:
+            written.update(call.args[2])
+        return lifecycle, event, written
+
+    def test_removed_override_pulls_estimate_back(self, db_factory, db_conn):
+        from tests.fakes import FakeManagedChannel
+
+        existing = FakeManagedChannel()
+        existing.event_end_estimate = "2099-01-01T00:00:00+00:00"  # left by an 11h template
+        lifecycle, event, written = self._sync(db_factory, db_conn, existing, SPORT_MODE)
+        expected = lifecycle._timing_manager.get_event_end_time(event).isoformat()
+        assert written["event_end_estimate"] == expected
+
+    def test_override_still_sets_estimate(self, db_factory, db_conn):
+        from tests.fakes import FakeManagedChannel
+
+        lifecycle, event, written = self._sync(
+            db_factory, db_conn, FakeManagedChannel(), CUSTOM_11H
+        )
+        expected = lifecycle._timing_manager.get_event_end_time(event, 11.0).isoformat()
+        assert written["event_end_estimate"] == expected

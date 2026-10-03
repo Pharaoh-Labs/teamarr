@@ -240,9 +240,10 @@ class ChannelSyncer(_LifecycleHost):
 
             # Keep the stored end estimate in lockstep with the delete time
             # (#946): the cleanup pass prefers `event_end_estimate` when
-            # re-deriving delete times, so a stale pre-override estimate
-            # would fight this sync on the next cleanup run.
-            if duration_override is not None and event.start_time:
+            # re-deriving delete times, so a stale estimate would fight this
+            # sync on the next cleanup run. Not gated on an override being
+            # set — removing a custom duration must pull the estimate back.
+            if event.start_time:
                 expected_end = self._timing_manager.get_event_end_time(event, duration_override)
                 expected_end_str = expected_end.isoformat()
                 stored_end_str = getattr(existing, "event_end_estimate", None)

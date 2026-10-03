@@ -562,7 +562,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 97
+    schema_version INTEGER DEFAULT 98
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains

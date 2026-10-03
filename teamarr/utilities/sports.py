@@ -160,9 +160,12 @@ def get_effective_duration(
 
     Priority order:
     1. Template custom duration (if mode='custom' and override set)
-    2. Global default (if mode='default')
-    3. Sport-specific duration (if mode='sport' or no mode)
-    4. Fallback default
+    2. Sport-specific duration
+    3. Fallback default
+
+    There is no "global default" mode any more (#946): the sport lookup
+    already falls back to the default for a sport with no duration of its
+    own, and a stored 'default' reads as 'sport'.
 
     Args:
         sport: Sport name (e.g., 'Basketball', 'Football')
@@ -174,15 +177,9 @@ def get_effective_duration(
     Returns:
         Duration in hours
     """
-    if template:
-        duration_mode = _template_value(template, "game_duration_mode", "sport")
-        if duration_mode == "custom":
-            override = _template_value(template, "game_duration_override")
-            if override is not None:
-                return float(override)
-        elif duration_mode == "default":
-            # Use global default
-            return default
+    override = template_duration_override(template)
+    if override is not None:
+        return override
 
     # Fall back to sport-specific duration
     return get_sport_duration(sport, sport_durations, default)
