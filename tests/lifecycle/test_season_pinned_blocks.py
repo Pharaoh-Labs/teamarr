@@ -43,7 +43,7 @@ class TestSeasonCondition:
         assert r.resolve("basketball", "nba", season_type="preseason") is DEFAULT
 
     def test_unknown_season_matches_no_condition(self, db_conn):
-        """ESPN gives the NBA play-in no season type we map; it must not guess."""
+        """A provider that reports no season type; it must not guess."""
         _pin(db_conn, start=900, season_type="postseason")
         assert _resolver(db_conn).resolve("basketball", "nba", season_type=None) is DEFAULT
 

@@ -1073,6 +1073,12 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         "regular": SEASON_REGULAR,
         "post-season": SEASON_POSTSEASON,
         "postseason": SEASON_POSTSEASON,
+        # NBA play-in tournament (#950): ESPN gives it its own season (type 5),
+        # not post-season. It counts as postseason here — keyed on the slug
+        # only; a bare type 5 is not mapped, it is not known to mean this
+        # outside the NBA. Side effects are intended: is_playoff and the
+        # playoff team-filter bypass (#881) apply to play-in games too.
+        "play-in-season": SEASON_POSTSEASON,
         "off-season": SEASON_OFFSEASON,
         "offseason": SEASON_OFFSEASON,
         # Soccer knockouts
