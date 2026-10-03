@@ -1,7 +1,7 @@
 """XMLTV rendering (programmes + filler) and per-group storage."""
 
 import logging
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import datetime, timedelta
 from sqlite3 import Connection
 from typing import TYPE_CHECKING, Any
@@ -15,11 +15,13 @@ from teamarr.consumers.filler.event_filler import (
     EventFillerResult,
     template_to_event_filler_config,
 )
+from teamarr.consumers.racing_segments import apply_template_race_duration
 from teamarr.database.groups import EventEPGGroup
 from teamarr.database.subscription import (
     get_subscription_template_for_event,
     get_subscription_templates,
 )
+from teamarr.utilities.sports import template_duration_override
 from teamarr.utilities.xmltv import programmes_to_xmltv
 
 logger = logging.getLogger(__name__)
@@ -84,9 +86,7 @@ class XmltvRenderer:
         template_db = None
 
         # Get default template from subscription (fallback for all events)
-        default_template_id = get_subscription_template_for_event(
-            conn, "", ""
-        )
+        default_template_id = get_subscription_template_for_event(conn, "", "")
 
         if default_template_id:
             template_config = self._load_event_template(conn, default_template_id)
@@ -124,13 +124,9 @@ class XmltvRenderer:
         sub_templates = get_subscription_templates(conn)
         if len(sub_templates) > 1:
             logger.debug(
-                "[EVENT_EPG] Multi-template subscription: default=%s, "
-                "templates=%s",
+                "[EVENT_EPG] Multi-template subscription: default=%s, templates=%s",
                 default_template_id,
-                [
-                    (t.template_id, t.sports, t.leagues)
-                    for t in sub_templates
-                ],
+                [(t.template_id, t.sports, t.leagues) for t in sub_templates],
             )
 
         for match in matched_streams:
@@ -142,9 +138,7 @@ class XmltvRenderer:
             event_league = getattr(event, "league", "") or ""
 
             # Resolve the best template for this specific event
-            event_template_id = get_subscription_template_for_event(
-                conn, event_sport, event_league
-            )
+            event_template_id = get_subscription_template_for_event(conn, event_sport, event_league)
 
             # Log template resolution for multi-template subscriptions (DEBUG —
             # see the note above; this is one line per event)
@@ -192,6 +186,15 @@ class XmltvRenderer:
             if event_template_id and event_template_id in filler_cache:
                 match["_event_filler_config"] = filler_cache[event_template_id]
 
+            # (#946) Apply the resolved template's custom duration to the
+            # match: race-session segment ends are stretched here (they were
+            # precomputed at match time, before any template was resolved)
+            # and `_duration_override` is annotated for the filler, which
+            # never sees template objects. Uses the same per-event template
+            # the programme below will resolve (default included).
+            duration_template = match.get("_event_template") or options.template
+            apply_template_race_duration(match, template_duration_override(duration_template))
+
             # Annotate match with exception keyword for EPG channel name parity
             stream = match.get("stream", {})
             stream_name = stream.get("name", "")
@@ -234,9 +237,7 @@ class XmltvRenderer:
         postgame_count = 0
 
         # Generate filler if any template (default or per-event) has filler enabled
-        any_filler = filler_config or any(
-            fc for fc in filler_cache.values() if fc is not None
-        )
+        any_filler = filler_config or any(fc for fc in filler_cache.values() if fc is not None)
         if any_filler:
             filler_result = self._generate_filler_for_streams(
                 matched_streams,
@@ -262,9 +263,7 @@ class XmltvRenderer:
 
         art_base_url = get_epg_settings(conn).art_base_url
         channel_dicts = [{"id": ch.channel_id, "name": ch.name, "icon": ch.icon} for ch in channels]
-        xmltv_content = programmes_to_xmltv(
-            programmes, channel_dicts, art_base_url=art_base_url
-        )
+        xmltv_content = programmes_to_xmltv(programmes, channel_dicts, art_base_url=art_base_url)
 
         filler_total = pregame_count + postgame_count
         logger.info(
@@ -373,11 +372,20 @@ class XmltvRenderer:
                     prepend_postponed_label=prepend_postponed_label,
                 )
                 # Create a modified event with segment start time
-                from dataclasses import replace
-
                 segment_event = replace(event, start_time=segment_start)
                 use_event = segment_event
                 use_options = segment_options
+            elif (
+                duration_override := stream_match.get("_duration_override")
+            ) is not None and event.start_time:
+                # (#946) Template custom duration on a non-segment event:
+                # postgame filler must anchor to the same end the programme
+                # uses, or it starts hours before the broadcast is over.
+                use_event = event
+                use_options = replace(
+                    options,
+                    event_end_override=event.start_time + timedelta(hours=duration_override),
+                )
             else:
                 use_event = event
                 use_options = options

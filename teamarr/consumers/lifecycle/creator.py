@@ -12,6 +12,7 @@ from sqlite3 import Connection
 from typing import Any
 
 from teamarr.core import Event
+from teamarr.utilities.sports import template_duration_override
 
 from ._host import _LifecycleHost
 from .feed_side import resolve_feed_side
@@ -73,6 +74,7 @@ class ChannelCreator(_LifecycleHost):
 
                 # Global consolidation mode (v59) replaces per-group duplicate_event_handling
                 from teamarr.database.channel_numbers import get_global_consolidation_mode
+
                 duplicate_mode = get_global_consolidation_mode(conn)
 
                 from teamarr.database.channels import keyword_display_value
@@ -96,9 +98,7 @@ class ChannelCreator(_LifecycleHost):
 
                 # Feed separation settings for channel naming
                 feed_settings = get_feed_separation_settings(conn)
-                feed_label_style = (
-                    feed_settings.label_style if feed_settings.enabled else None
-                )
+                feed_label_style = feed_settings.label_style if feed_settings.enabled else None
 
                 # Channel group defaults from global settings (per-league overrides in event loop)
                 static_channel_group_id = dispatcharr_settings.default_channel_group_id
@@ -109,10 +109,7 @@ class ChannelCreator(_LifecycleHost):
                 # Load per-league subscription configs for override
                 from teamarr.database.subscription import get_league_configs
 
-                league_configs = {
-                    lc.league_code: lc
-                    for lc in get_league_configs(conn)
-                }
+                league_configs = {lc.league_code: lc for lc in get_league_configs(conn)}
                 self._league_configs = league_configs
 
                 default_stream_profile_id = dispatcharr_settings.default_stream_profile_id
@@ -159,9 +156,7 @@ class ChannelCreator(_LifecycleHost):
                         # persisted on the stream row and never creates
                         # feed-separated channels.
                         stream_feed_team = matched.get("stream_feed_team")
-                        stream_feed_team_id = (
-                            stream_feed_team.id if stream_feed_team else None
-                        )
+                        stream_feed_team_id = stream_feed_team.id if stream_feed_team else None
                         if stream_feed_team_id is None:
                             side = matched.get("matched_side")
                             if side == "home" and event.home_team:
@@ -220,7 +215,15 @@ class ChannelCreator(_LifecycleHost):
                             event_id,
                             event.status.state if event.status else "N/A",
                         )
-                        excluded_reason = self._timing_manager.categorize_event_timing(event)
+                        # Resolve the event's template BEFORE the timing gate:
+                        # its custom duration (#946) widens the delete
+                        # threshold, so without it an endurance race with an
+                        # 11h template is judged "past" at the 2:45 mark.
+                        event_template = self._resolve_event_template(conn, event, template)
+                        duration_override = template_duration_override(event_template)
+                        excluded_reason = self._timing_manager.categorize_event_timing(
+                            event, duration_override
+                        )
                         if excluded_reason:
                             result.excluded.append(
                                 {
@@ -269,11 +272,6 @@ class ChannelCreator(_LifecycleHost):
                         # Determine effective duplicate mode
                         effective_mode = keyword_behavior if keyword_behavior else duplicate_mode
 
-                        # Resolve template for this specific event (may be sport/league-specific)
-                        event_template = self._resolve_event_template(
-                            conn, event, template
-                        )
-
                         # Find existing channel by event identity (event-scoped)
                         # Searches across ALL groups — channels owned by events
                         existing = find_existing_channel(
@@ -316,6 +314,7 @@ class ChannelCreator(_LifecycleHost):
                             event,
                             stream_exists=True,
                             segment_start=segment_start,
+                            duration_override=duration_override,
                         )
 
                         if not decision.should_act:
@@ -348,17 +347,15 @@ class ChannelCreator(_LifecycleHost):
                             if lc.channel_group_mode is not None:
                                 effective_group_mode = lc.channel_group_mode
 
-                        resolved_channel_group_id = (
-                            self._dynamic_resolver.resolve_channel_group(
-                                mode=effective_group_mode,
-                                static_group_id=effective_group_id,
-                                event_sport=event_sport,
-                                event_league=event_league,
-                                event=event,
-                                exception_keyword=keyword_display_value(
-                                    matched_keyword, untagged_keyword_label
-                                ),
-                            )
+                        resolved_channel_group_id = self._dynamic_resolver.resolve_channel_group(
+                            mode=effective_group_mode,
+                            static_group_id=effective_group_id,
+                            event_sport=event_sport,
+                            event_league=event_league,
+                            event=event,
+                            exception_keyword=keyword_display_value(
+                                matched_keyword, untagged_keyword_label
+                            ),
                         )
 
                         resolved_channel_profile_ids = self._resolve_profiles_for_event(
@@ -545,10 +542,8 @@ class ChannelCreator(_LifecycleHost):
         # leave the channel intact and re-verify next run (DB is source of truth).
         if self._channel_manager and existing.dispatcharr_channel_id:
             with self._dispatcharr_lock:
-                disp_channel, confirmed_absent = (
-                    self._channel_manager.get_channel_existence(
-                        existing.dispatcharr_channel_id
-                    )
+                disp_channel, confirmed_absent = self._channel_manager.get_channel_existence(
+                    existing.dispatcharr_channel_id
                 )
                 if disp_channel is None and confirmed_absent:
                     # Channel confirmed missing from Dispatcharr - mark old record
@@ -577,7 +572,8 @@ class ChannelCreator(_LifecycleHost):
                     logger.warning(
                         "Could not verify channel %s in Dispatcharr (transient error); "
                         "leaving intact, will re-verify next run: %s",
-                        existing.dispatcharr_channel_id, existing.channel_name,
+                        existing.dispatcharr_channel_id,
+                        existing.channel_name,
                     )
 
         if effective_mode == "ignore":
@@ -665,14 +661,18 @@ class ChannelCreator(_LifecycleHost):
                         if phantoms:
                             for pid in phantoms:
                                 remove_stream_from_channel(
-                                    conn, existing.id, pid,
+                                    conn,
+                                    existing.id,
+                                    pid,
                                     reason="phantom: not in Dispatcharr",
                                 )
                             logger.warning(
                                 "[STREAM_AUDIT] purged %d phantom stream(s) from ch='%s' "
                                 "(db_id=%d): %s",
-                                len(phantoms), existing.channel_name,
-                                existing.id, phantoms,
+                                len(phantoms),
+                                existing.channel_name,
+                                existing.id,
+                                phantoms,
                             )
                             ordered_streams = [s for s in ordered_streams if s not in phantoms]
 
@@ -684,9 +684,7 @@ class ChannelCreator(_LifecycleHost):
                     if (
                         len(ordered_streams) > 1
                         and ordered_streams[0] == stream_id
-                        and is_channel_event_live(
-                            existing.event_date, existing.scheduled_delete_at
-                        )
+                        and is_channel_event_live(existing.event_date, existing.scheduled_delete_at)
                     ):
                         ordered_streams[0], ordered_streams[1] = (
                             ordered_streams[1],
@@ -758,30 +756,22 @@ class ChannelCreator(_LifecycleHost):
                     # name-matched stream (None,None) or wipe a window on a
                     # transient EPG miss. Reconciliation re-pushes if membership
                     # changed — no manual Dispatcharr update needed here.
-                    update_stream_window(
-                        conn, existing.id, stream_id, attach_at, detach_at
-                    )
+                    update_stream_window(conn, existing.id, stream_id, attach_at, detach_at)
                 if epg_program_title:
                     # Keyword enforcement re-reads the stored programme text
                     # (#829); keep it on the guide's current programme. Guarded
                     # like the window: a name-matched run never blanks it.
-                    update_stream_program_title(
-                        conn, existing.id, stream_id, epg_program_title
-                    )
+                    update_stream_program_title(conn, existing.id, stream_id, epg_program_title)
                 if stream_feed_team_id:
                     # Backfill the resolved feed team (#489) so rows attached
                     # before the column existed feed the team_feed ordering
                     # rules on the next reorder pass, not only at re-attach.
-                    update_stream_feed_team(
-                        conn, existing.id, stream_id, stream_feed_team_id
-                    )
+                    update_stream_feed_team(conn, existing.id, stream_id, stream_feed_team_id)
                 if stream_feed_side:
                     # Same for the resolved side (#533). Guarded on a value:
                     # an unknown side leaves the row NULL rather than writing
                     # over a side resolved on an earlier, better-informed run.
-                    update_stream_feed_side(
-                        conn, existing.id, stream_id, stream_feed_side
-                    )
+                    update_stream_feed_side(conn, existing.id, stream_id, stream_feed_side)
                 if stream.get("m3u_group_id") is not None:
                     # Backfill the M3U group (#893) so keyword enforcement can
                     # re-check group sources on rows attached before the
@@ -814,9 +804,7 @@ class ChannelCreator(_LifecycleHost):
 
         dp_channel_group_id = stream.get("dp_channel_group_id")
         if dp_channel_group_id is not None:
-            update_stream_channel_source_group(
-                conn, existing.id, stream_id, dp_channel_group_id
-            )
+            update_stream_channel_source_group(conn, existing.id, stream_id, dp_channel_group_id)
 
         # Sync channel settings
         settings_result = self._sync_channel_settings(
@@ -982,15 +970,20 @@ class ChannelCreator(_LifecycleHost):
 
         # Generate channel name (segment resolved via {card_segment_display} template variable)
         channel_name = self._generate_channel_name(
-            event, template, matched_keyword, segment,
-            feed_team=feed_team, feed_label_style=feed_label_style,
+            event,
+            template,
+            matched_keyword,
+            segment,
+            feed_team=feed_team,
+            feed_label_style=feed_label_style,
             untagged_label=untagged_label,
         )
 
         # Get channel number from the event's numbering lane (pinned block or default range)
         event_league = getattr(event, "league", None)
         channel_number = self._get_next_channel_number(
-            conn, event_league,
+            conn,
+            event_league,
             sport=getattr(event, "sport", None),
             home_team=event.home_team.name if getattr(event, "home_team", None) else None,
             away_team=event.away_team.name if getattr(event, "away_team", None) else None,
@@ -1005,18 +998,27 @@ class ChannelCreator(_LifecycleHost):
         # derived from (#522). The per-run recalc can only see DB columns, so
         # without this it re-derives the end as event_date + sport duration —
         # session-blind, and for a multi-day race weekend that lands after
-        # Friday practice instead of Sunday's race.
-        delete_time = self._timing_manager.calculate_delete_time(event)
+        # Friday practice instead of Sunday's race. The template's custom
+        # duration (#946) participates: an 11h template on a 10h endurance
+        # race must produce an 11h estimate, not the league sprint fallback.
+        duration_override = template_duration_override(template)
+        delete_time = self._timing_manager.calculate_delete_time(event, duration_override)
         # No start time → the end is genuinely unknown, so leave the column
         # NULL rather than inventing one. The recalc treats NULL as "derive it
         # the old way", and its loop already skips channels with no event_date.
         event_end_estimate = (
-            self._timing_manager.get_event_end_time(event) if event.start_time else None
+            self._timing_manager.get_event_end_time(event, duration_override)
+            if event.start_time
+            else None
         )
 
         # Resolve logo URL from template (supports template variables including {exception_keyword})
         logo_url = self._resolve_logo_url(
-            event, template, matched_keyword, segment, feed_team=feed_team,
+            event,
+            template,
+            matched_keyword,
+            segment,
+            feed_team=feed_team,
             untagged_label=untagged_label,
         )
 
@@ -1032,9 +1034,7 @@ class ChannelCreator(_LifecycleHost):
         #
         # Persisted to the local DB as-is so the profile drift sync compares
         # against the same value that was pushed to Dispatcharr.
-        effective_profile_ids = (
-            channel_profile_ids if channel_profile_ids is not None else [0]
-        )
+        effective_profile_ids = channel_profile_ids if channel_profile_ids is not None else [0]
 
         # Create in Dispatcharr
         dispatcharr_channel_id = None
@@ -1137,9 +1137,7 @@ class ChannelCreator(_LifecycleHost):
                 # V1 Parity: Include venue and broadcast
                 venue=event.venue.name if event.venue else None,
                 broadcast=", ".join(event.broadcasts) if event.broadcasts else None,
-                event_end_estimate=(
-                    event_end_estimate.isoformat() if event_end_estimate else None
-                ),
+                event_end_estimate=(event_end_estimate.isoformat() if event_end_estimate else None),
                 scheduled_delete_at=delete_time.isoformat() if delete_time else None,
                 sync_status="in_sync" if dispatcharr_channel_id else "pending",
             )
@@ -1229,13 +1227,17 @@ class ChannelCreator(_LifecycleHost):
         from teamarr.database.channel_numbers import get_next_channel_number
 
         next_num = get_next_channel_number(
-            conn, league=event_league,
+            conn,
+            league=event_league,
             external_occupied=self._external_occupied,
-            sport=sport, home_team=home_team, away_team=away_team,
+            sport=sport,
+            home_team=home_team,
+            away_team=away_team,
         )
         if next_num is None:
             logger.warning(
-                "[LIFECYCLE] Could not allocate channel (league=%s)", event_league,
+                "[LIFECYCLE] Could not allocate channel (league=%s)",
+                event_league,
             )
             return None
         return next_num

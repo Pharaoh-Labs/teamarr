@@ -60,6 +60,7 @@ def _normalize_art_in_kwargs(kwargs: dict[str, Any]) -> None:
         if isinstance(blob, dict) and "art_url" in blob:
             blob["art_url"] = _normalize_art_path(blob["art_url"])
 
+
 if TYPE_CHECKING:
     from teamarr.core import TemplateConfig
     from teamarr.core.filler_types import FillerConfig
@@ -170,6 +171,13 @@ class EventTemplateConfig:
     subtitle_format: str = "{venue_city}"
     program_art_url: str | None = None
     event_channel_logo_url: str | None = None
+
+    # Game duration (#946): custom duration must survive the Template →
+    # EventTemplateConfig conversion — the event path (programme stop,
+    # racing race-session windows, lifecycle delete thresholds) reads it
+    # through template_duration_override.
+    game_duration_mode: str = "sport"  # 'sport', 'default', 'custom'
+    game_duration_override: float | None = None
 
     # XMLTV metadata
     xmltv_flags: dict = field(default_factory=lambda: {"new": True, "live": False, "date": False})
@@ -333,9 +341,7 @@ def list_templates_with_counts(conn: Connection) -> list[dict]:
         t["updated_at"] = _parse_ts(t.get("updated_at"))
 
     # Fetch global (subscription_templates) assignments per template
-    assign_cursor = conn.execute(
-        "SELECT template_id, sports, leagues FROM subscription_templates"
-    )
+    assign_cursor = conn.execute("SELECT template_id, sports, leagues FROM subscription_templates")
     import json
 
     assignments_by_template: dict[int, list[dict]] = {}
@@ -345,9 +351,7 @@ def list_templates_with_counts(conn: Connection) -> list[dict]:
         leagues_raw = row["leagues"]
         sports = json.loads(sports_raw) if sports_raw else None
         leagues = json.loads(leagues_raw) if leagues_raw else None
-        assignments_by_template.setdefault(tid, []).append(
-            {"sports": sports, "leagues": leagues}
-        )
+        assignments_by_template.setdefault(tid, []).append({"sports": sports, "leagues": leagues})
 
     for t in templates:
         t["global_assignments"] = assignments_by_template.get(t["id"], [])
@@ -723,6 +727,8 @@ def template_to_event_config(template: Template) -> EventTemplateConfig:
         subtitle_format=template.subtitle_template or "",
         program_art_url=template.program_art_url,
         event_channel_logo_url=template.event_channel_logo_url,
+        game_duration_mode=template.game_duration_mode or "sport",
+        game_duration_override=template.game_duration_override,
         xmltv_flags=template.xmltv_flags or {},
         xmltv_video=template.xmltv_video or {},
         xmltv_categories=categories,
