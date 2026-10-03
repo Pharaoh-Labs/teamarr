@@ -140,6 +140,7 @@ def update_lifecycle_settings(
     channel_post_buffer_minutes: int | None = None,
     channel_range_start: int | None = None,
     channel_range_end: int | None | object = _NOT_PROVIDED,
+    channel_create_postponed: bool | None = None,
 ) -> bool:
     """Update channel lifecycle settings (channel_range_end: None = no limit).
 
@@ -152,6 +153,7 @@ def update_lifecycle_settings(
         channel_pre_buffer_minutes=channel_pre_buffer_minutes,
         channel_post_buffer_minutes=channel_post_buffer_minutes,
         channel_range_start=channel_range_start,
+        channel_create_postponed=channel_create_postponed,
     ) | _skip_missing(channel_range_end=channel_range_end)
 
     # A range change only takes effect at re-layout in the sticky modes (locked

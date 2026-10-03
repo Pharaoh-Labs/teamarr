@@ -135,6 +135,7 @@ class ChannelLifecycleService(
         sport_durations: dict[str, float] | None = None,
         timezone: str = "America/New_York",
         include_final_events: bool = False,
+        create_postponed: bool = True,
     ):
         """Initialize the lifecycle service.
 
@@ -152,6 +153,7 @@ class ChannelLifecycleService(
             sport_durations: Per-sport duration mapping (basketball, football, etc.)
             timezone: User timezone for timing calculations
             include_final_events: Whether to include completed/final events in EPG
+            create_postponed: Whether postponed events get event channels (#948)
 
         Raises:
             ValueError: If sports_service is not provided
@@ -175,6 +177,7 @@ class ChannelLifecycleService(
             default_duration_hours=default_duration_hours,
             sport_durations=sport_durations,
             include_final_events=include_final_events,
+            create_postponed=create_postponed,
         )
 
         # Thread lock for Dispatcharr operations

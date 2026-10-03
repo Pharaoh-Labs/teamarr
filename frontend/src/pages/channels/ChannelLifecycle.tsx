@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { useSettings, useUpdateLifecycleSettings } from "@/hooks/useSettings"
 import type { LifecycleSettings } from "@/api/settings"
 
@@ -107,6 +108,23 @@ export function ChannelLifecycle() {
                 : "Midnight cross-over events will always use post-event buffer"}
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="ch-create-postponed">Create channels for postponed events</Label>
+            <p className="text-xs text-muted-foreground">
+              When off, postponed events get no channel, and a channel whose event becomes
+              postponed is deleted on the next run
+            </p>
+          </div>
+          <Switch
+            id="ch-create-postponed"
+            checked={lifecycle?.channel_create_postponed ?? true}
+            onCheckedChange={(checked) =>
+              lifecycle && setLifecycle({ ...lifecycle, channel_create_postponed: checked })
+            }
+          />
         </div>
 
         <SaveButton

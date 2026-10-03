@@ -24,6 +24,10 @@ For session-based events (race weekends, UFC card segments), each session's chan
 
 Channels are never created for events that are already over: final events are excluded (an API-only `include_final_events` setting can override this), an event not yet reported final is treated as final two hours after its estimated end, and an event already past its delete threshold is skipped entirely.
 
+## Postponed Events
+
+**Create channels for postponed events** (on by default) controls whether a postponed event gets an event channel. With it off, a matched postponed event is excluded at channel creation — it shows in Run History as "Event is postponed" — and a channel that already exists for an event that becomes postponed is deleted on the next run. Managed team channels always skip postponed games.
+
 ## Delete Timing
 
 | Mode | Description |
