@@ -73,6 +73,15 @@ The order sports and leagues take inside Everything Else and inside every pinned
 
 The full order, applied inside each block and inside Everything Else, is: **Priority Teams (everything) → Sport → Priority Teams (sport) → League → Priority Teams (league) → Event time**, with two deterministic tie-breakers after that — event id, then main channel before its keyword variants (your Spanish feed always sorts right after the main channel).
 
+### Ordering by start time
+
+**Channel order** (in the Number Stability card) chooses what leads the order inside every block:
+
+- **Sport & League order, then start time** (default) groups a block by sport and league, as described above.
+- **Start time, then Sport & League order** lists a block in the order games begin, whatever their league — useful for a single "what's on now" group. Sport and league order only settle games that start at the same moment. Priority teams marked *everything* still come first, and a game's feeds and keyword channels still sit together.
+
+Expect more renumbering with start time first: a game that begins earlier than the ones already numbered pushes every later channel down, so numbers move as games come and go. Anything that depends on a fixed channel number (favourites, recordings) will notice. In Gapped and Strict modes the change is applied at a re-layout, which switching the setting queues for the next generation.
+
 ## Everything Else
 
 | Field | Description |

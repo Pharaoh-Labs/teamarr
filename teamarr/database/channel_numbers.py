@@ -416,6 +416,14 @@ def _first_free(start: int, end: int, used: set[int]) -> int | None:
     return num if num <= end else None
 
 
+def _channel_order_mode(conn: Connection) -> str:
+    """'sport_league' or 'start_time' (#934); the former on any doubt."""
+    if not _table_has_column(conn, "settings", "channel_order_mode"):
+        return "sport_league"
+    row = conn.execute("SELECT channel_order_mode FROM settings WHERE id = 1").fetchone()
+    return "start_time" if row and row["channel_order_mode"] == "start_time" else "sport_league"
+
+
 def get_all_channels_sorted(conn: Connection) -> list[dict]:
     """Get all active channels sorted by sport/league/time/event_id.
 
@@ -430,9 +438,15 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
     4. Event ID (deterministic for same time)
     5. Main channel before keyword channels
 
+    With ``channel_order_mode = 'start_time'`` (#934, opt-in) start time moves
+    ahead of the sport and league order: priority teams (everything) → start
+    time → sport → league. Feeds and keyword variants of one game still sit
+    together, since they share its start time and event id.
+
     Returns:
         List of channel dicts with sort-relevant fields, ordered globally
     """
+    time_first = _channel_order_mode(conn) == "start_time"
 
     # 1. Get sort priorities (normalize to lowercase for case-insensitive matching)
     priorities = get_all_sort_priorities(conn)
@@ -556,6 +570,13 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         # Main channel (no keyword) sorts before keyword channels
         keyword_sort = (0, "") if not keyword else (1, keyword)
 
+        if time_first:
+            # "Everything" priority teams still lead; the sport- and
+            # league-scoped tiers break ties among games starting together.
+            return (
+                all_tier, event_date, sport_pri, sport_tier, league_pri, league_tier,
+                str(event_id), keyword_sort,
+            )
         return (
             all_tier, sport_pri, sport_tier, league_pri, league_tier,
             event_date, str(event_id), keyword_sort,
