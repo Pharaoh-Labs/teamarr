@@ -10,6 +10,8 @@ When changing support-bundle schemas, archive layout, collection limits, redacti
 
 Support-bundle v2 adds `owner_type` and nullable plugin identity/adoption fields to bounded managed event-channel rows. Keep those fields redacted through `_sanitize`; do not include raw plan payloads, stream URLs, or M3U account names.
 
+Support-bundle v3 (#822) replaces `sources_and_subscriptions.source_template_mappings` — rows of the retired `group_templates` table — with `template_assignments`, the rows of `subscription_templates` (template id, sports, leagues; no stream or account data). A reader of older bundles must accept either key.
+
 ## CRITICAL: Database Safety
 
 **NEVER delete `teamarr.db` or `data/teamarr.db`.** The database contains user-configured teams, templates, settings, and history that cannot be recreated. Schema changes use migrations (`INSERT OR REPLACE`, `ALTER TABLE`) - deleting the database is NEVER required and will cause data loss.
@@ -238,7 +240,7 @@ Documentation epic: `bd list --parent teamarr-nv4`
 | Version | `pyproject.toml` line 7 |
 | Dependencies | `pyproject.toml` (ranges) + `uv.lock` (pinned, used by the Docker build) — run `uv lock` after any dependency change or `--frozen` builds fail |
 | League configs | `teamarr/database/schema.sql` |
-| Schema version | `teamarr/database/schema.sql` (v98) |
+| Schema version | `teamarr/database/schema.sql` (v99) |
 | Schema reconciliation | `teamarr/database/reconciliation.py` |
 | Provider registration | `teamarr/providers/__init__.py` |
 

@@ -1301,10 +1301,10 @@ def _is_referenced(conn: Connection, template_id: int) -> bool:
     """True when any assignment or channel references the template.
 
     Deleting a referenced template would silently unassign it (teams and
-    event_epg_groups SET NULL; group/subscription assignments CASCADE), so
+    event_epg_groups SET NULL; subscription assignments CASCADE), so
     retirement only removes rows that are unedited AND unreferenced.
     """
-    for table in ("teams", "event_epg_groups", "group_templates", "subscription_templates"):
+    for table in ("teams", "event_epg_groups", "subscription_templates"):
         row = conn.execute(
             f"SELECT 1 FROM {table} WHERE template_id = ? LIMIT 1", (template_id,)
         ).fetchone()

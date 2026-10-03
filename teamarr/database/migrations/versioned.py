@@ -374,6 +374,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 98
 
+    if current_version < 99:
+        _apply_migration(
+            conn, 99, "drop the retired group_templates table",
+            _migrate_v99_drop_group_templates,
+        )
+        current_version = 99
+
 
 # =============================================================================
 # Migration helpers
@@ -2793,6 +2800,20 @@ def _migrate_v97_plugin_channel_identity(conn: sqlite3.Connection) -> None:
                             COALESCE(feed_team_id, ''), primary_stream_id)
         WHERE deleted_at IS NULL AND plugin_id IS NULL
     """)
+
+
+def _migrate_v99_drop_group_templates(conn: sqlite3.Connection) -> None:
+    """Drop group_templates (#822).
+
+    Per-source template assignments moved to subscription_templates in the
+    subscription migration, which copied every row across. Nothing in
+    matching, channels or the guide read the table afterwards; the support
+    bundle and the starter-template retirement check did, and now read
+    subscription_templates. A startup statement kept re-filling it from
+    event_epg_groups.template_id, so rows here are copies, not data.
+    """
+    conn.execute("DROP INDEX IF EXISTS idx_group_templates_group_id")
+    conn.execute("DROP TABLE IF EXISTS group_templates")
 
 
 def _migrate_v98_retire_default_duration_mode(conn: sqlite3.Connection) -> None:

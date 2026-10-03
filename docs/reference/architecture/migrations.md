@@ -161,7 +161,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 98** (not every version number has a migration block — column-only versions are handled by reconciliation)
+**Current schema version: 99** (not every version number has a migration block — column-only versions are handled by reconciliation)
 
 | Version | Type | Description |
 |---------|------|-------------|
@@ -173,3 +173,4 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 | 96 | Data | Migrates supported HockeyTech leagues to Bell Media |
 | 97 | Index | Adds plugin channel ownership columns via reconciliation and rebuilds the active event identity index for core-owned rows only; adds plugin logical-key uniqueness and adoption-key lookup indexes |
 | 98 | Data | Retires the template "Use Global Default" duration mode (#946): rewrites `game_duration_mode = 'default'` to `'sport'` |
+| 99 | Structure | Drops the retired `group_templates` table and its index (#822); template assignments live in `subscription_templates` |
