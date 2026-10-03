@@ -45,6 +45,8 @@ class TeamUpdate(BaseModel):
     managed_channel_enabled: bool | None = None
     managed_channel_number: int | None = None
     managed_channel_lifecycle: Literal["persistent", "game_days"] | None = None
+    # (#729) Record this team's games on its managed team channel
+    managed_channel_record: bool | None = None
     primary_league: str | None = None
     leagues: list[str] | None = None
 
@@ -74,6 +76,7 @@ class TeamResponse(BaseModel):
     managed_channel_sync_status: str | None = None
     managed_channel_sync_message: str | None = None
     managed_channel_lifecycle: str | None = None
+    managed_channel_record: bool = False
     created_at: datetime
     updated_at: datetime
 

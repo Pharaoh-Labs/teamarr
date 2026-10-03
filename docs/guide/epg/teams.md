@@ -84,6 +84,19 @@ A stream's home/away side is read from the broadcast (feed markers in the name, 
 
 #### Ownership And Lifecycle
 
+### Recording a team's games
+
+A managed team has a **Record games** switch in its edit dialog. With it on, each generation schedules a Dispatcharr DVR recording for every upcoming game on the team's channel:
+
+- **Only games with a stream attached are recorded.** A recording is scheduled once a stream for that game is on the team channel, which is normally well before it starts. A game nothing matched is not recorded.
+- **Timing.** The recording starts 5 minutes before the game and runs 45 minutes past its estimated end, to cover overtime and extra innings. The end is an estimate; a game that runs far longer can be cut off.
+- **Naming.** The recording is titled with the team and the game, so it is filed under the team in Dispatcharr's DVR, not under whatever filler programme the guide shows at the start.
+- **Changes are followed.** If a game's start time moves, the same recording is updated. If the game is postponed, loses its stream, or you switch recording off, a recording that has not started yet is removed. One that has started is always left to finish, and finished recordings are never touched.
+- **Removing one by hand sticks.** Delete a scheduled recording in Dispatcharr and Teamarr does not schedule that game again.
+- **Event channels are never recorded.** Recording needs the team's managed channel; switching the managed channel off switches recording off.
+
+A full game is large — expect several gigabytes each — so check the space available to Dispatcharr's recordings folder.
+
 Teamarr treats a channel as managed only after it has created a record for that team. A Dispatcharr channel with the same XMLTV channel id (`tvg-id`) is still a manual channel, so Teamarr will not adopt, update, repair, or delete it. If that conflict exists when management is enabled, Teamarr reports it on the Teams page instead of creating a duplicate — delete or re-point the hand-made channel, then generate again.
 
 Every decision that could orphan or duplicate a channel is made only on evidence: if the Dispatcharr channel list cannot be read, the run skips team-channel sync; if a mapped channel is missing from the list, Teamarr asks Dispatcharr for it directly and recreates it only on a confirmed "not found". A source whose matching failed this run keeps the memberships it produced last run, so a provider blip does not clear a game off a channel.

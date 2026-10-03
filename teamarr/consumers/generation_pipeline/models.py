@@ -63,6 +63,7 @@ class GenerationResult:
     epg_association: dict = field(default_factory=dict)
     managed_team_channels: dict = field(default_factory=dict)
     managed_team_streams: dict = field(default_factory=dict)
+    managed_team_recordings: dict = field(default_factory=dict)
     deletions: dict = field(default_factory=dict)
     reconciliation: dict = field(default_factory=dict)
     cleanup: dict = field(default_factory=dict)

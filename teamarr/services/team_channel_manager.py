@@ -25,9 +25,13 @@ from teamarr.database.managed_team_channel_streams import (
 )
 from teamarr.database.managed_team_channels import (
     delete_managed_team_channel,
+    delete_team_recording,
     get_managed_team_channel,
     list_disabled_managed_team_channels,
     list_enabled_managed_teams,
+    list_recording_targets,
+    list_team_recordings,
+    save_team_recording,
     upsert_managed_team_channel,
 )
 from teamarr.database.settings import (
@@ -36,9 +40,14 @@ from teamarr.database.settings import (
     get_managed_team_channel_settings,
 )
 from teamarr.utilities.art_url import apply_art_base_url, is_relative_art_path
-from teamarr.utilities.tz import now_utc, to_db_utc, to_utc
+from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc, to_utc
 
 logger = logging.getLogger(__name__)
+
+# Recording window around a game (#729): start a little early, and run well
+# past the estimated end — the end is an estimate and overtime is routine.
+RECORDING_PRE_MINUTES = 5
+RECORDING_POST_MINUTES = 45
 
 # Dispatcharr's "every profile" sentinel (creator.py). A None setting means the
 # user never narrowed profiles, which the event path also sends as [0].
@@ -82,6 +91,8 @@ class TeamChannelManager:
         self._logos = logo_manager
         self._resolver = dynamic_resolver
         self._warned_unresolved_profiles = False
+        # (provider, event_id) -> {"name", "end"} for games matched this run (#729)
+        self._recording_events: dict[tuple[str, str], dict[str, Any]] = {}
 
     # ------------------------------------------------------------------
     # Dispatcharr reads that must distinguish failure from emptiness
@@ -644,6 +655,7 @@ class TeamChannelManager:
                 event_start = self._event_start(event)
                 if attach_at is None:
                     attach_at, detach_at = self._event_window(event, timing)
+                self._remember_event(event, provider, timing)
                 stream_feed_team = matched.get("stream_feed_team")
                 stream_feed_team_id = (
                     str(stream_feed_team.id) if stream_feed_team is not None else None
@@ -698,6 +710,208 @@ class TeamChannelManager:
             )
             result["memberships"] = len(memberships)
         return result
+
+    # ------------------------------------------------------------------
+    # Recordings (#729)
+    # ------------------------------------------------------------------
+
+    def _remember_event(self, event, provider: str, timing) -> None:
+        """Keep a matched game's name and estimated end for the recording pass.
+
+        Memberships store only the start; the recording wants the game's own
+        title and a session-aware end, both of which the event has here.
+        """
+        try:
+            end = to_utc(timing.get_event_end_time(event)) if timing is not None else None
+        except Exception:  # noqa: BLE001
+            end = None
+        self._recording_events[(provider, str(event.id))] = {
+            "name": getattr(event, "name", None) or getattr(event, "short_name", None),
+            "end": end,
+        }
+
+    def sync_recordings(self) -> dict[str, int]:
+        """Schedule one Dispatcharr recording per upcoming game on a team channel.
+
+        For teams with recording switched on (``teams.managed_channel_record``).
+        Only games with a stream attached to the team channel are recorded, and
+        event channels never are. Dispatcharr does not de-duplicate, so every
+        recording created is remembered in ``managed_team_channel_recordings``
+        and later runs update it in place:
+
+        - new game → create; moved game → update, unless it has already started
+        - game no longer wanted (postponed, stream gone, recording switched
+          off) → the future recording is deleted; one that has started is left
+          to finish, and nothing is ever removed once recorded
+
+        Reads and writes the database around the Dispatcharr calls, never
+        across them (#735, #826).
+        """
+        result = {"created": 0, "updated": 0, "removed": 0, "errors": 0}
+        if not self._channels:
+            return result
+        from teamarr.config.runtime import dry_run
+
+        if dry_run():
+            return result
+
+        with self._db_factory() as conn:
+            targets = list_recording_targets(conn)
+            existing = {
+                (r["team_id"], r["event_id"], r["event_provider"]): r
+                for r in list_team_recordings(conn)
+            }
+            timing = self._timing_manager(conn)
+
+        now = now_utc()
+        saves: list[dict] = []
+        row_deletes: list[int] = []
+
+        for target in targets:
+            key = (target["team_id"], target["event_id"], target["event_provider"])
+            row = existing.pop(key, None)
+            start = parse_db_timestamp(target["event_start"])
+            if start is None:
+                continue
+            remembered = self._recording_events.get(
+                (target["event_provider"], target["event_id"]), {}
+            )
+            end = remembered.get("end") or start + timedelta(
+                hours=self._sport_duration_hours(target.get("sport"), timing)
+            )
+            rec_start = to_db_utc(start - timedelta(minutes=RECORDING_PRE_MINUTES))
+            rec_end = to_db_utc(end + timedelta(minutes=RECORDING_POST_MINUTES))
+            if rec_start is None or rec_end is None:
+                continue
+            if end + timedelta(minutes=RECORDING_POST_MINUTES) <= now:
+                continue  # already over; nothing to schedule
+            channel_id = target["dispatcharr_channel_id"]
+            saved = {
+                "team_id": target["team_id"],
+                "event_id": target["event_id"],
+                "event_provider": target["event_provider"],
+                "dispatcharr_channel_id": channel_id,
+                "start_time": rec_start,
+                "end_time": rec_end,
+            }
+
+            if row is None:
+                made = self._channels.create_recording(
+                    channel_id,
+                    self._iso(rec_start),
+                    self._iso(rec_end),
+                    self._recording_properties(target, remembered.get("name"), start),
+                )
+                if made.success and made.data and made.data.get("id") is not None:
+                    saves.append({**saved, "dispatcharr_recording_id": made.data["id"]})
+                    result["created"] += 1
+                    logger.info(
+                        "[TEAM_CHANNEL] Recording scheduled: %s, %s (%s to %s UTC)",
+                        target["team_name"],
+                        remembered.get("name") or target["event_id"],
+                        rec_start,
+                        rec_end,
+                    )
+                else:
+                    result["errors"] += 1
+                    logger.warning(
+                        "[TEAM_CHANNEL] Could not schedule recording for %s (%s): %s",
+                        target["team_name"],
+                        target["event_id"],
+                        made.error,
+                    )
+                continue
+
+            unchanged = (
+                row["start_time"] == rec_start
+                and row["end_time"] == rec_end
+                and row["dispatcharr_channel_id"] == channel_id
+            )
+            started = (parse_db_timestamp(row["start_time"]) or now) <= now
+            if unchanged or started:
+                continue
+            changed = self._channels.update_recording(
+                row["dispatcharr_recording_id"],
+                {
+                    "channel": channel_id,
+                    "start_time": self._iso(rec_start),
+                    "end_time": self._iso(rec_end),
+                },
+            )
+            if changed.success:
+                saves.append(
+                    {**saved, "dispatcharr_recording_id": row["dispatcharr_recording_id"]}
+                )
+                result["updated"] += 1
+            elif changed.message == "not_found":
+                # Deleted in Dispatcharr by hand. Keep the row, with the new
+                # times, so the game is not scheduled again: the user removed
+                # this recording on purpose.
+                saves.append(
+                    {**saved, "dispatcharr_recording_id": row["dispatcharr_recording_id"]}
+                )
+            else:
+                result["errors"] += 1
+
+        # What is left was scheduled earlier and is no longer wanted.
+        for row in existing.values():
+            start = parse_db_timestamp(row["start_time"])
+            end = parse_db_timestamp(row["end_time"])
+            if start is not None and start > now:
+                gone = self._channels.delete_recording(row["dispatcharr_recording_id"])
+                if gone.success:
+                    row_deletes.append(row["id"])
+                    result["removed"] += 1
+                else:
+                    result["errors"] += 1
+            elif end is None or end + timedelta(days=1) < now:
+                row_deletes.append(row["id"])  # finished long ago: forget the row only
+
+        if saves or row_deletes:
+            with self._db_factory() as conn:
+                for item in saves:
+                    save_team_recording(conn, **item)
+                for row_id in row_deletes:
+                    delete_team_recording(conn, row_id)
+                conn.commit()
+        return result
+
+    @staticmethod
+    def _iso(db_utc: str) -> str:
+        """SQLite-canonical UTC ("2026-10-03 23:00:00") as ISO-8601 with offset."""
+        return db_utc.replace(" ", "T") + "Z"
+
+    @staticmethod
+    def _sport_duration_hours(sport: str | None, timing) -> float:
+        if timing is None:
+            return 3.0
+        from teamarr.utilities.sports import get_sport_duration
+
+        return get_sport_duration(
+            sport or "", timing.sport_durations, timing.default_duration_hours
+        )
+
+    @staticmethod
+    def _recording_properties(target: dict, event_name: str | None, start) -> dict:
+        """Name the recording after the game, not whatever the guide shows.
+
+        Dispatcharr titles a recording from the channel's guide at the moment
+        it starts, which a few minutes before kickoff is the pregame filler.
+        An explicit programme overrides that; the ``teamarr`` key marks the
+        recording as ours.
+        """
+        return {
+            "program": {
+                "title": target["team_name"],
+                "sub_title": event_name or start.strftime("%Y-%m-%d"),
+                "description": event_name or "",
+            },
+            "teamarr": {
+                "team_id": target["team_id"],
+                "event_id": target["event_id"],
+                "event_provider": target["event_provider"],
+            },
+        }
 
     @staticmethod
     def _team_leagues(team: dict) -> set[str]:
