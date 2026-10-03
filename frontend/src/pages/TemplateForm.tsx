@@ -168,9 +168,7 @@ export function TemplateForm() {
   const timelineDurationLabel =
     formData.game_duration_mode === "custom" && formData.game_duration_override
       ? `${formData.game_duration_override}h custom`
-      : formData.game_duration_mode === "default"
-        ? "global default duration"
-        : "per-sport duration"
+      : "per-sport duration"
   // Filler blocks mirror generation's row precedence (#428): a register's
   // winning condition row beats the base content per field; the server's
   // rendered_description already walked the cascade (row → next matching row),

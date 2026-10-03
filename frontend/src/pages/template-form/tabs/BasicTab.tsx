@@ -44,21 +44,11 @@ export function BasicTab({ formData, setFormData, fieldRefs: fieldRefsRef, setLa
               <input
                 type="radio"
                 name="duration_mode"
-                checked={formData.game_duration_mode === "sport"}
+                checked={formData.game_duration_mode !== "custom"}
                 onChange={() => setFormData((prev) => ({ ...prev, game_duration_mode: "sport", game_duration_override: null }))}
                 className="accent-primary"
               />
               <span>Use Per-Sport Default</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="duration_mode"
-                checked={formData.game_duration_mode === "default"}
-                onChange={() => setFormData((prev) => ({ ...prev, game_duration_mode: "default", game_duration_override: null }))}
-                className="accent-primary"
-              />
-              <span>Use Global Default</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
@@ -73,7 +63,7 @@ export function BasicTab({ formData, setFormData, fieldRefs: fieldRefsRef, setLa
                 type="number"
                 step="0.25"
                 min="1"
-                max="8"
+                max="48"
                 value={formData.game_duration_override ?? ""}
                 onChange={(e) =>
                   setFormData((prev) => ({

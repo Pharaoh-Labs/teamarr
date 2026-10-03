@@ -94,7 +94,7 @@ class Template:
     program_art_url: str | None = None
 
     # Game duration
-    game_duration_mode: str = "sport"  # 'sport', 'default', 'custom'
+    game_duration_mode: str = "sport"  # 'sport' or 'custom'
     game_duration_override: float | None = None
 
     # XMLTV metadata
@@ -176,7 +176,7 @@ class EventTemplateConfig:
     # EventTemplateConfig conversion — the event path (programme stop,
     # racing race-session windows, lifecycle delete thresholds) reads it
     # through template_duration_override.
-    game_duration_mode: str = "sport"  # 'sport', 'default', 'custom'
+    game_duration_mode: str = "sport"  # 'sport' or 'custom'
     game_duration_override: float | None = None
 
     # XMLTV metadata

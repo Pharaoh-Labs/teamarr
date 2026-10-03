@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # =============================================================================
 # Teams
@@ -217,6 +217,11 @@ class ConditionalDescriptionEntry(BaseModel):
     label: str | None = None  # Optional label for default descriptions
 
 
+def _retired_duration_mode(value: str | None) -> str | None:
+    """'default' duration mode was removed (#946); it reads as 'sport'."""
+    return "sport" if value == "default" else value
+
+
 class TemplateCreate(BaseModel):
     """Request body for creating a template."""
 
@@ -234,6 +239,8 @@ class TemplateCreate(BaseModel):
     # Game duration
     game_duration_mode: str = "sport"
     game_duration_override: float | None = None
+
+    _coerce_duration_mode = field_validator("game_duration_mode")(_retired_duration_mode)
 
     # XMLTV metadata
     xmltv_flags: dict | None = None
@@ -288,6 +295,8 @@ class TemplateUpdate(BaseModel):
     program_art_url: str | None = None
     game_duration_mode: str | None = None
     game_duration_override: float | None = None
+
+    _coerce_duration_mode = field_validator("game_duration_mode")(_retired_duration_mode)
 
     # XMLTV metadata
     xmltv_flags: dict | None = None

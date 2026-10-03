@@ -367,6 +367,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 97
 
+    if current_version < 98:
+        _apply_migration(
+            conn, 98, "retire the 'default' template duration mode",
+            _migrate_v98_retire_default_duration_mode,
+        )
+        current_version = 98
+
 
 # =============================================================================
 # Migration helpers
@@ -2786,6 +2793,21 @@ def _migrate_v97_plugin_channel_identity(conn: sqlite3.Connection) -> None:
                             COALESCE(feed_team_id, ''), primary_stream_id)
         WHERE deleted_at IS NULL AND plugin_id IS NULL
     """)
+
+
+def _migrate_v98_retire_default_duration_mode(conn: sqlite3.Connection) -> None:
+    """Move templates off the removed "Use Global Default" duration mode (#946).
+
+    'default' reads as 'sport' everywhere now; rewriting the rows keeps the
+    stored value honest. The column's CHECK still allows 'default' — tightening
+    it needs a table rebuild, not worth it for a value nothing writes.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(templates)")}
+    if "game_duration_mode" not in columns:
+        return
+    conn.execute(
+        "UPDATE templates SET game_duration_mode = 'sport' WHERE game_duration_mode = 'default'"
+    )
 
 
 # Historical helper from #862: exported and tested, but never registered in

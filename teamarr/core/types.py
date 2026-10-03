@@ -371,7 +371,7 @@ class TemplateConfig:
     conditional_descriptions: list[dict] = field(default_factory=list)
 
     # V1 Parity: Duration override support
-    game_duration_mode: str = "sport"  # 'sport', 'default', 'custom'
+    game_duration_mode: str = "sport"  # 'sport' or 'custom'
     game_duration_override: float | None = None
 
     # XMLTV metadata (no hardcoded defaults - schema.sql provides them)
