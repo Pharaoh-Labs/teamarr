@@ -64,6 +64,7 @@ export function EventGroupForm() {
   const { data: group, isLoading: isLoadingGroup } = useGroup(
     isEdit ? Number(groupId) : 0
   )
+  const isChannelSource = !!group?.is_channel_source
 
   // Custom Regex event type tab
   type EventTypeTab = "team_vs_team" | "event_card"
@@ -429,8 +430,19 @@ export function EventGroupForm() {
             </CollapsibleSection>
           )}
 
+          {isChannelSource && (
+            <div className="rounded-md border bg-muted/40 px-4 py-3 text-sm">
+              <div className="font-medium">{group?.display_name || group?.name}</div>
+              <p className="text-muted-foreground mt-1">
+                This source reads the channels in one Dispatcharr group and matches them through
+                each channel&apos;s guide. It is switched on and off under Matching → Dispatcharr
+                as a Stream Source. Here you can limit which leagues it feeds and filter teams.
+              </p>
+            </div>
+          )}
+
           {/* Basic Info (edit mode) */}
-          {isEdit && <CollapsibleSection title="Basic Settings" defaultCollapsed={false} persistKey="sources-form.basic">
+          {isEdit && !isChannelSource && <CollapsibleSection title="Basic Settings" defaultCollapsed={false} persistKey="sources-form.basic">
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -521,7 +533,7 @@ export function EventGroupForm() {
           {/* Subscription Override */}
           <CollapsibleSection
             title="Subscription Override"
-            defaultCollapsed
+            defaultCollapsed={!isChannelSource}
             persistKey="sources-form.subscription"
             count={!useGlobalSubscription ? (
               <span className="text-xs text-amber-500 font-medium">Custom</span>
@@ -746,7 +758,7 @@ export function EventGroupForm() {
           </CollapsibleSection>
 
           {/* Custom Regex */}
-          <CollapsibleSection title="Custom Regex" defaultCollapsed persistKey="sources-form.regex">
+          {!isChannelSource && <CollapsibleSection title="Custom Regex" defaultCollapsed persistKey="sources-form.regex">
               <div className="space-y-6">
                 {/* Pattern Tester - only in edit mode */}
                 {isEdit && (
@@ -1183,10 +1195,10 @@ export function EventGroupForm() {
                   )}
                 </div>
               </div>
-          </CollapsibleSection>
+          </CollapsibleSection>}
 
           {/* Stream Timezone */}
-          <CollapsibleSection title="Stream Timezone" defaultCollapsed persistKey="sources-form.timezone">
+          {!isChannelSource && <CollapsibleSection title="Stream Timezone" defaultCollapsed persistKey="sources-form.timezone">
               <StreamTimezoneSelector
                 value={formData.stream_timezone ?? null}
                 onChange={(tz) => setFormData({ ...formData, stream_timezone: tz })}
@@ -1194,7 +1206,7 @@ export function EventGroupForm() {
               <p className="text-xs text-muted-foreground mt-2">
                 Optional. Timezone markers (e.g., "ET", "PT") are auto-detected. Set this only if your provider omits them and uses a different timezone than yours.
               </p>
-          </CollapsibleSection>
+          </CollapsibleSection>}
 
           {/* Actions */}
           <div className="flex justify-end gap-2">

@@ -69,7 +69,9 @@ Normally each source pulls its candidate streams from an **M3U group** — so EP
 
 For explicitly selected Dispatcharr groups, you can optionally choose a stream-profile override. Teamarr resolves the profile after **Channels → Stream Priority** produces the final order: the highest-ranked active stream is decisive. If it belongs to a mapped group, that group's override applies. If it has no override, Teamarr uses the global Dispatcharr stream profile, even if a lower-ranked stream has an override.
 
-When on, Teamarr adds a second, **additive** source that:
+Each Dispatcharr group you select becomes **its own source** on the [Sources](../sources/) page, marked **Dispatcharr group**. Open one to limit which leagues it feeds (**Subscription Override**) or to filter teams — for example a group of local CBS and FOX affiliates scoped to the NFL, so those channels are only ever matched to NFL games. A source that is not scoped feeds every league you subscribe to. With no groups selected there is a single source covering every Dispatcharr group. These sources are switched on and off here, by selecting or deselecting the group; they cannot be deleted or disabled from the Sources page, and deselecting a group keeps its scope for when you select it again.
+
+When on, Teamarr adds a second, **additive** source per selected group that:
 
 - Enumerates the Dispatcharr **channels** you've mapped that carry an active, non-`_Teamarr` EPG link.
 - Takes the **streams assigned to each channel** as candidates, tagged with that **channel's own EPG** (strategy 1 — the most authoritative mapping).

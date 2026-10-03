@@ -311,6 +311,11 @@ class GroupResponse(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     channel_count: int | None = None
+    # (#542) System-managed source reading one Dispatcharr channel group
+    # (None = every group). Created and enabled from Matching → Dispatcharr
+    # as a Stream Source; only its scope is editable here.
+    is_channel_source: bool = False
+    dispatcharr_channel_group_id: int | None = None
 
 
 class GroupListResponse(BaseModel):
@@ -545,6 +550,39 @@ def _effective_flag(patch: bool | None, current: bool) -> bool:
     return current if patch is None else patch
 
 
+# What a channel-source row lets the user change (#542). Everything else is
+# owned by the run-time sync (name, enabled, matching types) or has no meaning
+# for a source that is not an M3U group (patterns, regex).
+_CHANNEL_SOURCE_EDITABLE = frozenset(
+    {
+        "subscription_leagues",
+        "subscription_soccer_mode",
+        "subscription_soccer_followed_teams",
+        "clear_subscription_leagues",
+        "clear_subscription_soccer_mode",
+        "clear_subscription_soccer_followed_teams",
+        "include_teams",
+        "exclude_teams",
+        "team_filter_mode",
+        "bypass_filter_for_playoffs",
+        "clear_include_teams",
+        "clear_exclude_teams",
+        "clear_bypass_filter_for_playoffs",
+    }
+)
+
+
+def _reject_channel_source(group, action: str) -> None:
+    if getattr(group, "is_channel_source", False):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Cannot {action} a Dispatcharr channel source here. Select or deselect its "
+                "group under Matching → Dispatcharr as a Stream Source."
+            ),
+        )
+
+
 def require_matching_type(name: bool, team: bool, epg: bool) -> None:
     """Reject a source with no matching type enabled (epic ahow).
 
@@ -603,11 +641,16 @@ def list_groups(
     """List all event EPG groups."""
 
     with get_db() as conn:
-        # Hide the system-managed channel-source group (183.9) — it is controlled
-        # via Matching → 'Dispatcharr as a Stream Source', not edited as a normal Event Group.
-        groups = get_all_groups(
-            conn, include_disabled=include_disabled, exclude_channel_source=True
-        )
+        # Channel-source rows (183.9, one per Dispatcharr group since #542) are
+        # listed so their league scope can be set, but only while active: a
+        # row for a deselected group is kept in the database for its scope and
+        # would only be clutter here. They are created and switched on from
+        # Matching → 'Dispatcharr as a Stream Source'.
+        groups = [
+            g
+            for g in get_all_groups(conn, include_disabled=include_disabled)
+            if g.enabled or not g.is_channel_source
+        ]
 
         stats = {}
         if include_stats:
@@ -702,6 +745,8 @@ def list_groups(
                 channel_sort_order=g.channel_sort_order,
                 overlap_handling=g.overlap_handling,
                 enabled=g.enabled,
+                is_channel_source=g.is_channel_source,
+                dispatcharr_channel_group_id=g.dispatcharr_channel_group_id,
                 subscription_leagues=g.subscription_leagues,
                 subscription_soccer_mode=g.subscription_soccer_mode,
                 subscription_soccer_followed_teams=(
@@ -888,6 +933,8 @@ def create_group(request: GroupCreate):
         channel_sort_order=group.channel_sort_order,
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
+        is_channel_source=group.is_channel_source,
+        dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
         subscription_soccer_followed_teams=(
@@ -1063,6 +1110,20 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
                             name=f"Group {group_id}",
                             success=False,
                             error="Group not found",
+                        )
+                    )
+                    total_failed += 1
+                    continue
+
+                # Channel-source rows are not bulk-editable (#542): the shared
+                # settings here are the ones the run-time sync owns.
+                if group.is_channel_source:
+                    results.append(
+                        BulkGroupUpdateResult(
+                            group_id=group_id,
+                            name=group.name,
+                            success=False,
+                            error="Dispatcharr channel sources are edited one at a time",
                         )
                     )
                     total_failed += 1
@@ -1425,6 +1486,8 @@ def get_group_by_id(group_id: int):
         channel_sort_order=group.channel_sort_order,
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
+        is_channel_source=group.is_channel_source,
+        dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
         subscription_soccer_followed_teams=(
@@ -1450,6 +1513,18 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Group {group_id} not found",
+            )
+
+        if group.is_channel_source:
+            # Keep only the fields a channel-source row owns; the form sends
+            # the whole row back, and the rest must not overwrite what the
+            # run-time sync maintains.
+            request = GroupUpdate(
+                **{
+                    k: v
+                    for k, v in request.model_dump(exclude_unset=True).items()
+                    if k in _CHANNEL_SOURCE_EDITABLE
+                }
             )
 
         # Validate the post-update matching types (patch overrides current value).
@@ -1657,6 +1732,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         channel_sort_order=group.channel_sort_order,
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
+        is_channel_source=group.is_channel_source,
+        dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
         subscription_soccer_followed_teams=(
@@ -1685,6 +1762,7 @@ def delete_group_by_id(group_id: int) -> dict:
                 detail=f"Group {group_id} not found",
             )
 
+        _reject_channel_source(group, "delete")
         channel_count = get_group_channel_count(conn, group_id)
         delete_group(conn, group_id)
 
@@ -1732,6 +1810,7 @@ def enable_group(group_id: int) -> dict:
                 detail=f"Group {group_id} not found",
             )
 
+        _reject_channel_source(group, "enable")
         set_group_enabled(conn, group_id, True)
 
     return {"success": True, "message": f"Group '{group.name}' enabled"}
@@ -1749,6 +1828,7 @@ def disable_group(group_id: int) -> dict:
                 detail=f"Group {group_id} not found",
             )
 
+        _reject_channel_source(group, "disable")
         set_group_enabled(conn, group_id, False)
 
     return {"success": True, "message": f"Group '{group.name}' disabled"}

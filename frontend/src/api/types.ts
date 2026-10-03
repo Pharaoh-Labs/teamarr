@@ -90,6 +90,10 @@ export interface EventGroup {
   created_at: string | null
   updated_at: string | null
   channel_count?: number | null
+  // (#542) System-managed source reading one Dispatcharr channel group
+  // (null = every group). Only its league scope and team filter are editable.
+  is_channel_source?: boolean
+  dispatcharr_channel_group_id?: number | null
 }
 
 export interface EventGroupCreate {
