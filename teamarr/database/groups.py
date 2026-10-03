@@ -424,7 +424,10 @@ def ensure_channel_source_group(
         from teamarr.database.settings import get_epg_settings
 
         selected_group_ids = list(get_epg_settings(conn).epg_channel_source_groups)
-    wanted: list[int | None] = sorted({int(g) for g in selected_group_ids}) or [None]
+    wanted: list[int | None] = []
+    wanted.extend(sorted({int(g) for g in selected_group_ids}))
+    if not wanted:
+        wanted = [None]
 
     has_column = "dispatcharr_channel_group_id" in {
         r[1] for r in conn.execute("PRAGMA table_info(event_epg_groups)")
