@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { RadioCards } from "@/components/ui/radio-cards"
 import { Select } from "@/components/ui/select"
 import { useSports } from "@/hooks/useSports"
+import { useSubscription } from "@/hooks/useSubscription"
 import { getSportDisplayName } from "@/lib/utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -239,6 +240,16 @@ export function SportLeagueOrderCard({ showWhenSortBy = "sport_league_time", cur
   const { data: priorities, isLoading, refetch } = useSortPriorities()
   const reorderMutation = useReorderSortPriorities()
   const autoPopulateMutation = useAutoPopulateSortPriorities()
+  const { data: subscription } = useSubscription()
+
+  // Subscribed leagues with no row here number after everything listed (#678).
+  // Say so, and point at the button that adds them — where a new league
+  // belongs is the user's call, so nothing is placed automatically.
+  const unlistedLeagues = useMemo(() => {
+    if (!priorities || !subscription?.leagues) return []
+    const listed = new Set(priorities.map((p) => p.league_code).filter(Boolean))
+    return subscription.leagues.filter((code) => !listed.has(code)).sort()
+  }, [priorities, subscription])
 
   // Transform priorities to HierarchicalItem format
   // First, build a map of sport codes to display names from sport-level entries
@@ -373,6 +384,15 @@ export function SportLeagueOrderCard({ showWhenSortBy = "sport_league_time", cur
           </div>
         </CardHeader>
         <CardContent>
+          {unlistedLeagues.length > 0 && (
+            <p className="text-sm text-amber-600 dark:text-amber-400 mb-3">
+              {unlistedLeagues.length} subscribed league
+              {unlistedLeagues.length === 1 ? " isn't" : "s aren't"} in this list, so{" "}
+              {unlistedLeagues.length === 1 ? "its" : "their"} games number last:{" "}
+              <span className="font-mono">{unlistedLeagues.join(", ")}</span>. Auto-populate adds{" "}
+              {unlistedLeagues.length === 1 ? "it" : "them"} at the end; drag to place.
+            </p>
+          )}
           <HierarchicalSortable
             items={items}
             onReorder={handleReorder}
