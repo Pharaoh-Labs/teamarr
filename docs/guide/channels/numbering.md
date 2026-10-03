@@ -57,6 +57,8 @@ Rules:
 - **Feeds stay together.** Home/away feeds and keyword variants of one game land on adjacent numbers inside the block, exactly as in Everything Else.
 - **Blocks spill forward.** A block with more channels than room simply continues past its start; the next block skips over it (you'll see a ⚠ in the effective-layout preview). Set an **end channel** (under *advanced*) if you'd rather overflow into Everything Else.
 - **Disable** a block with its switch to keep it without applying it.
+- **A block can be limited to one season.** Set **Season** to Preseason, Regular season or Postseason and the block takes only those games; the league's other games number as if the block were not there. "NBA · Postseason at 900" with no other NBA block puts playoff games at 900 and regular-season games in Everything Else. If the same league also has an *Any season* block, the season block wins for its games. Games whose provider reports no season type (the NBA play-in is one) only ever match *Any season* blocks.
+- **A block can have its own channel group.** Enter a pattern such as `09 TEAMARR {league}` and the block's channels go to that group instead of the one set under [Output](output). The pattern takes the same wildcards as the Output page (`{sport}`, `{league}`, …) and needs at least one.
 
 Block changes are saved immediately and queue a re-grid in Gapped/Strict modes, so they take effect on the next generation. The list is shown in placement order (lowest start first), and the **effective layout** strip under it shows where today's channels would land — Everything Else included, wherever it falls.
 

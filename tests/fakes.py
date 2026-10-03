@@ -78,6 +78,7 @@ class FakeEvent:
     home_team: FakeTeam | None = None
     away_team: FakeTeam | None = None
     venue: str | None = None
+    season_type: str | None = None
     broadcasts: list = field(default_factory=list)
     status: FakeStatus | None = None
     # Real Event carries this; timing.get_event_end_time() reads it to find a

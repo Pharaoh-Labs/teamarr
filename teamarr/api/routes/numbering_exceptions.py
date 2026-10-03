@@ -41,6 +41,9 @@ class NumberingExceptionModel(BaseModel):
     label: str | None = None
     sort_order: int = 0
     enabled: bool = True
+    season_type: str | None = None  # None = any season
+    channel_group_id: int | None = None
+    channel_group_mode: str | None = None
     display_name: str | None = None
     channel_count: int = 0
 
@@ -62,6 +65,9 @@ class NumberingExceptionCreate(BaseModel):
     provider: str | None = None
     team_id: str | None = None
     team_league: str | None = None
+    season_type: str | None = None
+    channel_group_id: int | None = None
+    channel_group_mode: str | None = None
 
 
 class NumberingExceptionUpdate(BaseModel):
@@ -73,6 +79,13 @@ class NumberingExceptionUpdate(BaseModel):
     label: str | None = None
     clear_label: bool = False
     enabled: bool | None = None
+    # Season condition and channel group (#950). Each is replaced only when
+    # its set_* flag is true, so a client that predates them cannot clear them.
+    season_type: str | None = None
+    set_season_type: bool = False
+    channel_group_id: int | None = None
+    channel_group_mode: str | None = None
+    set_channel_group: bool = False
 
 
 class LanePreviewModel(BaseModel):
@@ -126,7 +139,11 @@ def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
     counts: dict[int | None, int] = {}
     for ch in get_all_channels_sorted(conn):
         lane = resolver.resolve(
-            ch.get("sport"), ch.get("league"), ch.get("home_team"), ch.get("away_team")
+            ch.get("sport"),
+            ch.get("league"),
+            ch.get("home_team"),
+            ch.get("away_team"),
+            ch.get("season_type"),
         )
         counts[lane.id] = counts.get(lane.id, 0) + 1
     # Group members share a lane id (the lowest id at that start); count per row by start.
@@ -172,6 +189,9 @@ def create_numbering_exception(data: NumberingExceptionCreate):
                 provider=data.provider,
                 provider_team_id=data.team_id,
                 team_league=data.team_league,
+                season_type=data.season_type,
+                channel_group_id=data.channel_group_id,
+                channel_group_mode=data.channel_group_mode,
             )
         except StartConflict as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -199,7 +219,11 @@ def preview_layout():
         buckets: dict[int | None, list[dict]] = {lane.id: [] for lane in lanes}
         for ch in get_all_channels_sorted(conn):
             lane = resolver.resolve(
-                ch.get("sport"), ch.get("league"), ch.get("home_team"), ch.get("away_team")
+                ch.get("sport"),
+                ch.get("league"),
+                ch.get("home_team"),
+                ch.get("away_team"),
+                ch.get("season_type"),
             )
             buckets[lane.id].append(ch)
         exceptions = {e.id: e for e in get_numbering_exceptions(conn)}
@@ -237,7 +261,8 @@ def preview_layout():
 
 @router.put("/{exception_id}", response_model=NumberingExceptionModel)
 def update(exception_id: int, data: NumberingExceptionUpdate):
-    """Update a block's start / end / label / enabled. 400 on a start conflict."""
+    """Update a block's start / end / label / enabled / season condition /
+    channel group. 400 on a start conflict."""
     with get_db() as conn:
         try:
             updated = update_numbering_exception(
@@ -249,6 +274,9 @@ def update(exception_id: int, data: NumberingExceptionUpdate):
                 if data.clear_label
                 else (data.label if data.label is not None else ...),
                 enabled=data.enabled,
+                season_type=data.season_type if data.set_season_type else ...,
+                channel_group_id=data.channel_group_id if data.set_channel_group else ...,
+                channel_group_mode=data.channel_group_mode if data.set_channel_group else ...,
             )
         except StartConflict as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e

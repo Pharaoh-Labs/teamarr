@@ -37,8 +37,8 @@ holds golden-equivalence tests that assert this for compact, gap and strict.
 
 ## Resolution: most specific wins
 
-`resolve_lane(sport, league, home_team, away_team)` returns the lane for a
-channel. Precedence:
+`LaneResolver.resolve(sport, league, home_team, away_team, season_type)`
+returns the lane for a channel. Precedence:
 
 1. **Team** pin matching the home team
 2. **Team** pin matching the away team
@@ -53,8 +53,36 @@ of the event — the same key `channel_priority_teams` uses — so a team pin
 follows the club into cup competitions. A team pin covers both the team's
 dedicated team channel and every event channel it plays in.
 
+### Season condition (#950)
+
+A pin may name a season type (`preseason`, `regular`, `postseason`,
+`offseason`). It is then a candidate only for channels of that season, and
+at its level it outranks the unconditioned pin: "NBA postseason at 900" plus
+"NBA at 1700" sends playoff games to 900 and everything else to 1700. With
+no unconditioned pin, the other seasons fall through to the sport pin or the
+default lane. Scope still decides first — an unconditioned league pin beats a
+conditioned sport pin.
+
+A channel whose season is unknown (`NULL`) satisfies no condition. That is
+the case for providers that report none, and for ESPN's NBA play-in, whose
+`play-in-season` slug maps to no canonical season type.
+
+The season is stored on the channel (`managed_channels.season_type`, written
+at creation and kept current by the settings sync), because re-layout
+resolves lanes from the stored row and has no event to ask.
+
+### Channel group on a block (#950)
+
+A pin may carry an output channel group — a static `channel_group_id`, or a
+pattern in `channel_group_mode` (`09 TEAMARR {league}`). A channel that
+resolves to that pin uses it in place of the subscription's group (global,
+then per-league override). Create and sync both go through
+`ChannelLifecycleService._pinned_block_group`, one `LaneResolver` per batch,
+so a channel cannot flip groups between runs.
+
 Resolution is deterministic from fields that never change during an event
-(sport, league, teams), so a channel's lane is stable for its lifetime. It
+(sport, league, teams, season type), so a channel's lane is stable for its
+lifetime. It
 changes only when the user edits pinned blocks — which arms a re-layout in
 sticky modes, exactly as changing the channel range does.
 
@@ -162,6 +190,9 @@ CREATE TABLE numbering_exceptions (
     label TEXT,                     -- group label (rows sharing start + label)
     sort_order INTEGER NOT NULL DEFAULT 0,
     enabled BOOLEAN DEFAULT 1,
+    season_type TEXT,               -- NULL = any season (#950)
+    channel_group_id INTEGER,       -- output group for the block's channels (#950)
+    channel_group_mode TEXT,        -- ...or a pattern, e.g. '09 TEAMARR {league}'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

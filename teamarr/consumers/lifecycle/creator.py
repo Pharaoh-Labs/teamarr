@@ -112,6 +112,12 @@ class ChannelCreator(_LifecycleHost):
                 league_configs = {lc.league_code: lc for lc in get_league_configs(conn)}
                 self._league_configs = league_configs
 
+                # Pinned blocks, for the channel group a block may carry (#950)
+                from teamarr.database.channel_numbers import _default_lane
+                from teamarr.database.numbering_exceptions import LaneResolver
+
+                self._lane_resolver = LaneResolver.load(conn, _default_lane(conn))
+
                 default_stream_profile_id = dispatcharr_settings.default_stream_profile_id
 
                 for matched in matched_streams:
@@ -354,6 +360,13 @@ class ChannelCreator(_LifecycleHost):
                                 effective_group_id = lc.channel_group_id
                             if lc.channel_group_mode is not None:
                                 effective_group_mode = lc.channel_group_mode
+                        # A pinned block's own group outranks both (#950), so the
+                        # number range and the group stay in step.
+                        block_group = self._pinned_block_group(event)
+                        if block_group is not None:
+                            if block_group[0] is not None:
+                                effective_group_id = block_group[0]
+                            effective_group_mode = block_group[1]
 
                         resolved_channel_group_id = self._dynamic_resolver.resolve_channel_group(
                             mode=effective_group_mode,
@@ -1030,6 +1043,7 @@ class ChannelCreator(_LifecycleHost):
             sport=getattr(event, "sport", None),
             home_team=event.home_team.name if getattr(event, "home_team", None) else None,
             away_team=event.away_team.name if getattr(event, "away_team", None) else None,
+            season_type=getattr(event, "season_type", None),
         )
         if not channel_number:
             return ChannelCreationResult(
@@ -1175,6 +1189,7 @@ class ChannelCreator(_LifecycleHost):
                 if (segment_start or event.start_time)
                 else None,
                 event_name=event.name,
+                season_type=getattr(event, "season_type", None),
                 league=event.league,
                 sport=event.sport,
                 # V1 Parity: Include venue and broadcast
@@ -1252,6 +1267,7 @@ class ChannelCreator(_LifecycleHost):
         sport: str | None = None,
         home_team: str | None = None,
         away_team: str | None = None,
+        season_type: str | None = None,
     ) -> int | None:
         """Get next available channel number.
 
@@ -1262,7 +1278,7 @@ class ChannelCreator(_LifecycleHost):
         Args:
             conn: Database connection
             event_league: League code for the event
-            sport / home_team / away_team: lane resolution keys
+            sport / home_team / away_team / season_type: lane resolution keys
 
         Returns:
             Next available channel number as int, or None if range exhausted
@@ -1276,6 +1292,7 @@ class ChannelCreator(_LifecycleHost):
             sport=sport,
             home_team=home_team,
             away_team=away_team,
+            season_type=season_type,
         )
         if next_num is None:
             logger.warning(
