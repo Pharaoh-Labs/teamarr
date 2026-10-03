@@ -136,7 +136,7 @@ class ChannelLifecycleService(
         timezone: str = "America/New_York",
         include_final_events: bool = False,
         create_postponed: bool = True,
-        league_create_overrides: dict[str, tuple[CreateTiming, int | None]] | None = None,
+        league_create_overrides: dict[str, tuple[str, int | None]] | None = None,
     ):
         """Initialize the lifecycle service.
 

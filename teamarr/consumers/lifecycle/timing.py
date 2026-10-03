@@ -178,7 +178,7 @@ class ChannelLifecycleManager:
         sport_durations: dict[str, float] | None = None,
         include_final_events: bool = False,
         create_postponed: bool = True,
-        league_create_overrides: dict[str, tuple[CreateTiming, int | None]] | None = None,
+        league_create_overrides: dict[str, tuple[str, int | None]] | None = None,
     ):
         self.create_timing = create_timing
         self.delete_timing = delete_timing
