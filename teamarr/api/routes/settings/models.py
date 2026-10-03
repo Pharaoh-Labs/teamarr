@@ -520,6 +520,7 @@ class FeedSeparationSettingsModel(BaseModel):
     away_terms: list[str] = ["AWAY"]  # Terms that indicate away feed
     detect_team_names: bool = True  # Also detect team names as feed indicators
     label_style: str = "team_name"  # 'team_name', 'short_name', 'home_away'
+    unlabeled_streams: str = "separate"  # 'separate' or 'ignore' (#828)
 
 
 class FeedSeparationSettingsUpdate(BaseModel):
@@ -531,6 +532,7 @@ class FeedSeparationSettingsUpdate(BaseModel):
     away_terms: list[str] | None = None
     detect_team_names: bool | None = None
     label_style: str | None = None
+    unlabeled_streams: str | None = None
 
 
 # =============================================================================

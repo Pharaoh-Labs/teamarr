@@ -518,6 +518,7 @@ GROUPS: dict[str, GroupSpec] = {
                     "away_terms": "feed_away_terms",
                     "detect_team_names": "feed_detect_team_names",
                     "label_style": "feed_label_style",
+                    "unlabeled_streams": "feed_unlabeled_streams",
                 },
                 hooks={
                     "sports": {"parse": _parse_str_list([])},

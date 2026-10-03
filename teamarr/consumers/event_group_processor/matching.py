@@ -637,6 +637,97 @@ class StreamMatching:
 
         return matched_streams
 
+    @staticmethod
+    def _entry_event_id(entry: dict) -> str | None:
+        """Channel-identity event id for a matched entry (segment-aware)."""
+        event = entry.get("event")
+        if event is None or not hasattr(event, "id"):
+            return None
+        segment = entry.get("segment")
+        return f"{event.id}-{segment}" if segment else str(event.id)
+
+    def _drop_unlabelled_feed_streams(
+        self,
+        matched_streams: list[dict],
+        conn: Connection,
+        separation_sports: list[str] | None,
+        disabled_leagues: set[str] | None,
+    ) -> tuple[list[dict], list[dict], set[str]]:
+        """Apply the 'ignore' policy for streams of unknown feed side (#828).
+
+        With feed separation on, a game whose provider labels some streams
+        home/away and leaves others bare ends up as three channels: the two
+        feeds and a third holding everything unlabelled. Under 'ignore' the
+        unlabelled streams are skipped for any game that has a separated feed.
+
+        A game "has a separated feed" when a stream in this batch resolved to
+        a feed team, or a feed channel for it already exists — from any source
+        group, since a game's feeds and its bare streams often come from
+        different sources. A game with no feed anywhere is untouched, so the
+        policy can never leave a game without a channel. Nothing is assigned
+        to a side: unknown stays unknown.
+
+        Returns (kept, dropped, labelled_event_ids).
+        """
+        from teamarr.database.channels.crud import get_feed_separated_event_ids
+
+        labelled = {
+            eid
+            for entry in matched_streams
+            if entry.get("feed_team") is not None and (eid := self._entry_event_id(entry))
+        }
+        labelled |= get_feed_separated_event_ids(conn)
+        if not labelled:
+            return matched_streams, [], labelled
+
+        kept: list[dict] = []
+        dropped: list[dict] = []
+        for entry in matched_streams:
+            if (
+                entry.get("feed_team") is None
+                and self._entry_event_id(entry) in labelled
+                and _separation_applies(entry.get("event"), separation_sports, disabled_leagues)
+            ):
+                dropped.append(entry)
+            else:
+                kept.append(entry)
+        return kept, dropped, labelled
+
+    def _cleanup_unlabelled_feed_channels(
+        self, group: EventEPGGroup, conn: Connection, labelled_event_ids: set[str]
+    ) -> int:
+        """Remove this group's unlabelled channel for games that have feeds (#828).
+
+        The streams it held are skipped under 'ignore', but cleanup only
+        detaches streams that are missing or rotated, so without this the
+        third channel would sit there until its event ended.
+        """
+        from teamarr.database.channels import get_managed_channels_for_group
+
+        if not labelled_event_ids:
+            return 0
+        stale = [
+            ch
+            for ch in get_managed_channels_for_group(conn, group.id)
+            if not getattr(ch, "feed_team_id", None) and ch.event_id in labelled_event_ids
+        ]
+        if not stale:
+            return 0
+        lifecycle_service = self._get_lifecycle_service()
+        deleted = 0
+        for channel in stale:
+            if lifecycle_service.delete_managed_channel(
+                conn, channel.id, reason="unlabelled_feed_ignored"
+            ):
+                deleted += 1
+                logger.info(
+                    "[FEED] Removed unlabelled channel '%s' (event_id=%s) — the game has "
+                    "separated feeds and unlabelled streams are set to be ignored",
+                    channel.channel_name,
+                    channel.event_id,
+                )
+        return deleted
+
     def _cleanup_feed_separated_channels(
         self,
         group: EventEPGGroup,

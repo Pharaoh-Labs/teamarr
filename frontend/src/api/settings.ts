@@ -298,6 +298,8 @@ export interface FeedSeparationSettings {
   away_terms: string[]
   detect_team_names: boolean
   label_style: "team_name" | "short_name" | "home_away"
+  // (#828) Streams with no home/away label on a game that has separated feeds
+  unlabeled_streams: "separate" | "ignore"
 }
 
 export interface FeedSeparationSettingsUpdate {
@@ -307,6 +309,7 @@ export interface FeedSeparationSettingsUpdate {
   away_terms?: string[]
   detect_team_names?: boolean
   label_style?: "team_name" | "short_name" | "home_away"
+  unlabeled_streams?: "separate" | "ignore"
 }
 
 // One Emby/Jellyfin server target (#471). Secrets round-trip masked

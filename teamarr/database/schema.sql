@@ -561,6 +561,11 @@ CREATE TABLE IF NOT EXISTS settings (
     feed_detect_team_names BOOLEAN DEFAULT 1,           -- Also detect team names as feed indicators
     feed_label_style TEXT DEFAULT 'team_name'           -- How to label feeds in channel names
         CHECK(feed_label_style IN ('team_name', 'short_name', 'home_away')),
+    -- (#828) Streams with no resolved feed side, on a game that has a
+    -- separated feed: 'separate' = their own channel beside the feeds (the
+    -- behaviour before this setting), 'ignore' = skipped for that game.
+    -- Validated in update_feed_separation_settings, not by a CHECK.
+    feed_unlabeled_streams TEXT DEFAULT 'separate',
 
     -- Emby Integration (Live TV Guide Refresh)
     -- emby_servers is a JSON list of {name, url, username, password, api_key}

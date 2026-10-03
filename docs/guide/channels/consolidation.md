@@ -130,6 +130,18 @@ Feed **identification** always runs — every stream's resolved feed team *and* 
 | **Away Feed Terms** | `AWAY` | Comma-separated terms that indicate an away feed |
 | **Detect Team Names** | On | Also match team names in stream names (e.g., "Orioles Feed") |
 | **Feed Label Style** | Team Name | How feed channels are labeled — see below |
+| **Streams With No Home/Away Label** | Give them their own channel | What happens to a stream Teamarr cannot place on either side, for a game that has a home or away feed — see below |
+
+### Streams With No Home/Away Label
+
+Many streams carry no feed signal at all — a national broadcast, or a provider that lists one version of the game without saying which. With Feed Separation on, a game that has labelled feeds and unlabelled streams becomes three channels: the home feed, the away feed, and a third holding everything else.
+
+- **Give them their own channel** (default) keeps that third channel.
+- **Ignore them** skips the unlabelled streams for that game, so it shows only its feed channels. Skipped streams appear in Run History as excluded with the reason `unlabeled_feed`.
+
+The setting only acts on a game that has at least one separated feed, from any source. A game where no stream is labelled keeps its single ordinary channel, so ignoring can never leave a game without one. Teamarr never assigns an unlabelled stream to a side.
+
+Two things to expect with **Ignore them**: a national broadcast is neither home nor away, so it is skipped for games that have feeds; and when the labelled and unlabelled streams come from different sources, the third channel can exist for one run before the feeds are known and it is removed.
 
 ### Scoping It To Certain Sports
 
