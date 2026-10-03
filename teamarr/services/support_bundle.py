@@ -26,7 +26,7 @@ from teamarr.database.stats import (
 from teamarr.services.stream_ordering import get_stream_ordering_service
 from teamarr.utilities.logging import _get_log_dir
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 RUN_LIMIT = 100
 MATCH_DETAIL_LIMIT = 500
 CHANNEL_LIMIT = 2_000
@@ -103,7 +103,10 @@ class SupportBundleService:
                 "sports_subscription": self._singleton(conn, "sports_subscription", errors),
                 "league_config": self._rows(conn, "subscription_league_config", errors),
                 "leagues": self._rows(conn, "leagues", errors),
-                "source_template_mappings": self._rows(conn, "group_templates", errors),
+                # v3 (#822): the global template assignments. v2 exported the
+                # retired per-source table here as "source_template_mappings",
+                # which was stale and left the real assignments out.
+                "template_assignments": self._rows(conn, "subscription_templates", errors),
             },
             "channels": channels,
             "generation": {"recent_run_count": len(runs), "run_limit": RUN_LIMIT},
@@ -536,7 +539,7 @@ class SupportBundleService:
                 "Stream URLs, M3U account names, credentials, tokens, raw template bodies, raw XMLTV, and provider cache payloads are excluded. JSON-typed settings (media-server lists, filters) are parsed and redacted at every depth.",
                 "",
                 "## Suggested Triage",
-                "Review critical signals, collection_errors, recent failed runs and logs, source subscription overrides/template mappings, then managed channels and stream ordering evidence.",
+                "Review critical signals, collection_errors, recent failed runs and logs, source subscription overrides and template assignments, then managed channels and stream ordering evidence.",
                 "",
             ]
         )

@@ -86,7 +86,7 @@ def test_bundle_contains_contract_and_redacts_source_data(db_path, tmp_path):
     assert "secret@example.test" not in contents
     assert report["channels"]["managed_team_channels"][0]["dispatcharr_channel_id"] == 42
     assert report["channels"]["managed_team_channel_streams"][0]["event_id"] == "event-2"
-    assert report["schema_version"] == 2
+    assert report["schema_version"] == 3
     assert report["channels"]["total"] == 2
     assert report["channels"]["channels"][0]["owner_type"] == "core"
     owned = report["channels"]["channels"][1]

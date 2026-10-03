@@ -585,7 +585,7 @@ CREATE TABLE IF NOT EXISTS settings (
     channelsdvr_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 98
+    schema_version INTEGER DEFAULT 99
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -788,18 +788,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_event_epg_groups_name_account
 -- Resolution order: leagues match > sports match > default (both NULL)
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS group_templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    group_id INTEGER NOT NULL,
-    template_id INTEGER NOT NULL,
-    sports JSON,                              -- NULL = any, or ["mma", "boxing"]
-    leagues JSON,                             -- NULL = any, or ["ufc", "bellator"]
-
-    FOREIGN KEY (group_id) REFERENCES event_epg_groups(id) ON DELETE CASCADE,
-    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_group_templates_group_id ON group_templates(group_id);
 
 
 -- =============================================================================
@@ -821,7 +809,8 @@ INSERT OR IGNORE INTO sports_subscription (id) VALUES (1);
 
 -- =============================================================================
 -- SUBSCRIPTION TEMPLATES TABLE
--- Global template assignments (replaces per-group group_templates)
+-- Global template assignments. Replaced the per-group group_templates table,
+-- which was dropped in v99 (#822).
 -- Resolution order: leagues match > sports match > default (both NULL)
 -- =============================================================================
 
@@ -2303,14 +2292,6 @@ SET category = 'event_type_keywords',
     target_value = COALESCE(target_value, 'EVENT_CARD')
 WHERE category = 'combat_sports';
 
--- v48: Migrate group.template_id to group_templates table
--- Creates a default template assignment (sports=NULL, leagues=NULL) for each group
--- that has a template_id set but no entries in group_templates yet
-INSERT INTO group_templates (group_id, template_id, sports, leagues)
-SELECT id, template_id, NULL, NULL
-FROM event_epg_groups
-WHERE template_id IS NOT NULL
-  AND id NOT IN (SELECT DISTINCT group_id FROM group_templates);
 
 -- v65: Event-anchored channel lifecycle overhaul
 -- Consolidate 6 create timing modes → 2 (same_day, before_event)
