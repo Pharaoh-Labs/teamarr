@@ -225,6 +225,13 @@ class ChannelCreator(_LifecycleHost):
                             event, duration_override
                         )
                         if excluded_reason:
+                            if excluded_reason.value == "event_postponed":
+                                # A channel created before the postponement
+                                # would otherwise sit there, programme-less,
+                                # until its delete time (#948).
+                                self._delete_postponed_event_channels(
+                                    conn, effective_event_id, event_provider, result
+                                )
                             result.excluded.append(
                                 {
                                     "stream": stream_name,
@@ -236,6 +243,7 @@ class ChannelCreator(_LifecycleHost):
                                         "event_past": "Event already ended",
                                         "event_final": "Event is final",
                                         "before_create_window": "Before create window",
+                                        "event_postponed": "Event is postponed",
                                     }.get(excluded_reason.value, excluded_reason.value),
                                 }
                             )
@@ -483,6 +491,41 @@ class ChannelCreator(_LifecycleHost):
             )
 
         return result
+
+    def _delete_postponed_event_channels(
+        self,
+        conn: Connection,
+        event_id: str,
+        event_provider: str,
+        result: StreamProcessResult,
+    ) -> None:
+        """Delete every channel of a postponed event (#948).
+
+        Event-scoped like channel identity itself: main, keyword and
+        per-feed channels across all source groups.
+        """
+        from teamarr.database.channels import find_any_channel_for_event
+
+        seen: set[int] = set()
+        while True:
+            channel = find_any_channel_for_event(conn, event_id, event_provider, any_keyword=True)
+            if channel is None or channel.id in seen:
+                return
+            seen.add(channel.id)
+            if not self.delete_managed_channel(conn, channel.id, reason="event postponed"):
+                return
+            logger.info(
+                "[LIFECYCLE] Deleted channel '%s': event %s is postponed",
+                channel.channel_name,
+                event_id,
+            )
+            result.deleted.append(
+                {
+                    "channel_id": channel.id,
+                    "channel_name": channel.channel_name,
+                    "tvg_id": channel.tvg_id,
+                }
+            )
 
     def _handle_existing_channel(
         self,

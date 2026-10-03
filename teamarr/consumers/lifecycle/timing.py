@@ -139,6 +139,10 @@ def _parse_channel_dt(value: "str | datetime | None") -> datetime | None:
     return value
 
 
+def _is_postponed(event: Event) -> bool:
+    return bool(event.status) and (event.status.state or "").lower() == "postponed"
+
+
 class ChannelLifecycleManager:
     """Manages event channel creation and deletion timing.
 
@@ -173,6 +177,7 @@ class ChannelLifecycleManager:
         default_duration_hours: float = 3.0,
         sport_durations: dict[str, float] | None = None,
         include_final_events: bool = False,
+        create_postponed: bool = True,
     ):
         self.create_timing = create_timing
         self.delete_timing = delete_timing
@@ -181,6 +186,7 @@ class ChannelLifecycleManager:
         self.default_duration_hours = default_duration_hours
         self.sport_durations = sport_durations or {}
         self.include_final_events = include_final_events
+        self.create_postponed = create_postponed
 
     def should_create_channel(
         self,
@@ -404,6 +410,7 @@ class ChannelLifecycleManager:
         2. Exclude if after delete timing → EVENT_PAST
         3. Final events outside lifecycle window → EVENT_FINAL (always)
         4. Final events within lifecycle window → honor include_final_events
+        5. Postponed events → EVENT_POSTPONED when create_postponed is off (#948)
 
         Args:
             event: The matched event to categorize
@@ -414,6 +421,13 @@ class ChannelLifecycleManager:
             ExcludedReason if event should be excluded, None if eligible
         """
         now = now_user()
+
+        # Postponed events (#948): checked before the window so the verdict
+        # says why — a postponed game keeps its original start time, and
+        # "before window" or "already ended" would hide the real reason.
+        if not self.create_postponed and _is_postponed(event):
+            logger.debug("[EXCLUDED] event=%s: postponed (EVENT_POSTPONED)", event.id)
+            return ExcludedReason.EVENT_POSTPONED
 
         # Calculate lifecycle window thresholds
         delete_threshold = self._calculate_delete_threshold(event, duration_override)

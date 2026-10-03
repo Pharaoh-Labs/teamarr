@@ -49,7 +49,7 @@ def get_lifecycle_settings(conn: Connection) -> dict:
     cursor = conn.execute(
         """SELECT channel_create_timing, channel_delete_timing,
                   channel_pre_buffer_minutes, channel_post_buffer_minutes,
-                  default_duplicate_event_handling
+                  default_duplicate_event_handling, channel_create_postponed
            FROM settings WHERE id = 1"""
     )
     row = cursor.fetchone()
@@ -69,6 +69,11 @@ def get_lifecycle_settings(conn: Connection) -> dict:
                 else 60
             ),
             "duplicate_handling": row["default_duplicate_event_handling"] or "consolidate",
+            "create_postponed": (
+                bool(row["channel_create_postponed"])
+                if row["channel_create_postponed"] is not None
+                else True
+            ),
         }
 
     return {
@@ -77,6 +82,7 @@ def get_lifecycle_settings(conn: Connection) -> dict:
         "pre_buffer_minutes": 60,
         "post_buffer_minutes": 60,
         "duplicate_handling": "consolidate",
+        "create_postponed": True,
     }
 
 
@@ -198,6 +204,7 @@ def create_lifecycle_service(
         # Final/complete events are always included (no longer a user setting —
         # the toggle was removed in the v2.7.0 EPG overhaul).
         include_final_events=True,
+        create_postponed=lifecycle["create_postponed"],
     )
 
 

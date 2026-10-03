@@ -239,6 +239,9 @@ CREATE TABLE IF NOT EXISTS settings (
     channel_pre_buffer_minutes INTEGER DEFAULT 60,
     -- Buffer minutes for after_event delete timing and same_day midnight crossover (default 60)
     channel_post_buffer_minutes INTEGER DEFAULT 60,
+    -- Create event channels for postponed events (#948). 0 = exclude them at
+    -- channel creation and delete a channel whose event becomes postponed.
+    channel_create_postponed BOOLEAN DEFAULT 1,
 
     -- EPG program-data matching master switch (epic teamarr-183.6). Default
     -- OFF (opt-in); also feature-gated on the connected Dispatcharr exposing

@@ -32,6 +32,7 @@ export interface LifecycleSettings {
   channel_delete_timing: string
   channel_pre_buffer_minutes: number
   channel_post_buffer_minutes: number
+  channel_create_postponed: boolean
   channel_range_start: number
   channel_range_end: number | null
 }

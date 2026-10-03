@@ -183,6 +183,7 @@ class LifecycleSettingsModel(BaseModel):
     channel_delete_timing: str = "same_day"
     channel_pre_buffer_minutes: int = 60
     channel_post_buffer_minutes: int = 60
+    channel_create_postponed: bool = True
     channel_range_start: int = 101
     channel_range_end: int | None = None
 

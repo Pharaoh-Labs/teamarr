@@ -82,6 +82,7 @@ def update_lifecycle_settings(update: LifecycleSettingsModel):
             channel_post_buffer_minutes=update.channel_post_buffer_minutes,
             channel_range_start=update.channel_range_start,
             channel_range_end=update.channel_range_end,
+            channel_create_postponed=update.channel_create_postponed,
         )
 
     with get_db() as conn:

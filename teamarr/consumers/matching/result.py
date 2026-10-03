@@ -204,6 +204,7 @@ class ExcludedReason(Enum):
     EVENT_FINAL = "event_final"  # Event status is final
     EVENT_PAST = "event_past"  # Event already ended (past delete threshold)
     BEFORE_WINDOW = "before_window"  # Too early to create channel
+    EVENT_POSTPONED = "event_postponed"  # Postponed, and postponed channels are off (#948)
 
 
 # =============================================================================
@@ -498,6 +499,7 @@ EXCLUDED_DISPLAY: dict[ExcludedReason | None, str] = {
     ExcludedReason.EVENT_FINAL: "Event is final",
     ExcludedReason.EVENT_PAST: "Event already ended",
     ExcludedReason.BEFORE_WINDOW: "Before create window",
+    ExcludedReason.EVENT_POSTPONED: "Event is postponed",
 }
 
 
