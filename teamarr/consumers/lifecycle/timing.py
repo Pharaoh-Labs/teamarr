@@ -187,6 +187,7 @@ class ChannelLifecycleManager:
         event: Event,
         stream_exists: bool = False,
         segment_start: datetime | None = None,
+        duration_override: float | None = None,
     ) -> LifecycleDecision:
         """Determine if a channel should be created for this event.
 
@@ -197,6 +198,8 @@ class ChannelLifecycleManager:
                 sessions, UFC card segments). When given, the create
                 threshold anchors to it instead of `event.start_time`,
                 which for racing points at the weekend's FIRST session.
+            duration_override: Event template's custom duration (#946),
+                used for the past-delete-threshold guard.
 
         Returns:
             LifecycleDecision with should_act and reason
@@ -206,7 +209,7 @@ class ChannelLifecycleManager:
         now = now_user()
 
         # Check if we're past delete threshold (prevents create-then-delete)
-        delete_threshold = self._calculate_delete_threshold(event)
+        delete_threshold = self._calculate_delete_threshold(event, duration_override)
         if delete_threshold and now >= delete_threshold:
             logger.debug(
                 "[SKIP CREATE] event=%s: past delete threshold (%s)",
@@ -309,7 +312,9 @@ class ChannelLifecycleManager:
         # same_day: start of event day (midnight)
         return event_start.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    def _calculate_delete_threshold(self, event: Event) -> datetime | None:
+    def _calculate_delete_threshold(
+        self, event: Event, duration_override: float | None = None
+    ) -> datetime | None:
         """Calculate when channel should be deleted.
 
         - after_event: event_end + post_buffer_minutes (always event-anchored)
@@ -317,10 +322,11 @@ class ChannelLifecycleManager:
           midnight, uses event_end + post_buffer_minutes instead to avoid
           the ~23hr stale window problem.
 
-        Uses sport-specific duration when available.
+        Uses sport-specific duration when available. `duration_override`
+        (the event template's custom duration, #946) replaces that duration.
         """
         event_start = to_user_tz(event.start_time)
-        event_end = self.get_event_end_time(event)
+        event_end = self.get_event_end_time(event, duration_override)
 
         if self.delete_timing == "after_event":
             return event_end + timedelta(minutes=self.post_buffer_minutes)
@@ -336,30 +342,46 @@ class ChannelLifecycleManager:
             datetime.max.time(),
         ).replace(tzinfo=event_end.tzinfo)
 
-    def calculate_delete_time(self, event: Event) -> datetime | None:
-        """Calculate scheduled delete time for an event."""
-        return self._calculate_delete_threshold(event)
+    def calculate_delete_time(
+        self, event: Event, duration_override: float | None = None
+    ) -> datetime | None:
+        """Calculate scheduled delete time for an event.
 
-    def get_event_end_time(self, event: Event) -> datetime:
+        `duration_override` is the event template's custom duration (#946).
+        """
+        return self._calculate_delete_threshold(event, duration_override)
+
+    def get_event_end_time(self, event: Event, duration_override: float | None = None) -> datetime:
         """Calculate estimated event end time using sport-specific duration.
 
         Racing events anchor `event.start_time` to the first session (e.g.
         Friday practice), which would otherwise make a multi-day race weekend
         look "over" as soon as practice ends. For events with sessions, use
         the last session's start time + its duration instead.
+
+        `duration_override` (the event template's custom duration, #946)
+        replaces the duration wherever one would have been derived — for a
+        racing weekend only when the last session IS the race, since a
+        custom duration describes the race, not practice/qualifying.
         """
         if event.sessions:
             from teamarr.consumers.racing_segments import _session_duration_hours
 
             last_session = max(event.sessions, key=lambda s: s.start_time)
-            duration_hours = _session_duration_hours(
-                last_session.code, self.sport_durations, event.league, event.name
-            )
+            if last_session.code == "race" and duration_override is not None:
+                duration_hours = duration_override
+            else:
+                duration_hours = _session_duration_hours(
+                    last_session.code, self.sport_durations, event.league, event.name
+                )
             return to_user_tz(last_session.start_time) + timedelta(hours=duration_hours)
 
-        duration_hours = get_sport_duration(
-            event.sport, self.sport_durations, self.default_duration_hours
-        )
+        if duration_override is not None:
+            duration_hours = duration_override
+        else:
+            duration_hours = get_sport_duration(
+                event.sport, self.sport_durations, self.default_duration_hours
+            )
         return to_user_tz(event.start_time) + timedelta(hours=duration_hours)
 
     def event_crosses_midnight(self, event: Event) -> bool:
@@ -368,7 +390,9 @@ class ChannelLifecycleManager:
         end = self.get_event_end_time(event)
         return crosses_midnight(start, end)
 
-    def categorize_event_timing(self, event: Event) -> ExcludedReason | None:
+    def categorize_event_timing(
+        self, event: Event, duration_override: float | None = None
+    ) -> ExcludedReason | None:
         """Categorize why a matched event would be excluded.
 
         This is called AFTER successful matching to determine if the event
@@ -383,6 +407,8 @@ class ChannelLifecycleManager:
 
         Args:
             event: The matched event to categorize
+            duration_override: Event template's custom duration (#946),
+                used for the delete threshold / event end estimate
 
         Returns:
             ExcludedReason if event should be excluded, None if eligible
@@ -390,11 +416,11 @@ class ChannelLifecycleManager:
         now = now_user()
 
         # Calculate lifecycle window thresholds
-        delete_threshold = self._calculate_delete_threshold(event)
+        delete_threshold = self._calculate_delete_threshold(event, duration_override)
         create_threshold = self._calculate_create_threshold(event)
 
         # Detailed logging for debugging lifecycle timing issues
-        event_end = self.get_event_end_time(event)
+        event_end = self.get_event_end_time(event, duration_override)
         status_state = event.status.state if event.status else "N/A"
         logger.debug(
             "[LIFECYCLE] event=%s start=%s end=%s status=%s delete_threshold=%s now=%s",

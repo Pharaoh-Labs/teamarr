@@ -32,12 +32,8 @@ logger = logging.getLogger(__name__)
 # its _FREE_PRACTICE_RE requires a digit and literal "free practice"/"fp",
 # and would miss stream labels like "Practice 2").
 _FREE_PRACTICE_RE = re.compile(r"^(?:free\s*practice|practice|fp)\s*(\d*)$", re.IGNORECASE)
-_QUALIFYING_RE = re.compile(
-    r"^(?:hyperpole\s+)?qualifying(?:\s*[-–]\s*(.+))?$", re.IGNORECASE
-)
-_HYPERPOLE_RE = re.compile(
-    r"^hyperpole\s*(\d*)\s*(?:[-–]\s*(.+))?$", re.IGNORECASE
-)
+_QUALIFYING_RE = re.compile(r"^(?:hyperpole\s+)?qualifying(?:\s*[-–]\s*(.+))?$", re.IGNORECASE)
+_HYPERPOLE_RE = re.compile(r"^hyperpole\s*(\d*)\s*(?:[-–]\s*(.+))?$", re.IGNORECASE)
 _PROLOGUE_RE = re.compile(r"prologue", re.IGNORECASE)
 
 # How far a broadcast instant may sit from a session's real [start, end]
@@ -75,11 +71,19 @@ SESSION_DURATION_HOURS = {
 # Per-league fallback race durations (hours), for endurance series whose
 # typical race length differs significantly from the global "racing" sport
 # default. Used when the race name doesn't encode an explicit duration (see
-# _parse_duration_from_name) - e.g. IMSA sprint races and WEC's "Petit
-# Le Mans" / "Prologue" rounds.
+# _parse_duration_from_name) - e.g. IMSA sprint races and WEC's "Prologue"
+# rounds.
 LEAGUE_RACE_DURATION_HOURS = {
     "wec": 6.0,
     "imsa": 2.75,
+}
+
+# Endurance classics whose duration is NOT spelled "<N> Hours" in the name.
+# "Petit Le Mans" runs 10 hours; without this entry it fell through to the
+# IMSA sprint fallback (2.75h) and the race channel's programme ended at
+# 2:45 mid-race (#946).
+_NAMED_RACE_DURATIONS = {
+    "petit le mans": 10.0,
 }
 
 # Word-number forms used in classic endurance race names (e.g. "Mobil 1
@@ -115,6 +119,10 @@ def _parse_duration_from_name(name: str | None) -> float | None:
     """
     if not name:
         return None
+    lowered = name.lower()
+    for phrase, hours in _NAMED_RACE_DURATIONS.items():
+        if phrase in lowered:
+            return hours
     match = _DURATION_NAME_RE.search(name)
     if not match:
         return None
@@ -616,3 +624,26 @@ def expand_racing_segments(
         )
 
     return result
+
+
+def apply_template_race_duration(match: dict, duration_override: float | None) -> dict:
+    """Apply a template's custom duration to a match's race-session window (#946).
+
+    Segment ends are precomputed here at match time — before any template is
+    resolved — so a custom game_duration_override can't be baked into
+    `_session_duration_hours`. This runs in the EPG annotation phase instead,
+    where the per-event template is known, stretching the RACE session's end
+    to the override. Practice/qualifying keep their fixed windows: a custom
+    duration describes how long the race runs, not how long practice runs.
+
+    Also annotates `_duration_override` for downstream consumers that never
+    see a template object (the event filler's non-segment path).
+
+    No-op when the override is None or the segment isn't the race.
+    """
+    if duration_override is None:
+        return match
+    match["_duration_override"] = duration_override
+    if match.get("segment") == "race" and match.get("segment_start") is not None:
+        match["segment_end"] = match["segment_start"] + timedelta(hours=duration_override)
+    return match

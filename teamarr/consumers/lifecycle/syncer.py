@@ -12,6 +12,7 @@ from sqlite3 import Connection
 from typing import Any
 
 from teamarr.core import Event
+from teamarr.utilities.sports import template_duration_override
 
 from ._host import _LifecycleHost
 from .stream_profiles import resolve_channel_stream_profile
@@ -96,15 +97,16 @@ class ChannelSyncer(_LifecycleHost):
                     fs = get_feed_separation_settings(settings_conn)
                     if fs.enabled:
                         sync_feed_label_style = fs.label_style
-                        if (event.home_team
-                                and event.home_team.id == stored_feed_team_id):
+                        if event.home_team and event.home_team.id == stored_feed_team_id:
                             sync_feed_team = event.home_team
-                        elif (event.away_team
-                                and event.away_team.id == stored_feed_team_id):
+                        elif event.away_team and event.away_team.id == stored_feed_team_id:
                             sync_feed_team = event.away_team
 
             expected_name = self._generate_channel_name(
-                event, template, matched_keyword, segment,
+                event,
+                template,
+                matched_keyword,
+                segment,
                 feed_team=sync_feed_team,
                 feed_label_style=sync_feed_label_style,
                 untagged_label=_ds.untagged_keyword_label,
@@ -206,7 +208,10 @@ class ChannelSyncer(_LifecycleHost):
             event_provider = getattr(event, "provider", "espn")
             stored_feed_team_id_for_tvg = getattr(existing, "feed_team_id", None)
             expected_tvg_id = generate_event_tvg_id(
-                event_id, event_provider, segment, matched_keyword,
+                event_id,
+                event_provider,
+                segment,
+                matched_keyword,
                 stored_feed_team_id_for_tvg,
             )
             if expected_tvg_id != existing.tvg_id:
@@ -215,8 +220,14 @@ class ChannelSyncer(_LifecycleHost):
                 update_data["tvg_id"] = expected_tvg_id
                 changes_made.append(f"tvg_id: {current_channel.tvg_id} → {expected_tvg_id}")
 
-            # 6b. Recalculate scheduled_delete_at based on current settings
-            expected_delete_time = self._timing_manager.calculate_delete_time(event)
+            # 6b. Recalculate scheduled_delete_at based on current settings.
+            # The template's custom duration participates (#946) — otherwise
+            # this recalc would pull a template-widened delete time (set at
+            # creation) back to the sport-duration one on every sync.
+            duration_override = template_duration_override(template)
+            expected_delete_time = self._timing_manager.calculate_delete_time(
+                event, duration_override
+            )
             if expected_delete_time:
                 expected_delete_str = expected_delete_time.isoformat()
                 stored_delete_str = getattr(existing, "scheduled_delete_at", None)
@@ -226,6 +237,20 @@ class ChannelSyncer(_LifecycleHost):
                 if expected_delete_str != stored_delete_str:
                     db_updates["scheduled_delete_at"] = expected_delete_str
                     changes_made.append("scheduled_delete_at updated")
+
+            # Keep the stored end estimate in lockstep with the delete time
+            # (#946): the cleanup pass prefers `event_end_estimate` when
+            # re-deriving delete times, so a stale pre-override estimate
+            # would fight this sync on the next cleanup run.
+            if duration_override is not None and event.start_time:
+                expected_end = self._timing_manager.get_event_end_time(event, duration_override)
+                expected_end_str = expected_end.isoformat()
+                stored_end_str = getattr(existing, "event_end_estimate", None)
+                if stored_end_str:
+                    stored_end_str = str(stored_end_str)
+                if expected_end_str != stored_end_str:
+                    db_updates["event_end_estimate"] = expected_end_str
+                    changes_made.append("event_end_estimate updated")
 
             # Apply Dispatcharr updates (closed-loop: only persist DB on success)
             if update_data:
@@ -245,21 +270,29 @@ class ChannelSyncer(_LifecycleHost):
 
             # 7. Sync channel_profile_ids (compares against Dispatcharr actual state)
             self._sync_channel_profiles(
-                conn, existing, event_sport, event_league, changes_made,
+                conn,
+                existing,
+                event_sport,
+                event_league,
+                changes_made,
                 current_channel=current_channel,
             )
 
             # 8. Sync logo
             self._sync_channel_logo(
-                conn, existing, event, template, matched_keyword, segment, changes_made,
+                conn,
+                existing,
+                event,
+                template,
+                matched_keyword,
+                segment,
+                changes_made,
                 feed_team=sync_feed_team,
                 untagged_label=_ds.untagged_keyword_label,
             )
 
             # 9. Sync stream_profile_id
-            self._sync_stream_profile(
-                conn, existing, current_channel, changes_made
-            )
+            self._sync_stream_profile(conn, existing, current_channel, changes_made)
 
             # Log changes if any
             if changes_made:
@@ -341,9 +374,7 @@ class ChannelSyncer(_LifecycleHost):
             if lc and lc.channel_profile_ids is not None:
                 raw_group_profiles = lc.channel_profile_ids
 
-        stored_profile_ids = self._parse_profile_ids(
-            getattr(existing, "channel_profile_ids", None)
-        )
+        stored_profile_ids = self._parse_profile_ids(getattr(existing, "channel_profile_ids", None))
 
         # Resolve dynamic profile IDs (expands "{sport}" and "{league}" wildcards)
         if raw_group_profiles is not None:
@@ -379,11 +410,7 @@ class ChannelSyncer(_LifecycleHost):
             dispatcharr_profile_ids is None  # API didn't include field — can't check
             or sorted(effective_profile_ids) == sorted(dispatcharr_profile_ids)
         )
-        if (
-            not dispatcharr_in_sync
-            and effective_profile_ids == [0]
-            and dispatcharr_profile_ids
-        ):
+        if not dispatcharr_in_sync and effective_profile_ids == [0] and dispatcharr_profile_ids:
             # [0] is Dispatcharr's ALL-profiles sentinel on WRITE, but reads
             # return the expanded concrete id list — a literal comparison always
             # mismatches and re-PATCHed every channel every run (diff loop).
@@ -486,7 +513,11 @@ class ChannelSyncer(_LifecycleHost):
         from teamarr.database.channels import update_managed_channel
 
         logo_url = self._resolve_logo_url(
-            event, template, matched_keyword, segment, feed_team=feed_team,
+            event,
+            template,
+            matched_keyword,
+            segment,
+            feed_team=feed_team,
             untagged_label=untagged_label,
         )
         current_logo_id = getattr(existing, "dispatcharr_logo_id", None)

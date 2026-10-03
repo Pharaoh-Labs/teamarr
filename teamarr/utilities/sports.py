@@ -119,11 +119,40 @@ def get_sport_duration(
     return sport_durations.get(sport.lower(), default)
 
 
+def _template_value(template: object, key: str, default=None):
+    """Read a duration field from a template dict OR config object.
+
+    Team paths pass template dicts; event paths pass EventTemplateConfig
+    dataclasses. Both carry the same game_duration_* fields.
+    """
+    if template is None:
+        return default
+    if isinstance(template, dict):
+        return template.get(key, default)
+    return getattr(template, key, default)
+
+
+def template_duration_override(template: object) -> float | None:
+    """Custom duration (hours) from a template, or None when it has no say.
+
+    Returns a value only when game_duration_mode is 'custom' with a numeric
+    override; every other configuration is "no opinion" so callers fall
+    through to the sport/league cascade unchanged. Accepts template dicts
+    and EventTemplateConfig objects alike (#946).
+    """
+    if _template_value(template, "game_duration_mode", "sport") != "custom":
+        return None
+    override = _template_value(template, "game_duration_override")
+    if override is None:
+        return None
+    return float(override)
+
+
 def get_effective_duration(
     sport: str,
     sport_durations: dict[str, float],
     default: float = 3.0,
-    template: dict | None = None,
+    template: object | None = None,
 ) -> float:
     """Get effective duration, checking template custom duration first.
 
@@ -139,15 +168,16 @@ def get_effective_duration(
         sport: Sport name (e.g., 'Basketball', 'Football')
         sport_durations: Durations dict from database settings
         default: Default duration if sport not found
-        template: Optional template dict with game_duration_mode/game_duration_override
+        template: Optional template dict or EventTemplateConfig with
+            game_duration_mode/game_duration_override
 
     Returns:
         Duration in hours
     """
     if template:
-        duration_mode = template.get("game_duration_mode", "sport")
+        duration_mode = _template_value(template, "game_duration_mode", "sport")
         if duration_mode == "custom":
-            override = template.get("game_duration_override")
+            override = _template_value(template, "game_duration_override")
             if override is not None:
                 return float(override)
         elif duration_mode == "default":

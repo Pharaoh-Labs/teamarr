@@ -24,7 +24,10 @@ from teamarr.services import SportsDataService
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
-from teamarr.utilities.sports import get_sport_duration
+from teamarr.utilities.sports import (
+    get_effective_duration,
+    template_duration_override,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -244,22 +247,34 @@ class EventEPGGenerator:
         """
         # Use template override if provided, otherwise fall back to options.template
         template = template_override or options.template
-        # If explicit segment timing is provided, use it (Phase 2 UFC segments)
+        # If explicit segment timing is provided, use it (Phase 2 UFC segments;
+        # racing session windows — already template-adjusted upstream by
+        # apply_template_race_duration, #946)
         if segment_start and segment_end:
             start = segment_start - timedelta(minutes=options.pregame_minutes)
             stop = segment_end
         # UFC/MMA events have special time handling based on stream name (legacy)
         elif event.sport == "mma" and stream_name and event.main_card_start:
             start, stop = self._get_ufc_programme_times(
-                event, stream_name, options.sport_durations, options.default_duration_hours
+                event,
+                stream_name,
+                options.sport_durations,
+                options.default_duration_hours,
+                duration_override=template_duration_override(template),
             )
             # Apply pregame offset to start
             start = start - timedelta(minutes=options.pregame_minutes)
         else:
-            # Standard handling for team sports
+            # Standard handling for team sports. The resolved template's
+            # duration configuration applies here just as it does on team
+            # channels (#946): custom mode wins, then the default/sport
+            # cascade.
             start = event.start_time - timedelta(minutes=options.pregame_minutes)
-            duration = get_sport_duration(
-                event.sport, options.sport_durations, options.default_duration_hours
+            duration = get_effective_duration(
+                event.sport,
+                options.sport_durations,
+                options.default_duration_hours,
+                template,
             )
             stop = event.start_time + timedelta(hours=duration)
 
@@ -286,9 +301,7 @@ class EventEPGGenerator:
                 conditional_fields["title"], context, variables=variables
             )
         if not title:
-            title = self._resolver.resolve(
-                template.title_format, context, variables=variables
-            )
+            title = self._resolver.resolve(template.title_format, context, variables=variables)
 
         subtitle = None
         if conditional_fields.get("subtitle"):
@@ -324,9 +337,7 @@ class EventEPGGenerator:
         )
         icon = None
         if art_template:
-            icon = self._resolver.resolve_art(
-                art_template, context, variables=variables
-            )
+            icon = self._resolver.resolve_art(art_template, context, variables=variables)
 
         # Resolve categories (may contain {sport} variable)
         # Preserve user's original casing for custom categories
@@ -364,6 +375,7 @@ class EventEPGGenerator:
         stream_name: str,
         sport_durations: dict[str, float],
         default_duration: float,
+        duration_override: float | None = None,
     ) -> tuple[datetime, datetime]:
         """Get start/end times for UFC events based on stream type.
 
@@ -375,12 +387,18 @@ class EventEPGGenerator:
             stream_name: Stream name to check for prelim/main indicators
             sport_durations: Duration settings from database
             default_duration: Fallback duration
+            duration_override: Template custom duration (#946) — replaces the
+                MMA sport duration when set; the main card keeps its
+                half-the-event share of it
 
         Returns:
             Tuple of (start_time, stop_time)
         """
         stream_lower = stream_name.lower()
-        mma_duration = sport_durations.get("mma", default_duration)
+        if duration_override is not None:
+            mma_duration = duration_override
+        else:
+            mma_duration = sport_durations.get("mma", default_duration)
 
         is_prelim = any(kw in stream_lower for kw in self.UFC_PRELIM_KEYWORDS)
         is_main = any(kw in stream_lower for kw in self.UFC_MAIN_KEYWORDS)
@@ -465,9 +483,7 @@ class EventEPGGenerator:
 
             # Build context using home team perspective
             # Inject exception_keyword into extra_vars so it resolves in all template fields
-            keyword_value = keyword_display_value(
-                exception_keyword, options.untagged_keyword_label
-            )
+            keyword_value = keyword_display_value(exception_keyword, options.untagged_keyword_label)
             context = self._context_builder.build_for_event(
                 event=event,
                 team_id=event.home_team.id,
@@ -508,9 +524,7 @@ class EventEPGGenerator:
                 cond_logo = cond_fields.get("event_channel_logo_url")
             logo_tpl = cond_logo or event_template.event_channel_logo_url
             if logo_tpl:
-                channel_icon = self._resolver.resolve_art(
-                    logo_tpl, context, variables=variables
-                )
+                channel_icon = self._resolver.resolve_art(logo_tpl, context, variables=variables)
 
             channel_info = EventChannelInfo(
                 channel_id=tvg_id,
