@@ -162,6 +162,17 @@ class TestESPNParseSeasonType:
         result = self.provider._parse_season_type({"slug": "group-stage", "type": 13846})
         assert result == SEASON_REGULAR
 
+    def test_nba_play_in_slug_is_postseason(self) -> None:
+        """ESPN's own shape for the play-in (2026-04-14): its own season, type 5 (#950)."""
+        result = self.provider._parse_season_type(
+            {"year": 2026, "type": 5, "slug": "play-in-season"}
+        )
+        assert result == SEASON_POSTSEASON
+
+    def test_bare_type_5_is_not_mapped(self) -> None:
+        """Only the slug says play-in; a type number alone is not evidence."""
+        assert self.provider._parse_season_type({"type": 5}) is None
+
     def test_type_number_fallback_when_no_slug(self) -> None:
         # Scoreboard sometimes lacks slug; fall back to numeric type
         assert self.provider._parse_season_type({"type": 3}) == SEASON_POSTSEASON

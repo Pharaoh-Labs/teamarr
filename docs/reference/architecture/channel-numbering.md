@@ -63,9 +63,10 @@ no unconditioned pin, the other seasons fall through to the sport pin or the
 default lane. Scope still decides first — an unconditioned league pin beats a
 conditioned sport pin.
 
-A channel whose season is unknown (`NULL`) satisfies no condition. That is
-the case for providers that report none, and for ESPN's NBA play-in, whose
-`play-in-season` slug maps to no canonical season type.
+A channel whose season is unknown (`NULL`) satisfies no condition — the case
+for providers that report none. ESPN's NBA play-in carries its own season
+slug (`play-in-season`), which the ESPN provider maps to `postseason`, so
+play-in games land in a Postseason block.
 
 The season is stored on the channel (`managed_channels.season_type`, written
 at creation and kept current by the settings sync), because re-layout

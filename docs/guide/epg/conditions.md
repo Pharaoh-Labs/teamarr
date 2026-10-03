@@ -164,7 +164,7 @@ idle field. Condition rows need a reference game to evaluate.
 
 | Condition | Value | Description |
 |-----------|-------|-------------|
-| `is_playoff` | - | Playoff/postseason game |
+| `is_playoff` | - | Playoff/postseason game (the NBA play-in counts) |
 | `is_preseason` | - | Preseason/exhibition game |
 
 **Example:**
