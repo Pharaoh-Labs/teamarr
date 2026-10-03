@@ -432,6 +432,35 @@ def _has_shared_name_token(stream_norm: str, event_team) -> bool:
     )
 
 
+def _exact_name_forms(team) -> frozenset[str]:
+    """The normalized forms a stream can write that ARE this team's name."""
+    return frozenset(
+        normalize_text(form)
+        for form in (
+            getattr(team, "name", None),
+            getattr(team, "short_name", None),
+            getattr(team, "location", None),
+        )
+        if form
+    )
+
+
+def _exact_sides(team1_norm: str | None, team2_norm: str | None, event) -> int:
+    """How many stream sides (0-2) equal one of the event's team names outright.
+
+    A tie-break, never a score (#799). token_set_ratio gives 100 whenever one
+    name is a token subset of the other, so a bare "Indiana" scores 100
+    against Indiana State Sycamores exactly as it does against the Indiana
+    Hoosiers, whose short name it IS. When two candidates score the same, the
+    one the stream names outright is the one it means.
+    """
+    home = _exact_name_forms(event.home_team) if event.home_team else frozenset()
+    away = _exact_name_forms(event.away_team) if event.away_team else frozenset()
+    straight = (team1_norm in home) + (team2_norm in away)
+    swapped = (team1_norm in away) + (team2_norm in home)
+    return max(straight, swapped)
+
+
 @lru_cache(maxsize=65536)
 def _best_name_score_cached(
     stream_norm: str, team_name: str, team_short: str, team_abbrev: str
@@ -1529,6 +1558,7 @@ class TeamMatcher:
         best_time_distance: int = 999999  # Seconds from stream time (for doubleheaders)
         best_anchor_dist: int = 999999999  # Seconds from EPG anchor (bead t5e)
         best_stream_date_dist: int = 999  # Days from the stream's declared date (#474)
+        best_exact_sides: int = -1  # Stream sides that equal a team name outright (#799)
         best_away_home_orientation = False
         date_rejected = 0  # Candidates gated by a trusted stream date (#474)
         fixture_rejected = 0  # Candidates in a league these teams never meet in
@@ -1709,11 +1739,20 @@ class TeamMatcher:
                 # Ranking: score > time proximity > future over past > date proximity.
                 # For EPG anchored matches, nearest to the program instant wins
                 # outright (the encore/series guard already gated the candidates).
+                exact_sides = _exact_sides(team1_normalized, team2_normalized, event)
+
                 is_better = False
                 if score > best_confidence:
                     is_better = True
                 elif score == best_confidence:
-                    if stream_date_dist != best_stream_date_dist:
+                    if exact_sides != best_exact_sides:
+                        # The stream names this event's teams outright and the
+                        # other's only as part of a longer name ("Indiana" is
+                        # the Hoosiers, not Indiana State) — #799. Same-team
+                        # fixtures tie here and fall through to the date and
+                        # time rules below, unchanged.
+                        is_better = exact_sides > best_exact_sides
+                    elif stream_date_dist != best_stream_date_dist:
                         # Agreement with the stream's declared date is the
                         # strongest equal-score disambiguator (#474)
                         is_better = stream_date_dist < best_stream_date_dist
@@ -1745,6 +1784,7 @@ class TeamMatcher:
                     best_anchor_dist = anchor_dist
                     best_time_distance = time_distance
                     best_stream_date_dist = stream_date_dist
+                    best_exact_sides = exact_sides
                     best_away_home_orientation = away_home_orientation
 
         if best_match and best_league:
