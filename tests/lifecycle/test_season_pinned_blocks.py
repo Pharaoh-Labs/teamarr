@@ -222,3 +222,97 @@ class TestBlockChannelGroup:
         for c in update.call_args_list:
             written.update(c.args[2])
         assert written["season_type"] == "postseason"
+
+
+class TestSyncPersistsGroup:
+    """The group move reached Dispatcharr only; the row kept its creation-time
+    group and reconciliation reported 14 moved channels as drift on every run."""
+
+    def _sync(self, db_conn, lifecycle, dispatcharr_group, stored_group, resolved=7, ok=True):
+        lifecycle._lane_resolver = _resolver(db_conn)
+        lifecycle._dynamic_resolver = MagicMock()
+        lifecycle._dynamic_resolver.resolve_channel_group.return_value = resolved
+        current = MagicMock(channel_group_id=dispatcharr_group, channel_number="5001")
+        lifecycle._channel_manager.get_channel.return_value = current
+        with (
+            patch.object(lifecycle, "_generate_channel_name", return_value="n"),
+            patch.object(lifecycle, "_sync_channel_profiles"),
+            patch.object(lifecycle, "_sync_channel_logo"),
+            patch.object(lifecycle, "_sync_stream_profile"),
+            patch.object(lifecycle, "_safe_update_channel", return_value=ok),
+            patch("teamarr.database.channels.update_managed_channel") as update,
+        ):
+            lifecycle._sync_channel_settings(
+                conn=db_conn,
+                existing=FakeManagedChannel(channel_group_id=stored_group),
+                stream={"id": 1},
+                event=_nba_event("regular"),
+                group_config={},
+                template=None,
+            )
+        written = {}
+        for c in update.call_args_list:
+            written.update(c.args[2])
+        return written
+
+    def test_moved_group_is_stored(self, db_conn, lifecycle):
+        written = self._sync(db_conn, lifecycle, dispatcharr_group=10, stored_group=10)
+        assert written["channel_group_id"] == 7
+
+    def test_row_left_behind_is_repaired(self, db_conn, lifecycle):
+        """Dispatcharr already right, the row still on the old group."""
+        written = self._sync(db_conn, lifecycle, dispatcharr_group=7, stored_group=10)
+        assert written["channel_group_id"] == 7
+
+    def test_failed_dispatcharr_update_stores_nothing(self, db_conn, lifecycle):
+        written = self._sync(db_conn, lifecycle, dispatcharr_group=10, stored_group=10, ok=False)
+        assert "channel_group_id" not in written
+
+    def test_unresolved_group_is_not_stored(self, db_conn, lifecycle):
+        written = self._sync(
+            db_conn, lifecycle, dispatcharr_group=None, stored_group=10, resolved=None
+        )
+        assert "channel_group_id" not in written
+
+
+class TestBlockRowDisplay:
+    def _channel(self, conn, group_id, event_id, league, sport, season):
+        return create_managed_channel(
+            conn=conn,
+            event_epg_group_id=group_id,
+            event_id=event_id,
+            event_provider="espn",
+            tvg_id=f"tvg-{event_id}",
+            channel_name=f"ch {event_id}",
+            sport=sport,
+            league=league,
+            home_team="A",
+            away_team="B",
+            event_date="2026-10-03T23:00:00+00:00",
+            season_type=season,
+        )
+
+    def test_count_is_per_row_not_per_shared_block(self, db_conn):
+        from teamarr.api.routes.numbering_exceptions import _with_counts
+
+        nba = _pin(db_conn, start=900, label="Priority", season_type="postseason")
+        mlb = _pin(
+            db_conn, start=900, label="Priority", league_code="mlb", sport="baseball",
+            season_type="postseason",
+        )
+        group = create_group(db_conn, name="G", leagues=["mlb", "nba"])
+        self._channel(db_conn, group, "1", "mlb", "baseball", "postseason")
+        self._channel(db_conn, group, "2", "mlb", "baseball", "postseason")
+        self._channel(db_conn, group, "3", "nba", "basketball", "preseason")
+        db_conn.commit()
+
+        counts = {m.id: m.channel_count for m in _with_counts(db_conn, [nba, mlb])}
+        assert counts == {nba.id: 0, mlb.id: 2}
+
+    def test_layout_label_names_the_season(self, db_conn):
+        from teamarr.api.routes.numbering_exceptions import _member_label
+
+        playoff = _pin(db_conn, start=900, label="Priority", season_type="postseason")
+        anytime = _pin(db_conn, start=900, label="Priority", league_code="nfl", sport="football")
+        assert _member_label(db_conn, playoff).endswith("(postseason)")
+        assert "(" not in _member_label(db_conn, anytime)
