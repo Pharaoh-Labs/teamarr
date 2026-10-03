@@ -112,6 +112,15 @@ def stage_team_channels(context: GenerationContext) -> None:
     except Exception as exc:  # noqa: BLE001 - per-step isolation
         logger.exception("[GENERATION] Managed team channel sync failed: %s", exc)
         context.result.managed_team_channels = {"error": str(exc)}
+        return
+    # After the memberships: a game is recorded only once a stream is on the
+    # team channel for it (#729). Isolated from the sync above — a recording
+    # failure must not report the team channels themselves as failed.
+    try:
+        context.result.managed_team_recordings = context.team_channel_manager.sync_recordings()
+    except Exception as exc:  # noqa: BLE001 - per-step isolation
+        logger.exception("[GENERATION] Team channel recording sync failed: %s", exc)
+        context.result.managed_team_recordings = {"error": str(exc)}
 
 
 def validate_channel_ranges(db_factory: Callable[[], Any], external_occupied: set[int]) -> dict:

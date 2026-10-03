@@ -196,16 +196,23 @@ def test_team_channel_phase_syncs_channels_before_memberships():
             calls.append(("memberships", matches, completed_group_ids))
             return {"attached": 1}
 
+        def sync_recordings(self):
+            calls.append(("recordings",))
+            return {"created": 1}
+
     context.team_channel_manager = Manager()
 
     processing.stage_team_channels(context)
 
+    # Recordings come last: a game is recorded only once its stream is attached (#729).
     assert calls == [
         ("channels", True),
         ("memberships", context.team_matched_streams, context.team_completed_groups),
+        ("recordings",),
     ]
     assert context.result.managed_team_channels == {"created": 2}
     assert context.result.managed_team_streams == {"attached": 1}
+    assert context.result.managed_team_recordings == {"created": 1}
 
 
 def test_team_channel_phase_preserves_nonfatal_membership_failure():

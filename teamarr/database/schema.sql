@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS teams (
     managed_channel_enabled BOOLEAN NOT NULL DEFAULT 0,
     managed_channel_number INTEGER,
     managed_channel_lifecycle TEXT,          -- NULL = inherit the global setting (#904)
+    managed_channel_record BOOLEAN NOT NULL DEFAULT 0,  -- (#729) Schedule a Dispatcharr recording for each of this team's games on its managed team channel
 
     -- One entry per team per league (ESPN reuses IDs across leagues for different teams)
     UNIQUE(provider, provider_team_id, sport, primary_league),
@@ -171,6 +172,25 @@ CREATE TABLE IF NOT EXISTS managed_team_channels (
 
 CREATE INDEX IF NOT EXISTS idx_managed_team_channels_dispatcharr
     ON managed_team_channels(dispatcharr_channel_id);
+
+-- Dispatcharr recordings Teamarr scheduled for a team's games on its managed
+-- team channel (#729). Dispatcharr does not de-duplicate recordings, so this
+-- is the record of what was created: one row per team and game, updated in
+-- place when the game moves and removed with the recording when it is cancelled.
+CREATE TABLE IF NOT EXISTS managed_team_channel_recordings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_id INTEGER NOT NULL,
+    event_id TEXT NOT NULL,
+    event_provider TEXT NOT NULL,
+    dispatcharr_recording_id INTEGER NOT NULL,
+    dispatcharr_channel_id INTEGER NOT NULL,
+    start_time TIMESTAMP NOT NULL,           -- UTC, SQLite-canonical
+    end_time TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (team_id, event_id, event_provider),
+    FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE
+);
 
 -- Temporary stream memberships for durable managed team channels. These stay
 -- separate from managed_channel_streams, whose foreign key and lifecycle are

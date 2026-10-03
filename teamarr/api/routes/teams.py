@@ -236,6 +236,18 @@ def update_team(team_id: int, team: TeamUpdate):
         # on every save, so the rule keys on the transition, not the flag (#826).
         if updates.get("managed_channel_enabled") and not current.get("managed_channel_enabled"):
             updates["active"] = True
+        # Recording rides on the managed team channel (#729): it cannot be on
+        # without one, and switching management off switches it off too.
+        managed = updates.get("managed_channel_enabled", current.get("managed_channel_enabled"))
+        if not managed and (
+            updates.get("managed_channel_record") or current.get("managed_channel_record")
+        ):
+            if updates.get("managed_channel_record") and "managed_channel_enabled" not in updates:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Recording needs the team's managed Dispatcharr channel to be on",
+                )
+            updates["managed_channel_record"] = False
         result = db_update_team(conn, team_id, updates)
         if result is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")

@@ -80,6 +80,7 @@ interface TeamUpdate {
   managed_channel_enabled?: boolean
   managed_channel_number?: number | null
   managed_channel_lifecycle?: "persistent" | "game_days" | null
+  managed_channel_record?: boolean
 }
 
 interface EditTeamDialogProps {
@@ -103,6 +104,7 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
     managed_channel_enabled: team.managed_channel_enabled,
     managed_channel_number: team.managed_channel_number,
     managed_channel_lifecycle: team.managed_channel_lifecycle ?? null,
+    managed_channel_record: team.managed_channel_record ?? false,
   })
 
   const handleSubmit = async () => {
@@ -219,6 +221,25 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
                   <option value="persistent">Persistent — always exists</option>
                   <option value="game_days">Game days only</option>
                 </Select>
+              </div>
+            )}
+            {formData.managed_channel_enabled && (
+              <div className="space-y-1 pt-2">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={formData.managed_channel_record ?? false}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, managed_channel_record: checked })
+                    }
+                  />
+                  <Label className="font-normal">Record games</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Schedules a Dispatcharr DVR recording for each of this team&apos;s games on
+                  this channel, once a stream is attached for the game. Recordings start 5
+                  minutes early and run 45 minutes past the estimated end. Event channels are
+                  never recorded.
+                </p>
               </div>
             )}
           </div>

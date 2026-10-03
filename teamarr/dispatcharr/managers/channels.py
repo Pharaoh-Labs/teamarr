@@ -415,6 +415,54 @@ class ChannelManager:
             error=self._client.parse_api_error(response),
         )
 
+    # ------------------------------------------------------------------
+    # Recordings (#729)
+    # ------------------------------------------------------------------
+
+    def create_recording(
+        self,
+        channel_id: int,
+        start_time: str,
+        end_time: str,
+        custom_properties: dict | None = None,
+    ) -> OperationResult:
+        """Schedule a DVR recording of a channel. ``data["id"]`` is the recording id.
+
+        Dispatcharr does not de-duplicate: two identical requests make two
+        recordings, so callers must remember the id they were given.
+        """
+        response = self._client.post(
+            "/api/channels/recordings/",
+            {
+                "channel": channel_id,
+                "start_time": start_time,
+                "end_time": end_time,
+                "custom_properties": custom_properties or {},
+            },
+        )
+        if response is not None and response.status_code in (200, 201):
+            return OperationResult(success=True, data=response.json())
+        return OperationResult(success=False, error=self._client.parse_api_error(response))
+
+    def update_recording(self, recording_id: int, fields: dict) -> OperationResult:
+        """Change a scheduled recording (Dispatcharr reschedules its task).
+
+        ``message == "not_found"`` when the recording no longer exists.
+        """
+        response = self._client.patch(f"/api/channels/recordings/{recording_id}/", fields)
+        if response is not None and response.status_code == 200:
+            return OperationResult(success=True, data=response.json())
+        if response is not None and response.status_code == 404:
+            return OperationResult(success=False, message="not_found", error="Recording not found")
+        return OperationResult(success=False, error=self._client.parse_api_error(response))
+
+    def delete_recording(self, recording_id: int) -> OperationResult:
+        """Remove a recording. Already gone counts as success."""
+        response = self._client.delete(f"/api/channels/recordings/{recording_id}/")
+        if response is not None and response.status_code in (200, 204, 404):
+            return OperationResult(success=True)
+        return OperationResult(success=False, error=self._client.parse_api_error(response))
+
     def delete_channel(self, channel_id: int) -> OperationResult:
         """Delete a channel from Dispatcharr.
 

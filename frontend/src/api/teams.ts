@@ -21,6 +21,7 @@ export interface Team {
   managed_channel_sync_status: string | null
   managed_channel_sync_message: string | null
   managed_channel_lifecycle: "persistent" | "game_days" | null
+  managed_channel_record: boolean
   created_at: string
   updated_at: string
 }
@@ -55,6 +56,7 @@ export interface TeamUpdate {
   active?: boolean | null
   managed_channel_enabled?: boolean | null
   managed_channel_number?: number | null
+  managed_channel_record?: boolean | null
   primary_league?: string | null
   leagues?: string[] | null
 }
