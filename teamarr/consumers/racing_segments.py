@@ -71,8 +71,8 @@ SESSION_DURATION_HOURS = {
 # Per-league fallback race durations (hours), for endurance series whose
 # typical race length differs significantly from the global "racing" sport
 # default. Used when the race name doesn't encode an explicit duration (see
-# _parse_duration_from_name) - e.g. IMSA sprint races and WEC's "Petit
-# Le Mans" / "Prologue" rounds.
+# _parse_duration_from_name) - e.g. IMSA sprint races and WEC's "Prologue"
+# rounds.
 LEAGUE_RACE_DURATION_HOURS = {
     "wec": 6.0,
     "imsa": 2.75,

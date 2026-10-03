@@ -288,8 +288,13 @@ class TestParseDurationFromName:
 
     def test_no_duration_in_name(self):
         assert _parse_duration_from_name("Rolex 24 At Daytona") is None
-        assert _parse_duration_from_name("Petit Le Mans") is None
         assert _parse_duration_from_name("Battle on the Bricks") is None
+
+    def test_named_endurance_classics(self):
+        # "Petit Le Mans" encodes no "<N> Hours" but IS a dated 10h round
+        # (#946); the named map resolves it before any league fallback.
+        assert _parse_duration_from_name("Petit Le Mans") == 10.0
+        assert _parse_duration_from_name("Motul Petit Le Mans") == 10.0
 
     def test_none_name(self):
         assert _parse_duration_from_name(None) is None
@@ -306,7 +311,9 @@ class TestSessionDurationHours:
         assert twelve == 12.0
 
     def test_league_fallback_when_name_has_no_duration(self):
-        assert _session_duration_hours("race", {}, "wec", "Petit Le Mans") == 6.0
+        # "Petit Le Mans" is a dated 10h name (#946) and no longer reaches
+        # the fallback; genuinely undated names keep their league defaults.
+        assert _session_duration_hours("race", {}, "wec", "WEC Prologue") == 6.0
         assert _session_duration_hours("race", {}, "imsa", "Battle on the Bricks") == 2.75
 
     def test_sport_default_for_other_leagues(self):
