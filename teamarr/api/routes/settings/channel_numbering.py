@@ -64,6 +64,15 @@ def update_channel_numbering_settings(update: ChannelNumberingSettingsUpdate):
             detail="channel_gap_size must be >= 1",
         )
 
+    if update.channel_order_mode is not None and update.channel_order_mode not in (
+        "sport_league",
+        "start_time",
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid channel_order_mode. Valid: sport_league, start_time",
+        )
+
     if update.channel_daily_reset_time is not None:
         if not _valid_hhmm(update.channel_daily_reset_time):
             raise HTTPException(
@@ -81,6 +90,7 @@ def update_channel_numbering_settings(update: ChannelNumberingSettingsUpdate):
             channel_gap_size=update.channel_gap_size,
             channel_daily_reset_enabled=update.channel_daily_reset_enabled,
             channel_daily_reset_time=update.channel_daily_reset_time,
+            channel_order_mode=update.channel_order_mode,
         )
 
     with get_db() as conn:

@@ -175,6 +175,8 @@ export interface ChannelNumberingSettings {
   global_consolidation_mode: "consolidate" | "separate"
   channel_stability_mode: ChannelStabilityMode
   channel_gap_size: number
+  /** What leads the order inside a block (#934). */
+  channel_order_mode: "sport_league" | "start_time"
   channel_daily_reset_enabled: boolean
   channel_daily_reset_time: string
   // One-shot re-grid armed for the next generation (read-only; set via relayout endpoint)
@@ -187,6 +189,7 @@ export interface ChannelNumberingSettingsUpdate {
   global_consolidation_mode?: "consolidate" | "separate"
   channel_stability_mode?: ChannelStabilityMode
   channel_gap_size?: number
+  channel_order_mode?: "sport_league" | "start_time"
   channel_daily_reset_enabled?: boolean
   channel_daily_reset_time?: string
 }

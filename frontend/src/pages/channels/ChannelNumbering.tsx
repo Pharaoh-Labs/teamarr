@@ -47,6 +47,7 @@ export function ChannelNumbering() {
     global_consolidation_mode: "consolidate",
     channel_stability_mode: "compact",
     channel_gap_size: 3,
+    channel_order_mode: "sport_league",
     channel_daily_reset_enabled: true,
     channel_daily_reset_time: "04:00",
     force_channel_relayout_pending: false,
@@ -118,6 +119,7 @@ export function ChannelNumbering() {
           global_consolidation_mode: channelNumbering.global_consolidation_mode,
           channel_stability_mode: channelNumbering.channel_stability_mode,
           channel_gap_size: channelNumbering.channel_gap_size,
+          channel_order_mode: channelNumbering.channel_order_mode,
           channel_daily_reset_enabled: channelNumbering.channel_daily_reset_enabled,
           channel_daily_reset_time: channelNumbering.channel_daily_reset_time,
         }),
@@ -324,6 +326,27 @@ export function ChannelNumbering() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div className="space-y-1.5 max-w-md">
+            <Label htmlFor="channel-order-mode">Channel order</Label>
+            <Select
+              id="channel-order-mode"
+              value={channelNumbering.channel_order_mode ?? "sport_league"}
+              onChange={(e) =>
+                setChannelNumbering({
+                  ...channelNumbering,
+                  channel_order_mode: e.target.value as ChannelNumberingSettings["channel_order_mode"],
+                })
+              }
+            >
+              <option value="sport_league">Sport &amp; League order, then start time</option>
+              <option value="start_time">Start time, then Sport &amp; League order</option>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Start time first lists every block in the order games begin. Numbers then move
+              more often as games come and go: a game starting earlier pushes every later
+              channel down. Priority teams marked &quot;everything&quot; still come first.
+            </p>
+          </div>
           <div className="space-y-3">
             <RadioCards
               name="channel-stability-mode"

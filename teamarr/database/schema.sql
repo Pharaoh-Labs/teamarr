@@ -543,6 +543,11 @@ CREATE TABLE IF NOT EXISTS settings (
     channel_stability_mode TEXT DEFAULT 'compact'
         CHECK(channel_stability_mode IN ('compact', 'gap', 'strict')),
     channel_gap_size INTEGER DEFAULT 3,                 -- Spacing between channels in 'gap' mode (1 = none)
+    -- (#934) What leads the channel order inside a block: 'sport_league' (Sport &
+    -- League order, then start time — the only behaviour before this setting) or
+    -- 'start_time' (start time, then Sport & League order). Opt-in; validated in
+    -- update_channel_numbering_settings, not by a CHECK.
+    channel_order_mode TEXT DEFAULT 'sport_league',
     channel_daily_reset_enabled BOOLEAN DEFAULT 1,      -- Run the periodic full re-layout (gap/strict only)
     channel_daily_reset_time TEXT DEFAULT '04:00',      -- Local HH:MM low-traffic window for the reset
     last_channel_reset_at TEXT,                          -- Internal: timestamp of last full reset

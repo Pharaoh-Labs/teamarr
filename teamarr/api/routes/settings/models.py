@@ -357,6 +357,7 @@ class ChannelNumberingSettingsModel(BaseModel):
     global_consolidation_mode: str = "consolidate"  # 'consolidate', 'separate'
     channel_stability_mode: str = "compact"  # 'compact', 'gap', 'strict'
     channel_gap_size: int = 3
+    channel_order_mode: str = "sport_league"  # 'sport_league', 'start_time' (#934)
     channel_daily_reset_enabled: bool = True
     channel_daily_reset_time: str = "04:00"
     force_channel_relayout_pending: bool = False  # one-shot re-grid armed for next run
@@ -370,6 +371,7 @@ class ChannelNumberingSettingsUpdate(BaseModel):
     global_consolidation_mode: str | None = None
     channel_stability_mode: str | None = None
     channel_gap_size: int | None = None
+    channel_order_mode: str | None = None
     channel_daily_reset_enabled: bool | None = None
     channel_daily_reset_time: str | None = None
 

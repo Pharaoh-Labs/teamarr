@@ -285,6 +285,9 @@ def update_team_filter_settings(
     return _apply(conn, "team_filter", provided)
 
 
+CHANNEL_ORDER_MODES = ("sport_league", "start_time")
+
+
 def update_channel_numbering_settings(
     conn: Connection,
     global_channel_mode: str | None = None,
@@ -294,6 +297,7 @@ def update_channel_numbering_settings(
     channel_gap_size: int | None = None,
     channel_daily_reset_enabled: bool | None = None,
     channel_daily_reset_time: str | None = None,
+    channel_order_mode: str | None = None,
 ) -> bool:
     """Update channel numbering and consolidation settings.
 
@@ -319,6 +323,9 @@ def update_channel_numbering_settings(
     ):
         logger.warning("[CHANNEL_NUM] Invalid channel_stability_mode '%s'", channel_stability_mode)
         return False
+    if channel_order_mode is not None and channel_order_mode not in CHANNEL_ORDER_MODES:
+        logger.warning("[CHANNEL_NUM] Invalid channel_order_mode '%s'", channel_order_mode)
+        return False
 
     provided = _skip_none(
         global_channel_mode=global_channel_mode,
@@ -328,6 +335,7 @@ def update_channel_numbering_settings(
         channel_gap_size=max(1, int(channel_gap_size)) if channel_gap_size is not None else None,
         channel_daily_reset_enabled=channel_daily_reset_enabled,
         channel_daily_reset_time=channel_daily_reset_time,
+        channel_order_mode=channel_order_mode,
     )
     if not provided:
         return False
@@ -339,11 +347,13 @@ def update_channel_numbering_settings(
     # unrelated save (the UI full-PUTs the whole settings object).
     arm_relayout = False
     clear_pending = False
-    if channel_gap_size is not None or channel_stability_mode is not None:
+    if (
+        channel_gap_size is not None
+        or channel_stability_mode is not None
+        or channel_order_mode is not None
+    ):
         try:
-            cur = conn.execute(
-                "SELECT channel_stability_mode, channel_gap_size FROM settings WHERE id = 1"
-            ).fetchone()
+            cur = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
             cur_mode = (cur["channel_stability_mode"] if cur else None) or "compact"
             cur_gap = int((cur["channel_gap_size"] if cur else None) or 3)
             new_mode = channel_stability_mode or cur_mode
@@ -351,7 +361,16 @@ def update_channel_numbering_settings(
             mode_changed = (
                 channel_stability_mode is not None and channel_stability_mode != cur_mode
             )
-            arm_relayout = (gap_changed or mode_changed) and new_mode in ("gap", "strict")
+            # A new order (#934) is a layout change like any other: in the
+            # sticky modes locked channels keep their numbers until re-laid out.
+            cur_order = (
+                cur["channel_order_mode"] if cur and "channel_order_mode" in cur.keys() else None
+            ) or "sport_league"
+            order_changed = channel_order_mode is not None and channel_order_mode != cur_order
+            arm_relayout = (gap_changed or mode_changed or order_changed) and new_mode in (
+                "gap",
+                "strict",
+            )
             # Leaving the sticky modes: drop any armed re-grid so it doesn't
             # linger as stale queued state (compact re-sorts every run anyway).
             clear_pending = mode_changed and new_mode == "compact"
