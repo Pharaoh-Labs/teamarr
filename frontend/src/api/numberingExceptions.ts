@@ -7,6 +7,9 @@ import { api } from "./client"
 
 export type NumberingScope = "team" | "league" | "sport"
 
+// Season condition on a block (#950): null = any season.
+export type NumberingSeason = "preseason" | "regular" | "postseason"
+
 export interface NumberingException {
   id: number
   scope: NumberingScope
@@ -20,6 +23,9 @@ export interface NumberingException {
   label: string | null
   sort_order: number
   enabled: boolean
+  season_type: string | null
+  channel_group_id: number | null
+  channel_group_mode: string | null
   display_name: string | null
   channel_count: number
 }
@@ -34,6 +40,8 @@ export interface NumberingExceptionCreate {
   provider?: string | null
   team_id?: string | null
   team_league?: string | null
+  season_type?: string | null
+  channel_group_mode?: string | null
 }
 
 export interface NumberingExceptionUpdate {
@@ -43,6 +51,12 @@ export interface NumberingExceptionUpdate {
   label?: string | null
   clear_label?: boolean
   enabled?: boolean
+  // Replaced only when the matching set_* flag is true (null clears).
+  season_type?: string | null
+  set_season_type?: boolean
+  channel_group_id?: number | null
+  channel_group_mode?: string | null
+  set_channel_group?: boolean
 }
 
 export interface LanePreview {

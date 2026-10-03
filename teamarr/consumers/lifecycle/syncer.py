@@ -147,6 +147,13 @@ class ChannelSyncer(_LifecycleHost):
                         effective_group_id = lc.channel_group_id
                     if lc.channel_group_mode is not None:
                         effective_group_mode = lc.channel_group_mode
+            # A pinned block's own group outranks both (#950) — same call as
+            # the create path, or the channel would flip groups every run.
+            block_group = self._pinned_block_group(event)
+            if block_group is not None:
+                if block_group[0] is not None:
+                    effective_group_id = block_group[0]
+                effective_group_mode = block_group[1]
 
             # Resolve dynamic group ID (creates group in Dispatcharr if needed)
             new_group_id = self._dynamic_resolver.resolve_channel_group(
@@ -252,6 +259,15 @@ class ChannelSyncer(_LifecycleHost):
                 if expected_end_str != stored_end_str:
                     db_updates["event_end_estimate"] = expected_end_str
                     changes_made.append("event_end_estimate updated")
+
+            # Keep the stored season type current (#950): re-layout resolves
+            # season-conditioned pinned blocks from the row, and channels
+            # created before the column existed have none. A provider answer
+            # of None (soccer summary refresh) never blanks a stored value.
+            event_season = getattr(event, "season_type", None)
+            if event_season and event_season != getattr(existing, "season_type", None):
+                db_updates["season_type"] = event_season
+                changes_made.append("season_type updated")
 
             # Apply Dispatcharr updates (closed-loop: only persist DB on success)
             if update_data:

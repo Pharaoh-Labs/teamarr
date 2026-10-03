@@ -901,6 +901,10 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     away_team_logo TEXT,
     event_date TIMESTAMP,                    -- Event start time (UTC)
     event_name TEXT,
+    -- Event season type (#950): season-conditioned pinned blocks resolve from
+    -- the stored row on re-layout. NULL = unknown (pre-column rows, providers
+    -- that do not report one) and matches no season condition.
+    season_type TEXT,
     league TEXT,
     sport TEXT,
     venue TEXT,
@@ -1072,7 +1076,16 @@ CREATE TABLE IF NOT EXISTS numbering_exceptions (
     "end" INTEGER,                           -- NULL = spill forward; set = overflow to default lane
     label TEXT,                              -- group label (rows sharing start + label)
     sort_order INTEGER NOT NULL DEFAULT 0,   -- tie-break within a precedence level (UI drag order)
-    enabled BOOLEAN DEFAULT 1
+    enabled BOOLEAN DEFAULT 1,
+
+    -- Season condition (#950): NULL = any. Set = the pin applies only to events
+    -- of that season type and outranks an unconditioned pin of the same scope.
+    season_type TEXT,                        -- 'preseason' | 'regular' | 'postseason' | 'offseason'
+    -- Output channel group for channels in this block (#950). Same shape as the
+    -- global/per-league pair: a static id, or a pattern ("09 TEAMARR {league}")
+    -- in channel_group_mode. Both NULL = the subscription's group applies.
+    channel_group_id INTEGER,
+    channel_group_mode TEXT
 );
 
 

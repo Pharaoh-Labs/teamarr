@@ -6,10 +6,17 @@ A *pinned block* numbers a scope's channels from a fixed start: a team
 World Cup + Olympics at 850). Everything unmatched numbers from the global
 channel range — the *default lane*.
 
-Every channel resolves to exactly one lane via :func:`resolve_lane`:
+Every channel resolves to exactly one lane via :meth:`LaneResolver.resolve`:
 most specific wins (home-team pin › away-team pin › league › sport ›
 default). Resolution reads only fields that never change during an event, so
 a channel's lane is stable for its lifetime.
+
+A pin may carry a *season condition* (#950): it then applies only to events
+of that season type ("NBA postseason at 900") and outranks an unconditioned
+pin of the same scope; when the season does not match it is skipped and
+resolution falls through to the next scope or the default lane. A pin may
+also name the output channel group for the channels it holds, which keeps the
+number range and the group in step.
 
 A start belongs to one block. Two rows may share a start only as members of
 the same named group — the lane is keyed on ``start``, so an ungrouped
@@ -31,6 +38,7 @@ from sqlite3 import Connection
 logger = logging.getLogger(__name__)
 
 SCOPES = ("team", "league", "sport")
+SEASON_TYPES = ("preseason", "regular", "postseason", "offseason")
 
 # Precedence rank per scope — lower wins. Team pins are split by which side
 # matched so a home-team pin beats an away-team pin when both are pinned.
@@ -77,6 +85,13 @@ class NumberingException:
     enabled: bool = True
     created_at: str | None = None
     updated_at: str | None = None
+    season_type: str | None = None
+    channel_group_id: int | None = None
+    channel_group_mode: str | None = None
+
+    @property
+    def has_channel_group(self) -> bool:
+        return self.channel_group_id is not None or bool(self.channel_group_mode)
 
     @property
     def lane(self) -> Lane:
@@ -85,7 +100,8 @@ class NumberingException:
 
 _COLUMNS = (
     'id, scope, sport, league_code, team_name, provider, provider_team_id, '
-    'start, "end", label, sort_order, enabled, created_at, updated_at'
+    'start, "end", label, sort_order, enabled, created_at, updated_at, '
+    "season_type, channel_group_id, channel_group_mode"
 )
 
 
@@ -105,6 +121,9 @@ def _row_to_exception(row: sqlite3.Row) -> NumberingException:
         enabled=bool(row["enabled"]) if row["enabled"] is not None else True,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        season_type=row["season_type"] or None,
+        channel_group_id=row["channel_group_id"],
+        channel_group_mode=row["channel_group_mode"] or None,
     )
 
 
@@ -169,9 +188,13 @@ def _next_sort_order(conn: Connection) -> int:
     return int(row[0]) if row else 0
 
 
-def _validate(scope: str, start: int, end: int | None) -> str | None:
+def _validate(
+    scope: str, start: int, end: int | None, season_type: str | None = None
+) -> str | None:
     if scope not in SCOPES:
         return f"invalid scope '{scope}'"
+    if season_type is not None and season_type not in SEASON_TYPES:
+        return f"invalid season_type '{season_type}'"
     if start < 1:
         return "start must be >= 1"
     if end is not None and end < start:
@@ -222,6 +245,9 @@ def add_numbering_exception(
     team_league: str | None = None,
     end: int | None = None,
     label: str | None = None,
+    season_type: str | None = None,
+    channel_group_id: int | None = None,
+    channel_group_mode: str | None = None,
 ) -> NumberingException | None:
     """Add a pinned block.
 
@@ -236,7 +262,8 @@ def add_numbering_exception(
     Raises :class:`StartConflict` when ``start`` is taken by a block outside
     the group ``label``.
     """
-    err = _validate(scope, start, end)
+    season_type = (season_type or "").strip().lower() or None
+    err = _validate(scope, start, end, season_type)
     if err:
         logger.warning("[NUMBERING_EXC] %s", err)
         return None
@@ -300,13 +327,15 @@ def add_numbering_exception(
         """
         INSERT INTO numbering_exceptions
             (scope, sport, league_code, team_name, provider, provider_team_id,
-             start, "end", label, sort_order)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             start, "end", label, sort_order,
+             season_type, channel_group_id, channel_group_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scope, sport, league_code, team_name, provider, provider_team_id,
             int(start), int(end) if end is not None else None,
             (label or "").strip() or None, _next_sort_order(conn),
+            season_type, channel_group_id, (channel_group_mode or "").strip() or None,
         ),
     )
     _arm_relayout(conn)
@@ -327,10 +356,14 @@ def update_numbering_exception(
     end: int | None | object = ...,
     label: str | None | object = ...,
     enabled: bool | None = None,
+    season_type: str | None | object = ...,
+    channel_group_id: int | None | object = ...,
+    channel_group_mode: str | None | object = ...,
 ) -> NumberingException | None:
-    """Update a block's range / label / enabled flag. Scope and identity are
-    immutable — delete and re-add to re-scope. ``end`` / ``label`` accept
-    ``None`` to clear; leave at the default sentinel to keep."""
+    """Update a block's range / label / enabled flag / season condition /
+    channel group. Scope and identity are immutable — delete and re-add to
+    re-scope. ``end``, ``label``, ``season_type`` and the channel group fields
+    accept ``None`` to clear; leave at the default sentinel to keep."""
     current = get_numbering_exception(conn, exception_id)
     if current is None:
         return None
@@ -339,10 +372,24 @@ def update_numbering_exception(
         new_end = current.end
     else:
         new_end = int(end) if isinstance(end, int) else None
-    err = _validate(current.scope, new_start, new_end)
+    if season_type is ...:
+        new_season = current.season_type
+    else:
+        new_season = (season_type.strip().lower() or None) if isinstance(season_type, str) else None
+    err = _validate(current.scope, new_start, new_end, new_season)
     if err:
         logger.warning("[NUMBERING_EXC] %s", err)
         return None
+    if channel_group_id is ...:
+        new_group_id = current.channel_group_id
+    else:
+        new_group_id = int(channel_group_id) if isinstance(channel_group_id, int) else None
+    if channel_group_mode is ...:
+        new_group_mode = current.channel_group_mode
+    else:
+        new_group_mode = (
+            (channel_group_mode.strip() or None) if isinstance(channel_group_mode, str) else None
+        )
     if label is ...:
         new_label = current.label
     else:
@@ -353,10 +400,15 @@ def update_numbering_exception(
     conn.execute(
         """
         UPDATE numbering_exceptions
-        SET start = ?, "end" = ?, label = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+        SET start = ?, "end" = ?, label = ?, enabled = ?,
+            season_type = ?, channel_group_id = ?, channel_group_mode = ?,
+            updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
-        (new_start, new_end, new_label, int(new_enabled), exception_id),
+        (
+            new_start, new_end, new_label, int(new_enabled),
+            new_season, new_group_id, new_group_mode, exception_id,
+        ),
     )
     _arm_relayout(conn)
     return get_numbering_exception(conn, exception_id)
@@ -383,10 +435,13 @@ class LaneResolver:
     Built once per allocation pass (``LaneResolver.load(conn)``) so resolving
     hundreds of channels costs no queries. ``default`` is the global range lane.
 
-    Within one precedence level a channel can only match one row (one league,
-    one sport, one home team, one away team), so the ``(sort_order, id)``
-    ordering below is just a deterministic fallback for legacy rows that were
-    created before starts became unique per group.
+    Within one precedence level a channel matches at most one row per season
+    condition (one league, one sport, one home team, one away team); a row
+    whose condition names the channel's season outranks the unconditioned row
+    of the same level (#950), and a row whose condition names another season
+    is not a candidate at all. The ``(sort_order, id)`` ordering is a
+    deterministic fallback for legacy rows created before starts became
+    unique per group.
     """
 
     def __init__(self, exceptions: list[NumberingException], default: Lane):
@@ -433,26 +488,46 @@ class LaneResolver:
         league: str | None,
         home_team: str | None = None,
         away_team: str | None = None,
+        season_type: str | None = None,
     ) -> Lane:
         """Most-specific-wins lane for one channel; default when nothing matches."""
+        e = self.match(sport, league, home_team, away_team, season_type)
+        return self.lane_for(e) if e is not None else self.default
+
+    def match(
+        self,
+        sport: str | None,
+        league: str | None,
+        home_team: str | None = None,
+        away_team: str | None = None,
+        season_type: str | None = None,
+    ) -> NumberingException | None:
+        """The pinned-block row a channel resolves to, or None for the default lane.
+
+        ``season_type`` None (unknown) satisfies no season condition, so such
+        a channel can only land on unconditioned pins.
+        """
         if not self._exceptions:
-            return self.default
+            return None
         s = (sport or "").lower()
-        candidates: list[tuple[int, int, int, NumberingException]] = []
+        season = (season_type or "").lower() or None
+        candidates: list[tuple[int, int, int, int, NumberingException]] = []
 
         def consider(rank: int, lst: list[NumberingException] | None) -> None:
-            if lst:
-                e = lst[0]
-                candidates.append((rank, e.sort_order, e.id, e))
+            for e in lst or ():
+                if e.season_type is None:
+                    candidates.append((rank, 1, e.sort_order, e.id, e))
+                elif e.season_type == season:
+                    candidates.append((rank, 0, e.sort_order, e.id, e))
 
         consider(_RANK_TEAM_HOME, self._teams.get((s, (home_team or "").lower())))
         consider(_RANK_TEAM_AWAY, self._teams.get((s, (away_team or "").lower())))
         consider(_RANK_LEAGUE, self._leagues.get((s, (league or "").lower())))
         consider(_RANK_SPORT, self._sports.get(s))
         if not candidates:
-            return self.default
-        candidates.sort(key=lambda c: c[:3])
-        return self.lane_for(candidates[0][3])
+            return None
+        candidates.sort(key=lambda c: c[:4])
+        return candidates[0][4]
 
     def lane_for(self, e: NumberingException) -> Lane:
         """The (possibly shared, grouped) lane a pinned-block row belongs to."""

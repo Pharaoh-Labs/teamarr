@@ -59,6 +59,8 @@ class ManagedChannel:
     # event_date + sport duration, which can't see sessions. None = unknown
     # (pre-column rows) → recalc falls back to the naive derivation.
     event_end_estimate: datetime | None = None
+    # (#950) Event season type; season-conditioned pinned blocks read it on re-layout.
+    season_type: str | None = None
     scheduled_delete_at: datetime | None = None
     deleted_at: datetime | None = None
     delete_reason: str | None = None
@@ -112,6 +114,7 @@ class ManagedChannel:
             league=row.get("league"),
             sport=row.get("sport"),
             event_end_estimate=row.get("event_end_estimate"),
+            season_type=row.get("season_type"),
             scheduled_delete_at=row.get("scheduled_delete_at"),
             deleted_at=row.get("deleted_at"),
             delete_reason=row.get("delete_reason"),

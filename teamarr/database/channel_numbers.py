@@ -339,6 +339,7 @@ def get_next_channel_number(
     sport: str | None = None,
     home_team: str | None = None,
     away_team: str | None = None,
+    season_type: str | None = None,
 ) -> int | None:
     """Get the next available channel number for a new channel.
 
@@ -360,7 +361,7 @@ def get_next_channel_number(
     from teamarr.database.numbering_exceptions import LaneResolver
 
     resolver = LaneResolver.load(conn, _default_lane(conn))
-    lane = resolver.resolve(sport, league, home_team, away_team)
+    lane = resolver.resolve(sport, league, home_team, away_team, season_type)
 
     used_set = _get_all_used_channels(conn)
     if external_occupied:
@@ -457,6 +458,11 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         if _table_has_column(conn, "managed_channels", "channel_number_locked")
         else "0 AS channel_number_locked"
     )
+    season_col = (
+        "mc.season_type"
+        if _table_has_column(conn, "managed_channels", "season_type")
+        else "NULL AS season_type"
+    )
     plugin_clause = (
         " OR mc.plugin_id IS NOT NULL"
         if _table_has_column(conn, "managed_channels", "plugin_id")
@@ -478,7 +484,8 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
             mc.away_team,
             mc.event_date,
             mc.exception_keyword,
-            mc.created_at
+            mc.created_at,
+            {season_col}
         FROM managed_channels mc
         LEFT JOIN event_epg_groups g ON mc.event_epg_group_id = g.id
         WHERE (g.enabled = 1 OR mc.event_epg_group_id IS NULL{plugin_clause})
@@ -504,6 +511,7 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
                 "event_date": row["event_date"],
                 "exception_keyword": row["exception_keyword"],
                 "created_at": row["created_at"],
+                "season_type": row["season_type"],
             }
         )
 
@@ -615,7 +623,11 @@ def reassign_all_channels(
     by_lane: dict[int | None, list[dict]] = {lane.id: [] for lane in lanes}
     for ch in sorted_channels:
         lane = resolver.resolve(
-            ch.get("sport"), ch.get("league"), ch.get("home_team"), ch.get("away_team")
+            ch.get("sport"),
+            ch.get("league"),
+            ch.get("home_team"),
+            ch.get("away_team"),
+            ch.get("season_type"),
         )
         by_lane[lane.id].append(ch)
 

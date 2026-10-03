@@ -40,7 +40,17 @@ import type { TeamFilterEntry } from "@/api/types"
  * server rejects any other collision). Most specific wins (team › league ›
  * sport). Everything unmatched numbers from the global range. Edits arm a
  * re-grid in sticky modes, so the change lands on the next generation.
+ *
+ * A block may be limited to one season type and may name the channel group its
+ * channels go to (#950) — "NBA postseason at 900, in 09 TEAMARR {league}".
  */
+
+const SEASON_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Any season" },
+  { value: "preseason", label: "Preseason" },
+  { value: "regular", label: "Regular season" },
+  { value: "postseason", label: "Postseason" },
+]
 
 const SCOPE_LABEL: Record<NumberingScope, string> = {
   team: "Team",
@@ -93,6 +103,34 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
     }
   }
 
+  const onSeasonChange = async (b: NumberingException, value: string) => {
+    try {
+      await update.mutateAsync({
+        id: b.id,
+        data: { season_type: value || null, set_season_type: true },
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update season")
+    }
+  }
+
+  const onGroupBlur = async (b: NumberingException, raw: string) => {
+    const v = raw.trim()
+    if (v === (b.channel_group_mode ?? "")) return
+    try {
+      await update.mutateAsync({
+        id: b.id,
+        data: {
+          channel_group_mode: v || null,
+          channel_group_id: v ? b.channel_group_id : null,
+          set_channel_group: true,
+        },
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update channel group")
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -106,7 +144,9 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
               anywhere — above, below, or inside the Everything Else range ({rangeStart}+),
               which flows around it. Most specific wins: Team › League › Sport. Each start
               belongs to one block — to put a team first inside its league&apos;s block, use
-              Priority Teams above. Blocks spill forward if they fill up.
+              Priority Teams above. Blocks spill forward if they fill up. A block can be
+              limited to one season (playoffs only, say) and can send its channels to its
+              own channel group.
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -155,6 +195,26 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                     {` · ${b.channel_count} channel${b.channel_count === 1 ? "" : "s"} today`}
                   </div>
                 </div>
+                <Select
+                  value={b.season_type ?? ""}
+                  onChange={(e) => onSeasonChange(b, e.target.value)}
+                  className="w-36 h-8"
+                  aria-label="Season"
+                >
+                  {SEASON_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  defaultValue={b.channel_group_mode ?? ""}
+                  key={`group-${b.id}-${b.channel_group_mode ?? ""}`}
+                  className="w-48 h-8"
+                  placeholder="Channel group pattern"
+                  onBlur={(e) => onGroupBlur(b, e.target.value)}
+                  aria-label="Channel group pattern"
+                />
                 <Switch
                   checked={b.enabled}
                   onCheckedChange={(v) => onToggle(b, v)}
@@ -263,6 +323,8 @@ function AddBlockDialog({
   const [end, setEnd] = useState("")
   const [label, setLabel] = useState("")
   const [showEnd, setShowEnd] = useState(false)
+  const [season, setSeason] = useState("")
+  const [groupPattern, setGroupPattern] = useState("")
 
   const reset = () => {
     setScope("team")
@@ -273,6 +335,8 @@ function AddBlockDialog({
     setEnd("")
     setLabel("")
     setShowEnd(false)
+    setSeason("")
+    setGroupPattern("")
   }
 
   // Joining an existing group pre-fills its start.
@@ -303,6 +367,8 @@ function AddBlockDialog({
         provider: scope === "team" ? team[0].provider : null,
         team_id: scope === "team" ? team[0].team_id : null,
         team_league: scope === "team" ? team[0].league : null,
+        season_type: season || null,
+        channel_group_mode: groupPattern.trim() || null,
       })
       toast.success("Block added — re-grid queued for the next generation")
       reset()
@@ -415,6 +481,33 @@ function AddBlockDialog({
           <p className="text-xs text-muted-foreground -mt-2">
             Each start belongs to one block. To share a block between several teams, leagues,
             or sports, give them the same group name and start.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="pin-season">Season</Label>
+              <Select id="pin-season" value={season} onChange={(e) => setSeason(e.target.value)}>
+                {SEASON_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pin-group-pattern">Channel group (optional)</Label>
+              <Input
+                id="pin-group-pattern"
+                value={groupPattern}
+                onChange={(e) => setGroupPattern(e.target.value)}
+                placeholder="e.g. 09 TEAMARR {league}"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            A season limits the block to those games; the rest number as if the block were
+            not there. A channel group pattern (with {"{sport}"} or {"{league}"}) overrides the
+            group these channels would otherwise use.
           </p>
 
           {showEnd ? (
