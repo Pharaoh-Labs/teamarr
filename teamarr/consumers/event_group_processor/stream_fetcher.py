@@ -141,7 +141,7 @@ class StreamFetcher:
             return []
 
         if getattr(group, "is_channel_source", False):
-            return self._fetch_channel_source_streams()
+            return self._fetch_channel_source_streams(group)
 
         try:
             m3u_manager = self._dispatcharr_client.m3u
@@ -229,8 +229,13 @@ class StreamFetcher:
                     streams.append(s)
         return streams
 
-    def _fetch_channel_source_streams(self) -> list[dict]:
+    def _fetch_channel_source_streams(self, group: EventEPGGroup | None = None) -> list[dict]:
         """Build EPG-match candidates from streams curated onto Dispatcharr channels.
+
+        ``group`` is the channel-source row being processed. A row bound to one
+        Dispatcharr channel group (#542) reads only that group's channels; the
+        catch-all row (or no row) reads the groups selected in settings, or
+        every group when none are selected.
 
         Epic 183.9. For each Dispatcharr channel that (a) carries an active,
         non-``_Teamarr`` EPG link and (b) is NOT one of Teamarr's own managed
@@ -286,6 +291,12 @@ class StreamFetcher:
                 }
         except Exception as e:
             logger.warning("[CHANNEL_SOURCE] Failed to load group ids: %s", e)
+        # A per-group row (#542) reads its own Dispatcharr group and nothing
+        # else — set outside the try so a settings failure cannot widen it to
+        # every group.
+        row_group = getattr(group, "dispatcharr_channel_group_id", None)
+        if row_group is not None:
+            selected_groups = {int(row_group)}
 
         # DP channel group id -> name (#379). The channels API returns only
         # channel_group_id; the name (which dispatcharr_group ordering rules

@@ -306,3 +306,125 @@ def test_managed_ids_passed_as_map_exclusion(monkeypatch):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ---------------------------------------------------------------------------
+# One source row per Dispatcharr channel group (#542)
+# ---------------------------------------------------------------------------
+
+
+def _sources(conn):
+    return {
+        g.dispatcharr_channel_group_id: g
+        for g in get_all_groups(conn, include_disabled=True)
+        if g.is_channel_source
+    }
+
+
+def test_one_row_per_selected_group(db_conn):
+    first = ensure_channel_source_group(
+        db_conn, True, selected_group_ids=[1222, 470], group_names={470: "NFL Local", 1222: "US"}
+    )
+    rows = _sources(db_conn)
+    assert set(rows) == {470, 1222}
+    assert first == rows[470].id  # lowest selected group
+    assert rows[470].name == "Dispatcharr Channels: NFL Local"
+    for g in rows.values():
+        assert g.enabled and g.epg_match_enabled and not g.name_match_enabled
+
+    # Idempotent
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470, 1222])
+    assert len(_sources(db_conn)) == 2
+
+
+def test_existing_hidden_row_is_adopted_not_replaced(db_conn):
+    """Upgrade path: the pre-#542 row keeps its id (and so its channels)."""
+    hidden = ensure_channel_source_group(db_conn, True, selected_group_ids=[])
+    assert _sources(db_conn)[None].id == hidden
+
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470, 1222])
+    rows = _sources(db_conn)
+    assert set(rows) == {470, 1222}
+    assert rows[470].id == hidden
+
+
+def test_deselected_group_is_disabled_and_keeps_its_scope(db_conn):
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470, 1222])
+    scoped = _sources(db_conn)[470].id
+    db_conn.execute(
+        "UPDATE event_epg_groups SET subscription_leagues = ? WHERE id = ?", ('["nfl"]', scoped)
+    )
+
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[1222])
+    rows = _sources(db_conn)
+    assert rows[470].enabled is False and rows[1222].enabled is True
+
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470, 1222])
+    back = _sources(db_conn)[470]
+    assert back.id == scoped and back.enabled is True
+    assert back.subscription_leagues == ["nfl"]
+
+
+def test_clearing_the_selection_falls_back_to_one_catch_all_row(db_conn):
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470])
+    catch_all = ensure_channel_source_group(db_conn, True, selected_group_ids=[])
+    rows = _sources(db_conn)
+    assert rows[None].id == catch_all and rows[None].enabled is True
+    assert rows[470].enabled is False
+
+
+def test_setting_off_disables_every_row(db_conn):
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470, 1222])
+    ensure_channel_source_group(db_conn, False, selected_group_ids=[470, 1222])
+    assert not any(g.enabled for g in _sources(db_conn).values())
+
+
+def test_missing_group_name_keeps_the_stored_name(db_conn):
+    ensure_channel_source_group(
+        db_conn, True, selected_group_ids=[470], group_names={470: "NFL Local"}
+    )
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470], group_names={})
+    assert _sources(db_conn)[470].name == "Dispatcharr Channels: NFL Local"
+
+
+def test_row_reads_only_its_own_dispatcharr_group(monkeypatch):
+    proc = _make_processor(
+        stream_channel_map={
+            500: {"id": 100, "epg_data_id": 1, "name": "CBS Detroit", "channel_group_id": 470},
+            501: {"id": 101, "epg_data_id": 1, "name": "ESPN", "channel_group_id": 1222},
+        },
+        epg_data_list=[{"id": 1, "tvg_id": "X.us", "epg_source": 10}],
+        streams=[_stream(500, "CBS Detroit", group_id=42), _stream(501, "ESPN", group_id=42)],
+        managed=[],
+        epg_groups=[],
+        monkeypatch=monkeypatch,
+    )
+    nfl_local = SimpleNamespace(is_channel_source=True, dispatcharr_channel_group_id=470)
+    catch_all = SimpleNamespace(is_channel_source=True, dispatcharr_channel_group_id=None)
+
+    assert [s["id"] for s in proc._fetch_channel_source_streams(nfl_local)] == [500]
+    assert sorted(s["id"] for s in proc._fetch_channel_source_streams(catch_all)) == [500, 501]
+
+
+def test_run_time_sync_builds_rows_from_settings(db_conn):
+    """The processor's own call, end to end: settings in, named rows out."""
+    db_conn.execute(
+        "UPDATE settings SET epg_channel_source_enabled = 1, epg_channel_source_groups = ?",
+        ("[470, 1222]",),
+    )
+    db_conn.commit()
+    proc = make_bare_processor(
+        _dispatcharr_client=SimpleNamespace(
+            m3u=SimpleNamespace(
+                list_groups=lambda: [SimpleNamespace(id=470, name="NFL Local")]
+            )
+        )
+    )
+
+    proc._sync_channel_source_rows(db_conn)
+
+    rows = _sources(db_conn)
+    assert set(rows) == {470, 1222}
+    assert rows[470].display_name == "Dispatcharr: NFL Local"
+    assert rows[1222].name == "Dispatcharr Channels: group 1222"
+    assert all(g.enabled for g in rows.values())

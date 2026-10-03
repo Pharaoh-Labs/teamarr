@@ -5,6 +5,7 @@ over all groups and post-processing enforcement. The heavy lifting lives in
 the sibling mixin modules; this module owns orchestration and shared state.
 """
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -139,6 +140,47 @@ class EventGroupProcessor(
             self._lifecycle_service.compute_external_occupied()
         return self._lifecycle_service
 
+    def _channel_source_group_names(self) -> dict[int, str]:
+        """Dispatcharr channel group id -> name, to label per-group source rows (#542).
+
+        Empty on any failure: a row then keeps the name it already has.
+        """
+        if not self._dispatcharr_client:
+            return {}
+        try:
+            return {g.id: g.name for g in self._dispatcharr_client.m3u.list_groups()}
+        except Exception as e:
+            logger.warning("[CHANNEL_SOURCE] Failed to list channel groups: %s", e)
+            return {}
+
+    def _sync_channel_source_rows(self, conn: Connection) -> None:
+        """Bring the channel-source rows in line with settings before a run (#542).
+
+        Never raises: a failure here must not stop the run, but it is logged
+        with its traceback — a swallowed error would silently leave the rows
+        as they were.
+        """
+        try:
+            from teamarr.database.groups import ensure_channel_source_group
+
+            row = conn.execute(
+                "SELECT epg_channel_source_enabled, epg_channel_source_groups "
+                "FROM settings WHERE id = 1"
+            ).fetchone()
+            enabled = bool(row and row["epg_channel_source_enabled"])
+            try:
+                selected = [int(g) for g in json.loads(row["epg_channel_source_groups"] or "[]")]
+            except (TypeError, ValueError):
+                selected = []
+            ensure_channel_source_group(
+                conn,
+                enabled,
+                selected_group_ids=selected,
+                group_names=self._channel_source_group_names() if enabled else None,
+            )
+        except Exception:
+            logger.exception("[CHANNEL_SOURCE] Failed to sync source rows")
+
     def _resolve_subscription_leagues(
         self, conn: Connection, group: "EventEPGGroup | None" = None
     ) -> list[str]:
@@ -267,21 +309,13 @@ class EventGroupProcessor(
         self._initial_reassign_done = False
 
         with self._db_factory() as conn:
-            # Sync the system-managed "Dispatcharr Channels" source group (183.9) to
-            # the global setting before loading groups. When enabled it joins the
-            # normal processing loop; when disabled it stays out and its channels are
-            # reaped by the disabled-group cleanup. (EPG matching is always available;
-            # only the channel-source toggle gates this system group.)
-            try:
-                from teamarr.database.groups import ensure_channel_source_group
-
-                _cs_row = conn.execute(
-                    "SELECT epg_channel_source_enabled FROM settings WHERE id = 1"
-                ).fetchone()
-                _channel_source_on = bool(_cs_row and _cs_row["epg_channel_source_enabled"])
-                ensure_channel_source_group(conn, _channel_source_on)
-            except Exception as e:
-                logger.warning("[CHANNEL_SOURCE] Failed to sync source group: %s", e)
+            # Sync the system-managed "Dispatcharr Channels" source rows (183.9) to
+            # the global setting before loading groups — one row per selected
+            # Dispatcharr channel group (#542). Enabled rows join the normal
+            # processing loop; disabled ones stay out and their channels are
+            # reaped by the disabled-group cleanup. (EPG matching is always
+            # available; only the channel-source toggle gates these rows.)
+            self._sync_channel_source_rows(conn)
 
             groups = get_all_groups(conn, include_disabled=False)
             total_groups = len(groups)
