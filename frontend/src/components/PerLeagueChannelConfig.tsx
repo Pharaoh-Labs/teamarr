@@ -14,6 +14,7 @@ import { getLeagues, getSports } from "@/api/teams"
 import { cn, getSportDisplayName } from "@/lib/utils"
 import {
   useDispatcharrStatus,
+  useEPGSettings,
   useLeagueConfigs,
   useLeagueDivisions,
   useUpsertLeagueConfig,
@@ -22,6 +23,10 @@ import {
 import { useSubscription } from "@/hooks/useSubscription"
 import { useChannelProfiles, useChannelGroups } from "@/hooks/useDispatcharr"
 import type { LeagueDivision, SubscriptionLeagueConfig } from "@/api/settings"
+
+// Mirrors the global Pre-Event Buffer field (Channels → Lifecycle)
+const MAX_PRE_BUFFER_HOURS = 336
+const DEFAULT_PRE_BUFFER_HOURS = 72
 
 function LeagueConfigRow({
   leagueName,
@@ -34,6 +39,7 @@ function LeagueConfigRow({
   channelGroups,
   includeM3uGroups,
   dispatcharrConnected,
+  matchDaysAhead,
   onToggleExpand,
   onSave,
   onClear,
@@ -48,6 +54,7 @@ function LeagueConfigRow({
   channelGroups: { id: number; name: string; from_m3u?: boolean }[]
   includeM3uGroups: boolean
   dispatcharrConnected: boolean
+  matchDaysAhead: number
   onToggleExpand: () => void
   onSave: (data: {
     channel_profile_ids?: (number | string)[] | null
@@ -57,6 +64,8 @@ function LeagueConfigRow({
     included_divisions?: string[] | null
     feed_separation_enabled?: boolean | null
     bypass_filter_for_playoffs?: boolean | null
+    channel_create_timing?: string | null
+    channel_pre_buffer_minutes?: number | null
   }) => Promise<void>
   onClear: () => Promise<void>
 }) {
@@ -67,6 +76,9 @@ function LeagueConfigRow({
   const [localFeedSeparationEnabled, setLocalFeedSeparationEnabled] = useState<boolean | null>(null)
   // #881: per-league playoff / All-Star team-filter bypass; null = inherit
   const [localPlayoffBypass, setLocalPlayoffBypass] = useState<boolean | null>(null)
+  // #851: per-league channel creation window; null timing = inherit
+  const [localCreateTiming, setLocalCreateTiming] = useState<string | null>(null)
+  const [localPreBufferHours, setLocalPreBufferHours] = useState(DEFAULT_PRE_BUFFER_HOURS)
   // #811: the divisions still ingested. Held as the checked set (null config =
   // all of them), so the UI never has to special-case "no override".
   const [localDivisions, setLocalDivisions] = useState<string[]>([])
@@ -91,6 +103,12 @@ function LeagueConfigRow({
       setLocalMatchupOrder(config.matchup_order ?? null)
       setLocalFeedSeparationEnabled(config.feed_separation_enabled)
       setLocalPlayoffBypass(config.bypass_filter_for_playoffs ?? null)
+      setLocalCreateTiming(config.channel_create_timing ?? null)
+      setLocalPreBufferHours(
+        config.channel_pre_buffer_minutes != null
+          ? Math.round(config.channel_pre_buffer_minutes / 60)
+          : DEFAULT_PRE_BUFFER_HOURS
+      )
       setLocalDivisions(config.included_divisions ?? divisions.map((d) => d.key))
     } else if (isExpanded && !config) {
       setLocalProfileIds([])
@@ -99,6 +117,8 @@ function LeagueConfigRow({
       setLocalMatchupOrder(null)
       setLocalFeedSeparationEnabled(null)
       setLocalPlayoffBypass(null)
+      setLocalCreateTiming(null)
+      setLocalPreBufferHours(DEFAULT_PRE_BUFFER_HOURS)
       setLocalDivisions(divisions.map((d) => d.key))
     }
   }
@@ -135,6 +155,14 @@ function LeagueConfigRow({
     return v === "home_first" ? "Home first" : "Away first"
   })()
 
+  const createTimingSummary = (() => {
+    const v = config?.channel_create_timing
+    if (!v) return "Default"
+    if (v === "same_day") return "Same day"
+    const minutes = config?.channel_pre_buffer_minutes
+    return minutes != null ? `${Math.round(minutes / 60)}h before` : "Before event"
+  })()
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -145,6 +173,9 @@ function LeagueConfigRow({
         matchup_order: localMatchupOrder,
         feed_separation_enabled: localFeedSeparationEnabled,
         bypass_filter_for_playoffs: localPlayoffBypass,
+        channel_create_timing: localCreateTiming,
+        channel_pre_buffer_minutes:
+          localCreateTiming === "before_event" ? localPreBufferHours * 60 : null,
         // All of them is stored as "no override" so the selection still means
         // everything if ESPN's slate gains a division later.
         included_divisions:
@@ -203,6 +234,11 @@ function LeagueConfigRow({
               : config.bypass_filter_for_playoffs ? "Always include" : "Team filter"}
           </span>
         </td>
+        <td className="px-3 py-1.5">
+          <span className={cn("text-xs", !hasOverride && "text-muted-foreground")}>
+            {createTimingSummary}
+          </span>
+        </td>
         <td className="px-3 py-1.5 text-right">
           {hasOverride && (
             <Button
@@ -222,7 +258,7 @@ function LeagueConfigRow({
       </tr>
       {isExpanded && (
         <tr>
-          <td colSpan={10} className="px-4 py-3 bg-muted/20 border-t-0">
+          <td colSpan={11} className="px-4 py-3 bg-muted/20 border-t-0">
             <div className="space-y-4 max-w-2xl">
               {/* Channel Profiles */}
               <div>
@@ -405,6 +441,61 @@ function LeagueConfigRow({
                 </Select>
               </div>
 
+              {/* Channel creation window (#851) */}
+              <div>
+                <Label className="text-sm font-medium">Create Timing</Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  When this league&apos;s event channels are created. Default inherits the
+                  global setting (Channels → Lifecycle). A channel still needs a matched
+                  stream, and when channels are removed stays global.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={localCreateTiming ?? ""}
+                    onChange={(e) => setLocalCreateTiming(e.target.value || null)}
+                    className="w-64"
+                  >
+                    <option value="">Default (inherit)</option>
+                    <option value="same_day">Same day</option>
+                    <option value="before_event">Before event + buffer</option>
+                  </Select>
+                  {localCreateTiming === "before_event" && (
+                    <>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={MAX_PRE_BUFFER_HOURS}
+                        value={localPreBufferHours}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value)
+                          if (!isNaN(val)) {
+                            setLocalPreBufferHours(
+                              Math.max(0, Math.min(MAX_PRE_BUFFER_HOURS, val))
+                            )
+                          }
+                        }}
+                        className="w-24"
+                        aria-label="Hours before event start"
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        hours before start
+                        {localPreBufferHours >= 48 &&
+                          ` (${+(localPreBufferHours / 24).toFixed(1)} days)`}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {localCreateTiming === "before_event" &&
+                  localPreBufferHours > matchDaysAhead * 24 && (
+                    <p className="text-xs text-amber-600 dark:text-amber-500 mt-1.5">
+                      Streams are only matched {matchDaysAhead}{" "}
+                      {matchDaysAhead === 1 ? "day" : "days"} ahead, so nothing is created
+                      earlier than that. Raise &quot;Event match days ahead&quot; on the
+                      Matching page to use the full window.
+                    </p>
+                  )}
+              </div>
+
               {/* Matchup Order (#692) */}
               <div>
                 <Label className="text-sm font-medium">Matchup Order</Label>
@@ -478,6 +569,7 @@ export function PerLeagueChannelConfig() {
   const upsertLeagueConfigMutation = useUpsertLeagueConfig()
   const deleteLeagueConfigMutation = useDeleteLeagueConfig()
   const dispatcharrStatus = useDispatcharrStatus()
+  const { data: epgSettings } = useEPGSettings()
 
   const { data: subscription } = useSubscription()
   const subscribedLeagueSlugs = useMemo(
@@ -530,7 +622,7 @@ export function PerLeagueChannelConfig() {
       <CardHeader>
         <CardTitle>Per-League Channel Config</CardTitle>
         <CardDescription>
-          Override channel profiles, channel group, group mode and playoff handling per league. Leagues without overrides inherit the global defaults above.
+          Override channel profiles, channel group, group mode, playoff handling and create timing per league. Leagues without overrides inherit the global defaults above.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -566,6 +658,7 @@ export function PerLeagueChannelConfig() {
                 <th className="px-3 py-2 text-left font-medium">Matchup Order</th>
                 <th className="px-3 py-2 text-left font-medium">Feed Separation</th>
                 <th className="px-3 py-2 text-left font-medium">Playoffs</th>
+                <th className="px-3 py-2 text-left font-medium">Create</th>
                 <th className="px-3 py-2 text-right font-medium w-16"></th>
               </tr>
             </thead>
@@ -589,6 +682,7 @@ export function PerLeagueChannelConfig() {
                       channelGroups={channelGroupsQuery.data ?? []}
                       includeM3uGroups={false}
                       dispatcharrConnected={dispatcharrStatus.data?.connected ?? false}
+                      matchDaysAhead={epgSettings?.event_match_days_ahead ?? 3}
                       onToggleExpand={() =>
                         setExpandedLeagueConfig(isExpanded ? null : league.slug)
                       }
@@ -617,7 +711,7 @@ export function PerLeagueChannelConfig() {
                 })}
               {filteredLeagues.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-3 py-4 text-center text-muted-foreground">
+                  <td colSpan={11} className="px-3 py-4 text-center text-muted-foreground">
                     {leagueSearch ? "No leagues match your search" : "No subscribed leagues"}
                   </td>
                 </tr>

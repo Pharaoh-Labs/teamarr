@@ -163,11 +163,13 @@ def create_lifecycle_service(
     """
     from teamarr.database.channels import get_dispatcharr_settings
     from teamarr.database.settings import get_all_settings
+    from teamarr.database.subscription import get_league_create_timing_overrides
 
     with db_factory() as conn:
         settings = get_dispatcharr_settings(conn)
         lifecycle = get_lifecycle_settings(conn)
         all_settings = get_all_settings(conn)
+        league_create_overrides = get_league_create_timing_overrides(conn)
 
     # Build sport durations dict from settings - dynamically from DurationSettings
     sport_durations = asdict(all_settings.durations)
@@ -205,6 +207,7 @@ def create_lifecycle_service(
         # the toggle was removed in the v2.7.0 EPG overhaul).
         include_final_events=True,
         create_postponed=lifecycle["create_postponed"],
+        league_create_overrides=league_create_overrides,
     )
 
 

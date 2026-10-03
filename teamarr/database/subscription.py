@@ -50,6 +50,10 @@ class SubscriptionLeagueConfig:
     feed_separation_enabled: bool | None = None
     # #881: None inherits the source's playoff bypass, then the global default.
     bypass_filter_for_playoffs: bool | None = None
+    # #851: None inherits the global channel create timing. The buffer is read
+    # for 'before_event' only; None there inherits the global pre-event buffer.
+    channel_create_timing: str | None = None
+    channel_pre_buffer_minutes: int | None = None
 
 
 @dataclass
@@ -505,14 +509,17 @@ def upsert_league_config(
     included_divisions: list[str] | None = None,
     feed_separation_enabled: bool | None = None,
     bypass_filter_for_playoffs: bool | None = None,
+    channel_create_timing: str | None = None,
+    channel_pre_buffer_minutes: int | None = None,
 ) -> SubscriptionLeagueConfig:
     """Create or update per-league config. Returns the saved config."""
     conn.execute(
         """INSERT INTO subscription_league_config
            (league_code, channel_profile_ids, channel_group_id,
              channel_group_mode, matchup_order, included_divisions, feed_separation_enabled,
-             bypass_filter_for_playoffs)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             bypass_filter_for_playoffs, channel_create_timing,
+             channel_pre_buffer_minutes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(league_code) DO UPDATE SET
                channel_profile_ids = excluded.channel_profile_ids,
                channel_group_id = excluded.channel_group_id,
@@ -520,7 +527,9 @@ def upsert_league_config(
                matchup_order = excluded.matchup_order,
                 included_divisions = excluded.included_divisions,
                 feed_separation_enabled = excluded.feed_separation_enabled,
-                bypass_filter_for_playoffs = excluded.bypass_filter_for_playoffs
+                bypass_filter_for_playoffs = excluded.bypass_filter_for_playoffs,
+                channel_create_timing = excluded.channel_create_timing,
+                channel_pre_buffer_minutes = excluded.channel_pre_buffer_minutes
         """,
         (
             league_code,
@@ -533,6 +542,9 @@ def upsert_league_config(
             json.dumps(included_divisions) if included_divisions is not None else None,
             feed_separation_enabled,
             bypass_filter_for_playoffs,
+            channel_create_timing,
+            # The buffer means nothing without 'before_event'
+            channel_pre_buffer_minutes if channel_create_timing == "before_event" else None,
         ),
     )
     logger.info("[LEAGUE_CONFIG] Upserted config for %s", league_code)
@@ -587,7 +599,29 @@ def _build_league_config(row) -> SubscriptionLeagueConfig:
             and row["bypass_filter_for_playoffs"] is not None
             else None
         ),
+        channel_create_timing=(
+            row["channel_create_timing"] if "channel_create_timing" in row.keys() else None
+        ),
+        channel_pre_buffer_minutes=(
+            row["channel_pre_buffer_minutes"]
+            if "channel_pre_buffer_minutes" in row.keys()
+            else None
+        ),
     )
+
+
+def get_league_create_timing_overrides(conn: Connection) -> dict[str, tuple[str, int | None]]:
+    """Leagues that override when their event channels are created (#851).
+
+    Maps league code to (create timing, pre-event buffer minutes). Only
+    leagues with an explicit timing appear; a missing league uses the global
+    setting. A None buffer means the global pre-event buffer.
+    """
+    return {
+        config.league_code: (config.channel_create_timing, config.channel_pre_buffer_minutes)
+        for config in get_league_configs(conn)
+        if config.channel_create_timing is not None
+    }
 
 
 def get_league_playoff_bypass_overrides(conn: Connection) -> dict[str, bool]:

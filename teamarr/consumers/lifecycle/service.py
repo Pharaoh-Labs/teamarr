@@ -136,6 +136,7 @@ class ChannelLifecycleService(
         timezone: str = "America/New_York",
         include_final_events: bool = False,
         create_postponed: bool = True,
+        league_create_overrides: dict[str, tuple[CreateTiming, int | None]] | None = None,
     ):
         """Initialize the lifecycle service.
 
@@ -154,6 +155,7 @@ class ChannelLifecycleService(
             timezone: User timezone for timing calculations
             include_final_events: Whether to include completed/final events in EPG
             create_postponed: Whether postponed events get event channels (#948)
+            league_create_overrides: Per-league create timing and buffer (#851)
 
         Raises:
             ValueError: If sports_service is not provided
@@ -178,6 +180,7 @@ class ChannelLifecycleService(
             sport_durations=sport_durations,
             include_final_events=include_final_events,
             create_postponed=create_postponed,
+            league_create_overrides=league_create_overrides,
         )
 
         # Thread lock for Dispatcharr operations

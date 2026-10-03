@@ -22,6 +22,20 @@ The **Pre-Event Buffer (hours)** field is greyed out until **Before event + buff
 
 For session-based events (race weekends, UFC card segments), each session's channel is timed against that session's own start — the Sunday race channel appears on race day (or race start minus buffer), not when Friday practice enters the window.
 
+### Per-league create timing
+
+One window rarely suits every sport: wide enough to show the weekend's NFL games on a Thursday also fills the guide with three days of baseball. A league can carry its own create timing under [Per-League Channel Config](output.md#per-league-channel-config) (Channels → Dispatcharr Output): **Default** follows the setting above, **Same day** and **Before event + buffer** replace it for that league only. Keeping the global setting on **Same day** and giving NFL **Before event + buffer** at 72 hours shows each NFL game three days out while everything else appears on game day.
+
+What it does not do:
+
+- **It never creates a channel on its own.** The window says how early a channel *may* exist; one is created once a stream for the game is listed by your provider and matched.
+- **It cannot reach past the matching window.** Streams are matched **Event match days ahead** days out (default 3, on the Matching page). A buffer longer than that needs the matching window raised too; the form warns when it is.
+- **It is per league, not per sport.** Soccer means setting it on each competition you follow.
+- **It is a number of hours before each event**, not a weekly reset — generation still runs on its one schedule.
+- **Deletion is unaffected.** Delete timing stays global.
+
+Managed team channels follow the same per-league window when deciding whether a game is close enough to attach.
+
 Channels are never created for events that are already over: final events are excluded (an API-only `include_final_events` setting can override this), an event not yet reported final is treated as final two hours after its estimated end, and an event already past its delete threshold is skipped entirely.
 
 ## Postponed Events

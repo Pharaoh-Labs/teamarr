@@ -858,7 +858,14 @@ CREATE TABLE IF NOT EXISTS subscription_league_config (
     -- Playoff / All-Star team-filter bypass override (#881): NULL = use the
     -- source's setting, then the global default; 1 = always include this
     -- league's postseason and All-Star games; 0 = leave them to the team filter
-    bypass_filter_for_playoffs BOOLEAN DEFAULT NULL
+    bypass_filter_for_playoffs BOOLEAN DEFAULT NULL,
+    -- Channel creation window override (#851): NULL = use the global
+    -- channel_create_timing. The buffer applies to 'before_event' only;
+    -- NULL there = the global channel_pre_buffer_minutes.
+    channel_create_timing TEXT DEFAULT NULL
+        CHECK(channel_create_timing IS NULL
+              OR channel_create_timing IN ('same_day', 'before_event')),
+    channel_pre_buffer_minutes INTEGER DEFAULT NULL
 );
 
 
