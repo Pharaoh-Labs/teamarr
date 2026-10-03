@@ -128,6 +128,8 @@ class EventEPGGroup:
     epg_match_enabled: bool = False  # (183.6) opt this group into EPG program-data matching
     # (183.9) system group sourcing candidates from curated Dispatcharr channels
     is_channel_source: bool = False
+    # (#542) Dispatcharr channel group a channel-source row reads; None = all
+    dispatcharr_channel_group_id: int | None = None
     # Per-group subscription overrides (NULL = inherit global)
     subscription_leagues: list[str] | None = None
     subscription_soccer_mode: str | None = None
@@ -282,6 +284,11 @@ def _row_to_group(row) -> EventEPGGroup:
         is_channel_source=(
             bool(row["is_channel_source"]) if "is_channel_source" in row.keys() else False
         ),
+        dispatcharr_channel_group_id=(
+            row["dispatcharr_channel_group_id"]
+            if "dispatcharr_channel_group_id" in row.keys()
+            else None
+        ),
         # Per-group subscription overrides
         subscription_leagues=(
             json.loads(row["subscription_leagues"])
@@ -370,48 +377,117 @@ def get_all_groups(
     return [_row_to_group(row) for row in cursor.fetchall()]
 
 
-def ensure_channel_source_group(conn: Connection, enabled: bool) -> int:
-    """Idempotently create/sync the system-managed "Dispatcharr Channels" source group.
+CHANNEL_SOURCE_NAME = "Dispatcharr Channels"
+
+
+def _channel_source_names(dp_group_id: int | None, group_names: dict[int, str]) -> tuple[str, str]:
+    """(name, display_name) for a channel-source row."""
+    if dp_group_id is None:
+        return CHANNEL_SOURCE_NAME, f"{CHANNEL_SOURCE_NAME} (EPG source)"
+    label = group_names.get(dp_group_id) or f"group {dp_group_id}"
+    return f"{CHANNEL_SOURCE_NAME}: {label}", f"Dispatcharr: {label}"
+
+
+def ensure_channel_source_group(
+    conn: Connection,
+    enabled: bool,
+    selected_group_ids: list[int] | None = None,
+    group_names: dict[int, str] | None = None,
+) -> int:
+    """Idempotently create/sync the system-managed "Dispatcharr Channels" source rows.
 
     Epic 183.9: when the global ``epg_channel_source_enabled`` setting is on, EPG
     matching also runs over streams curated onto Dispatcharr channels. That source
-    is modeled as a real (but hidden) event group so it reuses the full per-group
-    pipeline — matching, channel creation, XMLTV, and stats — with no FK hazards.
+    is modeled as real event groups so it reuses the full per-group pipeline —
+    matching, channel creation, XMLTV, and stats — with no FK hazards.
 
-    The group's ``enabled`` flag mirrors the setting, so disabling the toggle lets
-    the normal disabled-group cleanup remove its channels on the next run. Returns
-    the group id.
+    One row per selected Dispatcharr channel group (#542), so each can carry its
+    own league scope ("NFL Local" feeds NFL games only). With no groups selected
+    there is one catch-all row reading every group, as before.
+
+    ``selected_group_ids`` None reads ``settings.epg_channel_source_groups``.
+    A row is enabled when the setting is on AND it is the row the selection
+    calls for; rows for deselected groups are disabled (not deleted, so a
+    league scope survives a re-select) and the normal disabled-group cleanup
+    removes their channels on the next run.
+
+    Upgrade from the single hidden row: when groups are selected and no
+    per-group row exists yet, that row is adopted as the first selected
+    group's row. Its channels and stream attachments keep their source id, so
+    nothing is recreated.
+
+    Returns the id of the first active row (the catch-all, or the lowest
+    selected group's row).
     """
-    row = conn.execute(
-        "SELECT id FROM event_epg_groups WHERE is_channel_source = 1 LIMIT 1"
-    ).fetchone()
+    names = group_names or {}
+    if selected_group_ids is None:
+        from teamarr.database.settings import get_epg_settings
 
-    if row:
-        group_id = row["id"]
+        selected_group_ids = list(get_epg_settings(conn).epg_channel_source_groups)
+    wanted: list[int | None] = sorted({int(g) for g in selected_group_ids}) or [None]
+
+    has_column = "dispatcharr_channel_group_id" in {
+        r[1] for r in conn.execute("PRAGMA table_info(event_epg_groups)")
+    }
+    rows = conn.execute(
+        "SELECT id, "
+        + ("dispatcharr_channel_group_id" if has_column else "NULL")
+        + " AS dp_id FROM event_epg_groups WHERE is_channel_source = 1 ORDER BY id"
+    ).fetchall()
+    by_dp: dict[int | None, int] = {}
+    for r in rows:
+        by_dp.setdefault(r["dp_id"], r["id"])
+
+    # One-time adoption of the pre-#542 hidden row.
+    if has_column and wanted != [None] and None in by_dp and not (set(by_dp) - {None}):
+        first = wanted[0]
+        conn.execute(
+            "UPDATE event_epg_groups SET dispatcharr_channel_group_id = ? WHERE id = ?",
+            (first, by_dp[None]),
+        )
+        by_dp[first] = by_dp.pop(None)
+
+    for dp_id in wanted:
+        if dp_id in by_dp:
+            continue
+        name, display_name = _channel_source_names(dp_id, names)
+        gid = create_group(
+            conn,
+            name=name,
+            display_name=display_name,
+            leagues=[],
+            duplicate_event_handling="consolidate",
+            name_match_enabled=False,  # (ahow.7, #406) EPG-source group: matched via EPG only
+            epg_match_enabled=True,
+            team_streams_enabled=False,
+            skip_builtin_filter=True,
+            is_channel_source=True,
+            enabled=enabled,
+        )
+        if dp_id is not None:
+            conn.execute(
+                "UPDATE event_epg_groups SET dispatcharr_channel_group_id = ? WHERE id = ?",
+                (dp_id, gid),
+            )
+        by_dp[dp_id] = gid
+
+    for dp_id, gid in by_dp.items():
+        active = enabled and dp_id in wanted
         conn.execute(
             "UPDATE event_epg_groups SET enabled = ?, epg_match_enabled = 1, "
             "skip_builtin_filter = 1, team_streams_enabled = 0, name_match_enabled = 0 "
             "WHERE id = ?",
-            (int(enabled), group_id),
+            (int(active), gid),
         )
-        conn.commit()
-        return group_id
-
-    group_id = create_group(
-        conn,
-        name="Dispatcharr Channels",
-        display_name="Dispatcharr Channels (EPG source)",
-        leagues=[],
-        duplicate_event_handling="consolidate",
-        name_match_enabled=False,  # (ahow.7, #406) EPG-source group: matched via EPG only
-        epg_match_enabled=True,
-        team_streams_enabled=False,
-        skip_builtin_filter=True,
-        is_channel_source=True,
-        enabled=enabled,
-    )
+        # Follow a rename in Dispatcharr; without a name for it, keep what is stored.
+        if dp_id is None or dp_id in names:
+            name, display_name = _channel_source_names(dp_id, names)
+            conn.execute(
+                "UPDATE event_epg_groups SET name = ?, display_name = ? WHERE id = ?",
+                (name, display_name, gid),
+            )
     conn.commit()
-    return group_id
+    return by_dp[wanted[0]]
 
 
 def get_group(conn: Connection, group_id: int) -> EventEPGGroup | None:
