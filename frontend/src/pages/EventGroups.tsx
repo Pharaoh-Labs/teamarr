@@ -699,14 +699,26 @@ export function EventGroups() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Checkbox
-                            checked={selectedIds.has(group.id)}
-                            onCheckedChange={() => toggleSelect(group.id)}
-                          />
+                          {/* Channel sources (#542) are edited one at a time */}
+                          {!group.is_channel_source && (
+                            <Checkbox
+                              checked={selectedIds.has(group.id)}
+                              onCheckedChange={() => toggleSelect(group.id)}
+                            />
+                          )}
                         </TableCell>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span>{getDisplayName(group)}</span>
+                            {group.is_channel_source && (
+                              <Badge
+                                variant="secondary"
+                                className="text-xs"
+                                title="Streams come from the channels in this Dispatcharr group, matched through each channel's guide. Selected under Matching → Dispatcharr as a Stream Source."
+                              >
+                                Dispatcharr group
+                              </Badge>
+                            )}
                             {/* Stale-source badge (lylt) */}
                             {staleIds.has(group.id) && (
                               <Badge
@@ -837,7 +849,12 @@ export function EventGroups() {
                       <Switch
                         checked={group.enabled}
                         onCheckedChange={() => handleToggle(group)}
-                        disabled={toggleMutation.isPending}
+                        disabled={toggleMutation.isPending || !!group.is_channel_source}
+                        title={
+                          group.is_channel_source
+                            ? "Select or deselect this group under Matching → Dispatcharr as a Stream Source"
+                            : undefined
+                        }
                       />
                     </TableCell>
                     <TableCell>
@@ -881,15 +898,17 @@ export function EventGroups() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => setDeleteConfirm(group)}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        {!group.is_channel_source && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => setDeleteConfirm(group)}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

@@ -428,3 +428,26 @@ def test_run_time_sync_builds_rows_from_settings(db_conn):
     assert rows[470].display_name == "Dispatcharr: NFL Local"
     assert rows[1222].name == "Dispatcharr Channels: group 1222"
     assert all(g.enabled for g in rows.values())
+
+
+def test_scoped_row_feeds_only_its_leagues(db_conn):
+    """The reporter's case: "NFL Local" scoped to the NFL matches NFL games only,
+    while the unscoped row still follows the global subscription."""
+    from teamarr.database.groups import get_group
+
+    db_conn.execute(
+        "UPDATE sports_subscription SET leagues = ? WHERE id = 1", ('["nfl", "nba", "mlb"]',)
+    )
+    ensure_channel_source_group(db_conn, True, selected_group_ids=[470, 1222])
+    rows = _sources(db_conn)
+    db_conn.execute(
+        "UPDATE event_epg_groups SET subscription_leagues = ? WHERE id = ?",
+        ('["nfl"]', rows[470].id),
+    )
+    db_conn.commit()
+
+    proc = make_bare_processor()
+    scoped = proc._resolve_subscription_leagues(db_conn, get_group(db_conn, rows[470].id))
+    unscoped = proc._resolve_subscription_leagues(db_conn, get_group(db_conn, rows[1222].id))
+    assert scoped == ["nfl"]
+    assert sorted(unscoped) == ["mlb", "nba", "nfl"]

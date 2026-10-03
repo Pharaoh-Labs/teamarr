@@ -28,7 +28,7 @@ Which leagues a source scans is governed by your global [Subscription](../subscr
 
 ## The Sources Table
 
-The Sources page header shows an overall **X% matched** summary and the **Add Stream Source** button. The table lists every configured source:
+The Sources page header shows an overall **X% matched** summary and the **Add Stream Source** button. The table lists every configured source: Rows marked **Dispatcharr group** are the channel groups selected under [Dispatcharr as a Stream Source](../matching/program-matching#dispatcharr-channels-as-an-epg-source); they are added and removed there, and here you can only set their league scope and team filter.
 
 ![Sources table with matching-type badges, matched bars, and filters](../../assets/images/sources-list.png)
 
