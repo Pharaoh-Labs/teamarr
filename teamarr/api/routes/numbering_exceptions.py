@@ -131,34 +131,44 @@ def _display_name(conn, exc) -> str:
 
 
 def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
-    """Attach display names and how many active channels each block currently owns."""
+    """Attach display names and how many active channels each block row owns.
+
+    Counted per ROW — the row a channel actually resolved to — not per lane.
+    Group members share one lane, so a per-lane count put the whole block's
+    total on every member: a playoffs-only NBA row with no channels read
+    "7 channels today" because MLB and UFC had seven between them (#950).
+    """
     from teamarr.database.channel_numbers import _default_lane, get_all_channels_sorted
     from teamarr.database.numbering_exceptions import LaneResolver
 
     resolver = LaneResolver.load(conn, _default_lane(conn))
-    counts: dict[int | None, int] = {}
+    counts: dict[int, int] = {}
     for ch in get_all_channels_sorted(conn):
-        lane = resolver.resolve(
+        row = resolver.match(
             ch.get("sport"),
             ch.get("league"),
             ch.get("home_team"),
             ch.get("away_team"),
             ch.get("season_type"),
         )
-        counts[lane.id] = counts.get(lane.id, 0) + 1
-    # Group members share a lane id (the lowest id at that start); count per row by start.
-    start_counts: dict[int, int] = {}
-    for exc in exceptions:
-        lane = resolver.lane_for(exc)
-        start_counts[exc.start] = counts.get(lane.id, 0)
+        if row is not None:
+            counts[row.id] = counts.get(row.id, 0) + 1
     return [
         NumberingExceptionModel(
             **{k: v for k, v in exc.__dict__.items() if k not in ("created_at", "updated_at")},
             display_name=_display_name(conn, exc),
-            channel_count=start_counts.get(exc.start, 0),
+            channel_count=counts.get(exc.id, 0),
         )
         for exc in exceptions
     ]
+
+
+def _member_label(conn, exc) -> str:
+    """A block member's name for the layout strip, with its season condition
+    when it has one — "NBA (postseason)" — so a playoffs-only member does not
+    read as if all of the league numbers there (#950)."""
+    name = _display_name(conn, exc)
+    return f"{name} ({exc.season_type})" if exc.season_type else name
 
 
 # =============================================================================
@@ -236,7 +246,7 @@ def preview_layout():
             else:
                 exc = exceptions.get(lane.id) if lane.id is not None else None
                 members = [
-                    _display_name(conn, e) for e in exceptions.values() if e.start == lane.start
+                    _member_label(conn, e) for e in exceptions.values() if e.start == lane.start
                 ]
                 label = (exc.label if exc and exc.label else "") or " · ".join(members)
                 if exc and exc.label and members:

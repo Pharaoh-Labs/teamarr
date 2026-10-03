@@ -171,6 +171,16 @@ class ChannelSyncer(_LifecycleHost):
             if new_group_id != old_group_id:
                 update_data["channel_group_id"] = new_group_id
                 changes_made.append(f"channel_group_id: {old_group_id} → {new_group_id}")
+            # Keep the stored group in step (#950). The move used to reach
+            # Dispatcharr only, so the row kept the group from creation and
+            # reconciliation reported every moved channel as drift on every
+            # run. Compared against the stored value, not Dispatcharr's, so a
+            # row already left behind is repaired too. Dropped with the rest
+            # of db_updates if the Dispatcharr update fails.
+            if new_group_id is not None and new_group_id != getattr(
+                existing, "channel_group_id", None
+            ):
+                db_updates["channel_group_id"] = new_group_id
 
             # 4. Check streams (M3U ID sync) - V1 parity
             # Skipped for time-windowed streams: their membership flips with the
