@@ -69,7 +69,7 @@ Inside every block, channels follow the same [Sport & League Order](#sport--leag
 
 ## Sport & League Order
 
-The order sports and leagues take inside Everything Else and inside every pinned block. Drag sports to reorder; expand a sport to reorder its leagues. Higher in the list = lower channel numbers; games within a league sort by start time; sports and leagues not in the list go last. Click **Auto-populate** to pre-fill with all currently subscribed sports and leagues.
+The order sports and leagues take inside Everything Else and inside every pinned block. Drag sports to reorder; expand a sport to reorder its leagues. Higher in the list = lower channel numbers; games within a league sort by start time; sports and leagues not in the list go last. If a league you subscribe to is missing from the list, a note above it names the league; **Auto-populate** adds it at the end for you to place. Click **Auto-populate** to pre-fill with all currently subscribed sports and leagues.
 
 The full order, applied inside each block and inside Everything Else, is: **Priority Teams (everything) → Sport → Priority Teams (sport) → League → Priority Teams (league) → Event time**, with two deterministic tie-breakers after that — event id, then main channel before its keyword variants (your Spanish feed always sorts right after the main channel).
 
