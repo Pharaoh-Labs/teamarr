@@ -23,7 +23,7 @@ from teamarr.database.stats import (
     media_server_health,
     source_matching_health,
 )
-from teamarr.services.stream_ordering import get_stream_ordering_service
+from teamarr.services.stream_ordering import GameContext, get_stream_ordering_service
 from teamarr.utilities.logging import _get_log_dir
 
 SCHEMA_VERSION = 3
@@ -241,7 +241,11 @@ class SupportBundleService:
             row["id"]: row.get("name") for row in self._query(conn, "event_epg_groups", errors)
         }
         channel_context = {
-            channel["id"]: (channel.get("sport"), channel.get("league"))
+            channel["id"]: (
+                channel.get("sport"),
+                channel.get("league"),
+                GameContext.from_channel(channel),
+            )
             for channel in channels
             if isinstance(channel.get("id"), int)
         }
@@ -253,9 +257,9 @@ class SupportBundleService:
             stream["source_group_name"] = groups.get(stream.get("source_group_id"))
             channel_id = stream.get("managed_channel_id")
             if isinstance(channel_id, int):
-                sport, league = channel_context.get(channel_id, (None, None))
+                sport, league, game = channel_context.get(channel_id, (None, None, None))
                 stream["matched_rules"] = self._matched_rules(
-                    get_stream_ordering_service(conn, sport, league),
+                    get_stream_ordering_service(conn, sport, league, context=game),
                     model,
                     stream.get("source_group_name"),
                 )

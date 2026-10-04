@@ -933,6 +933,7 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     -- the stored row on re-layout. NULL = unknown (pre-column rows, providers
     -- that do not report one) and matches no season condition.
     season_type TEXT,
+    has_local_broadcast BOOLEAN,             -- (#539) 1 = the listing carries a home/away-market broadcaster, 0 = national only, NULL = unknown. Read by 'Only when' stream-ordering rule conditions.
     league TEXT,
     sport TEXT,
     venue TEXT,

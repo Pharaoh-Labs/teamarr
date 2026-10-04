@@ -174,6 +174,7 @@ export interface StreamRuleMatch {
   is_winner: boolean          // the priority-mode rule that set the band
   mode: "priority" | "score"  // 'priority' (band) or 'score' (additive contributor)
   points: number              // signed contribution for score-mode rules
+  condition?: string  // the rule's "Only when" game condition (#539); "" = always
 }
 
 export interface ChannelStreamEntry {

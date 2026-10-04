@@ -156,6 +156,14 @@ function ruleValueLabel(type: string, value: string): string {
   return pipe === -1 ? `Channel #${value}` : value.slice(pipe + 1)
 }
 
+// "Only when" game conditions (#539), as shown beside a matched rule.
+const RULE_CONDITION_LABELS: Record<string, string> = {
+  no_local_broadcast: "no local broadcast",
+  "season:postseason": "postseason",
+  "season:regular": "regular season",
+  "season:preseason": "preseason",
+}
+
 // Close a popover on outside-click / Escape. Shared by the click-popovers below
 // (same behavior as StatsMetricBuilder's dropdown).
 function useOutsideDismiss(
@@ -290,6 +298,11 @@ function PriorityCell(
                       {ruleValueLabel(r.type, r.value)}
                     </span>
                   )}
+                  {r.condition && (
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      only when {RULE_CONDITION_LABELS[r.condition] ?? r.condition}
+                    </span>
+                  )}
                 </span>
               </div>
             ))}
@@ -305,6 +318,11 @@ function PriorityCell(
                   {r.value && (
                     <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
                       {ruleValueLabel(r.type, r.value)}
+                    </span>
+                  )}
+                  {r.condition && (
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      only when {RULE_CONDITION_LABELS[r.condition] ?? r.condition}
                     </span>
                   )}
                 </span>

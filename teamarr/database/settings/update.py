@@ -410,7 +410,13 @@ def update_stream_ordering_rules(
     Returns:
         True if updated
     """
-    from .types import LEGACY_RULE_MODE, NO_VALUE_RULE_TYPES, VALID_RULE_MODES, VALID_RULE_TYPES
+    from .types import (
+        LEGACY_RULE_MODE,
+        NO_VALUE_RULE_TYPES,
+        VALID_RULE_CONDITIONS,
+        VALID_RULE_MODES,
+        VALID_RULE_TYPES,
+    )
     from .types import StreamOrderingRule as RuleType
 
     validated_rules = []
@@ -423,6 +429,7 @@ def update_stream_ordering_rules(
             rule_priority = rule.priority
             rule_mode = rule.mode
             rule_points = rule.points
+            rule_condition = rule.condition
         else:
             rule_type = rule.get("type")
             rule_value = rule.get("value")
@@ -432,6 +439,7 @@ def update_stream_ordering_rules(
             # their hard first-match behaviour rather than silently flipping to score.
             rule_mode = rule.get("mode", LEGACY_RULE_MODE)
             rule_points = rule.get("points", 0)
+            rule_condition = rule.get("condition") or ""
 
         if rule_type not in VALID_RULE_TYPES:
             logger.warning(
@@ -471,6 +479,14 @@ def update_stream_ordering_rules(
             )
             rule_points = 0
 
+        if rule_condition not in VALID_RULE_CONDITIONS:
+            logger.warning(
+                "[STREAM_ORDER] Invalid condition %r, must be one of %s, dropping it",
+                rule_condition,
+                sorted(VALID_RULE_CONDITIONS),
+            )
+            rule_condition = ""
+
         validated_rules.append(
             {
                 "type": rule_type,
@@ -478,6 +494,7 @@ def update_stream_ordering_rules(
                 "priority": rule_priority,
                 "mode": rule_mode,
                 "points": rule_points,
+                "condition": rule_condition,
             }
         )
 

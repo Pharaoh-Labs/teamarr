@@ -246,6 +246,9 @@ class StreamOrderingRule:
     priority: int  # 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
     mode: str = "priority"  # 'priority' (hard, first-match band) or 'score' (soft, additive)
     points: int = 0  # signed; summed across matched 'score' rules (ignored for 'priority' mode)
+    # (#539) Optional game condition, one of VALID_RULE_CONDITIONS; '' = always.
+    # A rule whose condition is not met — or cannot be told — does not match.
+    condition: str = ""
 
 
 VALID_RULE_TYPES: frozenset[str] = frozenset({
@@ -255,6 +258,12 @@ VALID_RULE_TYPES: frozenset[str] = frozenset({
     "stats_metric", "catch_all",
 })
 VALID_RULE_MODES: frozenset[str] = frozenset({"priority", "score"})
+# "Only when" conditions (#539): facts about the channel's game, not the stream.
+VALID_RULE_CONDITIONS: frozenset[str] = frozenset({
+    "",
+    "no_local_broadcast",
+    "season:preseason", "season:regular", "season:postseason",
+})
 # Legacy rows (pre epic teamarr-5ag) carry no 'mode'; they are hard priority rules.
 LEGACY_RULE_MODE: str = "priority"
 NO_VALUE_RULE_TYPES: frozenset[str] = frozenset(

@@ -61,6 +61,8 @@ class ManagedChannel:
     event_end_estimate: datetime | None = None
     # (#950) Event season type; season-conditioned pinned blocks read it on re-layout.
     season_type: str | None = None
+    # (#539) Whether the event lists a home/away-market broadcaster; None = unknown.
+    has_local_broadcast: bool | None = None
     scheduled_delete_at: datetime | None = None
     deleted_at: datetime | None = None
     delete_reason: str | None = None
@@ -115,6 +117,11 @@ class ManagedChannel:
             sport=row.get("sport"),
             event_end_estimate=row.get("event_end_estimate"),
             season_type=row.get("season_type"),
+            has_local_broadcast=(
+                bool(row["has_local_broadcast"])
+                if row.get("has_local_broadcast") is not None
+                else None
+            ),
             scheduled_delete_at=row.get("scheduled_delete_at"),
             deleted_at=row.get("deleted_at"),
             delete_reason=row.get("delete_reason"),

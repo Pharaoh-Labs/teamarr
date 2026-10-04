@@ -120,6 +120,7 @@ def create_managed_channel(
         "broadcast",
         "event_end_estimate",
         "season_type",
+        "has_local_broadcast",
         "scheduled_delete_at",
         "sync_status",
     ]

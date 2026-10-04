@@ -200,6 +200,9 @@ export interface StreamOrderingRule {
   priority: number  // 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
   mode: "priority" | "score"  // 'priority' = hard first-match band; 'score' = additive
   points: number  // signed; summed across matched 'score' rules (ignored for 'priority')
+  // #539 "Only when": "" (always) | "no_local_broadcast" | "season:preseason|regular|postseason".
+  // The rule matches only while the channel's game meets it; unknown never does.
+  condition?: string
 }
 
 export interface StreamOrderingSettings {
