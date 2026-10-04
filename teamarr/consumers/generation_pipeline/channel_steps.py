@@ -141,7 +141,7 @@ def apply_stream_ordering(
     )
     from teamarr.database.settings import get_stream_ordering_settings
     from teamarr.database.stream_ordering_scopes import get_stream_ordering_scopes
-    from teamarr.services.stream_ordering import get_stream_ordering_service
+    from teamarr.services.stream_ordering import GameContext, get_stream_ordering_service
     from teamarr.utilities.tz import now_utc
 
     reorder_result: dict = {
@@ -298,7 +298,12 @@ def apply_stream_ordering(
                             pinned_top = None
 
                 reordered_count = 0
-                ordering_service = get_stream_ordering_service(conn, channel.sport, channel.league)
+                ordering_service = get_stream_ordering_service(
+                    conn,
+                    channel.sport,
+                    channel.league,
+                    context=GameContext.from_channel(channel),
+                )
                 if ordering_service.rules:
                     for stream in streams:
                         new_priority = ordering_service.compute_priority(stream)

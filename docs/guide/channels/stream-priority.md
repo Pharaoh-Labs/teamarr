@@ -97,6 +97,28 @@ Existing streams show `—` until their next generation run fills the side in; n
 {: .note }
 At a **neutral-site** game (bowls, tournament finals) Teamarr keeps the provider's nominal home designation rather than forcing unknown — the provider told us a side, so the rule still works there.
 
+### Only when
+
+Every rule has an **Only when** dropdown. Left on **Always**, the rule behaves as it always has. Set to a condition, the rule applies only on channels whose game meets it — which lets the same stream rank differently from one game to the next, something no fixed score can do.
+
+| Condition | The rule applies when |
+|-----------|-----------------------|
+| **No local broadcast** | The game lists no home-market or away-market broadcaster for either team — an exclusive national game |
+| **Postseason** / **Regular season** / **Preseason** | The game is of that season type |
+
+The case it was built for: a provider's permanent team channel is attached to every one of that team's games, including the nationally exclusive ones where it shows nothing. A rule *Stream Type: Team stream, −20000, only when No local broadcast* leaves the team channel where your other rules put it on a normal night and drops it to the bottom on a dark one, so whichever stream is carrying the game leads. A second rule with **Postseason** does the same for October.
+
+What to know before relying on it:
+
+- **It reorders; it does not remove.** The stream stays on the channel, at the bottom.
+- **It reads the broadcasters listed for the game.** A game that is on a national network *and* a team's own network still lists the local one, so it is not treated as dark. Checked against league schedule data, the listing was right for all 162 games of one MLB team's 2026 season and for 791 of 794 NHL games between US teams in 2025-26.
+- **Canadian teams are less reliable.** Canadian regional broadcasts are often missing from the listing: about one NHL game in ten involving a Canadian team reads as "no local broadcast" when there was one. Every miss was in that direction — a working channel wrongly demoted — so avoid the condition for those teams.
+- **Unknown never applies.** A game with no broadcaster listing at all, or a provider that doesn't tag markets, leaves the rule ignored rather than guessed.
+- **Put it in a scoped tab.** In a league where every game is national (the NFL), "No local broadcast" is true every week; a league-scoped ruleset keeps the rule to the leagues it makes sense for.
+- **Event channels only.** Managed team channels carry no per-game facts, so a conditioned rule never applies to them.
+
+The [explainer](#why-is-a-stream-ordered-this-way) shows the condition beside any conditioned rule that matched.
+
 ### Team filters
 
 Both **Stream Type** (team streams) and **Specific Team's Feed** rules let you pick specific teams. Leaving the team selection empty makes the rule a no-op — a Stream Type rule with no teams matches *all* team streams, while a Specific Team's Feed rule with no teams matches nothing. Use the **Default** button to load your configured team-filter include list, or **Clear** to start fresh. **Feed Side** rules take no team selection at all — they apply to whichever teams are playing.

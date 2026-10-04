@@ -12,6 +12,7 @@ from sqlite3 import Connection
 from typing import Any
 
 from teamarr.core import Event
+from teamarr.utilities.broadcasts import has_local_broadcast
 from teamarr.utilities.sports import template_duration_override
 
 from ._host import _LifecycleHost
@@ -278,6 +279,18 @@ class ChannelSyncer(_LifecycleHost):
             if event_season and event_season != getattr(existing, "season_type", None):
                 db_updates["season_type"] = event_season
                 changes_made.append("season_type updated")
+
+            # Keep the local-broadcast fact current (#539): "Only when" stream
+            # ordering conditions read it, a game can be picked up by a
+            # national carrier after its channel exists, and channels created
+            # before the column have none. An unreadable listing (None) never
+            # blanks a stored answer.
+            event_local = has_local_broadcast(event)
+            if event_local is not None and event_local != getattr(
+                existing, "has_local_broadcast", None
+            ):
+                db_updates["has_local_broadcast"] = event_local
+                changes_made.append("has_local_broadcast updated")
 
             # Apply Dispatcharr updates (closed-loop: only persist DB on success)
             if update_data:

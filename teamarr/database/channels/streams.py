@@ -194,6 +194,8 @@ def compute_stream_priority_from_rules(
     sport: str | None = None,
     league: str | None = None,
     dispatcharr_source_channel_id: int | None = None,
+    season_type: str | None = None,
+    has_local_broadcast: bool | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
@@ -222,14 +224,21 @@ def compute_stream_priority_from_rules(
             rules). Unknown matches neither rule — never coerced to a side.
         dispatcharr_source_channel_id: DP channel a channel-source stream was
             read from (for dispatcharr_channel rules)
+        season_type / has_local_broadcast: The channel's game, for rules with
+            an "Only when" condition (#539); None = unknown, condition unmet
 
     Returns:
         Computed priority (lower = higher priority)
     """
     from teamarr.database.channels.types import ManagedChannelStream
-    from teamarr.services.stream_ordering import get_stream_ordering_service
+    from teamarr.services.stream_ordering import GameContext, get_stream_ordering_service
 
-    ordering_service = get_stream_ordering_service(conn, sport, league)
+    ordering_service = get_stream_ordering_service(
+        conn,
+        sport,
+        league,
+        context=GameContext(season_type=season_type, has_local_broadcast=has_local_broadcast),
+    )
     if not ordering_service.rules:
         # No rules - use sequential ordering (will be assigned by get_next_stream_priority)
         return None  # type: ignore
@@ -628,7 +637,7 @@ def reorder_channel_streams(
     Returns:
         Number of streams reordered
     """
-    from teamarr.services.stream_ordering import get_stream_ordering_service
+    from teamarr.services.stream_ordering import GameContext, get_stream_ordering_service
 
     # Get current streams
     streams = get_channel_streams(conn, managed_channel_id)
@@ -636,12 +645,13 @@ def reorder_channel_streams(
         return 0
 
     channel = conn.execute(
-        "SELECT sport, league FROM managed_channels WHERE id = ?", (managed_channel_id,)
+        "SELECT * FROM managed_channels WHERE id = ?", (managed_channel_id,)
     ).fetchone()
     ordering_service = get_stream_ordering_service(
         conn,
         channel["sport"] if channel else None,
         channel["league"] if channel else None,
+        context=GameContext.from_channel(channel),
     )
     if not ordering_service.rules:
         # No rules defined - skip reordering

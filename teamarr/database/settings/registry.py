@@ -245,6 +245,7 @@ def _parse_ordering_rules(raw: Any) -> list:
     from .types import (
         LEGACY_RULE_MODE,
         NO_VALUE_RULE_TYPES,
+        VALID_RULE_CONDITIONS,
         VALID_RULE_MODES,
         StreamOrderingRule,
     )
@@ -253,6 +254,10 @@ def _parse_ordering_rules(raw: Any) -> list:
         # Missing (legacy rows pre epic teamarr-5ag) or invalid -> hard 'priority',
         # preserving the original first-match ordering so migration is lossless.
         return v if v in VALID_RULE_MODES else LEGACY_RULE_MODE
+
+    def _condition(v: Any) -> str:
+        # Missing (rules saved before #539) or unknown -> '' (always).
+        return v if v in VALID_RULE_CONDITIONS else ""
 
     def _points(v: Any) -> int:
         try:
@@ -275,6 +280,7 @@ def _parse_ordering_rules(raw: Any) -> list:
             priority=rule.get("priority", 99),
             mode=_mode(rule.get("mode")),
             points=_points(rule.get("points")),
+            condition=_condition(rule.get("condition")),
         )
         for rule in rules_data
         if isinstance(rule, dict)

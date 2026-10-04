@@ -12,6 +12,7 @@ from sqlite3 import Connection
 from typing import Any
 
 from teamarr.core import Event
+from teamarr.utilities.broadcasts import has_local_broadcast
 from teamarr.utilities.sports import template_duration_override
 
 from ._host import _LifecycleHost
@@ -677,6 +678,8 @@ class ChannelCreator(_LifecycleHost):
                     sport=event.sport,
                     league=event.league,
                     dispatcharr_source_channel_id=stream.get("dp_channel_id"),
+                    season_type=getattr(event, "season_type", None),
+                    has_local_broadcast=has_local_broadcast(event),
                 )
                 if priority is None:
                     priority = get_next_stream_priority(conn, existing.id)
@@ -1194,6 +1197,7 @@ class ChannelCreator(_LifecycleHost):
                 else None,
                 event_name=event.name,
                 season_type=getattr(event, "season_type", None),
+                has_local_broadcast=has_local_broadcast(event),
                 league=event.league,
                 sport=event.sport,
                 # V1 Parity: Include venue and broadcast

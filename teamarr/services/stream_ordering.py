@@ -68,6 +68,39 @@ class RuleEvaluation:
     is_winner: bool  # True for the priority-mode rule that set the band (the band winner)
     mode: str = "priority"  # 'priority' (band) or 'score' (additive contributor)
     points: int = 0  # signed contribution for score-mode rules (0 for priority-mode)
+    condition: str = ""  # the rule's "Only when" game condition (#539); '' = always
+
+
+@dataclass(frozen=True)
+class GameContext:
+    """What "Only when" rule conditions may ask about a channel's game (#539).
+
+    None means unknown, and an unknown fact never satisfies a condition: a
+    rule gated on it simply does not match. Managed team channels carry no
+    per-game context, so conditioned rules are inert there.
+    """
+
+    season_type: str | None = None
+    has_local_broadcast: bool | None = None
+
+    @classmethod
+    def from_channel(cls, channel: Any) -> "GameContext":
+        """Build from a managed-channel row, dict or dataclass."""
+
+        def read(name: str) -> Any:
+            if isinstance(channel, dict):
+                return channel.get(name)
+            if hasattr(channel, "keys"):
+                return channel[name] if name in channel.keys() else None
+            return getattr(channel, name, None)
+
+        if channel is None:
+            return cls()
+        local = read("has_local_broadcast")
+        return cls(
+            season_type=read("season_type") or None,
+            has_local_broadcast=None if local is None else bool(local),
+        )
 
 
 class StreamOrderingService:
@@ -83,13 +116,17 @@ class StreamOrderingService:
         self,
         rules: list[StreamOrderingRule],
         conn: Connection | None = None,
+        context: GameContext | None = None,
     ):
         """Initialize the service.
 
         Args:
             rules: List of ordering rules
             conn: Database connection (optional, needed for group name lookups)
+            context: The channel's game, for rules with an "Only when"
+                condition (#539). None = nothing known, so those rules are inert.
         """
+        self.context = context or GameContext()
         self.rules = sorted(rules, key=lambda r: r.priority)
         self.conn = conn
         # Only widen the priority scale when scoring is actually in play; a
@@ -244,7 +281,7 @@ class StreamOrderingService:
                 matched.append(
                     RuleEvaluation(
                         rule.type, rule.value, rule.priority, False,
-                        mode="score", points=rule.points,
+                        mode="score", points=rule.points, condition=rule.condition,
                     )
                 )
             else:
@@ -252,7 +289,8 @@ class StreamOrderingService:
                 band_won = band_won or is_winner
                 matched.append(
                     RuleEvaluation(
-                        rule.type, rule.value, rule.priority, is_winner, mode="priority"
+                        rule.type, rule.value, rule.priority, is_winner,
+                        mode="priority", condition=rule.condition,
                     )
                 )
 
@@ -312,6 +350,8 @@ class StreamOrderingService:
         Returns:
             True if the stream matches the rule
         """
+        if not self._condition_met(rule.condition):
+            return False
         if rule.type == "m3u":
             return self._match_m3u(stream, rule.value)
         elif rule.type == "group":
@@ -336,6 +376,21 @@ class StreamOrderingService:
             return self._match_dispatcharr_channel(stream, rule.value)
         elif rule.type == "stats_metric":
             return self._match_stats_metric(stream, rule.value)
+        return False
+
+    def _condition_met(self, condition: str) -> bool:
+        """Whether a rule's "Only when" condition holds for this channel's game (#539).
+
+        Unknown is never a yes: a condition on a fact the channel does not
+        carry leaves the rule unmatched, so it can neither promote nor demote.
+        An unrecognised condition is treated the same way.
+        """
+        if not condition:
+            return True
+        if condition == "no_local_broadcast":
+            return self.context.has_local_broadcast is False
+        if condition.startswith("season:"):
+            return self.context.season_type == condition.split(":", 1)[1]
         return False
 
     def _match_m3u(self, stream: ManagedChannelStream, account_name: str) -> bool:
@@ -912,11 +967,14 @@ def get_stream_ordering_service(
     conn: Connection,
     sport: str | None = None,
     league: str | None = None,
+    context: GameContext | None = None,
 ) -> StreamOrderingService:
     """Factory function to create a StreamOrderingService with rules from database.
 
     Args:
         conn: Database connection
+        sport / league: The channel's, to pick its scoped ruleset
+        context: The channel's game, for "Only when" rule conditions (#539)
 
     Returns:
         Configured StreamOrderingService
@@ -925,4 +983,4 @@ def get_stream_ordering_service(
     from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
 
     rules, _ = resolve_stream_ordering_rules(conn, sport, league)
-    return StreamOrderingService(rules=rules, conn=conn)
+    return StreamOrderingService(rules=rules, conn=conn, context=context)

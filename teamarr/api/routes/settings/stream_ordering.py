@@ -4,7 +4,11 @@ from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
 from teamarr.database import get_db
-from teamarr.database.settings.types import NO_VALUE_RULE_TYPES, VALID_RULE_TYPES
+from teamarr.database.settings.types import (
+    NO_VALUE_RULE_TYPES,
+    VALID_RULE_CONDITIONS,
+    VALID_RULE_TYPES,
+)
 from teamarr.database.stream_ordering_scopes import ScopeAssignmentConflict
 
 from .models import (
@@ -66,6 +70,14 @@ def _validated_rules(rules) -> list[dict]:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid rule type '{rule.type}'. Valid: {VALID_RULE_TYPES}",
             )
+        if rule.condition not in VALID_RULE_CONDITIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Invalid rule condition '{rule.condition}'. "
+                    f"Valid: {sorted(VALID_RULE_CONDITIONS)}"
+                ),
+            )
         if rule.type not in NO_VALUE_RULE_TYPES and (not rule.value or not rule.value.strip()):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -85,6 +97,7 @@ def _validated_rules(rules) -> list[dict]:
             "priority": rule.priority,
             "mode": rule.mode,
             "points": rule.points,
+            "condition": rule.condition,
         }
         for rule in rules
     ]

@@ -334,9 +334,26 @@ interface RuleFormData {
   // a priority-mode baseline.
   mode: "priority" | "score"
   points: number
+  // "Only when" game condition (#539); "" = always
+  condition: string
 }
 
 const DEFAULT_SCORE_POINTS = 10
+
+// Mirrors backend VALID_RULE_CONDITIONS (database/settings/types.py).
+const RULE_CONDITIONS = [
+  { value: "", label: "Always" },
+  { value: "no_local_broadcast", label: "No local broadcast" },
+  { value: "season:postseason", label: "Postseason" },
+  { value: "season:regular", label: "Regular season" },
+  { value: "season:preseason", label: "Preseason" },
+] as const
+const VALID_RULE_CONDITIONS = new Set<string>(RULE_CONDITIONS.map(c => c.value))
+const CONDITION_HELP =
+  "Apply this rule only when the channel's game meets a condition. " +
+  "'No local broadcast' uses the broadcasters listed for the game and applies when none is listed for either team — " +
+  "an exclusive national game, where a team's own channel is dark. Reliable for US teams; Canadian regional broadcasts are often missing from the listing. " +
+  "A game with no listing, and any managed team channel, never meets a condition."
 
 const EMPTY_DP_CHANNELS: ChannelSourceChannel[] = []
 
@@ -531,7 +548,7 @@ function RuleRow({
           </Select>
         </div>
 
-        <div className="col-span-12 md:col-span-7">
+        <div className="col-span-12 md:col-span-5">
           {rule.type === "m3u" ? (
             <Select
               value={rule.value}
@@ -702,6 +719,18 @@ function RuleRow({
               placeholder="Regex pattern (e.g., .*HD.*)"
             />
           )}
+        </div>
+
+        <div className="col-span-12 md:col-span-2">
+          <Select
+            value={rule.condition}
+            onChange={(e) => onUpdate(index, { ...rule, condition: e.target.value })}
+            aria-label="Only when"
+          >
+            {RULE_CONDITIONS.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </Select>
         </div>
 
         <div className="col-span-10 md:col-span-2">
@@ -1008,6 +1037,7 @@ export function StreamOrderingManager() {
   const globalRuleForms = useMemo<RuleFormData[]>(() => (settings?.rules ?? []).map((rule) => ({
     ...rule,
     _id: allocateId(),
+    condition: rule.condition ?? "",
   })), [settings])
   const [syncedSource, setSyncedSource] = useState<typeof currentSource>(undefined)
   if (currentRules && currentSource !== syncedSource) {
@@ -1019,6 +1049,7 @@ export function StreamOrderingManager() {
       priority: r.priority,
       mode: r.mode ?? "priority",
       points: r.points ?? 0,
+      condition: r.condition ?? "",
     }))
     setRules(loaded)
     setUseGlobalScoring(activeScope?.use_global_scoring ?? false)
@@ -1031,7 +1062,7 @@ export function StreamOrderingManager() {
   const handleAddScoreRule = () => {
     setRules([
       ...rules,
-      { _id: allocateId(), type: "regex", value: "", priority: 99, mode: "score", points: DEFAULT_SCORE_POINTS },
+      { _id: allocateId(), type: "regex", value: "", priority: 99, mode: "score", points: DEFAULT_SCORE_POINTS, condition: "" },
     ])
     setHasChanges(true)
   }
@@ -1050,7 +1081,7 @@ export function StreamOrderingManager() {
     }
     setRules([
       ...rules,
-      { _id: allocateId(), type: "m3u", value: "", priority: nextPriority, mode: "priority", points: 0 },
+      { _id: allocateId(), type: "m3u", value: "", priority: nextPriority, mode: "priority", points: 0, condition: "" },
     ])
     setHasChanges(true)
   }
@@ -1058,7 +1089,7 @@ export function StreamOrderingManager() {
   const handleAddBaseline = () => {
     setRules([
       ...rules,
-      { _id: allocateId(), type: "catch_all", value: "", priority: 99, mode: "priority", points: 0 },
+      { _id: allocateId(), type: "catch_all", value: "", priority: 99, mode: "priority", points: 0, condition: "" },
     ])
     setHasChanges(true)
   }
@@ -1081,6 +1112,8 @@ export function StreamOrderingManager() {
     priority: r.priority,
     mode: r.mode,
     points: r.mode === "score" ? r.points : 0,
+    // The baseline has no condition: it is what everything else falls to.
+    condition: r.type === "catch_all" ? "" : r.condition,
   }))
 
   const saveScope = (scope: StreamOrderingScope, overrides: Partial<StreamOrderingScopeUpdate> = {}) =>
@@ -1139,7 +1172,7 @@ export function StreamOrderingManager() {
     )
     setRules((current) => [
       ...current.filter((rule) => family === "scoring" ? !isScoringRule(rule) : !isPriorityRule(rule)),
-      ...copied.map((rule) => ({ ...rule, _id: allocateId() })),
+      ...copied.map((rule) => ({ ...rule, _id: allocateId(), condition: rule.condition ?? "" })),
     ])
     if (family === "scoring") setUseGlobalScoring(false)
     else setUseGlobalPriority(false)
@@ -1163,6 +1196,7 @@ export function StreamOrderingManager() {
         priority: r.priority,
         mode: r.mode,
         points: r.points,
+        condition: r.condition ?? "",
       })),
     }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
@@ -1212,6 +1246,7 @@ export function StreamOrderingManager() {
         priority: number
         mode: RuleFormData["mode"]
         points: number
+        condition: string
       }[] = []
       for (const r of importedRules) {
         if (!r || typeof r.type !== "string" || !VALID_RULE_TYPES.has(r.type)) continue
@@ -1225,7 +1260,10 @@ export function StreamOrderingManager() {
           mode === "score" && Number.isInteger(pointsRaw)
             ? Math.max(-100000, Math.min(100000, pointsRaw))
             : 0
-        clean.push({ type: r.type as RuleFormData["type"], value, priority, mode, points })
+        // Files exported before #539 carry no condition; an unknown one is dropped.
+        const condition =
+          typeof r.condition === "string" && VALID_RULE_CONDITIONS.has(r.condition) ? r.condition : ""
+        clean.push({ type: r.type as RuleFormData["type"], value, priority, mode, points, condition })
       }
 
       if (clean.length === 0) {
@@ -1494,7 +1532,13 @@ export function StreamOrderingManager() {
             <div className="space-y-2">
               <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
                 <div className="col-span-2">Type</div>
-                <div className="col-span-7">Value</div>
+                <div className="col-span-5">Value</div>
+                <div className="col-span-2 flex items-center gap-1">
+                  Only when
+                  <RichTooltip content={CONDITION_HELP} side="top">
+                    <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                  </RichTooltip>
+                </div>
                 <div className="col-span-2 text-center">Points</div>
                 <div className="col-span-1"></div>
               </div>
@@ -1554,7 +1598,13 @@ export function StreamOrderingManager() {
             <div className="space-y-2">
               <div className="hidden md:grid grid-cols-12 gap-2 px-2 text-xs font-medium text-muted-foreground">
                 <div className="col-span-2">Type</div>
-                <div className="col-span-7">Value</div>
+                <div className="col-span-5">Value</div>
+                <div className="col-span-2 flex items-center gap-1">
+                  Only when
+                  <RichTooltip content={CONDITION_HELP} side="top">
+                    <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                  </RichTooltip>
+                </div>
                 <div className="col-span-2 text-center">Priority</div>
                 <div className="col-span-1"></div>
               </div>

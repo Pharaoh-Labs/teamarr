@@ -424,6 +424,13 @@ class StreamOrderingRuleModel(BaseModel):
     points: int = Field(
         0, ge=-100000, le=100000, description="Signed points, summed for score-mode rules"
     )
+    condition: str = Field(
+        "",
+        description=(
+            "Optional game condition (#539): '' (always), 'no_local_broadcast', "
+            "or 'season:preseason|regular|postseason'"
+        ),
+    )
 
 
 class StreamOrderingSettingsModel(BaseModel):

@@ -41,7 +41,7 @@ from teamarr.dispatcharr import (
     get_dispatcharr_connection,
 )
 from teamarr.services import create_channel_service, create_default_service
-from teamarr.services.stream_ordering import StreamOrderingService
+from teamarr.services.stream_ordering import GameContext, StreamOrderingService
 from teamarr.services.team_channel_status import find_next_live_window
 from teamarr.templates.resolver import TemplateResolver
 from teamarr.utilities.art_url import apply_art_base_url, is_relative_art_path
@@ -199,6 +199,7 @@ class StreamRuleMatch(BaseModel):
     is_winner: bool  # the priority-mode rule that set the band
     mode: str = "priority"  # 'priority' (band) or 'score' (additive contributor)
     points: int = 0  # signed contribution for score-mode rules
+    condition: str = ""  # the rule's "Only when" game condition (#539)
 
 
 class StreamNameMatch(BaseModel):
@@ -592,6 +593,7 @@ def get_managed_channel_streams(channel_id: int):
                         is_winner=entry.is_winner,
                         mode=entry.mode,
                         points=entry.points,
+                        condition=entry.condition,
                     )
                     for entry in ordering_service.evaluate_rules(stream, group_name)
                 ]
@@ -710,7 +712,9 @@ def get_managed_channel_streams(channel_id: int):
         ordering_rules, ordering_scope = resolve_stream_ordering_rules(
             conn, channel.sport, channel.league
         )
-        ordering_service = StreamOrderingService(ordering_rules, conn)
+        ordering_service = StreamOrderingService(
+            ordering_rules, conn, context=GameContext.from_channel(channel)
+        )
         sorting_scope = ordering_scope.name if ordering_scope else "Global"
         # With no rules configured, generation never reorders (streams keep their
         # sequential added order), so 'expected' must mirror the stored priority
@@ -729,6 +733,7 @@ def get_managed_channel_streams(channel_id: int):
                     is_winner=e.is_winner,
                     mode=e.mode,
                     points=e.points,
+                    condition=e.condition,
                 )
                 for e in ordering_service.evaluate_rules(s, group_name)
             ]
