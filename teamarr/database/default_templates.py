@@ -305,6 +305,28 @@ def _revert_team_order(spec: dict) -> dict:
     return g
 
 
+# --- pre-#975 postgame titles -------------------------------------------------
+
+# Every starter said "Postgame" after the event; it reads wrong for anything
+# that is not a game ("UFC 320: Postgame"). New title -> the one it replaced.
+_POSTGAME_TITLE_REVERTS = {
+    "{gracenote_category}: {team_name} Final": "{gracenote_category}: {team_name} Postgame",
+    "{gracenote_category}: Final": "{gracenote_category}: Postgame",
+    "{league} {event_number}: Event Complete": "{league} {event_number}: Postgame",
+    # Soccer Team inherited the base title until #975 gave it the match register
+    "{gracenote_category}: {team_name} Full Time": "{gracenote_category}: {team_name} Postgame",
+}
+
+
+def _revert_postgame_title(spec: dict) -> dict:
+    """The spec's content with its pre-#975 "Postgame" filler title (G6)."""
+    g = copy.deepcopy(spec)
+    block = g.get("postgame_fallback") or {}
+    if block.get("title") in _POSTGAME_TITLE_REVERTS:
+        block["title"] = _POSTGAME_TITLE_REVERTS[block["title"]]
+    return g
+
+
 def _revert_filler_rows(spec: dict) -> dict:
     """The spec's content in its pre-#420 shape: native condition rows
     reverted to the enabled legacy final/not-final dicts those generations
@@ -340,7 +362,10 @@ def _with_v80_rows(gen: dict) -> dict:
 def _prior_generations(name: str, spec: dict) -> list[dict]:
     """Registered prior content generations of a set member, newest first.
 
-    G5 (pre-#692 phase 2): current content with {team1}/{team2} reverted
+    G6 (pre-#975): current content with the postgame filler title reverted
+        to its "Postgame" wording. Every older generation carried that
+        title too, so the rest of the chain is built on G6.
+    G5 (pre-#692 phase 2): G6 with {team1}/{team2} reverted
         to {away_team}/{home_team} in subtitles / event channel name.
     G4 (pre-#420 cajd.6): G5 with the filler condition rows reverted to
         the enabled legacy final/not-final conditionals.
@@ -365,7 +390,8 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     # {away_team}/{home_team} in subtitles and the event channel name. It
     # postdates #420, so it carries native rows and is emitted as-is (no
     # v80/empty-rows variants) — see the tail of this function.
-    g5 = _revert_team_order(spec)
+    g6 = _revert_postgame_title(spec)
+    g5 = _revert_team_order(g6)
 
     g4 = _revert_filler_rows(g5)
     if g4 != g5:
@@ -403,7 +429,9 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     if g0 != g2:
         legacy_chain.append(g0)
 
-    gens: list[dict] = [g5] if g5 != spec else []
+    gens: list[dict] = [g6] if g6 != spec else []
+    if g5 != g6:
+        gens.append(g5)
     for g in legacy_chain:
         gens.append(_with_v80_rows(g))
         gens.append(g)  # empty-rows variant (post-v80 window)
@@ -469,7 +497,7 @@ def _team_base(**overrides) -> dict:
         # final AND the provider published one; otherwise the fallback's
         # constructed result line renders.
         "postgame_fallback": {
-            "title": "{gracenote_category}: {team_name} Postgame",
+            "title": "{gracenote_category}: {team_name} Final",
             "subtitle": "{team1.last} {at_vs.last} {team2.last}",
             "description": (
                 "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
@@ -639,7 +667,7 @@ def _event_base(**overrides) -> dict:
         # only event-scope vars here ({event_result}, never {team_name_the}/
         # {result_text}, which are TEAM_ONLY and fail builder validation, #354).
         "postgame_fallback": {
-            "title": "{gracenote_category}: Postgame",
+            "title": "{gracenote_category}: Final",
             "subtitle": "{team1} {at_vs} {team2}",
             "description": "Final: {event_result}",
             "art_url": _EVENT_ART,
@@ -821,6 +849,17 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "subtitle": "No upcoming match currently on schedule in next 30 days",
             "description_enabled": True,
             "description": "No upcoming {team_name} matches scheduled.",
+        },
+        # Match register for the after-match filler too (#975): the soccer
+        # event starters already say "Full Time". Same block as the base
+        # otherwise.
+        postgame_fallback={
+            "title": "{gracenote_category}: {team_name} Full Time",
+            "subtitle": "{team1.last} {at_vs.last} {team2.last}",
+            "description": (
+                "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
+            ),
+            "art_url": _ART_LAST,
         },
         pregame_fallback={
             "title": "Coming up: {gracenote_category} at {game_time.next}",
@@ -1049,7 +1088,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         # MMA carries no home/away scores, so the base 'Final: {event_result}'
         # would render empty — constructed bout-register line instead (#354).
         postgame_fallback={
-            "title": "{league} {event_number}: Postgame",
+            "title": "{league} {event_number}: Event Complete",
             "subtitle": "{away_team} vs {home_team}",
             "description": "{away_team} vs {home_team} has concluded at {venue}.",
             "art_url": _EVENT_ART,

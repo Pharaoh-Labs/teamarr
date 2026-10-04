@@ -34,25 +34,25 @@
     <live />
   </programme>
   <programme start="20260710220000 +0000" stop="20260711000000 +0000" channel="teamarr-event-e1">
-    <title lang="en">NBA Basketball: Postgame</title>
+    <title lang="en">NBA Basketball: Final</title>
     <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
     <desc lang="en">The game between the Detroit Pistons and the Boston Celtics has not yet ended as of the last update.</desc>
     <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=6&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260711000000 +0000" stop="20260711060000 +0000" channel="teamarr-event-e1">
-    <title lang="en">NBA Basketball: Postgame</title>
+    <title lang="en">NBA Basketball: Final</title>
     <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
     <desc lang="en">The game between the Detroit Pistons and the Boston Celtics has not yet ended as of the last update.</desc>
     <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=6&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260711060000 +0000" stop="20260711120000 +0000" channel="teamarr-event-e1">
-    <title lang="en">NBA Basketball: Postgame</title>
+    <title lang="en">NBA Basketball: Final</title>
     <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
     <desc lang="en">The game between the Detroit Pistons and the Boston Celtics has not yet ended as of the last update.</desc>
     <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=6&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260711120000 +0000" stop="20260711150000 +0000" channel="teamarr-event-e1">
-    <title lang="en">NBA Basketball: Postgame</title>
+    <title lang="en">NBA Basketball: Final</title>
     <sub-title lang="en">Detroit Pistons at Boston Celtics</sub-title>
     <desc lang="en">The game between the Detroit Pistons and the Boston Celtics has not yet ended as of the last update.</desc>
     <icon src="nba/DetroitPistons/BostonCeltics/cover.png?style=6&amp;logo=true&amp;fallback=true" />

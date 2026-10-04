@@ -81,6 +81,7 @@ constructed prose when it isn't available:
 - **Idle / offseason filler** — soccer team channels phrase filler in the
   match register ("No Chelsea Match Today", "No upcoming Chelsea matches
   scheduled."); other families keep the US "game" phrasing.
+- **After-event titles** — no starter titles its after-event filler "Postgame": the US-register starters say "Final" ("NBA Basketball: Final", "NBA Basketball: Boston Celtics Final"), soccer "Full Time", combat "Event Complete" ("UFC 325: Event Complete"), tennis "Match Complete" and racing "{session} Complete". The before-event filler is "Coming up: … at {time}" everywhere.
 - **Postgame** — when ESPN publishes a recap headline, the filler shows it
   via a `has_recap → {game_recap}` condition row; a game that's still
   running gets an `is_not_final` in-progress line; a final game with no
