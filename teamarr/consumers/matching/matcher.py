@@ -58,6 +58,7 @@ from teamarr.consumers.racing_segments import nearest_session
 from teamarr.consumers.stream_match_cache import (
     FAILED_MATCH_EVENT_ID,
     StreamMatchCache,
+    compute_fingerprint,
     get_generation_counter,
     increment_generation_counter,
 )
@@ -112,6 +113,11 @@ class _ExtractionFields(TypedDict):
     extracted_date: str | None
     extracted_time: str | None
     extracted_tz: str | None
+
+
+def _is_user_skip(results: "list[MatchedStreamResult]") -> bool:
+    """Whether a stream's verdict is the user's own skip (#869)."""
+    return bool(results) and results[0].filtered_reason is FilteredReason.USER_SKIPPED
 
 
 def _extraction_fields(classified: ClassifiedStream) -> _ExtractionFields:
@@ -487,6 +493,9 @@ class StreamMatcher:
         # Use provided generation or fetch current
         self._generation = generation or get_generation_counter(db_factory)
         self._generation_provided = generation is not None
+        # Fingerprints of the streams the user skipped in this group (#869);
+        # None = not loaded yet. Reloaded at the start of every batch.
+        self._skipped_fingerprints: set[str] | None = None
 
         # Initialize sub-matchers
         self._team_matcher = TeamMatcher(
@@ -566,6 +575,9 @@ class StreamMatcher:
         # Load league event types
         self._load_league_event_types()
 
+        # The user's skips for this source, read once per batch (#869)
+        self._skipped_fingerprints = None
+
         # Learn the source's date format from the whole batch (#474): the
         # custom date regex describes where the date lives; the batch shows
         # how it's formatted (one 16/07 proves the source is day-first).
@@ -611,7 +623,11 @@ class StreamMatcher:
                 # EPG augmentation (epic 183.4): for streams carrying a tvg_id in an
                 # EPG-enabled group, also match via EPG program titles and reconcile.
                 tvg_id = stream.get("tvg_id")
-                if self._epg_index is not None and tvg_id:
+                if _is_user_skip(match_results):
+                    # A skipped stream is skipped on every path (#869): its
+                    # guide programmes are not consulted either.
+                    pass
+                elif self._epg_index is not None and tvg_id:
                     epg_results = self._match_via_epg(
                         stream_id=stream_id,
                         stream_name=stream_name,
@@ -860,6 +876,15 @@ class StreamMatcher:
             event_league_sport=event_league_sport,
         )
 
+        # A stream the user skipped stays skipped however it would have been
+        # matched (#869). Checked here, before routing, because only the
+        # team-vs-team matcher ever read the skip: team streams never look at
+        # the cache, guide-anchored matches bypass it, and the event-card,
+        # racing and tennis matchers used to delete the row.
+        skipped = self._user_skipped(classified, stream_id, stream_name)
+        if skipped is not None:
+            return skipped
+
         # Step 2: Handle placeholders (streams that couldn't be classified)
         # Note: Placeholder pattern detection and unsupported sports filtering
         # is now handled by StreamFilter before streams reach the matcher.
@@ -968,6 +993,39 @@ class StreamMatcher:
         ]
         self._remember_failure(outcomes, stream_id, stream_name)
         return results
+
+    def _user_skipped(
+        self,
+        classified: ClassifiedStream,
+        stream_id: int,
+        stream_name: str,
+    ) -> list[MatchedStreamResult] | None:
+        """The user-skipped verdict for a stream, or None when it is not skipped."""
+        # No database, no skips (see _cached_failure).
+        if self._db_factory is None:
+            return None
+        if self._skipped_fingerprints is None:
+            self._skipped_fingerprints = self._cache.user_skipped_fingerprints(self._group_id)
+        if not self._skipped_fingerprints:
+            return None
+        fingerprint = compute_fingerprint(self._group_id, stream_id, stream_name)
+        if fingerprint not in self._skipped_fingerprints:
+            return None
+        logger.debug("[CACHE_SKIP] stream_id=%d (user skipped)", stream_id)
+        outcome = MatchOutcome.filtered(
+            FilteredReason.USER_SKIPPED,
+            stream_name=stream_name,
+            stream_id=stream_id,
+            detail="Skipped by user",
+        )
+        return [
+            self._outcome_to_result(
+                outcome=outcome,
+                stream_id=stream_id,
+                stream_name=stream_name,
+                classified=classified,
+            )
+        ]
 
     def _cached_failure(
         self, classified, stream_id: int, stream_name: str

@@ -613,6 +613,28 @@ class StreamMatchCache:
             logger.warning("[STREAM_CACHE_ERROR] Delete failed: %s", e)
             return False
 
+    def user_skipped_fingerprints(self, group_id: int) -> "set[str]":
+        """Fingerprints of the streams a user skipped in a group (#869).
+
+        One query per batch instead of one per stream: the matcher asks this
+        once and checks membership before it routes anything. Rows written by
+        older versions carry a NULL event id; both forms count.
+        """
+        try:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT fingerprint FROM stream_match_cache
+                    WHERE group_id = ? AND user_corrected = 1
+                      AND (event_id IS NULL OR event_id = ?)
+                    """,
+                    (group_id, USER_SKIPPED_EVENT_ID),
+                ).fetchall()
+        except sqlite3.Error as e:
+            logger.warning("[STREAM_CACHE_ERROR] Skip lookup failed: %s", e)
+            return set()
+        return {row["fingerprint"] for row in rows}
+
     def clear_failed(self) -> int:
         """Drop every cached FAILURE, leaving successes and pins untouched (#757).
 

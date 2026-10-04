@@ -693,7 +693,10 @@ class TennisMatcher:
         event = matcher._reconstruct_event(entry.cached_data)
 
         if not event:
-            self._cache.delete(ctx.group_id, ctx.stream_id, ctx.stream_name)
+            # A user's skip or pick is theirs to remove (#869): a pinned row
+            # that cannot be rebuilt into an event is left alone, never deleted.
+            if not entry.user_corrected:
+                self._cache.delete(ctx.group_id, ctx.stream_id, ctx.stream_name)
             return None
 
         # Cached event must still be on the stream's date
