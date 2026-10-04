@@ -311,6 +311,7 @@ class KeywordEnforcer:
                                 detach_at=stream.detach_at,
                                 dispatcharr_channel_group=stream.dispatcharr_channel_group,
                                 dispatcharr_channel_group_id=stream.dispatcharr_channel_group_id,
+                                dispatcharr_source_channel_id=stream.dispatcharr_source_channel_id,
                                 m3u_group_id=stream.m3u_group_id,
                                 m3u_group_name=group_name,
                             )

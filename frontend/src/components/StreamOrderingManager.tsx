@@ -45,7 +45,8 @@ import {
   useApplyStreamOrdering,
 } from "@/hooks/useSettings"
 import { useGroups } from "@/hooks/useGroups"
-import { useChannelGroupsWithChannels } from "@/hooks/useDispatcharr"
+import { useChannelGroupsWithChannels, useChannelSourceChannels } from "@/hooks/useDispatcharr"
+import type { ChannelSourceChannel } from "@/api/dispatcharr"
 import { useSubscription } from "@/hooks/useSubscription"
 import { getLeagueTeams, getTeamPickerLeagues, getLeagues } from "@/api/teams"
 import type { CachedTeam } from "@/api/teams"
@@ -290,6 +291,7 @@ const RULE_TYPES = [
   { value: "team_feed", label: "Specific Team's Feed", description: "Match streams resolved as a particular team's own broadcast — team-branded channels (Brewers.TV), broadcast-market listings, team streams, or home/away markers in the name" },
   { value: "home_feed", label: "Feed Side", description: "Match the home or away side's feed for whichever teams are playing — no team selection needed. Streams whose side we couldn't determine match neither and fall to Everything Else" },
   { value: "dispatcharr_group", label: "Dispatcharr Group", description: "Match channel-source streams by the Dispatcharr channel group you selected as an EPG source" },
+  { value: "dispatcharr_channel", label: "Dispatcharr Channel", description: "Match channel-source streams read from one specific Dispatcharr channel" },
   { value: "stats_metric", label: "Stream Stats", description: "Match streams where a numeric stat (resolution, bitrate, fps) meets a threshold" },
 ] as const
 
@@ -315,7 +317,7 @@ const NO_VALUE_TYPES = new Set(["team_feed", "not_team_feed", "epg_match", "home
 // Mirrors backend VALID_RULE_TYPES (database/settings/types.py) — used to validate imports.
 const VALID_RULE_TYPES = new Set([
   "m3u", "group", "regex", "stream_type",
-  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
+  "team_feed", "not_team_feed", "epg_match", "dispatcharr_group", "dispatcharr_channel",
   "home_feed", "away_feed", "stats_metric", "catch_all",
 ])
 
@@ -324,7 +326,7 @@ interface RuleFormData {
   // Without this, keying by array index causes focus to follow DOM position
   // instead of the rule, breaking double-digit priority entry (#198).
   _id: number
-  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "home_feed" | "away_feed" | "stats_metric" | "catch_all"
+  type: "m3u" | "group" | "regex" | "stream_type" | "team_feed" | "not_team_feed" | "epg_match" | "dispatcharr_group" | "dispatcharr_channel" | "home_feed" | "away_feed" | "stats_metric" | "catch_all"
   value: string
   priority: number
   // 'priority' rules form the hard first-match band list; 'score' rules add
@@ -335,6 +337,8 @@ interface RuleFormData {
 }
 
 const DEFAULT_SCORE_POINTS = 10
+
+const EMPTY_DP_CHANNELS: ChannelSourceChannel[] = []
 
 const TEAM_FEED_FAMILY = new Set<RuleFormData["type"]>(["team_feed", "not_team_feed"])
 // home_feed/away_feed share one UI control (the Feed Side select), collapsed to
@@ -450,6 +454,7 @@ function RuleRow({
   m3uAccounts,
   groupNames,
   dpGroupNames,
+  dpChannels,
   disabled = false,
 }: {
   rule: RuleFormData
@@ -459,6 +464,7 @@ function RuleRow({
   m3uAccounts: string[]
   groupNames: string[]
   dpGroupNames: string[]
+  dpChannels: ChannelSourceChannel[]
   disabled?: boolean
 }) {
   const isCatchAll = rule.type === "catch_all"
@@ -564,7 +570,41 @@ function RuleRow({
                 <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
               </RichTooltip>
             </div>
-          ) : STREAM_TYPE_FAMILY.has(rule.type) ? (() => {
+          ) : rule.type === "dispatcharr_channel" ? (() => {
+            // Stored as "<id>|<name>": the id is what matches, the name is the
+            // label shown when the channel list can't be loaded or the channel
+            // is gone (#971).
+            const savedId = rule.value.split("|", 1)[0]
+            const savedName = rule.value.includes("|") ? rule.value.slice(savedId.length + 1) : ""
+            const known = dpChannels.some(c => String(c.id) === savedId)
+            return (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={savedId}
+                  onChange={(e) => {
+                    const picked = dpChannels.find(c => String(c.id) === e.target.value)
+                    onUpdate(index, { ...rule, value: picked ? `${picked.id}|${picked.name}` : "" })
+                  }}
+                >
+                  <option value="">Select Dispatcharr channel...</option>
+                  {savedId && !known && (
+                    <option value={savedId}>{savedName || `Channel #${savedId}`} (not in the current list)</option>
+                  )}
+                  {dpChannels.map(c => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.name}{c.group_name ? ` — ${c.group_name}` : ""}
+                    </option>
+                  ))}
+                </Select>
+                <RichTooltip
+                  content="Ranks streams read from one specific channel under Matching → 'Dispatcharr as a Stream Source'. Matches on the channel itself, so renaming it in Dispatcharr doesn't break the rule. Streams from M3U sources are unaffected."
+                  side="top"
+                >
+                  <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                </RichTooltip>
+              </div>
+            )
+          })() : STREAM_TYPE_FAMILY.has(rule.type) ? (() => {
             const isEpg = rule.type === "epg_match"
             // epg_match carries no value; for stream_type parse event/team(+teams) out of value.
             const { streamType, teamIds } = isEpg
@@ -895,6 +935,7 @@ export function StreamOrderingManager() {
   // ids the picker offered resolved to nothing here and silently vanished.
   const { data: appSettings } = useQuery({ queryKey: ["settings"], queryFn: getSettings })
   const { data: dpChannelGroups } = useChannelGroupsWithChannels()
+  const { data: dpChannels } = useChannelSourceChannels()
   const dpGroupNames = useMemo(() => {
     const selected = new Set(appSettings?.epg?.epg_channel_source_groups ?? [])
     if (!selected.size || !dpChannelGroups) return []
@@ -1310,6 +1351,7 @@ export function StreamOrderingManager() {
       m3uAccounts={m3uAccounts}
       groupNames={groupNames}
       dpGroupNames={dpGroupNames}
+      dpChannels={dpChannels ?? EMPTY_DP_CHANNELS}
       disabled={isScoped && globalRuleForms.includes(rule)}
     />
   )

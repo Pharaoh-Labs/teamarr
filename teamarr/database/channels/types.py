@@ -160,6 +160,9 @@ class ManagedChannelStream:
     dispatcharr_channel_group: str | None = None
     # Stable DP channel group id for channel-source stream-profile overrides.
     dispatcharr_channel_group_id: int | None = None
+    # (#971) The DP channel a channel-source stream was read from — drives the
+    # dispatcharr_channel ordering rule. NULL for non-channel-source streams.
+    dispatcharr_source_channel_id: int | None = None
     # (#893) The stream's own M3U group, for exception keywords with M3U-group
     # sources. NULL on rows attached before the columns existed.
     m3u_group_id: int | None = None
@@ -228,6 +231,7 @@ class ManagedChannelStream:
             feed_side=row.get("feed_side"),
             dispatcharr_channel_group=row.get("dispatcharr_channel_group"),
             dispatcharr_channel_group_id=row.get("dispatcharr_channel_group_id"),
+            dispatcharr_source_channel_id=row.get("dispatcharr_source_channel_id"),
             m3u_group_id=row.get("m3u_group_id"),
             m3u_group_name=row.get("m3u_group_name"),
             added_at=row.get("added_at"),

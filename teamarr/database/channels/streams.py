@@ -57,6 +57,7 @@ def add_stream_to_channel(
         "feed_side",  # 'home'/'away'; NULL = unknown. Drives home_feed/away_feed rules (#533)
         "dispatcharr_channel_group",  # DP channel group; drives dispatcharr_group rule (ybt.3)
         "dispatcharr_channel_group_id",  # Stable DP channel group id for profile overrides
+        "dispatcharr_source_channel_id",  # DP channel read from; dispatcharr_channel rule (#971)
         "m3u_group_id",  # the stream's M3U group; exception keyword sources (#893)
         "m3u_group_name",
         "attach_at",   # time-windowed membership (183.5); None = full-life
@@ -192,6 +193,7 @@ def compute_stream_priority_from_rules(
     feed_side: str | None = None,
     sport: str | None = None,
     league: str | None = None,
+    dispatcharr_source_channel_id: int | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
@@ -202,7 +204,8 @@ def compute_stream_priority_from_rules(
     match_type (stream_type rules), match_method (epg_match rules),
     dispatcharr_channel_group (dispatcharr_group rules), feed_team_id
     (team_feed/not_team_feed rules, #489), and feed_side (home_feed/away_feed
-    rules, #533) — omitting them makes those rules silently non-matching at
+    rules, #533), dispatcharr_source_channel_id (dispatcharr_channel rules,
+    #971) — omitting them makes those rules silently non-matching at
     attach time, so the order pushed to Dispatcharr is wrong until the
     end-of-generation reorder pass corrects it.
 
@@ -217,6 +220,8 @@ def compute_stream_priority_from_rules(
         feed_team_id: Resolved feed/matched team id (for team_feed rules)
         feed_side: 'home'/'away', or None = unknown (for home_feed/away_feed
             rules). Unknown matches neither rule — never coerced to a side.
+        dispatcharr_source_channel_id: DP channel a channel-source stream was
+            read from (for dispatcharr_channel rules)
 
     Returns:
         Computed priority (lower = higher priority)
@@ -240,6 +245,7 @@ def compute_stream_priority_from_rules(
         match_type=match_type,
         match_method=match_method,
         dispatcharr_channel_group=dispatcharr_channel_group,
+        dispatcharr_source_channel_id=dispatcharr_source_channel_id,
         feed_team_id=feed_team_id,
         feed_side=feed_side,
     )
@@ -306,17 +312,26 @@ def update_stream_channel_source_group(
     managed_channel_id: int,
     dispatcharr_stream_id: int,
     dispatcharr_channel_group_id: int,
+    dispatcharr_source_channel_id: int | None = None,
 ) -> bool:
     """Backfill channel-source group metadata for an active stream.
 
     Only channel-source candidates supply this immutable Dispatcharr group id;
-    ordinary M3U/name-matched streams must remain NULL.
+    ordinary M3U/name-matched streams must remain NULL. The source channel id
+    (#971) rides along so streams attached before the column existed gain it;
+    a missing one never clears a stored value.
     """
     cursor = conn.execute(
         """UPDATE managed_channel_streams
-           SET dispatcharr_channel_group_id = ?
+           SET dispatcharr_channel_group_id = ?,
+               dispatcharr_source_channel_id = COALESCE(?, dispatcharr_source_channel_id)
            WHERE managed_channel_id = ? AND dispatcharr_stream_id = ? AND removed_at IS NULL""",
-        (dispatcharr_channel_group_id, managed_channel_id, dispatcharr_stream_id),
+        (
+            dispatcharr_channel_group_id,
+            dispatcharr_source_channel_id,
+            managed_channel_id,
+            dispatcharr_stream_id,
+        ),
     )
     return cursor.rowcount > 0
 

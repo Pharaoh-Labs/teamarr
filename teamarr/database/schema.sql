@@ -209,6 +209,7 @@ CREATE TABLE IF NOT EXISTS managed_team_channel_streams (
     feed_team_id TEXT,
     feed_side TEXT,
     dispatcharr_channel_group TEXT,
+    dispatcharr_source_channel_id INTEGER,    -- (#971) DP channel a channel-source stream was read from
     priority INTEGER NOT NULL DEFAULT 999,
     event_start TIMESTAMP,                    -- UTC; the soonest game wins the channel (#826)
     attach_at TIMESTAMP,
@@ -1769,6 +1770,7 @@ CREATE TABLE IF NOT EXISTS managed_channel_streams (
         CHECK(feed_side IN ('home', 'away')),
     dispatcharr_channel_group TEXT,           -- (ybt.3) the DP channel's own group name, for channel-source streams; drives the 'dispatcharr_group' stream-ordering rule. NULL for non-channel-source streams.
     dispatcharr_channel_group_id INTEGER,     -- Stable DP channel-group id for channel-source stream-profile overrides. NULL for non-channel-source streams.
+    dispatcharr_source_channel_id INTEGER,    -- (#971) the DP channel a channel-source stream was read from; drives the 'dispatcharr_channel' stream-ordering rule. NULL for non-channel-source streams.
     m3u_group_id INTEGER,                     -- (#893) the stream's own M3U group; exception keywords with M3U-group sources re-check against it. NULL on rows attached before the column existed.
     m3u_group_name TEXT,
 

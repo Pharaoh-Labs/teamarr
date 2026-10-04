@@ -109,3 +109,51 @@ def test_bulk_edit_skips_channel_sources(rows):
     body = resp.json()
     assert body["total_updated"] == 0 and body["total_failed"] == 1
     assert _listed()[rows[470]]["enabled"] is True
+
+
+def test_channel_source_channels_lists_selected_groups_without_teamarr_channels(
+    tmp_path, monkeypatch
+):
+    """The Dispatcharr Channel rule picker (#971): channels of the selected
+    groups, never Teamarr's own output channels."""
+    from types import SimpleNamespace
+
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    init_db()
+    with get_db() as conn:
+        conn.execute("UPDATE settings SET epg_channel_source_groups = '[7]' WHERE id = 1")
+        conn.execute(
+            "INSERT INTO managed_channels (event_id, event_provider, tvg_id, channel_name, "
+            "dispatcharr_channel_id) VALUES ('e', 'espn', 't', 'Teamarr output', 900)"
+        )
+
+    def channel(cid, name, group):
+        return SimpleNamespace(id=cid, name=name, channel_number="1", channel_group_id=group)
+
+    fake = SimpleNamespace(
+        m3u=SimpleNamespace(
+            list_groups=lambda: [
+                SimpleNamespace(id=7, name="US Sports"),
+                SimpleNamespace(id=9, name="UK Sports"),
+            ]
+        ),
+        channels=SimpleNamespace(
+            get_channels=lambda: [
+                channel(101, "FS1", 7),
+                channel(100, "ESPN", 7),
+                channel(200, "Sky Sports", 9),
+                channel(900, "Teamarr output", 7),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        "teamarr.api.routes.dispatcharr.get_dispatcharr_connection", lambda db_factory: fake
+    )
+
+    resp = client.get("/api/v1/dispatcharr/channel-source-channels")
+
+    assert resp.status_code == 200, resp.text
+    assert [(c["id"], c["name"], c["group_name"]) for c in resp.json()] == [
+        (100, "ESPN", "US Sports"),
+        (101, "FS1", "US Sports"),
+    ]

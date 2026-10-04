@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   getChannelGroups,
   getChannelGroupsWithChannels,
+  getChannelSourceChannels,
   getChannelProfiles,
   getStreamProfiles,
   createChannelProfile,
@@ -52,6 +53,16 @@ export function useChannelGroupsWithChannels(enabled = true) {
   return useQuery({
     queryKey: ["dispatcharr-channel-groups", { withChannels: true }],
     queryFn: getChannelGroupsWithChannels,
+    enabled,
+    retry: false,
+  })
+}
+
+/** Channels a channel-source scan can read — the Dispatcharr Channel rule picker (#971). */
+export function useChannelSourceChannels(enabled = true) {
+  return useQuery({
+    queryKey: ["dispatcharr-channel-source-channels"],
+    queryFn: getChannelSourceChannels,
     enabled,
     retry: false,
   })

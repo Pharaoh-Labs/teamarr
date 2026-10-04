@@ -332,6 +332,8 @@ class StreamOrderingService:
             return self._match_epg_match(stream)
         elif rule.type == "dispatcharr_group":
             return self._match_dispatcharr_group(stream, rule.value)
+        elif rule.type == "dispatcharr_channel":
+            return self._match_dispatcharr_channel(stream, rule.value)
         elif rule.type == "stats_metric":
             return self._match_stats_metric(stream, rule.value)
         return False
@@ -451,6 +453,20 @@ class StreamOrderingService:
         if not stream.dispatcharr_channel_group:
             return False
         return stream.dispatcharr_channel_group.lower() == group_name.lower()
+
+    @staticmethod
+    def _match_dispatcharr_channel(stream: ManagedChannelStream, rule_value: str) -> bool:
+        """Match a channel-source stream by the Dispatcharr channel it came from (#971).
+
+        rule_value is "<channel id>|<channel name>". Only the id is compared —
+        the name is the label the rule was saved with, so a channel renamed in
+        Dispatcharr keeps matching. Streams from an M3U source carry no source
+        channel and never match.
+        """
+        if stream.dispatcharr_source_channel_id is None:
+            return False
+        channel_id = rule_value.split("|", 1)[0].strip()
+        return channel_id.isdigit() and int(channel_id) == stream.dispatcharr_source_channel_id
 
     _STATS_OPERATORS = {
         ">": lambda a, b: a > b,

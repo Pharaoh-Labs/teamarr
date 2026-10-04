@@ -144,8 +144,16 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   away_feed: "Away Side's Feed",
   epg_match: "EPG Match",
   dispatcharr_group: "Dispatcharr Group",
+  dispatcharr_channel: "Dispatcharr Channel",
   stats_metric: "Stats Metric",
   catch_all: "Everything else",
+}
+
+// A dispatcharr_channel rule stores "<id>|<name>" (#971); show the name.
+function ruleValueLabel(type: string, value: string): string {
+  if (type !== "dispatcharr_channel") return value
+  const pipe = value.indexOf("|")
+  return pipe === -1 ? `Channel #${value}` : value.slice(pipe + 1)
 }
 
 // Close a popover on outside-click / Escape. Shared by the click-popovers below
@@ -279,7 +287,7 @@ function PriorityCell(
                   </span>
                   {r.value && (
                     <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
-                      {r.value}
+                      {ruleValueLabel(r.type, r.value)}
                     </span>
                   )}
                 </span>
@@ -296,7 +304,7 @@ function PriorityCell(
                   </span>
                   {r.value && (
                     <span className="block truncate font-mono text-[10px] text-muted-foreground" title={r.value}>
-                      {r.value}
+                      {ruleValueLabel(r.type, r.value)}
                     </span>
                   )}
                 </span>

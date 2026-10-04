@@ -566,6 +566,11 @@ def get_managed_channel_streams(channel_id: int):
                     feed_team_id=stream["feed_team_id"],
                     feed_side=stream["feed_side"],
                     dispatcharr_channel_group=stream["dispatcharr_channel_group"],
+                    dispatcharr_source_channel_id=(
+                        stream["dispatcharr_source_channel_id"]
+                        if "dispatcharr_source_channel_id" in stream.keys()
+                        else None
+                    ),
                     priority=stream["priority"],
                     stream_stats=stats_by_stream.get(stream["dispatcharr_stream_id"]),
                 )

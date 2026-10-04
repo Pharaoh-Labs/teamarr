@@ -676,6 +676,7 @@ class ChannelCreator(_LifecycleHost):
                     feed_side=stream_feed_side,
                     sport=event.sport,
                     league=event.league,
+                    dispatcharr_source_channel_id=stream.get("dp_channel_id"),
                 )
                 if priority is None:
                     priority = get_next_stream_priority(conn, existing.id)
@@ -698,6 +699,7 @@ class ChannelCreator(_LifecycleHost):
                     feed_side=stream_feed_side,
                     dispatcharr_channel_group=stream.get("dp_channel_group"),
                     dispatcharr_channel_group_id=stream.get("dp_channel_group_id"),
+                    dispatcharr_source_channel_id=stream.get("dp_channel_id"),
                     m3u_group_id=stream.get("m3u_group_id"),
                     m3u_group_name=stream.get("m3u_group_name"),
                     attach_at=attach_at,
@@ -860,7 +862,9 @@ class ChannelCreator(_LifecycleHost):
 
         dp_channel_group_id = stream.get("dp_channel_group_id")
         if dp_channel_group_id is not None:
-            update_stream_channel_source_group(conn, existing.id, stream_id, dp_channel_group_id)
+            update_stream_channel_source_group(
+                conn, existing.id, stream_id, dp_channel_group_id, stream.get("dp_channel_id")
+            )
 
         # Sync channel settings
         settings_result = self._sync_channel_settings(
@@ -1222,6 +1226,7 @@ class ChannelCreator(_LifecycleHost):
                 feed_side=stream_feed_side,
                 dispatcharr_channel_group=stream.get("dp_channel_group"),
                 dispatcharr_channel_group_id=stream.get("dp_channel_group_id"),
+                dispatcharr_source_channel_id=stream.get("dp_channel_id"),
                 m3u_group_id=stream.get("m3u_group_id"),
                 m3u_group_name=stream.get("m3u_group_name"),
                 attach_at=attach_at,

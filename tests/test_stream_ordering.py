@@ -269,6 +269,60 @@ class TestDispatcharrGroup:
         assert svc.compute_priority(self._stream(None)) == NO_MATCH_PRIORITY
 
 
+class TestDispatcharrChannelRule:
+    """dispatcharr_channel: one specific channel-source channel (#971)."""
+
+    def _stream(self, source_channel_id):
+        return ManagedChannelStream(
+            id=1, managed_channel_id=1, dispatcharr_stream_id=1,
+            stream_name="FanDuel Sports Wisconsin",
+            dispatcharr_source_channel_id=source_channel_id,
+        )
+
+    def test_matches_on_the_channel_id(self):
+        svc = StreamOrderingService([StreamOrderingRule("dispatcharr_channel", "412|FDSN WI", 1)])
+        assert svc.compute_priority(self._stream(412)) == 1
+
+    def test_a_renamed_channel_still_matches(self):
+        # The name after the pipe is only the label the rule was saved with.
+        svc = StreamOrderingService([StreamOrderingRule("dispatcharr_channel", "412|Old Name", 1)])
+        assert svc.compute_priority(self._stream(412)) == 1
+
+    def test_ignores_another_channel(self):
+        svc = StreamOrderingService([StreamOrderingRule("dispatcharr_channel", "412|FDSN WI", 1)])
+        assert svc.compute_priority(self._stream(4120)) == NO_MATCH_PRIORITY
+
+    def test_non_channel_source_stream_never_matches(self):
+        svc = StreamOrderingService([StreamOrderingRule("dispatcharr_channel", "412|FDSN WI", 1)])
+        assert svc.compute_priority(self._stream(None)) == NO_MATCH_PRIORITY
+
+    def test_a_value_without_an_id_matches_nothing(self):
+        svc = StreamOrderingService([StreamOrderingRule("dispatcharr_channel", "FDSN WI", 1)])
+        assert svc.compute_priority(self._stream(412)) == NO_MATCH_PRIORITY
+
+    def test_attach_time_compute_honors_the_source_channel(self, seeded_db):
+        """The rule must apply when a stream is attached, not only at the
+        end-of-run reorder (#379)."""
+        from teamarr.database.channels import compute_stream_priority_from_rules
+        from teamarr.database.settings.update import update_stream_ordering_rules
+
+        update_stream_ordering_rules(
+            seeded_db,
+            [{"type": "dispatcharr_channel", "value": "412|FDSN WI", "priority": 99,
+              "mode": "score", "points": 500}],
+        )
+        seeded_db.commit()
+
+        picked = compute_stream_priority_from_rules(
+            seeded_db, "FDSN WI", None, None, dispatcharr_source_channel_id=412,
+        )
+        other = compute_stream_priority_from_rules(
+            seeded_db, "FDSN WI", None, None, dispatcharr_source_channel_id=7,
+        )
+        assert picked == NO_MATCH_PRIORITY * BAND_STRIDE - 500
+        assert other == NO_MATCH_PRIORITY * BAND_STRIDE
+
+
 # ---------------------------------------------------------------------------
 # catch_all fallback
 # ---------------------------------------------------------------------------
