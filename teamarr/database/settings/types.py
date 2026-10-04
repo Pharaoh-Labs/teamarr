@@ -239,8 +239,8 @@ class StreamOrderingRule:
     """
 
     # One of VALID_RULE_TYPES below (m3u/group/regex/stream_type/team_feed/
-    # not_team_feed/epg_match/dispatcharr_group/home_feed/away_feed/
-    # stats_metric/catch_all)
+    # not_team_feed/epg_match/dispatcharr_group/dispatcharr_channel/home_feed/
+    # away_feed/stats_metric/catch_all)
     type: str
     value: str  # Account name, group name, regex pattern, or team key(s)
     priority: int  # 1-99, lower = higher priority (orders 'priority'-mode rules / sets band)
@@ -251,7 +251,7 @@ class StreamOrderingRule:
 VALID_RULE_TYPES: frozenset[str] = frozenset({
     "m3u", "group", "regex", "stream_type",
     "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
-    "home_feed", "away_feed",
+    "dispatcharr_channel", "home_feed", "away_feed",
     "stats_metric", "catch_all",
 })
 VALID_RULE_MODES: frozenset[str] = frozenset({"priority", "score"})

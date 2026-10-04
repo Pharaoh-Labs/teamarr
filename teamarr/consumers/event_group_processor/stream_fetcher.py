@@ -381,6 +381,8 @@ class StreamFetcher:
                     # the M3U stream group above — drives scoping + the sorting rule.
                     "dp_channel_group_id": dp_group_id,
                     "dp_channel_group": dp_group_names.get(dp_group_id),
+                    # The DP channel itself (#971) — drives the dispatcharr_channel rule
+                    "dp_channel_id": ch.get("id"),
                     "m3u_account_id": account_id,
                     "m3u_account_name": self._account_names().get(account_id)
                     if account_id is not None

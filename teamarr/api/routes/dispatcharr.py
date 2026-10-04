@@ -157,6 +157,45 @@ def list_channel_groups(exclude_m3u: bool = True, with_channels: bool = False) -
     ]
 
 
+@router.get("/channel-source-channels")
+def list_channel_source_channels() -> list[dict]:
+    """List the Dispatcharr channels a channel-source scan can read (#971).
+
+    The picker behind the ``dispatcharr_channel`` stream-ordering rule: every
+    non-Teamarr channel in the groups selected under Dispatcharr as a Stream
+    Source, or in any group when none is selected (the catch-all row reads
+    them all). Sorted by name.
+
+    Returns:
+        List of ``{id, name, channel_number, group_id, group_name}``
+    """
+    from teamarr.database.settings import get_epg_settings
+
+    conn = get_dispatcharr_connection(db_factory=get_db)
+    if not conn:
+        raise HTTPException(status_code=503, detail="Dispatcharr not configured or unavailable")
+
+    with get_db() as db:
+        selected = {int(gid) for gid in get_epg_settings(db).epg_channel_source_groups or []}
+    own = managed_channel_ids(get_db)
+    group_names = {g.id: g.name for g in conn.m3u.list_groups()}
+    channels = [
+        {
+            "id": ch.id,
+            "name": ch.name,
+            "channel_number": ch.channel_number,
+            "group_id": ch.channel_group_id,
+            "group_name": (
+                group_names.get(ch.channel_group_id) if ch.channel_group_id is not None else None
+            ),
+        }
+        for ch in conn.channels.get_channels()
+        if ch.id not in own and (not selected or ch.channel_group_id in selected)
+    ]
+    channels.sort(key=lambda c: natural_sort_key(c["name"] or ""))
+    return channels
+
+
 @router.post("/channel-groups")
 def create_channel_group(name: str) -> dict:
     """Create a new channel group in Dispatcharr.

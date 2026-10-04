@@ -203,6 +203,8 @@ def test_scopes_candidates_to_selected_dp_groups(monkeypatch):
     # name resolved from the groups endpoint — not the channel dict (#379).
     assert out[0]["dp_channel_group_id"] == 7
     assert out[0]["dp_channel_group"] == "US Sports"
+    # ...and the channel itself, for the dispatcharr_channel rule (#971)
+    assert out[0]["dp_channel_id"] == 100
 
 
 def test_dp_group_name_resolves_from_groups_endpoint(monkeypatch):
@@ -251,6 +253,39 @@ def test_channel_source_group_id_persists_and_backfills(db_conn):
 
     update_stream_channel_source_group(db_conn, channel_id, 500, 9)
     assert get_channel_streams(db_conn, channel_id)[0].dispatcharr_channel_group_id == 9
+
+
+def test_source_channel_id_persists_and_backfills(db_conn):
+    """The DP channel a stream was read from (#971): stored at attach, filled
+    in for streams attached before the column existed, never cleared."""
+    from teamarr.database.channels import (
+        add_stream_to_channel,
+        get_channel_streams,
+        update_stream_channel_source_group,
+    )
+
+    db_conn.execute(
+        "INSERT INTO managed_channels (event_id, event_provider, tvg_id, channel_name) "
+        "VALUES ('event', 'espn', 'tvg-event', 'Event')"
+    )
+    channel_id = db_conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    add_stream_to_channel(db_conn, channel_id, 500, dispatcharr_source_channel_id=100)
+    add_stream_to_channel(db_conn, channel_id, 501, dispatcharr_channel_group_id=7)
+
+    def source_channels():
+        return {
+            s.dispatcharr_stream_id: s.dispatcharr_source_channel_id
+            for s in get_channel_streams(db_conn, channel_id)
+        }
+
+    assert source_channels() == {500: 100, 501: None}
+
+    update_stream_channel_source_group(db_conn, channel_id, 501, 7, 101)
+    assert source_channels() == {500: 100, 501: 101}
+
+    # A caller without the channel id must not wipe a stored one
+    update_stream_channel_source_group(db_conn, channel_id, 500, 7)
+    assert source_channels()[500] == 100
 
 
 def test_ensure_channel_source_group_idempotent_and_synced(db_conn):

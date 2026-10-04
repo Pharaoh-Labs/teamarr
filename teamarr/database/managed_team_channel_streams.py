@@ -103,8 +103,8 @@ def reconcile_team_streams(
                    team_id, dispatcharr_stream_id, event_id, event_provider,
                    source_group_id, stream_name, m3u_account_name, match_method,
                    match_type, feed_team_id, feed_side, dispatcharr_channel_group,
-                   priority, event_start, attach_at, detach_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   dispatcharr_source_channel_id, priority, event_start, attach_at, detach_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(team_id, dispatcharr_stream_id, event_id, event_provider,
                             source_group_id, attach_at) DO UPDATE SET
                     stream_name = excluded.stream_name,
@@ -114,6 +114,7 @@ def reconcile_team_streams(
                     feed_team_id = excluded.feed_team_id,
                     feed_side = excluded.feed_side,
                     dispatcharr_channel_group = excluded.dispatcharr_channel_group,
+                    dispatcharr_source_channel_id = excluded.dispatcharr_source_channel_id,
                     priority = excluded.priority,
                     event_start = excluded.event_start,
                     detach_at = excluded.detach_at,
@@ -125,6 +126,7 @@ def reconcile_team_streams(
                 item.get("m3u_account_name"), item.get("match_method"),
                 item.get("match_type", "event"), item.get("feed_team_id"),
                 item.get("feed_side"), item.get("dispatcharr_channel_group"),
+                item.get("dispatcharr_source_channel_id"),
                 item.get("priority", 999), item.get("event_start"),
                 item.get("attach_at") or "", item.get("detach_at"),
             ),

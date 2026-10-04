@@ -63,6 +63,20 @@ export function getChannelGroups(excludeM3u: boolean): Promise<ChannelGroup[]> {
  * so hides groups the user curated channels into. "Holds channels" is the test
  * that matches what the scan scopes on.
  */
+/** A Dispatcharr channel a channel-source scan can read (#971). */
+export interface ChannelSourceChannel {
+  id: number
+  name: string
+  channel_number: string | null
+  group_id: number | null
+  group_name: string | null
+}
+
+/** Channels behind the "Dispatcharr Channel" stream-priority rule picker (#971). */
+export function getChannelSourceChannels(): Promise<ChannelSourceChannel[]> {
+  return emptyOn503(api.get<ChannelSourceChannel[]>("/dispatcharr/channel-source-channels"))
+}
+
 export function getChannelGroupsWithChannels(): Promise<ChannelGroup[]> {
   return emptyOn503(
     api.get<ChannelGroup[]>("/dispatcharr/channel-groups?with_channels=true")

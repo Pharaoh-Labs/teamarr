@@ -698,6 +698,7 @@ class TeamChannelManager:
                                 "feed_team_id": stream_feed_team_id,
                                 "feed_side": feed_side,
                                 "dispatcharr_channel_group": stream.get("dp_channel_group"),
+                                "dispatcharr_source_channel_id": stream.get("dp_channel_id"),
                                 "event_start": event_start,
                                 "attach_at": attach_at,
                                 "detach_at": detach_at,
@@ -1081,6 +1082,11 @@ class TeamChannelManager:
                         match_type=row["match_type"], match_method=row["match_method"],
                         feed_team_id=row["feed_team_id"], feed_side=row["feed_side"],
                         dispatcharr_channel_group=row["dispatcharr_channel_group"],
+                        dispatcharr_source_channel_id=(
+                            row["dispatcharr_source_channel_id"]
+                            if "dispatcharr_source_channel_id" in row.keys()
+                            else None
+                        ),
                         priority=row["priority"],
                         stream_stats=stats_by_stream.get(row["dispatcharr_stream_id"]),
                     )
