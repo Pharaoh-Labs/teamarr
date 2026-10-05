@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter
 
 from teamarr.database import get_db
-from teamarr.database.subscription import get_subscribed_league_codes
+from teamarr.database.subscription import get_subscribed_league_codes, get_template_scope
 from teamarr.services.cache_service import create_cache_service
 from teamarr.templates.preview import build_live_context, lookup_league_fields
 from teamarr.templates.resolver import TemplateResolver
@@ -169,27 +169,56 @@ def _league_info_dict(lg) -> dict:
     }
 
 
+def _default_preview_league(
+    enabled: list, subscribed: set[str], leagues: list[str], sports: list[str]
+) -> str | None:
+    """The league a template's preview should open on, or None for no opinion.
+
+    A league the template is assigned to wins over one that merely shares an
+    assigned sport, and within each a league the user subscribes to wins.
+    """
+    by_slug = {lg.slug.lower(): lg for lg in enabled}
+    assigned = [by_slug[code.lower()] for code in leagues if code.lower() in by_slug]
+    wanted_sports = {s.lower() for s in sports}
+    same_sport = [lg for lg in enabled if (lg.sport or "").lower() in wanted_sports]
+    for pool in (assigned, same_sport):
+        for lg in pool:
+            if lg.slug.lower() in subscribed:
+                return lg.slug
+        if pool:
+            return pool[0].slug
+    return None
+
+
 @router.get("/variables/sample-leagues")
-def get_sample_leagues():
+def get_sample_leagues(template_id: int | None = None):
     """Leagues to offer in the template preview selector.
 
-    Returns all enabled configured leagues plus the subset the user has
-    subscribed to (event-based sports subscription + the leagues of followed
-    teams). The picker shows the subscribed subset by default but can search the
-    full list.
+    Returns every league the app knows — configured ones and the ones only
+    discovered from a provider, since those can be subscribed to as well (#993)
+    — plus the subset the user has subscribed to (event-based sports
+    subscription + the leagues of followed teams). The picker shows the
+    subscribed subset by default but can search the full list.
+
+    With ``template_id``, ``default_slug`` names the league that template's
+    preview should open on: one it is assigned to or whose teams use it.
     """
 
     with get_db() as conn:
         codes = get_subscribed_league_codes(conn)
+        scope_leagues, scope_sports = (
+            get_template_scope(conn, template_id) if template_id is not None else ([], [])
+        )
 
     service = create_cache_service(get_db)
-    enabled = service.get_leagues(configured_only=True)
+    enabled = service.get_leagues()
     subscribed_slugs = [lg.slug for lg in enabled if lg.slug.lower() in codes]
 
     return {
         "count": len(enabled),
         "leagues": [_league_info_dict(lg) for lg in enabled],
         "subscribed_slugs": subscribed_slugs,
+        "default_slug": _default_preview_league(enabled, codes, scope_leagues, scope_sports),
     }
 
 

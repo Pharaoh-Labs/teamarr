@@ -83,12 +83,22 @@ export function TemplateForm() {
   // Leagues to preview against: all enabled leagues, with the subscribed subset
   // shown by default in the sidebar (search reaches the full list).
   const { data: sampleLeaguesData } = useQuery({
-    queryKey: ["sample-leagues"],
-    queryFn: fetchSampleLeagues,
+    queryKey: ["sample-leagues", templateId ?? null],
+    queryFn: () => fetchSampleLeagues(isEdit ? Number(templateId) : undefined),
     staleTime: 60 * 60 * 1000, // 1 hour
   })
   const previewLeagues = sampleLeaguesData?.leagues ?? []
   const subscribedSlugs = sampleLeaguesData?.subscribed_slugs ?? []
+
+  // Open the preview on a league this template is actually used for (#993) —
+  // a soccer template used to open on NBA. Applied once per load, so a league
+  // the author then picks by hand is never overridden.
+  const [defaultedFrom, setDefaultedFrom] = useState<typeof sampleLeaguesData>(undefined)
+  if (sampleLeaguesData && sampleLeaguesData !== defaultedFrom) {
+    setDefaultedFrom(sampleLeaguesData)
+    const slug = sampleLeaguesData.default_slug
+    if (slug && previewLeagues.some((l) => l.slug === slug)) setPreviewLeague(slug)
+  }
 
   // Keep the preview league valid against the fetched list. Prefer a subscribed
   // league (nba if subscribed, else the first subscribed), then nba, then the
