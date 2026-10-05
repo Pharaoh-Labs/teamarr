@@ -386,7 +386,8 @@ def maintain_managed_sources(
         )
     }
     for source in get_all_groups(conn, include_disabled=True):
-        if not source.managed:
+        # A managed source always has the group it was accepted from.
+        if not source.managed or source.m3u_group_id is None:
             continue
         group_live = source.m3u_group_id in live_group_ids
         if source.enabled:
