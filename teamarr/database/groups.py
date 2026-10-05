@@ -128,6 +128,10 @@ class EventEPGGroup:
     epg_match_enabled: bool = False  # (183.6) opt this group into EPG program-data matching
     # (183.9) system group sourcing candidates from curated Dispatcharr channels
     is_channel_source: bool = False
+    # Created by source discovery (#997). Only a managed source is ever
+    # disabled or removed on its own; a hand edit clears the flag.
+    managed: bool = False
+    last_matched_at: str | None = None  # Last run in which it matched a stream
     # (#542) Dispatcharr channel group a channel-source row reads; None = all
     dispatcharr_channel_group_id: int | None = None
     # Per-group subscription overrides (NULL = inherit global)
@@ -284,6 +288,8 @@ def _row_to_group(row) -> EventEPGGroup:
         is_channel_source=(
             bool(row["is_channel_source"]) if "is_channel_source" in row.keys() else False
         ),
+        managed=bool(row["managed"]) if "managed" in row.keys() else False,
+        last_matched_at=row["last_matched_at"] if "last_matched_at" in row.keys() else None,
         dispatcharr_channel_group_id=(
             row["dispatcharr_channel_group_id"]
             if "dispatcharr_channel_group_id" in row.keys()
@@ -954,6 +960,7 @@ def update_group(
         return False
 
     cursor = conn.execute(builder.build_query("event_epg_groups"), builder.params(group_id))
+    _claim_managed_source(conn, group_id)
     if cursor.rowcount > 0:
         logger.info("[UPDATED] Event group id=%d", group_id)
         return True
@@ -974,6 +981,7 @@ def set_group_enabled(conn: Connection, group_id: int, enabled: bool) -> bool:
     cursor = conn.execute(
         "UPDATE event_epg_groups SET enabled = ? WHERE id = ?", (int(enabled), group_id)
     )
+    _claim_managed_source(conn, group_id)
     if cursor.rowcount > 0:
         logger.info("[UPDATED] Event group id=%d enabled=%s", group_id, enabled)
         return True
@@ -1029,6 +1037,12 @@ def update_group_stats(
     Returns:
         True if updated
     """
+    if matched_count > 0:
+        # Source discovery retires a managed source by how long ago this was (#997).
+        conn.execute(
+            "UPDATE event_epg_groups SET last_matched_at = datetime('now') WHERE id = ?",
+            (group_id,),
+        )
     if total_stream_count is not None:
         cursor = conn.execute(
             """UPDATE event_epg_groups
@@ -1111,6 +1125,35 @@ def update_group_stats(
 # =============================================================================
 # STALE SOURCE TRACKING (lylt)
 # =============================================================================
+
+
+def _claim_managed_source(conn: Connection, group_id: int) -> None:
+    """A hand edit makes a discovered source the user's own (#997).
+
+    ``update_group`` and ``set_group_enabled`` are the user-edit paths, so
+    both come through here. Source discovery changes a managed source with
+    its own statements (``set_managed_source_enabled``) and never claims it.
+    A source that is not managed is untouched.
+    """
+    conn.execute(
+        "UPDATE event_epg_groups SET managed = 0 WHERE id = ? AND managed = 1", (group_id,)
+    )
+
+
+def set_managed_source_enabled(conn: Connection, group_id: int, enabled: bool) -> None:
+    """Enable or disable a managed source on discovery's behalf, keeping it managed."""
+    conn.execute(
+        "UPDATE event_epg_groups SET enabled = ? WHERE id = ? AND managed = 1",
+        (int(enabled), group_id),
+    )
+
+
+def set_group_managed(conn: Connection, group_id: int, managed: bool) -> None:
+    """Mark a source as owned by source discovery, or hand it to the user (#997)."""
+    conn.execute(
+        "UPDATE event_epg_groups SET managed = ? WHERE id = ?", (int(managed), group_id)
+    )
+    conn.commit()
 
 
 def mark_group_source_seen(conn: Connection, group_id: int) -> None:

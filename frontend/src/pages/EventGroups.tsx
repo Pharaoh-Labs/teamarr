@@ -68,6 +68,7 @@ import {
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
 import { BulkEditDialog } from "./event-groups/BulkEditDialog"
+import { SuggestedSources } from "@/components/SuggestedSources"
 import { getFailedReasonLabel, getLeagueDisplayName } from "@/lib/utils"
 
 // Helper to get display name (prefer display_name over name)
@@ -511,6 +512,8 @@ export function EventGroups() {
         </Alert>
       )}
 
+      <SuggestedSources leagueName={getLeagueDisplay} />
+
       {/* Fixed Batch Operations Bar */}
       {selectedIds.size > 0 && (
         <StickyActionBar
@@ -717,6 +720,15 @@ export function EventGroups() {
                                 title="Streams come from the channels in this Dispatcharr group, matched through each channel's guide. Selected under Matching → Dispatcharr as a Stream Source."
                               >
                                 Dispatcharr group
+                              </Badge>
+                            )}
+                            {group.managed && (
+                              <Badge
+                                variant="info"
+                                className="text-xs"
+                                title="Added by source discovery. It is switched off when it has matched nothing for two weeks and back on when its group has games again. Editing it makes it an ordinary source."
+                              >
+                                Managed
                               </Badge>
                             )}
                             {/* Stale-source badge (lylt) */}

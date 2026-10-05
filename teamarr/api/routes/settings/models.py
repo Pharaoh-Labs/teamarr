@@ -220,6 +220,9 @@ class SchedulerSettingsModel(BaseModel):
     # Scheduled channel reset (for Jellyfin logo cache issues)
     channel_reset_enabled: bool = False
     channel_reset_cron: str | None = None
+    # Source discovery (#997)
+    source_discovery_mode: str = "off"
+    source_discovery_cron: str = "0 11 * * *"
 
 
 class SchedulerSettingsUpdate(BaseModel):
@@ -229,6 +232,8 @@ class SchedulerSettingsUpdate(BaseModel):
     interval_minutes: int | None = None
     channel_reset_enabled: bool | None = None
     channel_reset_cron: str | None = None
+    source_discovery_mode: Literal["off", "suggest"] | None = None
+    source_discovery_cron: str | None = None
 
 
 class SchedulerStatusResponse(BaseModel):

@@ -62,6 +62,35 @@ From there:
 - **Single import** (+ icon) opens the full source editor for that group.
 - **Import N Groups** imports your selection in bulk, via a modal that sets the shared settings up front: Stream Timezone, Enabled, and the three matching types (Stream name matching, Team stream source, EPG program matching).
 
+## Suggested Sources
+
+Providers add, rename and drop M3U groups through the year, so a hand-kept source list drifts. Teamarr can look for sources itself. Open **Suggested sources** at the top of the Sources page.
+
+**What a scan does.** It reads every M3U group that is not already a source, puts a sample of each group's streams through the same matching a generation run uses, and records which groups carried events in leagues you subscribe to. Nothing is created and nothing else is changed. A scan takes a few minutes on a large install and never runs at the same time as a generation run.
+
+**When it runs.** Turn on **Scan on a schedule** and set a cron expression (default: once a day at 11:00), or press **Scan now**. It is off by default.
+
+**What gets suggested.** Evidence is kept for a week, because most groups are empty or placeholders between match days:
+
+| Badge | Meaning |
+|-------|---------|
+| **Events found** | A scan matched streams in the group to real events. Three matched streams are enough; one is enough when the group's name also names a subscribed league. |
+| **Name only** | The group's name names a subscribed league, but no scan has seen an event in it yet. Often a group waiting for match day — and often a replay group. |
+
+A stream that only names one team (a news or regional channel that happens to contain a country name) never counts as evidence.
+
+**Add** creates the source. **✕** dismisses the group: it is not suggested or scanned again unless you restore it from *Show dismissed groups*.
+
+### Managed sources
+
+A source added from the suggestions is marked **Managed**:
+
+- It is switched off when it has matched nothing for two weeks (three when its name still names a subscribed league). Its settings are kept.
+- It is switched back on when a scan sees events in its group again.
+- It is removed only after it has been switched off and its group has been gone from Dispatcharr for two weeks.
+
+Editing, enabling or disabling a managed source by hand makes it an ordinary source. **A source you added or edited yourself is never switched off or removed automatically.**
+
 ## Binding by Name Pattern
 
 Some IPTV providers rotate group names — `EPL (MW1)` becomes `EPL (MW2)`, dated tournament groups come and go. Dispatcharr matches M3U groups by exact name, so a provider rename always creates a **new** group and a source pinned to the old one silently stops finding streams.

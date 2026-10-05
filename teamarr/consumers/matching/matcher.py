@@ -386,6 +386,7 @@ class StreamMatcher:
         team_streams_enabled: bool = False,
         tennis_majors_only: bool = False,
         epg_index: "EPGProgramIndex | None" = None,
+        cache: StreamMatchCache | None = None,
     ):
         """Initialize the matcher.
 
@@ -489,7 +490,7 @@ class StreamMatcher:
         self._team_streams_enabled = team_streams_enabled
 
         # Initialize cache
-        self._cache = StreamMatchCache(db_factory)
+        self._cache = cache or StreamMatchCache(db_factory)
         # Use provided generation or fetch current
         self._generation = generation or get_generation_counter(db_factory)
         self._generation_provided = generation is not None

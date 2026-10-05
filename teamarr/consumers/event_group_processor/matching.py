@@ -24,6 +24,7 @@ from teamarr.consumers.matching.epg_resolver import (
     EpgCatalogIndex,
     build_epg_catalog_index,
 )
+from teamarr.consumers.stream_match_cache import StreamMatchCache
 from teamarr.database.groups import EventEPGGroup
 from teamarr.database.settings import get_feed_separation_settings
 from teamarr.utilities.tz import get_user_timezone, to_utc
@@ -102,6 +103,7 @@ class StreamMatching:
         stream_progress_callback: Callable | None = None,
         status_callback: Callable[[str], None] | None = None,
         resolved_leagues: list[str] | None = None,
+        cache: StreamMatchCache | None = None,
     ) -> BatchMatchResult:
         """Match streams to events using StreamMatcher.
 
@@ -117,6 +119,8 @@ class StreamMatching:
             stream_progress_callback: Optional callback(current, total, stream_name, matched)
             status_callback: Optional callback(status_message) for status updates
             resolved_leagues: Pre-resolved leagues (subscription leagues)
+            cache: Match cache to use instead of the real one — source
+                discovery passes one that remembers nothing (#997)
         """
         # Load settings for event filtering
         with self._db_factory() as conn:
@@ -198,6 +202,7 @@ class StreamMatching:
             tennis_majors_only=tennis_majors_only,
             team_streams_enabled=group.team_streams_enabled,
             epg_index=epg_index,
+            cache=cache,
         )
 
         result = matcher.match_all(

@@ -451,6 +451,11 @@ CREATE TABLE IF NOT EXISTS settings (
     channel_reset_enabled BOOLEAN DEFAULT 0,
     channel_reset_cron TEXT DEFAULT NULL,
 
+    -- Source discovery (#997): scan M3U groups that are not sources for subscribed games.
+    -- 'off' | 'suggest' (candidates wait for review). Runs on its own cron, never per generation.
+    source_discovery_mode TEXT DEFAULT 'off',
+    source_discovery_cron TEXT DEFAULT '0 11 * * *',
+
     -- Stream Filtering (global defaults for event groups)
     -- Require event pattern: only match streams that look like events (have vs/@/at/date patterns)
     stream_filter_require_event_pattern BOOLEAN DEFAULT 1,
@@ -743,6 +748,8 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     name_match_enabled BOOLEAN DEFAULT 1,        -- (ahow) Match streams whose name identifies a specific event (TEAM_VS_TEAM/EVENT_CARD/RACING) — the default matching type. DEFAULT 1 backfills existing sources on upgrade. One of three declared matching types alongside team_streams_enabled (Team) and epg_match_enabled (EPG).
     team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
     epg_match_enabled BOOLEAN DEFAULT 0,         -- (183.6) Use Dispatcharr EPG program data to match static-named linear streams (ESPN, NBA1) and time-window them. Requires a Dispatcharr build with /api/epg/programs/search/ (0.24.0+). No global switch — per-source opt-in (3lp1).
+    managed BOOLEAN DEFAULT 0,                   -- (#997) Created by source discovery. Only a managed source is ever disabled or removed on its own; a hand edit clears the flag.
+    last_matched_at TIMESTAMP,                   -- (#997) Last generation run in which this source matched a stream
     is_channel_source BOOLEAN DEFAULT 0,         -- (183.9) System-managed source group whose candidate streams come from curated Dispatcharr channels (their assigned streams + each channel's own EPG) instead of an M3U group. Auto-created/toggled by settings.epg_channel_source_enabled; hidden from the Event Groups UI.
     dispatcharr_channel_group_id INTEGER,        -- (#542) The Dispatcharr channel group a channel-source row reads. One row per selected group; NULL = the catch-all row used when no groups are selected (every group).
 
@@ -1926,6 +1933,39 @@ CREATE TABLE IF NOT EXISTS race_feeds (
     UNIQUE(league, feed_key)
 );
 CREATE INDEX IF NOT EXISTS idx_race_feeds_league ON race_feeds(league, enabled);
+
+-- =============================================================================
+-- SOURCE DISCOVERY (#997)
+-- M3U groups that are not sources, and what each scan found in them. A group
+-- qualifies as a suggested source on evidence gathered over days, not one scan:
+-- most real sources are empty or placeholders between match days.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS source_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    m3u_group_id INTEGER NOT NULL UNIQUE,     -- Dispatcharr channel-group id of the M3U group
+    m3u_group_name TEXT NOT NULL,
+    m3u_account_ids TEXT NOT NULL DEFAULT '[]',  -- JSON list of M3U account ids carrying the group
+    stream_count INTEGER DEFAULT 0,           -- streams in the group at the last scan
+    name_leagues TEXT NOT NULL DEFAULT '[]',  -- JSON: subscribed leagues the group NAME mentions
+    status TEXT NOT NULL DEFAULT 'new'
+        CHECK(status IN ('new', 'accepted', 'dismissed')),
+    source_group_id INTEGER,                  -- event_epg_groups.id created when accepted
+    last_seen_at TIMESTAMP,                   -- last scan that still listed the group
+    last_matched_at TIMESTAMP                 -- last scan with a two-sided game match
+);
+
+CREATE TABLE IF NOT EXISTS source_candidate_scans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id INTEGER NOT NULL,
+    scanned_at TIMESTAMP NOT NULL,
+    streams_read INTEGER NOT NULL DEFAULT 0,       -- sampled, non-stale streams put to the matcher
+    game_matches INTEGER NOT NULL DEFAULT 0,       -- distinct streams matched as a two-sided game
+    team_only_matches INTEGER NOT NULL DEFAULT 0,  -- distinct streams matched by one team name alone
+    leagues TEXT NOT NULL DEFAULT '{}',            -- JSON {league: game matches}
+    FOREIGN KEY (candidate_id) REFERENCES source_candidates(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_source_candidate_scans ON source_candidate_scans(candidate_id, scanned_at);
 
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_enabled ON consolidation_exception_keywords(enabled);
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_behavior ON consolidation_exception_keywords(behavior);
