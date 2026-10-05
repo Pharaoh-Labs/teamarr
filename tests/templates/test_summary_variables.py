@@ -262,18 +262,41 @@ def test_series_score_and_summary_short_empty_in_regular_season():
     assert extract_series_summary_short(ctx, gc) == ""
 
 
-def test_preview_text_prefers_headline_over_description():
-    # Preview articles carry no shortLinkText; the description is the wire
-    # story's opening sentence, not a summary of the game (#979).
+def test_preview_text_written_preview_uses_headline():
+    # A written (AP) preview's description is the story's opening anecdote;
+    # the headline is the line that summarises the game (#979).
     article = {
         "type": "Preview",
-        "headline": "Flyers take 3-game losing streak into matchup with the Lightning",
-        "description": "Philadelphia Flyers (0-1-2) vs. Tampa Bay Lightning (1-1)",
+        "source": "AP",
+        "headline": (
+            "Panthers defense looks to slow down Jared Goff and the Lions "
+            "while missing both starting cornerbacks"
+        ),
+        "description": (
+            "— The Carolina Panthers found themselves in a precarious position last November."
+        ),
+    }
+    assert ESPNProvider._preview_text(article) == article["headline"]
+
+
+def test_preview_text_generated_preview_keeps_description():
+    # Machine-generated previews are the reverse: generic headline, records
+    # in the description.
+    article = {
+        "type": "Preview",
+        "source": "Data Skrive",
+        "headline": "Southern Miss visits Troy in Sun Belt matchup",
+        "description": "Southern Miss (1-3) at Troy (2-2), Oct. 6 at 8 p.m. EDT.",
     }
     assert (
         ESPNProvider._preview_text(article)
-        == "Flyers take 3-game losing streak into matchup with the Lightning"
+        == "Southern Miss (1-3) at Troy (2-2), Oct. 6 at 8 p.m. EDT."
     )
+
+
+def test_preview_text_unknown_source_uses_headline():
+    article = {"headline": "headline", "description": "body"}
+    assert ESPNProvider._preview_text(article) == "headline"
 
 
 def test_preview_text_short_link_still_wins():

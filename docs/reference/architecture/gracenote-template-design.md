@@ -106,7 +106,7 @@ with per-sport shapes — so it became the two honest vars above rather than one
 normalized field. `{game_recap}` prefers ESPN's `shortLinkText` (a clean, EPG-sized
 headline that carries the score) over the long `.description` wire body, falling back
 to the body with the AP dateline em dash stripped. Per-event `{game_preview}` (summary
-`article` type Preview, its `headline` ahead of the `.description` lede, #979) and `{series_summary}` (from `seasonseries` via
+`article` type Preview, its `headline` ahead of the `.description` lede unless the article is machine-generated, #979) and `{series_summary}` (from `seasonseries` via
 `select_series`, which prioritizes the active playoff series over a completed
 regular-season one, #920) are the gated Tier-2 follow-ups.
 

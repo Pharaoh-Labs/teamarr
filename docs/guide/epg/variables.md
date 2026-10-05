@@ -455,7 +455,7 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 | Variable | Description | Suffixes | Sample |
 |----------|-------------|----------|--------|
 | `{game_recap}` | Postgame recap headline — short, self-contained, carries the result. Empty until a game is final | base, .next, .last | `Brunson scores 45, and New York tops Spurs for title` |
-| `{game_preview}` | Pregame preview headline. Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Flyers take 3-game losing streak into matchup with the Lightning` |
+| `{game_preview}` | Pregame preview: the headline of a written preview, or the matchup line of an auto-generated one (`Southern Miss (1-3) at Troy (2-2), Oct. 6 at 8 p.m. EDT.`). Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Flyers take 3-game losing streak into matchup with the Lightning` |
 | `{generated_preview}` | Opt-in sport-specific preview for baseball, football, and basketball, with a generic matchup sentence for other sports; composed from public fields and never betting information | base, .next, .last | `The Packers visit the Broncos at Empower Field...` |
 | `{week}` | Provider-reported football week number | base, .next, .last | `3` |
 | `{home_total_yards_per_game}` / `{away_total_yards_per_game}` | Football team total yards per game | base, .next, .last | `360` |

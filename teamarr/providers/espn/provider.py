@@ -939,16 +939,26 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         desc = obj.get("description") or ""
         return re.sub(r"^\s*[—–-]\s+", "", desc).strip()
 
+    # ESPN's machine-generated previews. Their headline is generic ("Arizona
+    # State hosts Hawaii") while the description carries the records, so the
+    # description stays the text for these.
+    _GENERATED_PREVIEW_SOURCES = frozenset({"data skrive"})
+
     @classmethod
     def _preview_text(cls, article: dict) -> str:
-        """Preview copy from an ESPN summary article: its headline first.
+        """Preview copy from an ESPN summary article (#979).
 
-        Preview articles carry no `shortLinkText`, and their `description` is
-        the wire story's opening sentence — an anecdotal lede, or a bare
-        'Flyers (0-1-2) vs. Lightning (1-1)'. The `headline` is the line that
-        summarises the game ('Flyers take 3-game losing streak into matchup
-        with the Lightning'); 7 of 7 published previews had one (#979).
+        Preview articles carry no `shortLinkText` (0 of 57 sampled), so
+        `_editorial_text` alone always lands on `description`. For a written
+        preview (AP) that is the story's opening anecdote, and the `headline`
+        is the line that summarises the game ('Panthers defense looks to slow
+        down Jared Goff and the Lions while missing both starting
+        cornerbacks'). Machine-generated previews are the reverse, so they
+        keep the description.
         """
+        source = (article.get("source") or "").strip().lower()
+        if source in cls._GENERATED_PREVIEW_SOURCES:
+            return cls._editorial_text(article)
         short = (article.get("shortLinkText") or "").strip()
         headline = (article.get("headline") or "").strip()
         return short or headline or cls._editorial_text(article)
