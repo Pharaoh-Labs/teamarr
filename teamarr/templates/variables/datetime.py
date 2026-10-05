@@ -19,6 +19,9 @@ from teamarr.utilities.tz import (
     to_user_tz,
 )
 
+# What a time variable prints for a game whose start time is not announced.
+TIME_TBD = "TBD"
+
 
 def _get_local_time(game_ctx: GameContext | None) -> datetime | None:
     """Get game start time in user timezone."""
@@ -130,6 +133,10 @@ def extract_game_day_short(ctx: TemplateContext, game_ctx: GameContext | None) -
 def extract_game_time(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
+    # No announced start time: say so rather than print the provider's
+    # placeholder ("12:00 AM EDT") as if it were the kickoff (#995).
+    if game_ctx.event.time_tbd:
+        return TIME_TBD
     # Uses user's time_format (12h/24h) and show_timezone settings
     return format_time(game_ctx.event.start_time)
 

@@ -740,6 +740,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         event_data = {
             "id": event_id,
             "name": header.get("gameNote", ""),
+            # header-level on the summary endpoint; _parse_event reads either
+            "timeValid": header.get("timeValid"),
             "shortName": self._build_short_name(competition),
             "date": competition.get("date"),
             "competitions": [competition],
@@ -866,6 +868,10 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             game_event_note = (notes[0].get("headline") if notes else "") or ""
             soccer_match_note = competition.get("altGameNote") or ""
             neutral_site = bool(competition.get("neutralSite"))
+            # ESPN states an unannounced start time outright, on the competition
+            # (scoreboard, schedule) or the event wrapper; the timestamp it sends
+            # alongside is midnight Eastern, not a kickoff (#995).
+            time_tbd = competition.get("timeValid") is False or data.get("timeValid") is False
             self._editorial_canary.record(
                 competition,
                 sport=sport,
@@ -918,6 +924,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 game_event_note=game_event_note,
                 soccer_match_note=soccer_match_note,
                 neutral_site=neutral_site,
+                time_tbd=time_tbd,
                 broadcast_markets=broadcast_markets,
             )
         except Exception as e:
