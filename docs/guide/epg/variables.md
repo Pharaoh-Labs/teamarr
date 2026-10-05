@@ -68,6 +68,8 @@ Three template fields hold image URLs and accept the same variables as any other
 | **Team Channel Name** (`team_channel_name`, team templates) | XMLTV and managed Dispatcharr channel name |
 | **Filler Art URL** (pregame/postgame/idle `art_url`) | artwork on filler programmes |
 
+The two team-channel fields describe the channel, not a game, so they are resolved from the team alone: team and league variables work (`{team_name}`, `{team_short}`, `{team_abbrev}`, `{league}`, `{league_abbrev}`, `{sport}`, …), while game and record variables (`{opponent}`, `{game_time}`, `{team_record}`) resolve empty. In these two fields `{league_id}` is the league code, as it always has been.
+
 ### Game-Thumbs base URL
 
 Instead of writing the full image host in every template, set it **once** in

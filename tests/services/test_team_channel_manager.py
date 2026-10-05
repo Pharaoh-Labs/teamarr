@@ -10,6 +10,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -20,6 +21,21 @@ from teamarr.database.managed_team_channel_streams import (
 )
 from teamarr.database.managed_team_channels import get_managed_team_channel
 from teamarr.services.team_channel_manager import TeamChannelManager
+
+
+@pytest.fixture(autouse=True)
+def league_mapping_service():
+    """Channel names and logos go through the template engine (#983), which
+    reads league facts from this singleton."""
+    svc = MagicMock()
+    svc.get_league_alias.side_effect = lambda code: code.upper()
+    svc.get_league_display_name.side_effect = lambda code: code.upper()
+    svc.get_league_id.side_effect = lambda code: code
+    svc.get_league_logo.return_value = ""
+    svc.get_gracenote_category.side_effect = lambda code: code.upper()
+    svc.get_sport_display_name.side_effect = lambda code: code.title()
+    with patch("teamarr.services.league_mappings._league_mapping_service", svc):
+        yield svc
 
 
 @dataclass
