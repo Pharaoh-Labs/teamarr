@@ -33,36 +33,36 @@
     <live />
   </programme>
   <programme start="20260710213000 +0000" stop="20260710220000 +0000" channel="teamarr-team-1">
-    <title lang="en">Premier League Soccer: Chelsea Full Time</title>
+    <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
-    <desc lang="en">The game between Chelsea and Arsenal on Friday, July 10, 2026 has not yet ended as of the last update.</desc>
+    <desc lang="en">The game between Chelsea and Arsenal has not yet ended as of the last update.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710220000 +0000" stop="20260711040000 +0000" channel="teamarr-team-1">
-    <title lang="en">Premier League Soccer: Chelsea Full Time</title>
+    <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
-    <desc lang="en">The game between Chelsea and Arsenal on Friday, July 10, 2026 has not yet ended as of the last update.</desc>
+    <desc lang="en">The game between Chelsea and Arsenal has not yet ended as of the last update.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260711040000 +0000" stop="20260711100000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
     <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026.</desc>
+    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260711100000 +0000" stop="20260711160000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
     <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026.</desc>
+    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260711160000 +0000" stop="20260711220000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
     <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026.</desc>
+    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260711220000 +0000" stop="20260712040000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
     <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026.</desc>
+    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260712040000 +0000" stop="20260712100000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
@@ -95,15 +95,15 @@
     <live />
   </programme>
   <programme start="20260712213000 +0000" stop="20260712220000 +0000" channel="teamarr-team-1">
-    <title lang="en">Premier League Soccer: Chelsea Full Time</title>
+    <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
-    <desc lang="en">The game between Chelsea and Liverpool on Sunday, July 12, 2026 has not yet ended as of the last update.</desc>
+    <desc lang="en">The game between Chelsea and Liverpool has not yet ended as of the last update.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712220000 +0000" stop="20260713040000 +0000" channel="teamarr-team-1">
-    <title lang="en">Premier League Soccer: Chelsea Full Time</title>
+    <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
-    <desc lang="en">The game between Chelsea and Liverpool on Sunday, July 12, 2026 has not yet ended as of the last update.</desc>
+    <desc lang="en">The game between Chelsea and Liverpool has not yet ended as of the last update.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260713040000 +0000" stop="20260713100000 +0000" channel="teamarr-team-1">
