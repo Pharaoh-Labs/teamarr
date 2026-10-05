@@ -36,7 +36,7 @@ What it does not do:
 
 Managed team channels follow the same per-league window when deciding whether a game is close enough to attach.
 
-Channels are never created for events that are already over: final events are excluded (an API-only `include_final_events` setting can override this), an event not yet reported final is treated as final two hours after its estimated end, and an event already past its delete threshold is skipped entirely.
+An event that has finished keeps its channel and its guide programmes until the channel's delete time, and a stream first matched in that window still gets a channel. An event already past its delete threshold is skipped entirely.
 
 ## Postponed Events
 
