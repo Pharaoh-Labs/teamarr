@@ -87,7 +87,57 @@ def test_event_result_text_is_empty_until_final():
         # untouched: abbreviations, decimals, ordinary text
         ("Lions vs. Panthers", "Lions vs. Panthers"),
         ("spread of .5 points", "spread of .5 points"),
+        # an article-aware name opening a later sentence takes its capital…
+        ("NBA Finals - Game 5. the Pistons and the Celtics meet.",
+         "NBA Finals - Game 5. The Pistons and the Celtics meet."),
+        # …but "vs." is a connector, not a sentence end
+        ("Next game: vs. the Ottawa Senators", "Next game: vs. the Ottawa Senators"),
     ],
 )
 def test_cleanup_pulls_a_stranded_full_stop_back_in(raw, cleaned):
     assert TemplateResolver()._cleanup_result(raw) == cleaned
+
+
+def test_default_event_line_drops_the_article_for_a_national_team():
+    """The Default starters are the catch-all — UEFA Nations League lands on
+    them. "The Cyprus (1-1-1) host the Latvia (0-1-2)" was the first cut."""
+    from teamarr.database.default_templates import DEFAULT_TEMPLATE_SET
+
+    spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Event (Starter)")
+    default_row = next(r for r in spec["conditional_descriptions"] if r["label"] == "Default")
+    ctx, _ = _game(None, None, state="pre", league="uefa.nations", sport="soccer",
+                   home="Cyprus", away="Latvia")
+    assert TemplateResolver().resolve(default_row["template"], ctx) == "Cyprus host Latvia at."
+
+    ctx, _ = _game(None, None, state="pre")
+    assert TemplateResolver().resolve(default_row["template"], ctx) == (
+        "The Carolina Panthers host the Detroit Lions at."
+    )
+
+
+@pytest.mark.parametrize(
+    "summary, is_state",
+    [
+        ("Series tied 1-1", True),
+        ("BOS leads series 3-2", True),
+        ("Series starts 12/16", False),
+        ("series starts 10/6", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_a_series_that_has_not_begun_is_not_series_state(summary, is_state):
+    from teamarr.providers.espn.preview import is_series_state
+
+    assert is_series_state(summary) is is_state
+
+
+def test_select_series_skips_a_series_that_has_not_begun():
+    from teamarr.providers.espn.preview import select_series
+
+    assert select_series([{"type": "season", "summary": "Series starts 12/16"}]) is None
+    chosen = select_series(
+        [{"type": "season", "summary": "Series starts 12/16"},
+         {"type": "season", "summary": "Series tied 1-1"}]
+    )
+    assert chosen["summary"] == "Series tied 1-1"

@@ -884,7 +884,10 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             comp_series = competition.get("series")
             series_summary = ""
             if isinstance(comp_series, dict):
-                series_summary = str(comp_series.get("summary") or "")
+                from teamarr.providers.espn.preview import is_series_state
+
+                raw_summary = comp_series.get("summary")
+                series_summary = str(raw_summary) if is_series_state(raw_summary) else ""
             elif isinstance(comp_series, list):
                 from teamarr.providers.espn.preview import select_series
 
