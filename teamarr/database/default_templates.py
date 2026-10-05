@@ -327,6 +327,68 @@ def _revert_postgame_title(spec: dict) -> dict:
     return g
 
 
+# --- pre-#981 team starter wording ---------------------------------------------
+
+# #981 aligned the team starters with the event starters (after-game title,
+# "to play", no date on the in-progress line) and rewrote the idle
+# descriptions so each says when the next game is without repeating the
+# subtitle. The text they replaced, for recognising an unedited older row.
+_PRE_981_IN_PROGRESS = (
+    "The game between {team_name_the} and {opponent_the.last} on "
+    "{game_date.last} has not yet ended as of the last update."
+)
+_PRE_981_TITLES = {
+    "{gracenote_category}: Final": "{gracenote_category}: {team_name} Final",
+    "{gracenote_category}: Full Time": "{gracenote_category}: {team_name} Full Time",
+}
+_PRE_981_IDLE = {
+    "game": {
+        "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}",
+        "is_final": (
+            "{team_name_the} {result_text.last} {opponent_the.last} "
+            "{final_score.last} {overtime_text.last} on {game_date.last}. "
+            "Next game will be with {opponent_the.next} on {game_date.next}"
+        ),
+        "is_not_final": (
+            "{team_name_the} last played against {opponent_the.last} on {game_date.last}."
+        ),
+    },
+    "match": {
+        "description": "Next match: {game_date.next} at {game_time.next} vs {opponent.next}",
+        "is_final": (
+            "{team_name_the} {result_text.last} {opponent_the.last} "
+            "{final_score.last} on {game_date.last}. "
+            "Next match is against {opponent_the.next} on {game_date.next}"
+        ),
+        "is_not_final": "{team_name_the} last played {opponent_the.last} on {game_date.last}.",
+    },
+}
+
+
+def _revert_team_parity(name: str, spec: dict) -> dict:
+    """The spec's content with its pre-#981 team wording (G7). Event starters
+    were not touched by #981 and come back unchanged."""
+    if spec.get("template_type") != "team":
+        return spec
+    g = copy.deepcopy(spec)
+    if name == "Default Team (Starter)":
+        for row in g["conditional_descriptions"]:
+            row["template"] = row["template"].replace(
+                "to play the {home_team_record}", "to take on the {home_team_record}"
+            )
+    block = g["postgame_fallback"]
+    block["title"] = _PRE_981_TITLES.get(block["title"], block["title"])
+    for row in g["postgame_conditional_rows"]:
+        if row.get("condition") == "is_not_final":
+            row["template"] = _PRE_981_IN_PROGRESS
+    old_idle = _PRE_981_IDLE["match" if name == "Soccer Team (Starter)" else "game"]
+    g["idle_content"]["description"] = old_idle["description"]
+    for row in g["idle_conditional_rows"]:
+        if row.get("condition") in old_idle:
+            row["template"] = old_idle[row["condition"]]
+    return g
+
+
 def _revert_filler_rows(spec: dict) -> dict:
     """The spec's content in its pre-#420 shape: native condition rows
     reverted to the enabled legacy final/not-final dicts those generations
@@ -362,7 +424,12 @@ def _with_v80_rows(gen: dict) -> dict:
 def _prior_generations(name: str, spec: dict) -> list[dict]:
     """Registered prior content generations of a set member, newest first.
 
-    G6 (pre-#975): current content with the postgame filler title reverted
+    G7 (pre-#981, team starters only): current content with the team
+        wording reverted — after-game title carrying the team name, "to
+        take on", the dated in-progress line, the old idle descriptions.
+        Every older generation carried that text too, so the rest of the
+        chain is built on G7.
+    G6 (pre-#975): G7 with the postgame filler title reverted
         to its "Postgame" wording. Every older generation carried that
         title too, so the rest of the chain is built on G6.
     G5 (pre-#692 phase 2): G6 with {team1}/{team2} reverted
@@ -390,7 +457,8 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     # {away_team}/{home_team} in subtitles and the event channel name. It
     # postdates #420, so it carries native rows and is emitted as-is (no
     # v80/empty-rows variants) — see the tail of this function.
-    g6 = _revert_postgame_title(spec)
+    g7 = _revert_team_parity(name, spec)
+    g6 = _revert_postgame_title(g7)
     g5 = _revert_team_order(g6)
 
     g4 = _revert_filler_rows(g5)
@@ -429,7 +497,9 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     if g0 != g2:
         legacy_chain.append(g0)
 
-    gens: list[dict] = [g6] if g6 != spec else []
+    gens: list[dict] = [g7] if g7 != spec else []
+    if g6 != g7:
+        gens.append(g6)
     if g5 != g6:
         gens.append(g5)
     for g in legacy_chain:
@@ -497,7 +567,7 @@ def _team_base(**overrides) -> dict:
         # final AND the provider published one; otherwise the fallback's
         # constructed result line renders.
         "postgame_fallback": {
-            "title": "{gracenote_category}: {team_name} Final",
+            "title": "{gracenote_category}: Final",
             "subtitle": "{team1.last} {at_vs.last} {team2.last}",
             "description": (
                 "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
@@ -521,8 +591,8 @@ def _team_base(**overrides) -> dict:
                 "condition": "is_not_final",
                 "condition_value": None,
                 "template": (
-                    "The game between {team_name_the} and {opponent_the.last} on "
-                    "{game_date.last} has not yet ended as of the last update."
+                    "The game between {team_name_the} and {opponent_the.last} has not "
+                    "yet ended as of the last update."
                 ),
                 "priority": 50,
                 "label": "In progress",
@@ -533,7 +603,15 @@ def _team_base(**overrides) -> dict:
             "subtitle": (
                 "Next game: {game_date.next} at {game_time.next} {vs_at.next} {opponent_the.next}"
             ),
-            "description": "Next game: {game_date.next} at {game_time.next} vs {opponent.next}",
+            # Says when AND adds the matchup (#981): the subtitle already
+            # carries the bare "Next game: … vs …" line, and a guide that
+            # shows only the description still needs the date and time.
+            "description": (
+                "Next game: {game_date.next} at {game_time.next}. "
+                "The {away_team_record.next} {away_team.next} travel to "
+                "{venue_city.next}, {venue_state.next} to play the "
+                "{home_team_record.next} {home_team.next} at {venue.next}."
+            ),
             "art_url": "",
         },
         "idle_conditional": dict(_LEGACY_CONDITIONAL_OFF),
@@ -544,7 +622,8 @@ def _team_base(**overrides) -> dict:
                 "template": (
                     "{team_name_the} {result_text.last} {opponent_the.last} "
                     "{final_score.last} {overtime_text.last} on {game_date.last}. "
-                    "Next game will be with {opponent_the.next} on {game_date.next}"
+                    "Next game will be with {opponent_the.next} on {game_date.next} "
+                    "at {game_time.next}."
                 ),
                 "priority": 50,
                 "label": "Final",
@@ -553,7 +632,9 @@ def _team_base(**overrides) -> dict:
                 "condition": "is_not_final",
                 "condition_value": None,
                 "template": (
-                    "{team_name_the} last played against {opponent_the.last} on {game_date.last}."
+                    "{team_name_the} last played against {opponent_the.last} on "
+                    "{game_date.last}. Next game will be with {opponent_the.next} on "
+                    "{game_date.next} at {game_time.next}."
                 ),
                 "priority": 50,
                 "label": "In progress",
@@ -607,7 +688,7 @@ def _team_base(**overrides) -> dict:
                 "condition_value": None,
                 "template": (
                     "The {away_team_record} {away_team} travel to {venue_city}, "
-                    "{venue_state} to take on the {home_team_record} {home_team} at "
+                    "{venue_state} to play the {home_team_record} {home_team} at "
                     "{venue}. {last_five_summary} {series_summary}"
                 ),
                 "priority": 20,
@@ -618,7 +699,7 @@ def _team_base(**overrides) -> dict:
                 "condition_value": None,
                 "template": (
                     "The {away_team_record} {away_team} travel to {venue_city}, "
-                    "{venue_state} to take on the {home_team_record} {home_team} at {venue}."
+                    "{venue_state} to play the {home_team_record} {home_team} at {venue}."
                 ),
                 "priority": 100,
                 "label": "Default",
@@ -817,7 +898,10 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "Next match: {game_date.next} at {game_time.next} "
                 "{vs_at.next} {opponent_the.next}"
             ),
-            "description": "Next match: {game_date.next} at {game_time.next} vs {opponent.next}",
+            "description": (
+                "Next match: {game_date.next} at {game_time.next}. "
+                "{away_team_the.next} face {home_team_the.next} at {venue.next}."
+            ),
             "art_url": "",
         },
         idle_conditional_rows=[
@@ -827,7 +911,8 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "template": (
                     "{team_name_the} {result_text.last} {opponent_the.last} "
                     "{final_score.last} on {game_date.last}. "
-                    "Next match is against {opponent_the.next} on {game_date.next}"
+                    "Next match is against {opponent_the.next} on {game_date.next} "
+                    "at {game_time.next}."
                 ),
                 "priority": 50,
                 "label": "Final",
@@ -836,7 +921,9 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": "is_not_final",
                 "condition_value": None,
                 "template": (
-                    "{team_name_the} last played {opponent_the.last} on {game_date.last}."
+                    "{team_name_the} last played {opponent_the.last} on {game_date.last}. "
+                    "Next match is against {opponent_the.next} on {game_date.next} "
+                    "at {game_time.next}."
                 ),
                 "priority": 50,
                 "label": "In progress",
@@ -854,7 +941,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         # event starters already say "Full Time". Same block as the base
         # otherwise.
         postgame_fallback={
-            "title": "{gracenote_category}: {team_name} Full Time",
+            "title": "{gracenote_category}: Full Time",
             "subtitle": "{team1.last} {at_vs.last} {team2.last}",
             "description": (
                 "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"

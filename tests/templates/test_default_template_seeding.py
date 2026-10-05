@@ -582,8 +582,9 @@ def test_user_edited_filler_rows_block_healing(db_conn):
     db_conn.execute("DELETE FROM templates")
     db_conn.commit()
     spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Team (Starter)")
-    # [0] is the pre-#975 postgame-title generation; the pre-#692 one follows it
-    g4_migrated = _prior_generations("Default Team (Starter)", spec)[1]
+    # [0] is the pre-#981 team wording, [1] the pre-#975 postgame title;
+    # the pre-#692 one follows them
+    g4_migrated = _prior_generations("Default Team (Starter)", spec)[2]
     tid = create_template(db_conn, **g4_migrated)
     update_template(
         db_conn,
@@ -688,7 +689,8 @@ def test_pre_692_team_order_generation_healed_to_current(db_conn):
     assert row.event_channel_name == "{league} | {team1_abbrev}/{team2_abbrev}"
 
     soccer = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Soccer Team (Starter)")
-    soccer_g5 = _prior_generations("Soccer Team (Starter)", soccer)[1]
+    # team starters carry one more generation ahead of it: pre-#981 wording
+    soccer_g5 = _prior_generations("Soccer Team (Starter)", soccer)[2]
     assert soccer_g5["subtitle_template"] == "{away_team} vs {home_team}"
     assert soccer["subtitle_template"] == "{team1} vs {team2}"
 
@@ -696,9 +698,10 @@ def test_pre_692_team_order_generation_healed_to_current(db_conn):
 # --- #975: "Postgame" filler titles -> Final / Event Complete ----------------
 
 POSTGAME_TITLES = {
-    "Default Team (Starter)": "{gracenote_category}: {team_name} Final",
-    "College Team (Starter)": "{gracenote_category}: {team_name} Final",
-    "Soccer Team (Starter)": "{gracenote_category}: {team_name} Full Time",
+    # team starters dropped the team name from the title in #981
+    "Default Team (Starter)": "{gracenote_category}: Final",
+    "College Team (Starter)": "{gracenote_category}: Final",
+    "Soccer Team (Starter)": "{gracenote_category}: Full Time",
     "Default Event (Starter)": "{gracenote_category}: Final",
     "College Event (Starter)": "{gracenote_category}: Final",
     "Combat Event (Starter)": "{league} {event_number}: Event Complete",
@@ -722,7 +725,9 @@ def test_unedited_postgame_title_heals_in_place(db_conn, name):
     db_conn.execute("DELETE FROM templates")
     db_conn.commit()
     spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == name)
-    previous = _prior_generations(name, spec)[0]  # newest prior: pre-#975
+    # pre-#975 generation: the newest prior for event starters, the second
+    # for team starters (pre-#981 wording sits ahead of it)
+    previous = _prior_generations(name, spec)[1 if spec["template_type"] == "team" else 0]
     assert previous["postgame_fallback"]["title"].endswith("Postgame")
     tid = create_template(db_conn, **previous)
 
@@ -761,3 +766,93 @@ def test_starters_without_the_old_wording_gain_no_generation():
     ):
         spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == name)
         assert _revert_postgame_title(spec) == spec
+
+
+# --- #981: team starter wording aligned with the event starters ---------------
+
+TEAM_STARTERS = ("Default Team (Starter)", "College Team (Starter)", "Soccer Team (Starter)")
+
+
+def _spec(name):
+    return next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == name)
+
+
+def test_team_after_game_title_matches_the_event_starter():
+    assert (
+        _spec("Default Team (Starter)")["postgame_fallback"]["title"]
+        == _spec("Default Event (Starter)")["postgame_fallback"]["title"]
+    )
+    assert (
+        _spec("Soccer Team (Starter)")["postgame_fallback"]["title"]
+        == _spec("Soccer Club Event (Starter)")["postgame_fallback"]["title"]
+    )
+
+
+def test_default_team_description_rows_match_the_event_starter():
+    def rows(name):
+        return {r["label"]: r["template"] for r in _spec(name)["conditional_descriptions"]}
+
+    assert rows("Default Team (Starter)") == rows("Default Event (Starter)")
+
+
+@pytest.mark.parametrize("name", TEAM_STARTERS)
+def test_every_idle_description_says_when_the_next_game_is(name):
+    spec = _spec(name)
+    texts = [spec["idle_content"]["description"]] + [
+        r["template"] for r in spec["idle_conditional_rows"]
+    ]
+    for text in texts:
+        assert "{game_date.next}" in text and "{game_time.next}" in text, text
+
+
+@pytest.mark.parametrize("name", TEAM_STARTERS)
+def test_idle_description_does_not_repeat_the_subtitle(name):
+    idle = _spec(name)["idle_content"]
+    assert idle["description"] != idle["subtitle"]
+    # more than the subtitle's bare "when vs who": it names the venue
+    assert "{venue.next}" in idle["description"]
+
+
+@pytest.mark.parametrize("name", TEAM_STARTERS)
+def test_unedited_pre_981_team_starter_heals_in_place(db_conn, name):
+    from teamarr.database.default_templates import _prior_generations
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    spec = _spec(name)
+    previous = _prior_generations(name, spec)[0]
+    assert "{team_name}" in previous["postgame_fallback"]["title"]
+    assert previous["idle_content"]["description"].endswith("vs {opponent.next}")
+    tid = create_template(db_conn, **previous)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}[name]
+    assert row.id == tid
+    assert row.postgame_fallback["title"] == spec["postgame_fallback"]["title"]
+    assert row.idle_content["description"] == spec["idle_content"]["description"]
+
+
+def test_an_edited_pre_981_team_starter_is_left_alone(db_conn):
+    from teamarr.database.default_templates import _prior_generations
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    name = "Default Team (Starter)"
+    edited = _prior_generations(name, _spec(name))[0]
+    edited["idle_content"]["description"] = "Back soon."
+    create_template(db_conn, **edited)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}[name]
+    assert row.idle_content["description"] == "Back soon."
+    assert "{team_name}" in row.postgame_fallback["title"]
+
+
+def test_event_starters_gain_no_pre_981_generation():
+    from teamarr.database.default_templates import _revert_team_parity
+
+    for spec in DEFAULT_TEMPLATE_SET:
+        if spec["template_type"] == "event":
+            assert _revert_team_parity(spec["name"], spec) is spec

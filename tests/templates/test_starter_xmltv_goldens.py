@@ -483,3 +483,55 @@ def test_starter_xmltv_matches_golden(name, db_conn):
 def test_every_starter_has_a_golden_case():
     """Adding/renaming a starter must add/rename its golden case too."""
     assert set(CASES) == {spec["name"] for spec in DEFAULT_TEMPLATE_SET}
+
+
+# --- #981: idle description before a team's first game ------------------------
+
+
+def _idle_descs(xml):
+    import re
+
+    return set(re.findall(r"<desc[^>]*>(Next (?:game|match):[^<]*)</desc>", xml))
+
+
+def test_default_team_idle_with_no_previous_game_says_when_and_where(db_conn):
+    """No last game → neither idle row fires and the base description shows.
+    It used to repeat the subtitle; it now gives the date and time plus the
+    matchup line."""
+    current = _nba_event()
+    bulls = _team("Chicago Bulls", "CHI", "nba", "basketball", "3", short="Bulls")
+    stats = dict(NBA_STATS)
+    stats["3"] = TeamStats(record="6-6")
+    nxt = _event(
+        current.home_team, bulls, "nba", "basketball",
+        id_="e2", start=EVENT_START + timedelta(days=2),
+    )
+    xml = _render_team_starter(
+        db_conn, "Default Team (Starter)", schedule=[nxt], stats=stats,
+        league="nba", team_name="Boston Celtics", team_abbrev="BOS",
+    )
+    assert _idle_descs(xml) == {
+        "Next game: Sunday, July 12, 2026 at 3:00 PM EDT. The 6-6 Chicago Bulls "
+        "travel to Auburn Hills, MI to play the 10-2 Boston Celtics at The Palace."
+    }
+
+
+def test_soccer_team_idle_with_no_previous_match_says_when_and_where(db_conn):
+    current = _soccer_event()
+    liverpool = _team("Liverpool", "LIV", "eng.1", "soccer", "4")
+    stats = dict(SOCCER_STATS)
+    stats["4"] = TeamStats(record="13-2-2")
+    nxt = _event(
+        current.home_team, liverpool, "eng.1", "soccer",
+        id_="e2", start=EVENT_START + timedelta(days=2),
+    )
+    xml = _render_team_starter(
+        db_conn, "Soccer Team (Starter)", schedule=[nxt], stats=stats,
+        league="eng.1", team_name="Chelsea", team_abbrev="CHE",
+    )
+    descs = _idle_descs(xml)
+    assert len(descs) == 1
+    desc = descs.pop()
+    assert desc.startswith(
+        "Next match: Sunday, July 12, 2026 at 3:00 PM EDT. Liverpool face Chelsea at "
+    )
