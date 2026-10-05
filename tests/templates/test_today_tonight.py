@@ -85,7 +85,7 @@ def test_same_day_evening_is_still_tonight():
 
 
 def test_a_few_days_out_names_the_weekday():
-    assert _render(datetime(2026, 8, 11, 19, 30, tzinfo=UTC)) == ("tuesday", "Tuesday")
+    assert _render(datetime(2026, 8, 11, 19, 30, tzinfo=UTC)) == ("Tuesday", "Tuesday")
 
 
 def test_a_week_out_gives_the_date():

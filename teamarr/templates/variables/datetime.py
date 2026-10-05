@@ -191,8 +191,11 @@ def extract_relative_day(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     Logic:
         - 0 days: 'today' (before 5pm) or 'tonight' (5pm+)
         - 1 day: 'tomorrow'
-        - 2-6 days: day of week (e.g., 'wednesday')
-        - 7+ days: date (e.g., 'jan 25')
+        - 2-6 days: day of week (e.g., 'Wednesday')
+        - 7+ days: date (e.g., 'Jan 25')
+
+    The relative words are lowercase for mid-sentence use; a weekday is a
+    proper noun and keeps its capital, as the month always did.
     """
     dt = _get_local_time(game_ctx)
     if not dt:
@@ -205,7 +208,7 @@ def extract_relative_day(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     elif delta == 1:
         return "tomorrow"
     elif delta <= 6:
-        return dt.strftime("%A").lower()
+        return dt.strftime("%A")
     else:
         return strftime_compat(dt, "%b %-d")  # Keep month title case (Jan 25)
 

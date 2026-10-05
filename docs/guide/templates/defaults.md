@@ -72,23 +72,44 @@ constructed prose when it isn't available:
   `has_event_note` / `has_match_note` rows); neutral-site games (bowls,
   CFP/NCAA tournament rounds) drop host framing for "X and Y meet at {venue}"
   via an `is_neutral_site` row; for games further out, a structured-preview
-  row enriches the constructed line with recent form and series state ("The
-  Rays have won 2 of their last five… BOS leads series 3-2"); otherwise the
-  plain constructed "X travel to Y…" line renders.
-- **Subtitles** — the US-register starters connect matchups with the
-  neutral-aware `{at_vs}` variable: "Pistons at Celtics" for hosted games,
-  "Ohio State vs. Texas" at neutral sites (the Gracenote convention).
-- **Idle / offseason filler** — soccer team channels phrase filler in the
-  match register ("No Chelsea Match Today", "No upcoming Chelsea matches
-  scheduled."); other families keep the US "game" phrasing.
-- **After-event titles** — no starter titles its after-event filler "Postgame": the US-register starters say "Final" ("NBA Basketball: Final", on team and event channels alike), soccer "Full Time", combat "Event Complete" ("UFC 325: Event Complete"), tennis "Match Complete" and racing "{session} Complete". The before-event filler is "Coming up: … at {time}" everywhere.
-- **Idle descriptions (team starters)** — every idle description says when the next game is. Before a team's first game it is the date and time plus the matchup line ("Next game: Sunday, July 12, 2026 at 3:00 PM EDT. The 6-6 Chicago Bulls travel to Auburn Hills, MI to play the 10-2 Boston Celtics at The Palace."); after a game it is the result or "last played" line followed by "Next game will be with … on … at …". The subtitle keeps the short "Next game: … vs …" form.
+  row adds recent form and series state; otherwise the plain matchup
+  sentence renders.
+
+## One style across every starter
+
+The starters follow one set of wording rules, modelled on Gracenote's
+listings, so the same fact always reads the same way:
+
+| Fact | How it reads |
+|------|--------------|
+| Matchup (US pro) | "The Carolina Panthers (1-2) host the Detroit Lions (2-1) at Bank of America Stadium." — home side first; "X and Y meet at …" when nobody hosts |
+| Matchup (college) | "No. 20 Arkansas (20-7) host No. 15 Texas A&M (19-8) at Bud Walton Arena." |
+| Matchup (soccer) | "Chelsea face Arsenal at Stamford Bridge." — sides in subtitle order |
+| Result, team channel | "The Detroit Lions lost to the Carolina Panthers, 32-26." — winner's score first |
+| Result, event channel | "The Carolina Panthers beat the Detroit Lions, 32-26." (`{event_result_text}`) |
+| Still playing | "The Detroit Lions and the Carolina Panthers are still playing." |
+| Next game | "Next game: at the Arizona Cardinals, Sunday, Oct 11 at 4:25 PM EDT." |
+| Last game, no score | "Last game: vs the Carolina Panthers, Oct 4." |
+
+- **Each line has one job.** The title names the kind of programme, the
+  subtitle says who (and, on idle filler, a short when: "Next: at the Arizona
+  Cardinals, Sun Oct 11, 4:25 PM EDT"), and the description is full sentences
+  that stand on their own.
+- **Subtitles** use one matchup form per starter across the game and the
+  filler around it: "Pistons at Celtics" for hosted US games, "vs." (with its
+  full stop) for soccer, combat, tennis and neutral sites.
+- **One vocabulary per starter** — game, match, bout or session, never mixed.
+  Soccer team channels say "No Chelsea Match Today" and "Next match: …".
+- **Dates** carry no year, and past dates no weekday ("on Oct 4").
+- **After-event titles** — "Final" for the US-register starters, soccer
+  "Full Time", combat "Event Complete", tennis "Match Complete" and racing
+  "{session} Complete". The before-event filler is "Coming up: … at {time}"
+  everywhere.
 - **Postgame** — when ESPN publishes a recap headline, the filler shows it
   via a `has_recap → {game_recap}` condition row; a game that's still
-  running gets an `is_not_final` in-progress line; a final game with no
-  recap falls to the constructed result line ("The X defeated the Y 4–2").
-  Tennis gates its constructed `{tennis_result}` on `is_final` instead —
-  it's built from score data, not provider copy.
+  running gets the still-playing line; a final game with no recap falls to
+  the result sentence. Tennis gates its constructed `{tennis_result}` on
+  `is_final` instead — it's built from score data, not provider copy.
 
 The underlying mechanism (for your own templates): each filler register
 carries **condition rows** evaluated against its reference game — see

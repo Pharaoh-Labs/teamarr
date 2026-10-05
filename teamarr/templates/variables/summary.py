@@ -268,10 +268,10 @@ def extract_last_five_summary(ctx: TemplateContext, game_ctx: GameContext | None
         return ""
     event = game_ctx.event
     parts = []
-    # Away first — matches the seeds' "away travel to home" sentence lead.
+    # Home first — matches the seeds' "home host away" sentence lead.
     for team, form in (
-        (event.away_team, event.away_last_five),
         (event.home_team, event.home_last_five),
+        (event.away_team, event.away_last_five),
     ):
         if not team or not form or "-" not in form:
             continue
@@ -280,4 +280,6 @@ def extract_last_five_summary(ctx: TemplateContext, game_ctx: GameContext | None
         parts.append(f"{name} have won {wins} of their last five")
     if not parts:
         return ""
-    return "; ".join(parts) + "."
+    # A sentence of its own: the article-aware name opens it lowercase.
+    text = "; ".join(parts) + "."
+    return text[0].upper() + text[1:]

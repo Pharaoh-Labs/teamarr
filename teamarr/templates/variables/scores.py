@@ -3,6 +3,7 @@
 Variables for game scores. These only apply to completed games (LAST_ONLY).
 """
 
+from teamarr.core.naming import team_with_article
 from teamarr.templates.context import GameContext, TemplateContext
 from teamarr.templates.variables.registry import (
     Category,
@@ -305,3 +306,55 @@ def extract_loser_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     elif event.away_score < event.home_score:
         return event.away_team.abbreviation.upper() if event.away_team else ""
     return ""
+
+
+def _final_scores(game_ctx: GameContext | None) -> tuple[int, int] | None:
+    """(home, away) scores of a finished game, else None."""
+    if not game_ctx or not game_ctx.event:
+        return None
+    event = game_ctx.event
+    if event.home_score is None or event.away_score is None:
+        return None
+    if event.status.state not in ("final", "post"):
+        return None
+    return event.home_score, event.away_score
+
+
+@register_variable(
+    name="result_score",
+    category=Category.SCORES,
+    suffix_rules=SuffixRules.ALL,
+    description="Final score with the winner's score first, whichever side won "
+    "(e.g., '32-26'). Empty if not final.",
+)
+def extract_result_score(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """The score the way a guide writes it: "a 21-18 loss", "lost, 31-24"."""
+    scores = _final_scores(game_ctx)
+    if scores is None:
+        return ""
+    return f"{max(scores)}-{min(scores)}"
+
+
+@register_variable(
+    name="event_result_text",
+    category=Category.SCORES,
+    suffix_rules=SuffixRules.ALL,
+    description="Result as a sentence, winner first (e.g., 'The Carolina Panthers beat "
+    "the Detroit Lions, 32-26.'; a draw reads 'Arsenal and Chelsea drew, 1-1.'). "
+    "Empty if not final.",
+)
+def extract_event_result_text(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
+    """Perspective-free result prose for event channels, article-aware."""
+    scores = _final_scores(game_ctx)
+    event = game_ctx.event if game_ctx else None
+    if scores is None or event is None or not event.home_team or not event.away_team:
+        return ""
+    home = team_with_article(event.home_team.name, event.league, event.sport)
+    away = team_with_article(event.away_team.name, event.league, event.sport)
+    home_score, away_score = scores
+    if home_score == away_score:
+        text = f"{away} and {home} drew, {home_score}-{away_score}."
+    else:
+        winner, loser = (home, away) if home_score > away_score else (away, home)
+        text = f"{winner} beat {loser}, {max(scores)}-{min(scores)}."
+    return text[0].upper() + text[1:]
