@@ -178,9 +178,59 @@ def test_postgame_finality_uses_refreshed_status():
         ],
     )
     ctx = _filler_context(last_event=_event("in"))
+    ctx = gen._with_fresh_reference_game(FillerType.POSTGAME, config, ctx)
     selected = gen._select_register_template(FillerType.POSTGAME, config, ctx)
     assert selected.description == "final text"
     gen._service.refresh_event_status.assert_called_once()
+
+
+def _render(gen, filler_type, config, ctx):
+    return gen._create_filler_programmes(
+        start_dt=datetime(2026, 6, 18, 4, 0, tzinfo=UTC),
+        end_dt=datetime(2026, 6, 18, 10, 0, tzinfo=UTC),
+        filler_type=filler_type,
+        context=ctx,
+        config=config,
+        channel_id="ch1",
+        logo_url=None,
+    )
+
+
+@pytest.mark.parametrize("filler_type", [FillerType.POSTGAME, FillerType.IDLE])
+def test_the_chosen_row_is_rendered_from_the_refreshed_game(filler_type):
+    """#987: "Final" was chosen on the refreshed game and then rendered from
+    the schedule-cache copy, which had no score yet — the result and score
+    came out empty ("The Red Wings the Jets on Sunday")."""
+    stale = _event("in")  # schedule cache: mid-game, no scores
+    fresh = _event("post", home_score=2, away_score=3)
+    gen = _generator(refreshed_event=fresh)
+    rows = [
+        {"condition": "is_final", "priority": 50,
+         "template": "{team_name} {result_text.last} {opponent.last} {final_score.last}"},
+        {"condition": "is_not_final", "priority": 50, "template": "live text"},
+    ]
+    config = FillerConfig(
+        postgame_template=BASE, postgame_rows=rows, idle_template=BASE, idle_rows=rows
+    )
+
+    programmes = _render(gen, filler_type, config, _filler_context(last_event=stale))
+
+    assert programmes
+    assert {p.description for p in programmes} == {"Home Heat lost to Away Aces 2-3"}
+    gen._service.refresh_event_status.assert_called_once()
+
+
+def test_pregame_and_rowless_registers_do_not_refresh():
+    gen = _generator()
+    ctx = _filler_context(next_event=_event("pre"), last_event=_event("post"))
+    with_rows = FillerConfig(
+        pregame_template=BASE,
+        pregame_rows=[{"condition": "is_final", "priority": 50, "template": "x"}],
+        postgame_template=BASE,
+    )
+    assert gen._with_fresh_reference_game(FillerType.PREGAME, with_rows, ctx) is ctx
+    assert gen._with_fresh_reference_game(FillerType.POSTGAME, with_rows, ctx) is ctx
+    gen._service.refresh_event_status.assert_not_called()
 
 
 def test_per_field_falls_to_base_when_row_does_not_set_it():

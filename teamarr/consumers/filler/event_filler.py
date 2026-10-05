@@ -166,7 +166,6 @@ class EventFillerGenerator:
                 base=config.pregame_template,
                 rows=config.pregame_rows,
                 context=context,
-                refresh=False,
             )
             pregame_programmes = self._generate_filler(
                 start_dt=epg_start,
@@ -189,12 +188,13 @@ class EventFillerGenerator:
 
         # Generate postgame filler
         if config.postgame_enabled and event_end < epg_end:
-            # Select postgame template (condition rows, refreshed status)
+            # One refreshed copy of the event serves both the row selection
+            # and the text rendered from it (#987).
+            context = self._with_fresh_event(context, config.postgame_rows)
             postgame_template = self._select_register_template(
                 base=config.postgame_template,
                 rows=config.postgame_rows,
                 context=context,
-                refresh=True,
             )
 
             postgame_programmes = self._generate_filler(
@@ -259,7 +259,6 @@ class EventFillerGenerator:
                 base=config.pregame_template,
                 rows=config.pregame_rows,
                 context=context,
-                refresh=False,
             )
             pregame_programmes = self._generate_filler(
                 start_dt=epg_start,
@@ -278,11 +277,13 @@ class EventFillerGenerator:
 
         # Generate postgame filler
         if config.postgame_enabled and event_end < epg_end:
+            # One refreshed copy of the event serves both the row selection
+            # and the text rendered from it (#987).
+            context = self._with_fresh_event(context, config.postgame_rows)
             postgame_template = self._select_register_template(
                 base=config.postgame_template,
                 rows=config.postgame_rows,
                 context=context,
-                refresh=True,
             )
 
             postgame_programmes = self._generate_filler(
@@ -481,12 +482,25 @@ class EventFillerGenerator:
                 self._stats_cache[cache_key] = None
         return self._stats_cache[cache_key]
 
+    def _with_fresh_event(self, context: TemplateContext, rows: list[dict]) -> TemplateContext:
+        """The context with fresh provider state overlaid on its event.
+
+        Postgame rows ask whether the event is final. The refresh used to
+        land on a copy only the row selection saw, so a row chosen on fresh
+        data was rendered from the stale event (#987). A register with no
+        rows keeps the event it has, as before.
+        """
+        game_ctx = context.game_context
+        if not rows or not game_ctx or not game_ctx.event or not self._service:
+            return context
+        fresh = self._service.refresh_event_status(game_ctx.event)
+        return dc_replace(context, game_context=dc_replace(game_ctx, event=fresh))
+
     def _select_register_template(
         self,
         base: FillerTemplate,
         rows: list[dict],
         context: TemplateContext,
-        refresh: bool,
     ) -> FillerTemplate:
         """Select the register's template, applying condition rows (#420).
 
@@ -494,17 +508,13 @@ class EventFillerGenerator:
         both registers on the event path) with per-field highest-priority-
         match-wins semantics. The description keeps its cascade-on-empty
         (tvnk.14, #329): winning row → other matching rows → base register.
-        ``refresh=True`` (postgame) overlays fresh provider status onto the
-        event first so finality-dependent rows see accurate state.
+        Postgame callers pass a context that has been through
+        ``_with_fresh_event`` so finality-dependent rows see accurate state.
         """
         if not rows:
             return base
 
         game_ctx = context.game_context
-        if refresh and game_ctx and game_ctx.event and self._service:
-            game_ctx = dc_replace(
-                game_ctx, event=self._service.refresh_event_status(game_ctx.event)
-            )
 
         fields, runner_up_descriptions, _ = get_condition_selector().select_filler_fields(
             rows, context, game_ctx

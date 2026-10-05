@@ -458,6 +458,10 @@ class FillerGenerator:
         if not chunks:
             return []
 
+        # One refreshed copy of the reference game serves both the row
+        # selection below and the text rendered from it (#987).
+        context = self._with_fresh_reference_game(filler_type, config, context)
+
         # Get template for this filler type (condition rows evaluated here)
         template = self._select_register_template(
             filler_type=filler_type,
@@ -537,6 +541,34 @@ class FillerGenerator:
 
         return programmes
 
+    def _with_fresh_reference_game(
+        self,
+        filler_type: FillerType,
+        config: FillerConfig,
+        context: TemplateContext,
+    ) -> TemplateContext:
+        """The context with fresh provider state overlaid on its last game.
+
+        Postgame and idle rows ask whether the last game is final, so they
+        need refreshed status. The refresh used to land on a copy that only
+        the row selection saw: "Final" was chosen on fresh data and then
+        rendered from the schedule-cache game, which had no score yet —
+        "The Red Wings the Jets on Sunday" (#987). Returning the context
+        makes selection and rendering read the same game.
+
+        Pregame's reference is the upcoming game — never final, not worth a
+        summary call per filler run. A register with no rows keeps its
+        schedule copy, as before.
+        """
+        if filler_type == FillerType.PREGAME:
+            return context
+        rows = config.postgame_rows if filler_type == FillerType.POSTGAME else config.idle_rows
+        last_game = context.last_game
+        if not rows or not last_game or not last_game.event:
+            return context
+        fresh = self._service.refresh_event_status(last_game.event)
+        return dc_replace(context, last_game=dc_replace(last_game, event=fresh))
+
     def _select_register_template(
         self,
         filler_type: FillerType,
@@ -552,6 +584,9 @@ class FillerGenerator:
         matching row sets fall to the base register. The description keeps
         its cascade-on-empty (tvnk.14, #329): winning row → other matching
         rows by priority → base register text.
+
+        Finality rows need refreshed status: the caller passes a context that
+        has been through ``_with_fresh_reference_game``.
         """
         if filler_type == FillerType.PREGAME:
             base, rows, game_ctx = config.pregame_template, config.pregame_rows, context.next_game
@@ -588,15 +623,6 @@ class FillerGenerator:
 
         if not rows:
             return base
-
-        # Finality must use refreshed status: postgame/idle overlay a fresh
-        # provider fetch onto the reference game before evaluation (matches
-        # the legacy _check_event_final behavior). Pregame's reference is the
-        # upcoming game — never final, not worth a summary call per filler run.
-        if filler_type != FillerType.PREGAME and game_ctx and game_ctx.event:
-            game_ctx = dc_replace(
-                game_ctx, event=self._service.refresh_event_status(game_ctx.event)
-            )
 
         fields, runner_up_descriptions, _ = get_condition_selector().select_filler_fields(
             rows, context, game_ctx
