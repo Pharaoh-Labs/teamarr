@@ -10,10 +10,12 @@ from teamarr.consumers.matching import StreamCategory
 from teamarr.consumers.source_discovery import (
     TIER_GAMES,
     TIER_NAME_ONLY,
+    TIER_TEAMS,
     SourceDiscovery,
+    fold_same_content,
+    is_replay_group,
     league_name_surfaces,
     leagues_named_by,
-    sample_streams,
     suggestion_tier,
 )
 from teamarr.consumers.stream_match_cache import NullStreamMatchCache, StreamMatchCache
@@ -81,11 +83,13 @@ class FakeProcessor:
         for s in streams:
             league, _, rest = s["name"].partition(": ")
             if " vs " in rest:
-                results.append(SimpleNamespace(matched=True, stream_id=s["id"], league=league,
-                                               category=StreamCategory.TEAM_VS_TEAM))
+                results.append(SimpleNamespace(
+                    matched=True, stream_id=s["id"], league=league,
+                    category=StreamCategory.TEAM_VS_TEAM,
+                    event=SimpleNamespace(provider="espn", id=rest)))
             elif league == "team":
                 results.append(SimpleNamespace(matched=True, stream_id=s["id"], league="nba",
-                                               category=StreamCategory.TEAM_ONLY))
+                                               category=StreamCategory.TEAM_ONLY, event=None))
             else:
                 results.append(SimpleNamespace(matched=False, stream_id=s["id"], league=None,
                                                category=None))
@@ -144,13 +148,56 @@ def test_groups_that_are_already_sources_are_not_read(db):
 
 
 def test_empty_and_dismissed_groups_are_not_read(db):
-    _scan([_group(7, "Replay | NBA")], {7: [_stream(1, "old")]})
+    _scan([_group(7, "Sports 9")], {7: [_stream(1, "old")]})
     with get_db() as conn:
-        set_candidate_status(conn, _by_name()["Replay | NBA"].id, "dismissed")
-    summary, m3u, _ = _scan([_group(7, "Replay | NBA"), _group(8, "Empty", streams=0)], {})
+        set_candidate_status(conn, _by_name()["Sports 9"].id, "dismissed")
+    summary, m3u, _ = _scan([_group(7, "Sports 9"), _group(8, "Empty", streams=0)], {})
     assert m3u.read == []
     assert (summary.skipped_dismissed, summary.skipped_empty) == (1, 1)
-    assert _by_name()["Replay | NBA"].status == "dismissed"
+    assert _by_name()["Sports 9"].status == "dismissed"
+
+
+def test_a_dismissal_survives_the_group_coming_back_under_a_new_id(db):
+    """A provider rename makes Dispatcharr create a new group; the "no" stands."""
+    _scan([_group(7, "Sports 9")], {7: [_stream(1, "nhl: A vs B")]})
+    with get_db() as conn:
+        set_candidate_status(conn, _by_name()["Sports 9"].id, "dismissed")
+    summary, m3u, _ = _scan([_group(70, "sports 9 ")], {70: [_stream(1, "nhl: A vs B")]})
+    assert m3u.read == [] and summary.skipped_dismissed == 1
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT status FROM source_candidates WHERE m3u_group_id = 70").fetchall()
+    assert [r[0] for r in rows] == ["dismissed"]
+
+
+def test_every_stream_is_matched_not_a_sample(db):
+    streams = {7: [_stream(i, f"nhl: A{i} vs B{i}") for i in range(400)]}
+    _scan([_group(7, "USA: ESPN PLUS", streams=400)], streams)
+    cand = _by_name()["USA: ESPN PLUS"]
+    assert cand.best_game_matches == 400 and len(cand.event_ids) == 400
+
+
+def test_a_replay_group_is_recorded_but_never_matched_or_suggested(db):
+    groups = [_group(7, "Replay | NBA"), _group(8, "Sports | NBA Extra")]
+    streams = {7: [_stream(1, "nba: A vs B")],
+               8: [_stream(2, "NBA Replay 9"), _stream(3, "NBA Replay Highlights"),
+                   _stream(4, "nba: A vs B")]}
+    summary, _, proc = _scan(groups, streams)
+    assert summary.skipped_replay == 2 and proc.caches == []
+    for cand in _by_name().values():
+        assert cand.replay is True and suggestion_tier(cand) is None
+
+
+def test_the_scan_waits_for_a_generation_run_between_groups(db, monkeypatch):
+    from teamarr.consumers import generation_status
+    from teamarr.consumers import source_discovery as sd
+
+    answers = iter([True, True, False])
+    monkeypatch.setattr(generation_status, "is_in_progress", lambda: next(answers, False))
+    naps = []
+    monkeypatch.setattr(sd.time, "sleep", naps.append)
+    _scan([_group(7, "Sports")], {7: [_stream(1, "nhl: A vs B")]})
+    assert naps == [2, 2]
 
 
 def test_a_group_count_the_listing_does_not_give_is_read_not_assumed_empty(db):
@@ -266,11 +313,85 @@ def test_team_only_matches_never_qualify_a_group():
     assert suggestion_tier(_cand(games=0, team_only=40)) is None
 
 
-def test_the_sample_is_an_even_spread_not_the_first_block():
-    streams = [{"id": i} for i in range(1000)]
-    picked = [s["id"] for s in sample_streams(streams, 50)]
-    assert len(picked) == 50 and picked[0] == 0 and picked[-1] >= 980
-    assert sample_streams(streams[:10], 50) == streams[:10]
+def test_team_streams_qualify_only_in_a_league_the_group_name_names():
+    named = _cand(name_leagues=["nfl"])
+    named.team_leagues = {"nfl": 30}
+    assert suggestion_tier(named) == TIER_TEAMS
+    # "UK | News" matching national teams on a country word: no league in the name
+    unnamed = _cand()
+    unnamed.team_leagues = {"uefa.nations": 12}
+    assert suggestion_tier(unnamed) is None
+    # the name says NFL, the teams matched are somewhere else
+    elsewhere = _cand(name_leagues=["nfl"])
+    elsewhere.team_leagues = {"uefa.nations": 12}
+    assert suggestion_tier(elsewhere) == TIER_NAME_ONLY
+    few = _cand(name_leagues=["nfl"])
+    few.team_leagues = {"nfl": 2}
+    assert suggestion_tier(few) == TIER_NAME_ONLY
+
+
+@pytest.mark.parametrize("group, streams, replay", [
+    ("Replay | NBA", ["NBA Replay 9"], True),
+    ("Sports | EPL Replays", [], True),
+    ("Sports 4", ["NHL Replay info", "NHL Replay Highlights", "NHL Replay 9", "Info"], True),
+    ("USA | NBA", ["NBA 01: Lakers vs Celtics", "NBA 02: Replay of the night"], True),
+    ("USA | NBA", ["NBA 01: Lakers vs Celtics", "NBA 02: Suns vs Kings", "NBA 03: Replay"], False),
+    ("Instant Replayers FC", ["A vs B"], False),
+    ("USA | NBA", [], False),
+])
+def test_replay_groups_are_told_by_their_own_words(group, streams, replay):
+    assert is_replay_group(group, streams) is replay
+
+
+def test_a_name_only_group_with_streams_all_week_and_no_match_drops_off(db):
+    def ev(read):
+        return ScanEvidence(m3u_group_id=7, m3u_group_name="Sports | NBA Classics",
+                            streams_read=read, name_leagues=["nba"])
+    with get_db() as conn:
+        for day in range(6, -1, -1):
+            record_scan(conn, [ev(12)], NOW - timedelta(days=day, hours=1))
+    assert suggestion_tier(_by_name()["Sports | NBA Classics"]) is None
+
+
+def test_a_name_only_group_that_was_empty_some_days_is_still_waiting(db):
+    with get_db() as conn:
+        for day in range(6, -1, -1):
+            record_scan(conn, [ScanEvidence(
+                m3u_group_id=7, m3u_group_name="LIVE | EPL (Sat)",
+                streams_read=0 if day % 2 else 12, name_leagues=["eng.1"])],
+                NOW - timedelta(days=day, hours=1))
+    assert suggestion_tier(_by_name()["LIVE | EPL (Sat)"]) == TIER_NAME_ONLY
+
+
+def test_several_scans_in_one_day_are_one_day_of_evidence(db):
+    with get_db() as conn:
+        for hour in range(8):
+            record_scan(conn, [ScanEvidence(m3u_group_id=7, m3u_group_name="Sports | NBA Extra",
+                                            streams_read=12, name_leagues=["nba"])],
+                        NOW - timedelta(hours=hour))
+    cand = _by_name()["Sports | NBA Extra"]
+    assert cand.scan_days <= 2 and suggestion_tier(cand) == TIER_NAME_ONLY
+
+
+def test_groups_with_the_same_events_fold_into_one_suggestion():
+    def cand(id_, name, events):
+        c = _cand(games=len(events))
+        c.id, c.m3u_group_name, c.event_ids = id_, name, set(events)
+        return c
+    a = cand(1, "CAN: TSN+", [f"e{i}" for i in range(10)])
+    b = cand(2, "Sports | TSN+ (2)", [f"e{i}" for i in range(9)])      # 9 of 10 shared
+    c = cand(3, "Sports | F1", [f"e{i}" for i in range(4)])            # too little shared
+    d = cand(4, "LIVE | EPL (Sat)", [])                                # nothing matched
+    e = cand(5, "Sports | EPL Teams", [])
+    # one shared event is a race week, not the same content
+    f = cand(6, "Live | F1 TV", ["gp"])
+    g = cand(7, "Live | Apple TV F1", ["gp"])
+    folded = fold_same_content([d, c, b, a, e, f, g])
+    assert [[x.m3u_group_name for x in grp] for grp in folded] == [
+        ["CAN: TSN+", "Sports | TSN+ (2)"], ["Sports | F1"],
+        ["Live | Apple TV F1"], ["Live | F1 TV"],
+        ["LIVE | EPL (Sat)"], ["Sports | EPL Teams"],
+    ]
 
 
 # --- API and schedule -------------------------------------------------------------
@@ -292,9 +413,17 @@ def _seed(now=None):
     with get_db() as conn:
         record_scan(conn, [
             ScanEvidence(m3u_group_id=1, m3u_group_name="USA: ESPN PLUS", streams_read=50,
-                         game_matches=9, leagues={"nhl": 9}),
-            ScanEvidence(m3u_group_id=2, m3u_group_name="Replay | NBA", streams_read=19,
+                         game_matches=9, leagues={"nhl": 9},
+                         event_ids={f"espn:{i}" for i in range(9)}),
+            ScanEvidence(m3u_group_id=2, m3u_group_name="Sports | NBA Extra", streams_read=19,
                          name_leagues=["nba"]),
+            ScanEvidence(m3u_group_id=5, m3u_group_name="Replay | NBA", name_leagues=["nba"],
+                         replay=True),
+            ScanEvidence(m3u_group_id=6, m3u_group_name="USA | NFL Teams", streams_read=34,
+                         team_only_matches=30, team_leagues={"nfl": 30}, name_leagues=["nfl"]),
+            ScanEvidence(m3u_group_id=8, m3u_group_name="Sports | ESPN PLUS (2)", streams_read=50,
+                         game_matches=9, leagues={"nhl": 9},
+                         event_ids={f"espn:{i}" for i in range(9)}),
             ScanEvidence(m3u_group_id=3, m3u_group_name="UK | News", streams_read=50,
                          team_only_matches=5),
             ScanEvidence(m3u_group_id=4, m3u_group_name="LIVE | NBA (Preseason)", streams_read=14,
@@ -306,25 +435,30 @@ def test_the_review_list_holds_only_groups_worth_suggesting_strongest_first(api)
     _seed()
     body = api.get("/api/v1/source-discovery/candidates").json()
     assert [(c["m3u_group_name"], c["tier"]) for c in body["candidates"]] == [
-        ("USA: ESPN PLUS", "games"),
+        ("Sports | ESPN PLUS (2)", "games"),
         ("LIVE | NBA (Preseason)", "games"),
-        ("Replay | NBA", "name_only"),
+        ("USA | NFL Teams", "teams"),
+        ("Sports | NBA Extra", "name_only"),
     ]
+    folded = body["candidates"][0]
+    assert [a["m3u_group_name"] for a in folded["alternates"]] == ["USA: ESPN PLUS"]
+    assert folded["events"] == 9
+    assert body["candidates"][2]["team_leagues"] == {"nfl": 30}
     assert body["window_days"] == 7 and body["scan"]["running"] is False
 
 
 def test_a_dismissed_candidate_leaves_the_list_and_can_be_restored(api):
     _seed()
-    cid = api.get("/api/v1/source-discovery/candidates").json()["candidates"][2]["id"]
+    cid = api.get("/api/v1/source-discovery/candidates").json()["candidates"][3]["id"]
     assert api.post(f"/api/v1/source-discovery/candidates/{cid}/dismiss").status_code == 200
     names = lambda **p: [  # noqa: E731
         c["m3u_group_name"]
         for c in api.get("/api/v1/source-discovery/candidates", params=p).json()["candidates"]
     ]
-    assert "Replay | NBA" not in names()
-    assert "Replay | NBA" in names(include_dismissed=True)
+    assert "Sports | NBA Extra" not in names()
+    assert "Sports | NBA Extra" in names(include_dismissed=True)
     api.post(f"/api/v1/source-discovery/candidates/{cid}/restore")
-    assert "Replay | NBA" in names()
+    assert "Sports | NBA Extra" in names()
     assert api.post("/api/v1/source-discovery/candidates/9999/dismiss").status_code == 404
 
 
@@ -362,7 +496,8 @@ def test_a_scan_is_skipped_without_dispatcharr_and_only_one_runs_at_a_time(db, m
 
 def _accept_first(api):
     _seed()
-    cid = api.get("/api/v1/source-discovery/candidates").json()["candidates"][0]["id"]
+    listed = api.get("/api/v1/source-discovery/candidates").json()["candidates"]
+    cid = listed[0]["alternates"][0]["id"]  # "USA: ESPN PLUS", M3U group 1
     resp = api.post(f"/api/v1/source-discovery/candidates/{cid}/accept")
     assert resp.status_code == 201, resp.text
     return cid, resp.json()["source_group_id"]
@@ -495,3 +630,41 @@ def test_a_run_that_matches_stamps_the_source(db):
         assert get_group(conn, source_id).last_matched_at is None
         update_group_stats(conn, source_id, stream_count=10, matched_count=4)
         assert get_group(conn, source_id).last_matched_at is not None
+
+
+def test_a_team_stream_group_becomes_a_team_stream_source(api):
+    _seed()
+    listed = api.get("/api/v1/source-discovery/candidates").json()["candidates"]
+    cid = next(c["id"] for c in listed if c["tier"] == "teams")
+    source_id = api.post(f"/api/v1/source-discovery/candidates/{cid}/accept").json()[
+        "source_group_id"]
+    source = _source(source_id)
+    assert (source.team_streams_enabled, source.name_match_enabled) == (True, False)
+
+
+def test_deleting_an_accepted_source_by_hand_is_a_dismissal(api):
+    cid, source_id = _accept_first(api)
+    assert api.delete(f"/api/v1/groups/{source_id}").status_code == 200
+    names = [c["m3u_group_name"] for c in api.get(
+        "/api/v1/source-discovery/candidates", params={"include_dismissed": True}
+    ).json()["candidates"] if c["status"] == "dismissed"]
+    assert names == ["USA: ESPN PLUS"]
+    # ... and a scan that sees games in it does not bring it back
+    summary, m3u, _ = _scan([_group(1, "USA: ESPN PLUS")], {1: [_stream(1, "nhl: A vs B")]})
+    assert m3u.read == [] and summary.sources_readded == 0
+
+
+def test_a_removed_managed_source_is_added_back_when_its_group_returns(api):
+    """Approved once: the user is not asked again."""
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=15)
+    _maintain(live=())
+    assert _maintain(live=()).sources_removed == 1
+    streams = {1: [_stream(i, f"nhl: A{i} vs B{i}") for i in range(4)]}
+    summary, _, _ = _scan([_group(1, "USA: ESPN PLUS")], streams)
+    assert summary.sources_readded == 1
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT managed, enabled, m3u_group_id FROM event_epg_groups "
+            "WHERE name = 'USA: ESPN PLUS'").fetchone()
+    assert tuple(row) == (1, 1, 1)

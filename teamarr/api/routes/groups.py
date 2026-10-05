@@ -36,6 +36,7 @@ from teamarr.database.groups import (
     update_group,
 )
 from teamarr.database.settings import get_display_settings
+from teamarr.database.source_candidates import dismiss_candidate_for_source
 from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
 from teamarr.services import create_group_service
 from teamarr.services.stream_filter import (
@@ -1770,6 +1771,10 @@ def delete_group_by_id(group_id: int) -> dict:
         _reject_channel_source(group, "delete")
         channel_count = get_group_channel_count(conn, group_id)
         delete_group(conn, group_id)
+        # Deleting a source that came from a suggestion is the user's "no":
+        # source discovery must not offer or re-add it (#997).
+        dismiss_candidate_for_source(conn, group_id)
+        conn.commit()
 
     logger.info(
         "[DELETED] Event group id=%d name=%s channels=%d", group_id, group.name, channel_count

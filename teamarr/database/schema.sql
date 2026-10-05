@@ -1950,7 +1950,8 @@ CREATE TABLE IF NOT EXISTS source_candidates (
     name_leagues TEXT NOT NULL DEFAULT '[]',  -- JSON: subscribed leagues the group NAME mentions
     status TEXT NOT NULL DEFAULT 'new'
         CHECK(status IN ('new', 'accepted', 'dismissed')),
-    source_group_id INTEGER,                  -- event_epg_groups.id created when accepted
+    source_group_id INTEGER,                  -- event_epg_groups.id created when accepted (NULL while accepted = approved, source since removed)
+    replay BOOLEAN DEFAULT 0,                 -- group name or most stream names say "replay": never suggested
     last_seen_at TIMESTAMP,                   -- last scan that still listed the group
     last_matched_at TIMESTAMP                 -- last scan with a two-sided game match
 );
@@ -1963,6 +1964,8 @@ CREATE TABLE IF NOT EXISTS source_candidate_scans (
     game_matches INTEGER NOT NULL DEFAULT 0,       -- distinct streams matched as a two-sided game
     team_only_matches INTEGER NOT NULL DEFAULT 0,  -- distinct streams matched by one team name alone
     leagues TEXT NOT NULL DEFAULT '{}',            -- JSON {league: game matches}
+    team_leagues TEXT NOT NULL DEFAULT '{}',       -- JSON {league: streams matched by one team name}
+    event_ids TEXT NOT NULL DEFAULT '[]',          -- JSON list of "provider:event_id" the game matches landed on
     FOREIGN KEY (candidate_id) REFERENCES source_candidates(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_source_candidate_scans ON source_candidate_scans(candidate_id, scanned_at);
