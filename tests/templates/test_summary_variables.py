@@ -260,3 +260,50 @@ def test_series_score_and_summary_short_empty_in_regular_season():
     ))
     assert extract_series_score(ctx, gc) == ""
     assert extract_series_summary_short(ctx, gc) == ""
+
+
+def test_preview_text_written_preview_uses_headline():
+    # A written (AP) preview's description is the story's opening anecdote;
+    # the headline is the line that summarises the game (#979).
+    article = {
+        "type": "Preview",
+        "source": "AP",
+        "headline": (
+            "Panthers defense looks to slow down Jared Goff and the Lions "
+            "while missing both starting cornerbacks"
+        ),
+        "description": (
+            "— The Carolina Panthers found themselves in a precarious position last November."
+        ),
+    }
+    assert ESPNProvider._preview_text(article) == article["headline"]
+
+
+def test_preview_text_generated_preview_keeps_description():
+    # Machine-generated previews are the reverse: generic headline, records
+    # in the description.
+    article = {
+        "type": "Preview",
+        "source": "Data Skrive",
+        "headline": "Southern Miss visits Troy in Sun Belt matchup",
+        "description": "Southern Miss (1-3) at Troy (2-2), Oct. 6 at 8 p.m. EDT.",
+    }
+    assert (
+        ESPNProvider._preview_text(article)
+        == "Southern Miss (1-3) at Troy (2-2), Oct. 6 at 8 p.m. EDT."
+    )
+
+
+def test_preview_text_unknown_source_uses_headline():
+    article = {"headline": "headline", "description": "body"}
+    assert ESPNProvider._preview_text(article) == "headline"
+
+
+def test_preview_text_short_link_still_wins():
+    article = {"shortLinkText": "short", "headline": "headline", "description": "body"}
+    assert ESPNProvider._preview_text(article) == "short"
+
+
+def test_preview_text_falls_back_to_description():
+    article = {"headline": " ", "description": "— Bo Bichette continued his tear."}
+    assert ESPNProvider._preview_text(article) == "Bo Bichette continued his tear."

@@ -65,8 +65,8 @@ abbreviations and surnames.
 Starter descriptions prefer ESPN's own editorial copy and fall back to
 constructed prose when it isn't available:
 
-- **Pregame / main program** — when ESPN publishes a preview blurb (usually
-  on game day), it's used verbatim via a `has_preview → {game_preview}`
+- **Pregame / main program** — when ESPN publishes a preview (usually
+  on game day), its text is used verbatim via a `has_preview → {game_preview}`
   conditional row; marquee games lead with the provider's designation when
   one exists ("NBA Finals - Game 5. …", "FIFA World Cup, Group C. …" via
   `has_event_note` / `has_match_note` rows); neutral-site games (bowls,
