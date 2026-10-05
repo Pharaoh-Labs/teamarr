@@ -275,6 +275,29 @@ def get_subscription_templates(conn: Connection) -> list[SubscriptionTemplate]:
     return [_row_to_subscription_template(row) for row in cursor.fetchall()]
 
 
+def get_template_scope(conn: Connection, template_id: int) -> tuple[list[str], list[str]]:
+    """The leagues and sports a template is used for, as ``(leagues, sports)``.
+
+    Leagues are the ones it is assigned to plus the primary leagues of the
+    teams that use it; sports come from its sport-level assignments. Either
+    can be empty — a template assigned to everything names neither.
+    """
+    leagues: list[str] = []
+    sports: list[str] = []
+    for assignment in get_subscription_templates(conn):
+        if assignment.template_id != template_id:
+            continue
+        leagues.extend(assignment.leagues or [])
+        sports.extend(assignment.sports or [])
+    rows = conn.execute(
+        "SELECT DISTINCT primary_league FROM teams "
+        "WHERE template_id = ? AND primary_league IS NOT NULL AND primary_league != ''",
+        (template_id,),
+    ).fetchall()
+    leagues.extend(row[0] for row in rows)
+    return leagues, sports
+
+
 def get_subscription_template(
     conn: Connection, assignment_id: int
 ) -> SubscriptionTemplate | None:
