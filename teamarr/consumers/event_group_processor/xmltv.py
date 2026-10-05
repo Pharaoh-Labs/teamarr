@@ -318,8 +318,12 @@ class XmltvRenderer:
         # Get configured timezone
         tz = get_user_timezone()
 
-        # Build filler options - lookback allows preceding EPG content
-        now = datetime.now(tz)
+        # Build filler options - lookback allows preceding EPG content.
+        # The window hangs off the run's one clock reading, not this source's
+        # own: sources are processed seconds apart, and a channel they share
+        # otherwise gets one near-duplicate edge programme per source (#988).
+        run_now = getattr(self, "_run_now", None)
+        now = run_now.astimezone(tz) if run_now else datetime.now(tz)
         epg_start = now - timedelta(hours=lookback_hours)
         options = EventFillerOptions(
             epg_start=epg_start,
