@@ -4,26 +4,26 @@
   </channel>
   <programme start="20260710090000 +0000" stop="20260710100000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
-    <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
+    <desc lang="en">Chelsea face Arsenal at Stamford Bridge today at 3:00 PM EDT.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710100000 +0000" stop="20260710160000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
-    <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
+    <desc lang="en">Chelsea face Arsenal at Stamford Bridge today at 3:00 PM EDT.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710160000 +0000" stop="20260710190000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
-    <desc lang="en">Arsenal face Chelsea at Stamford Bridge today at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
+    <desc lang="en">Chelsea face Arsenal at Stamford Bridge today at 3:00 PM EDT.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710190000 +0000" stop="20260710213000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer</title>
-    <sub-title lang="en">Chelsea vs Arsenal</sub-title>
-    <desc lang="en">Arsenal face Chelsea at Stamford Bridge. Arsenal have won 4 of their last five; Chelsea have won 3 of their last five.</desc>
+    <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
+    <desc lang="en">Chelsea face Arsenal at Stamford Bridge. Chelsea have won 3 of their last five; Arsenal have won 4 of their last five.</desc>
     <date>20260710</date>
     <category lang="en">Sports</category>
     <category lang="en">Soccer</category>
@@ -35,57 +35,57 @@
   <programme start="20260710213000 +0000" stop="20260710220000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
-    <desc lang="en">The game between Chelsea and Arsenal has not yet ended as of the last update.</desc>
+    <desc lang="en">The match between Chelsea and Arsenal has not yet ended as of the last update.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260710220000 +0000" stop="20260711040000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Arsenal</sub-title>
-    <desc lang="en">The game between Chelsea and Arsenal has not yet ended as of the last update.</desc>
+    <desc lang="en">The match between Chelsea and Arsenal has not yet ended as of the last update.</desc>
     <icon src="epl/Arsenal/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260711040000 +0000" stop="20260711100000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Next: vs Liverpool, Sun Jul 12, 3:00 PM EDT</sub-title>
+    <desc lang="en">Last match: vs Arsenal, Jul 10. Next match: vs Liverpool, Sunday, Jul 12 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260711100000 +0000" stop="20260711160000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Next: vs Liverpool, Sun Jul 12, 3:00 PM EDT</sub-title>
+    <desc lang="en">Last match: vs Arsenal, Jul 10. Next match: vs Liverpool, Sunday, Jul 12 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260711160000 +0000" stop="20260711220000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Next: vs Liverpool, Sun Jul 12, 3:00 PM EDT</sub-title>
+    <desc lang="en">Last match: vs Arsenal, Jul 10. Next match: vs Liverpool, Sunday, Jul 12 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260711220000 +0000" stop="20260712040000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">Next match: Sunday, July 12, 2026 at 3:00 PM EDT vs Liverpool</sub-title>
-    <desc lang="en">Chelsea last played Arsenal on Friday, July 10, 2026. Next match is against Liverpool on Sunday, July 12, 2026 at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Next: vs Liverpool, Sun Jul 12, 3:00 PM EDT</sub-title>
+    <desc lang="en">Last match: vs Arsenal, Jul 10. Next match: vs Liverpool, Sunday, Jul 12 at 3:00 PM EDT.</desc>
   </programme>
   <programme start="20260712040000 +0000" stop="20260712100000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
-    <desc lang="en">Liverpool face Chelsea at The Palace sunday at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
+    <desc lang="en">Chelsea face Liverpool at The Palace Sunday at 3:00 PM EDT.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712100000 +0000" stop="20260712160000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
-    <desc lang="en">Liverpool face Chelsea at The Palace sunday at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
+    <desc lang="en">Chelsea face Liverpool at The Palace Sunday at 3:00 PM EDT.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712160000 +0000" stop="20260712190000 +0000" channel="teamarr-team-1">
     <title lang="en">Coming up: Premier League Soccer at 3:00 PM EDT</title>
-    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
-    <desc lang="en">Liverpool face Chelsea at The Palace sunday at 3:00 PM EDT.</desc>
+    <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
+    <desc lang="en">Chelsea face Liverpool at The Palace Sunday at 3:00 PM EDT.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712190000 +0000" stop="20260712213000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer</title>
-    <sub-title lang="en">Chelsea vs Liverpool</sub-title>
-    <desc lang="en">Liverpool face Chelsea at The Palace.</desc>
+    <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
+    <desc lang="en">Chelsea face Liverpool at The Palace.</desc>
     <date>20260712</date>
     <category lang="en">Sports</category>
     <category lang="en">Soccer</category>
@@ -97,33 +97,33 @@
   <programme start="20260712213000 +0000" stop="20260712220000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
-    <desc lang="en">The game between Chelsea and Liverpool has not yet ended as of the last update.</desc>
+    <desc lang="en">The match between Chelsea and Liverpool has not yet ended as of the last update.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260712220000 +0000" stop="20260713040000 +0000" channel="teamarr-team-1">
     <title lang="en">Premier League Soccer: Full Time</title>
     <sub-title lang="en">Chelsea vs. Liverpool</sub-title>
-    <desc lang="en">The game between Chelsea and Liverpool has not yet ended as of the last update.</desc>
+    <desc lang="en">The match between Chelsea and Liverpool has not yet ended as of the last update.</desc>
     <icon src="epl/Liverpool/Chelsea/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260713040000 +0000" stop="20260713100000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">No upcoming match currently on schedule in next 30 days</sub-title>
-    <desc lang="en">No upcoming Chelsea matches scheduled.</desc>
+    <sub-title lang="en">No upcoming matches scheduled</sub-title>
+    <desc lang="en">No upcoming Chelsea matches are scheduled.</desc>
   </programme>
   <programme start="20260713100000 +0000" stop="20260713160000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">No upcoming match currently on schedule in next 30 days</sub-title>
-    <desc lang="en">No upcoming Chelsea matches scheduled.</desc>
+    <sub-title lang="en">No upcoming matches scheduled</sub-title>
+    <desc lang="en">No upcoming Chelsea matches are scheduled.</desc>
   </programme>
   <programme start="20260713160000 +0000" stop="20260713220000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">No upcoming match currently on schedule in next 30 days</sub-title>
-    <desc lang="en">No upcoming Chelsea matches scheduled.</desc>
+    <sub-title lang="en">No upcoming matches scheduled</sub-title>
+    <desc lang="en">No upcoming Chelsea matches are scheduled.</desc>
   </programme>
   <programme start="20260713220000 +0000" stop="20260714040000 +0000" channel="teamarr-team-1">
     <title lang="en">No Chelsea Match Today</title>
-    <sub-title lang="en">No upcoming match currently on schedule in next 30 days</sub-title>
-    <desc lang="en">No upcoming Chelsea matches scheduled.</desc>
+    <sub-title lang="en">No upcoming matches scheduled</sub-title>
+    <desc lang="en">No upcoming Chelsea matches are scheduled.</desc>
   </programme>
 </tv>

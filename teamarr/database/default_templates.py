@@ -43,6 +43,7 @@ import copy
 from sqlite3 import Connection
 
 from teamarr.core.filler_types import legacy_conditional_to_rows
+from teamarr.database.starter_snapshots import PRE_STYLE_PASS
 from teamarr.templates.resolver import rewrite_legacy_tokens
 
 # Neutralized legacy filler conditional (#420, cajd.6): starters author
@@ -421,10 +422,33 @@ def _with_v80_rows(gen: dict) -> dict:
     return g
 
 
+def _pre_style_pass(name: str, spec: dict) -> dict:
+    """The spec as it stood before the #991 style pass (generation G8).
+
+    Current members come straight from the frozen snapshot. A retired member
+    is an event base plus a few overrides, so it is rebuilt the same way on
+    the pre-pass Default Event text.
+    """
+    if name in PRE_STYLE_PASS:
+        return copy.deepcopy(PRE_STYLE_PASS[name])
+    if spec.get("template_type") != "event":
+        return spec
+    live_base = _event_base()
+    prior = copy.deepcopy(PRE_STYLE_PASS["Default Event (Starter)"])
+    for key, value in spec.items():
+        if value != live_base.get(key):
+            prior[key] = copy.deepcopy(value)
+    return prior
+
+
 def _prior_generations(name: str, spec: dict) -> list[dict]:
     """Registered prior content generations of a set member, newest first.
 
-    G7 (pre-#981, team starters only): current content with the team
+    G8 (pre-#991): the starters verbatim as they stood before the style
+        pass (starter_snapshots.PRE_STYLE_PASS). That pass rewrote most of
+        the prose, so it is a frozen copy rather than a revert, and every
+        older generation below is derived from it, not from the live spec.
+    G7 (pre-#981, team starters only): G8 with the team
         wording reverted — after-game title carrying the team name, "to
         take on", the dated in-progress line, the old idle descriptions.
         Every older generation carried that text too, so the rest of the
@@ -457,7 +481,8 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     # {away_team}/{home_team} in subtitles and the event channel name. It
     # postdates #420, so it carries native rows and is emitted as-is (no
     # v80/empty-rows variants) — see the tail of this function.
-    g7 = _revert_team_parity(name, spec)
+    g8 = _pre_style_pass(name, spec)
+    g7 = _revert_team_parity(name, g8)
     g6 = _revert_postgame_title(g7)
     g5 = _revert_team_order(g6)
 
@@ -467,7 +492,15 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
 
     g3 = copy.deepcopy(g4)
     if name == "Soccer Team (Starter)":
-        base = _revert_filler_rows(_team_base())
+        # The base team text of that era, not today's.
+        default_team = "Default Team (Starter)"
+        base = _revert_filler_rows(
+            _revert_team_order(
+                _revert_postgame_title(
+                    _revert_team_parity(default_team, copy.deepcopy(PRE_STYLE_PASS[default_team]))
+                )
+            )
+        )
         for f in ("idle_content", "idle_conditional", "idle_offseason"):
             g3[f] = base[f]  # #369 reverted: soccer idle was the base text
     if g3 != g4:
@@ -497,7 +530,9 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     if g0 != g2:
         legacy_chain.append(g0)
 
-    gens: list[dict] = [g7] if g7 != spec else []
+    gens: list[dict] = [g8] if g8 != spec else []
+    if g7 != g8:
+        gens.append(g7)
     if g6 != g7:
         gens.append(g6)
     if g5 != g6:
@@ -521,6 +556,71 @@ def _matches_any_generation(row, name: str, spec: dict) -> bool:
             titled["title_format"] = old_title
             candidates.append(titled)
     return any(_content_matches(row, cand) for cand in candidates)
+
+
+# --- shared phrases (#991) -------------------------------------------------------
+# One sentence shape per fact, written once and reused by every starter that
+# states it, so the same thing is never said two ways.
+
+# US-pro matchup, home team first as a guide writes it ("The Panthers (1-2)
+# host the Lions (2-1) at …"); an empty record's brackets are cleaned away.
+_PRO_HOST = (
+    "The {home_team} ({home_team_record}) host the {away_team} ({away_team_record}) at {venue}"
+)
+# Nobody hosts a neutral-site or marquee game.
+_PRO_MEET = (
+    "The {away_team} ({away_team_record}) and the {home_team} ({home_team_record}) "
+    "meet at {venue}"
+)
+# Team-channel result, winner's score first whoever won: "The Lions lost to
+# the Panthers, 32-26" (+ "in overtime").
+_TEAM_RESULT = (
+    "{team_name_the} {result_text.last} {opponent_the.last}, "
+    "{result_score.last} {overtime_text.last}"
+)
+# Next / last game as labelled fragments; the idle subtitle is the short form.
+_NEXT_GAME = (
+    "Next game: {vs_at.next} {opponent_the.next}, {game_day.next}, "
+    "{game_date_short.next} at {game_time.next}"
+)
+_LAST_GAME = "Last game: {vs_at.last} {opponent_the.last}, {game_date_short.last}"
+_NEXT_SHORT = (
+    "Next: {vs_at.next} {opponent_the.next}, {game_day_short.next} "
+    "{game_date_short.next}, {game_time.next}"
+)
+
+
+def _not_ended(noun: str, first: str, second: str) -> str:
+    """The in-progress line. Deliberately "as of the last update": the guide
+    only knows what the last generation saw, so the event may well be over."""
+    return f"The {noun} between {first} and {second} has not yet ended as of the last update."
+
+
+def _match(text: str) -> str:
+    """The soccer register of a shared phrase: 'match', never 'game'."""
+    return text.replace("Next game:", "Next match:").replace("Last game:", "Last match:")
+
+
+def _team_postgame_rows(noun: str) -> list[dict]:
+    """Team after-game rows (#420): has_recap fires only when the provider
+    published a recap; a game still running gets the not-yet-ended line; a
+    final game without a recap falls to the constructed result sentence."""
+    return [
+        {
+            "condition": "has_recap",
+            "condition_value": None,
+            "template": "{game_recap.last}",
+            "priority": 10,
+            "label": "Recap (provider)",
+        },
+        {
+            "condition": "is_not_final",
+            "condition_value": None,
+            "template": _not_ended(noun, "{team_name_the}", "{opponent_the.last}"),
+            "priority": 50,
+            "label": "In progress",
+        },
+    ]
 
 
 def _team_base(**overrides) -> dict:
@@ -555,9 +655,8 @@ def _team_base(**overrides) -> dict:
             "subtitle": "{team1.next} {at_vs.next} {team2.next}",
             "description": "{game_preview.next}",
             "description_fallback": (
-                "The {away_team_record.next} {away_team.next} travel to "
-                "{venue_city.next}, {venue_state.next} to play the "
-                "{home_team_record.next} {home_team.next} {today_tonight.next} "
+                "The {home_team.next} ({home_team_record.next}) host the "
+                "{away_team.next} ({away_team_record.next}) {today_tonight.next} "
                 "at {game_time.next}."
             ),
             "art_url": _ART_NEXT,
@@ -569,9 +668,7 @@ def _team_base(**overrides) -> dict:
         "postgame_fallback": {
             "title": "{gracenote_category}: Final",
             "subtitle": "{team1.last} {at_vs.last} {team2.last}",
-            "description": (
-                "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
-            ),
+            "description": _TEAM_RESULT + ".",
             "art_url": _ART_LAST,
         },
         "postgame_conditional": dict(_LEGACY_CONDITIONAL_OFF),
@@ -579,39 +676,13 @@ def _team_base(**overrides) -> dict:
         # is_final+{game_recap} pairing as the primary mechanism — it fires
         # only when the provider actually published a recap (a final game
         # without one falls straight to the constructed result line).
-        "postgame_conditional_rows": [
-            {
-                "condition": "has_recap",
-                "condition_value": None,
-                "template": "{game_recap.last}",
-                "priority": 10,
-                "label": "Recap (provider)",
-            },
-            {
-                "condition": "is_not_final",
-                "condition_value": None,
-                "template": (
-                    "The game between {team_name_the} and {opponent_the.last} has not "
-                    "yet ended as of the last update."
-                ),
-                "priority": 50,
-                "label": "In progress",
-            },
-        ],
+        "postgame_conditional_rows": _team_postgame_rows("game"),
         "idle_content": {
             "title": "No {team_name} Game Today",
-            "subtitle": (
-                "Next game: {game_date.next} at {game_time.next} {vs_at.next} {opponent_the.next}"
-            ),
-            # Says when AND adds the matchup (#981): the subtitle already
-            # carries the bare "Next game: … vs …" line, and a guide that
-            # shows only the description still needs the date and time.
-            "description": (
-                "Next game: {game_date.next} at {game_time.next}. "
-                "The {away_team_record.next} {away_team.next} travel to "
-                "{venue_city.next}, {venue_state.next} to play the "
-                "{home_team_record.next} {home_team.next} at {venue.next}."
-            ),
+            "subtitle": _NEXT_SHORT,
+            # Stands alone on guides that show only the description (#981);
+            # the subtitle carries the short form of the same line.
+            "description": _NEXT_GAME + ".",
             "art_url": "",
         },
         "idle_conditional": dict(_LEGACY_CONDITIONAL_OFF),
@@ -619,23 +690,14 @@ def _team_base(**overrides) -> dict:
             {
                 "condition": "is_final",
                 "condition_value": None,
-                "template": (
-                    "{team_name_the} {result_text.last} {opponent_the.last} "
-                    "{final_score.last} {overtime_text.last} on {game_date.last}. "
-                    "Next game will be with {opponent_the.next} on {game_date.next} "
-                    "at {game_time.next}."
-                ),
+                "template": _TEAM_RESULT + " on {game_date_short.last}. " + _NEXT_GAME + ".",
                 "priority": 50,
                 "label": "Final",
             },
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": (
-                    "{team_name_the} last played against {opponent_the.last} on "
-                    "{game_date.last}. Next game will be with {opponent_the.next} on "
-                    "{game_date.next} at {game_time.next}."
-                ),
+                "template": _LAST_GAME + ". " + _NEXT_GAME + ".",
                 "priority": 50,
                 "label": "In progress",
             },
@@ -645,9 +707,9 @@ def _team_base(**overrides) -> dict:
             "title_enabled": False,
             "title": None,
             "subtitle_enabled": True,
-            "subtitle": "No upcoming game currently on schedule in next 30 days",
+            "subtitle": "No upcoming games scheduled",
             "description_enabled": True,
-            "description": "No upcoming {team_name} games scheduled.",
+            "description": "No upcoming {team_name} games are scheduled.",
         },
         "conditional_descriptions": [
             {
@@ -664,10 +726,7 @@ def _team_base(**overrides) -> dict:
             {
                 "condition": "has_event_note",
                 "condition_value": None,
-                "template": (
-                    "{game_event_note}. The {away_team_record} {away_team} and the "
-                    "{home_team_record} {home_team} meet at {venue}."
-                ),
+                "template": "{game_event_note}. " + _PRO_MEET + ".",
                 "priority": 15,
                 "label": "Marquee note",
             },
@@ -676,31 +735,21 @@ def _team_base(**overrides) -> dict:
             {
                 "condition": "is_neutral_site",
                 "condition_value": None,
-                "template": (
-                    "The {away_team_record} {away_team} and the {home_team_record} "
-                    "{home_team} meet at {venue}. {last_five_summary} {series_summary}"
-                ),
+                "template": _PRO_MEET + ". {last_five_summary} {series_summary}.",
                 "priority": 17,
                 "label": "Neutral site",
             },
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,
-                "template": (
-                    "The {away_team_record} {away_team} travel to {venue_city}, "
-                    "{venue_state} to play the {home_team_record} {home_team} at "
-                    "{venue}. {last_five_summary} {series_summary}"
-                ),
+                "template": _PRO_HOST + ". {last_five_summary} {series_summary}.",
                 "priority": 20,
                 "label": "Structured preview",
             },
             {
                 "condition": None,
                 "condition_value": None,
-                "template": (
-                    "The {away_team_record} {away_team} travel to {venue_city}, "
-                    "{venue_state} to play the {home_team_record} {home_team} at {venue}."
-                ),
+                "template": _PRO_HOST + ".",
                 "priority": 100,
                 "label": "Default",
             },
@@ -710,6 +759,29 @@ def _team_base(**overrides) -> dict:
     }
     base.update(overrides)
     return base
+
+
+def _event_postgame_rows(not_ended: str) -> list[dict]:
+    """Event after-game rows: the provider recap when one is published, else
+    the not-yet-ended line while the event runs. A final event with no recap
+    falls to the base result sentence. `not_ended` uses the starter's own
+    noun and names the sides in its subtitle order."""
+    return [
+        {
+            "condition": "has_recap",
+            "condition_value": None,
+            "template": "{game_recap}",
+            "priority": 10,
+            "label": "Recap (provider)",
+        },
+        {
+            "condition": "is_not_final",
+            "condition_value": None,
+            "template": not_ended,
+            "priority": 50,
+            "label": "In progress",
+        },
+    ]
 
 
 def _event_base(**overrides) -> dict:
@@ -735,9 +807,8 @@ def _event_base(**overrides) -> dict:
             "subtitle": "{team1} {at_vs} {team2}",
             "description": "{game_preview}",
             "description_fallback": (
-                "The {away_team_record} {away_team} travel to {venue_city}, "
-                "{venue_state} to play the {home_team_record} {home_team} "
-                "{today_tonight} at {game_time}."
+                "The {home_team} ({home_team_record}) host the {away_team} "
+                "({away_team_record}) {today_tonight} at {game_time}."
             ),
             "art_url": _EVENT_ART,
         },
@@ -750,32 +821,16 @@ def _event_base(**overrides) -> dict:
         "postgame_fallback": {
             "title": "{gracenote_category}: Final",
             "subtitle": "{team1} {at_vs} {team2}",
-            "description": "Final: {event_result}",
+            "description": "{event_result_text}",
             "art_url": _EVENT_ART,
         },
         "postgame_conditional": dict(_LEGACY_CONDITIONAL_OFF),
         # Native condition rows (#420, cajd.6) — recap-when-published wins;
         # a still-running game gets the in-progress line; a final game with
         # no recap falls to the base "Final: {event_result}".
-        "postgame_conditional_rows": [
-            {
-                "condition": "has_recap",
-                "condition_value": None,
-                "template": "{game_recap}",
-                "priority": 10,
-                "label": "Recap (provider)",
-            },
-            {
-                "condition": "is_not_final",
-                "condition_value": None,
-                "template": (
-                    "The game between {away_team_the} and {home_team_the} has not yet "
-                    "ended as of the last update."
-                ),
-                "priority": 50,
-                "label": "In progress",
-            },
-        ],
+        "postgame_conditional_rows": _event_postgame_rows(
+            _not_ended("game", "{away_team_the}", "{home_team_the}")
+        ),
         "idle_content": {
             # {league}, not {team_name} — event templates have no "our team"
             # and TEAM_ONLY vars fail the event editor's validation (#354).
@@ -810,10 +865,7 @@ def _event_base(**overrides) -> dict:
             {
                 "condition": "has_event_note",
                 "condition_value": None,
-                "template": (
-                    "{game_event_note}. The {away_team_record} {away_team} and the "
-                    "{home_team_record} {home_team} meet at {venue}."
-                ),
+                "template": "{game_event_note}. " + _PRO_MEET + ".",
                 "priority": 15,
                 "label": "Marquee note",
             },
@@ -822,10 +874,7 @@ def _event_base(**overrides) -> dict:
             {
                 "condition": "is_neutral_site",
                 "condition_value": None,
-                "template": (
-                    "The {away_team_record} {away_team} and the {home_team_record} "
-                    "{home_team} meet at {venue}. {last_five_summary} {series_summary}"
-                ),
+                "template": _PRO_MEET + ". {last_five_summary} {series_summary}.",
                 "priority": 17,
                 "label": "Neutral site",
             },
@@ -834,21 +883,14 @@ def _event_base(**overrides) -> dict:
             {
                 "condition": "has_structured_preview",
                 "condition_value": None,
-                "template": (
-                    "The {away_team_record} {away_team} travel to {venue_city}, "
-                    "{venue_state} to play the {home_team_record} {home_team} at "
-                    "{venue}. {last_five_summary} {series_summary}"
-                ),
+                "template": _PRO_HOST + ". {last_five_summary} {series_summary}.",
                 "priority": 20,
                 "label": "Structured preview",
             },
             {
                 "condition": None,
                 "condition_value": None,
-                "template": (
-                    "The {away_team_record} {away_team} travel to {venue_city}, "
-                    "{venue_state} to play the {home_team_record} {home_team} at {venue}."
-                ),
+                "template": _PRO_HOST + ".",
                 "priority": 100,
                 "label": "Default",
             },
@@ -876,7 +918,7 @@ _PREVIEW_ROW = {
 _MATCH_NOTE_ROW = {
     "condition": "has_match_note",
     "condition_value": None,
-    "template": "{soccer_match_note}. {away_team_the} face {home_team_the} at {venue}.",
+    "template": "{soccer_match_note}. {home_team_the} face {away_team_the} at {venue}.",
     "priority": 15,
     "label": "Competition note",
 }
@@ -889,19 +931,13 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # naming; W-D-L records come through the generic record vars.
     _team_base(
         name="Soccer Team (Starter)",
-        subtitle_template="{team1} vs {team2}",
+        postgame_conditional_rows=_team_postgame_rows("match"),
         # Match register (#355 item 5): soccer filler says 'match', never
         # 'game'. College keeps the base text — 'game' IS its register.
         idle_content={
             "title": "No {team_name} Match Today",
-            "subtitle": (
-                "Next match: {game_date.next} at {game_time.next} "
-                "{vs_at.next} {opponent_the.next}"
-            ),
-            "description": (
-                "Next match: {game_date.next} at {game_time.next}. "
-                "{away_team_the.next} face {home_team_the.next} at {venue.next}."
-            ),
+            "subtitle": _NEXT_SHORT,
+            "description": _match(_NEXT_GAME) + ".",
             "art_url": "",
         },
         idle_conditional_rows=[
@@ -909,10 +945,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": "is_final",
                 "condition_value": None,
                 "template": (
-                    "{team_name_the} {result_text.last} {opponent_the.last} "
-                    "{final_score.last} on {game_date.last}. "
-                    "Next match is against {opponent_the.next} on {game_date.next} "
-                    "at {game_time.next}."
+                    _TEAM_RESULT + " on {game_date_short.last}. " + _match(_NEXT_GAME) + "."
                 ),
                 "priority": 50,
                 "label": "Final",
@@ -920,11 +953,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": (
-                    "{team_name_the} last played {opponent_the.last} on {game_date.last}. "
-                    "Next match is against {opponent_the.next} on {game_date.next} "
-                    "at {game_time.next}."
-                ),
+                "template": _match(_LAST_GAME) + ". " + _match(_NEXT_GAME) + ".",
                 "priority": 50,
                 "label": "In progress",
             },
@@ -933,9 +962,9 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "title_enabled": False,
             "title": None,
             "subtitle_enabled": True,
-            "subtitle": "No upcoming match currently on schedule in next 30 days",
+            "subtitle": "No upcoming matches scheduled",
             "description_enabled": True,
-            "description": "No upcoming {team_name} matches scheduled.",
+            "description": "No upcoming {team_name} matches are scheduled.",
         },
         # Match register for the after-match filler too (#975): the soccer
         # event starters already say "Full Time". Same block as the base
@@ -943,17 +972,15 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         postgame_fallback={
             "title": "{gracenote_category}: Full Time",
             "subtitle": "{team1.last} {at_vs.last} {team2.last}",
-            "description": (
-                "{team_name_the} {result_text.last} {opponent_the.last} {final_score.last}"
-            ),
+            "description": _TEAM_RESULT + ".",
             "art_url": _ART_LAST,
         },
         pregame_fallback={
             "title": "Coming up: {gracenote_category} at {game_time.next}",
-            "subtitle": "{team1.next} vs {team2.next}",
+            "subtitle": "{team1.next} {at_vs.next} {team2.next}",
             "description": "{game_preview.next}",
             "description_fallback": (
-                "{away_team_the.next} face {home_team_the.next} at {venue.next} "
+                "{home_team_the.next} face {away_team_the.next} at {venue.next} "
                 "{today_tonight.next} at {game_time.next}."
             ),
             "art_url": _ART_NEXT,
@@ -965,8 +992,8 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": "has_structured_preview",
                 "condition_value": None,
                 "template": (
-                    "{away_team_the} face {home_team_the} at {venue}. "
-                    "{last_five_summary} {series_summary}"
+                    "{home_team_the} face {away_team_the} at {venue}. "
+                    "{last_five_summary} {series_summary}."
                 ),
                 "priority": 20,
                 "label": "Structured preview",
@@ -974,7 +1001,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": None,
                 "condition_value": None,
-                "template": "{away_team_the} face {home_team_the} at {venue}.",
+                "template": "{home_team_the} face {away_team_the} at {venue}.",
                 "priority": 100,
                 "label": "Default",
             },
@@ -988,6 +1015,19 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # the captured college register (no article).
     _team_base(
         name="College Team (Starter)",
+        # Pre-game filler in the same home-led rank/record register as the
+        # game description (#991); it used to fall back to the US-pro line.
+        pregame_fallback={
+            "title": "Coming up: {gracenote_category} at {game_time.next}",
+            "subtitle": "{team1.next} {at_vs.next} {team2.next}",
+            "description": "{game_preview.next}",
+            "description_fallback": (
+                "{home_team_rank_display.next} {home_team.next} ({home_team_record.next}) "
+                "host {away_team_rank_display.next} {away_team.next} "
+                "({away_team_record.next}) {today_tonight.next} at {game_time.next}."
+            ),
+            "art_url": _ART_NEXT,
+        },
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
@@ -1012,7 +1052,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "template": (
                     "{away_team_rank_display} {away_team} ({away_team_record}) and "
                     "{home_team_rank_display} {home_team} ({home_team_record}) meet "
-                    "at {venue}. {last_five_summary} {series_summary}"
+                    "at {venue}. {last_five_summary} {series_summary}."
                 ),
                 "priority": 17,
                 "label": "Neutral site",
@@ -1024,7 +1064,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                     "{home_team_rank_display} {home_team} ({home_team_record}) host "
                     "{away_team_rank_display} {away_team} ({away_team_record}) in "
                     "{college_conference} play at {venue}. "
-                    "{last_five_summary} {series_summary}"
+                    "{last_five_summary} {series_summary}."
                 ),
                 "priority": 18,
                 "label": "Conference game",
@@ -1035,7 +1075,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "template": (
                     "{home_team_rank_display} {home_team} ({home_team_record}) host "
                     "{away_team_rank_display} {away_team} ({away_team_record}) at "
-                    "{venue}. {last_five_summary} {series_summary}"
+                    "{venue}. {last_five_summary} {series_summary}."
                 ),
                 "priority": 20,
                 "label": "Structured preview",
@@ -1060,6 +1100,17 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # omitted (conference stats aren't reliably present in event context).
     _event_base(
         name="College Event (Starter)",
+        pregame_fallback={
+            "title": "Coming up: {gracenote_category} at {game_time}",
+            "subtitle": "{team1} {at_vs} {team2}",
+            "description": "{game_preview}",
+            "description_fallback": (
+                "{home_team_rank_display} {home_team} ({home_team_record}) host "
+                "{away_team_rank_display} {away_team} ({away_team_record}) "
+                "{today_tonight} at {game_time}."
+            ),
+            "art_url": _EVENT_ART,
+        },
         conditional_descriptions=[
             dict(_PREVIEW_ROW),
             # Marquee note: bowls, CFP rounds, tournament designations
@@ -1084,7 +1135,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "template": (
                     "{away_team_rank_display} {away_team} ({away_team_record}) and "
                     "{home_team_rank_display} {home_team} ({home_team_record}) meet "
-                    "at {venue}. {last_five_summary} {series_summary}"
+                    "at {venue}. {last_five_summary} {series_summary}."
                 ),
                 "priority": 17,
                 "label": "Neutral site",
@@ -1095,7 +1146,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "template": (
                     "{home_team_rank_display} {home_team} ({home_team_record}) host "
                     "{away_team_rank_display} {away_team} ({away_team_record}) at "
-                    "{venue}. {last_five_summary} {series_summary}"
+                    "{venue}. {last_five_summary} {series_summary}."
                 ),
                 "priority": 20,
                 "label": "Structured preview",
@@ -1117,21 +1168,24 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # connector; national-team tournaments use International Event instead.
     _event_base(
         name="Soccer Club Event (Starter)",
-        subtitle_template="{team1} vs {team2}",
+        # Home side first, as the soccer subtitle lists it.
+        postgame_conditional_rows=_event_postgame_rows(
+            _not_ended("match", "{home_team_the}", "{away_team_the}")
+        ),
         pregame_fallback={
             "title": "Coming up: {gracenote_category} at {game_time}",
-            "subtitle": "{away_team} vs {home_team}",
+            "subtitle": "{team1} {at_vs} {team2}",
             "description": "{game_preview}",
             "description_fallback": (
-                "{away_team_the} face {home_team_the} at {venue} "
+                "{home_team_the} face {away_team_the} at {venue} "
                 "{today_tonight} at {game_time}."
             ),
             "art_url": _EVENT_ART,
         },
         postgame_fallback={
             "title": "{gracenote_category}: Full Time",
-            "subtitle": "{away_team} vs {home_team}",
-            "description": "Full time: {event_result}",
+            "subtitle": "{team1} {at_vs} {team2}",
+            "description": "{event_result_text}",
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
@@ -1141,8 +1195,8 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": "has_structured_preview",
                 "condition_value": None,
                 "template": (
-                    "{away_team_the} face {home_team_the} at {venue}. "
-                    "{last_five_summary} {series_summary}"
+                    "{home_team_the} face {away_team_the} at {venue}. "
+                    "{last_five_summary} {series_summary}."
                 ),
                 "priority": 20,
                 "label": "Structured preview",
@@ -1150,7 +1204,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": None,
                 "condition_value": None,
-                "template": "{away_team_the} face {home_team_the} at {venue}.",
+                "template": "{home_team_the} face {away_team_the} at {venue}.",
                 "priority": 100,
                 "label": "Default",
             },
@@ -1162,10 +1216,10 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _event_base(
         name="Combat Event (Starter)",
         title_format="{league} {event_number}: {card_segment_display}",
-        subtitle_template="{team1} vs {team2}",
+        subtitle_template="{team1} vs. {team2}",
         pregame_fallback={
             "title": "Coming up: {league} {event_number} at {game_time}",
-            "subtitle": "{away_team} vs {home_team}",
+            "subtitle": "{team1} vs. {team2}",
             "description": "{game_preview}",
             "description_fallback": (
                 "{away_team} takes on {home_team} at {venue} {today_tonight} at {game_time}."
@@ -1176,8 +1230,8 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         # would render empty — constructed bout-register line instead (#354).
         postgame_fallback={
             "title": "{league} {event_number}: Event Complete",
-            "subtitle": "{away_team} vs {home_team}",
-            "description": "{away_team} vs {home_team} has concluded at {venue}.",
+            "subtitle": "{team1} vs. {team2}",
+            "description": "{away_team} vs. {home_team} has concluded at {venue}.",
             "art_url": _EVENT_ART,
         },
         postgame_conditional_rows=[
@@ -1191,10 +1245,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": (
-                    "The bout between {away_team} and {home_team} has not yet ended "
-                    "as of the last update."
-                ),
+                "template": _not_ended("bout", "{away_team}", "{home_team}"),
                 "priority": 50,
                 "label": "In progress",
             },
@@ -1225,14 +1276,29 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # teams bare ("Belgium face Spain") and any club sides articled.
     _event_base(
         name="International Event (Starter)",
+        # Home side first, as the soccer subtitle lists it.
+        postgame_conditional_rows=_event_postgame_rows(
+            _not_ended("match", "{home_team_the}", "{away_team_the}")
+        ),
         title_format="{gracenote_category} {year}",
-        subtitle_template="{team1} vs {team2}",
         # "NED v JPN"
         event_channel_name="{away_team_abbrev} v {home_team_abbrev}",
+        # Match register before kick-off too (#991): the base's host/record
+        # line is the US-pro form and reads wrong for national teams.
+        pregame_fallback={
+            "title": "Coming up: {gracenote_category} at {game_time}",
+            "subtitle": "{team1} {at_vs} {team2}",
+            "description": "{game_preview}",
+            "description_fallback": (
+                "{home_team_the} face {away_team_the} at {venue} "
+                "{today_tonight} at {game_time}."
+            ),
+            "art_url": _EVENT_ART,
+        },
         postgame_fallback={
             "title": "{gracenote_category}: Full Time",
-            "subtitle": "{away_team} vs {home_team}",
-            "description": "Full time: {event_result}",
+            "subtitle": "{team1} {at_vs} {team2}",
+            "description": "{event_result_text}",
             "art_url": _EVENT_ART,
         },
         conditional_descriptions=[
@@ -1242,8 +1308,8 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "condition": "has_structured_preview",
                 "condition_value": None,
                 "template": (
-                    "{away_team_the} face {home_team_the} at {venue}. "
-                    "{last_five_summary} {series_summary}"
+                    "{home_team_the} face {away_team_the} at {venue}. "
+                    "{last_five_summary} {series_summary}."
                 ),
                 "priority": 20,
                 "label": "Structured preview",
@@ -1251,7 +1317,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": None,
                 "condition_value": None,
-                "template": "{away_team_the} face {home_team_the} at {venue}.",
+                "template": "{home_team_the} face {away_team_the} at {venue}.",
                 "priority": 100,
                 "label": "Default",
             },
@@ -1263,10 +1329,10 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     _event_base(
         name="Tennis Event (Starter)",
         title_format="{year} {tournament_name}",
-        subtitle_template="{tennis_round} - {player1} vs {player2}",
+        subtitle_template="{tennis_round} - {player1} vs. {player2}",
         pregame_fallback={
             "title": "Coming up: {tournament_name} at {game_time}",
-            "subtitle": "{player1} vs {player2}",
+            "subtitle": "{player1} vs. {player2}",
             "description": "{game_preview}",
             "description_fallback": (
                 "{player1} takes on {player2} in the {tennis_round} of "
@@ -1279,7 +1345,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         # missing recap rendered an empty description.
         postgame_fallback={
             "title": "{tournament_name}: Match Complete",
-            "subtitle": "{player1} vs {player2}",
+            "subtitle": "{player1} vs. {player2}",
             "description": (
                 "{player1} and {player2} have completed their {tennis_round} "
                 "match at {tournament_name_the}."
@@ -1299,10 +1365,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": (
-                    "The match between {player1} and {player2} has not yet ended "
-                    "as of the last update."
-                ),
+                "template": _not_ended("match", "{player1}", "{player2}"),
                 "priority": 50,
                 "label": "In progress",
             },
@@ -1384,7 +1447,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": None,
                 "condition_value": None,
-                "template": "{race_name} {session_name} at {circuit_name}.",
+                "template": "{race_name} {session_name} from {circuit_name}.",
                 "priority": 100,
                 "label": "Default",
             },

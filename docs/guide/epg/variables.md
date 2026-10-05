@@ -10,7 +10,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 269 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 271 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
 
 ## Team vs Event Templates
 
@@ -197,7 +197,7 @@ Game scheduling information.
 | `{game_day_short}` | Short day of week | base, .next, .last | `Sun` |
 | `{game_time}` | Game time formatted per user settings | base, .next, .last | `1:00 PM EST` |
 | `{days_until}` | Days until game | base, .next, .last | `0` |
-| `{today_tonight}` | 'today' or 'tonight' (5pm cutoff) when the game is today; 'tomorrow', the weekday, or the date when it is further out | base, .next, .last | `today` |
+| `{today_tonight}` | 'today' or 'tonight' (5pm cutoff) when the game is today; 'tomorrow', the weekday (capitalised: `Sunday`), or the date when it is further out | base, .next, .last | `today` |
 | `{today_tonight_title}` | Title-case form of `{today_tonight}` | base, .next, .last | `Today` |
 | `{relative_day}` | Relative day: 'today', 'tonight', 'tomorrow', day of week, or date | base, .next | `tomorrow` |
 | `{relative_day_title}` | Relative day (title case) | base, .next | `Tomorrow` |
@@ -343,12 +343,14 @@ Game scores and results. Empty for future games.
 | `{opponent_score}` | Opponent's score (empty if game not started) | base, .next, .last | `24` |
 | `{score}` | Score, home team first. Empty if not started. | base, .next, .last | `31-24` |
 | `{final_score}` | Score with team perspective (team score first) | base, .next, .last | `31-24` |
+| `{result_score}` | Final score with the winner's score first, whichever side won. Empty if not final. | base, .next, .last | `32-26` |
 | `{home_team_score}` | Home team's score | base, .next, .last | `31` |
 | `{away_team_score}` | Away team's score | base, .next, .last | `24` |
 | `{score_diff}` | Score differential (+7 = won by 7, -7 = lost by 7) | base, .next, .last | `+7` |
 | `{score_differential}` | Score differential as absolute value | base, .next, .last | `7` |
 | `{score_differential_text}` | Score differential as text | base, .next, .last | `by 7` |
 | `{event_result}` | Full event result, home team first. Empty if not final. | base, .next, .last | `Detroit Lions 31 - Chicago Bears 24` |
+| `{event_result_text}` | Result as a sentence, winner first; a draw reads "Arsenal and Chelsea drew, 1-1." Empty if not final. | base, .next, .last | `The Carolina Panthers beat the Detroit Lions, 32-26.` |
 | `{event_result_abbrev}` | Abbreviated event result. Empty if not final. | base, .next, .last | `DET 31 - CHI 24` |
 | `{winner}` | Winning team name. Empty if not final or tie. | base, .next, .last | `Detroit Lions` |
 | `{winner_abbrev}` | Winning team abbreviation. Empty if not final or tie. | base, .next, .last | `DET` |
