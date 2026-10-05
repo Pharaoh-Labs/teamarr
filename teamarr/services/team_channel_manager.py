@@ -39,7 +39,10 @@ from teamarr.database.settings import (
     get_epg_settings,
     get_managed_team_channel_settings,
 )
-from teamarr.utilities.art_url import apply_art_base_url, is_relative_art_path
+from teamarr.services.team_channel_templates import (
+    resolve_team_channel_logo,
+    resolve_team_channel_name,
+)
 from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc, to_utc
 
 logger = logging.getLogger(__name__)
@@ -1306,34 +1309,19 @@ class TeamChannelManager:
             if key == "channel_profile_ids" or current.get(key) != value
         }
 
-    @staticmethod
-    def _template_context(conn, team) -> dict:
-        from teamarr.database.leagues import get_league_display
-
-        return {
-            "league": get_league_display(conn, team["primary_league"]),
-            "league_id": team["primary_league"],
-            "league_code": team["primary_league"],
-            "team_name": team["team_name"],
-        }
-
     def _logo_id(self, conn, team) -> int | None:
         if not self._logos or not team.get("template_id"):
             return None
         from teamarr.database.templates import get_template
-        from teamarr.templates.resolver import TemplateResolver
 
         template = get_template(conn, team["template_id"])
-        url = template.team_channel_logo_url if template else None
-        if not url:
-            return None
-        art_base_url = get_epg_settings(conn).art_base_url
-        url = TemplateResolver(art_base_url).resolve_with_map(
-            url, self._template_context(conn, team)
+        url = resolve_team_channel_logo(
+            conn,
+            team,
+            template.team_channel_logo_url if template else None,
+            get_epg_settings(conn).art_base_url,
         )
-        url = apply_art_base_url(url, art_base_url)
-        if is_relative_art_path(url):
-            # A game-thumbs path with no base URL is not a fetchable logo.
+        if not url:
             return None
         uploaded = self._logos.upload(name=f'{team["team_name"]} Logo', url=url)
         return uploaded.logo.get("id") if uploaded.success and uploaded.logo else None
@@ -1343,13 +1331,10 @@ class TeamChannelManager:
         if not team.get("template_id"):
             return team["team_name"]
         from teamarr.database.templates import get_template
-        from teamarr.templates.resolver import TemplateResolver
 
         template = get_template(conn, team["template_id"])
-        if not template or not template.team_channel_name:
-            return team["team_name"]
-        return TemplateResolver(get_epg_settings(conn).art_base_url).resolve_with_map(
-            template.team_channel_name, cls._template_context(conn, team)
+        return resolve_team_channel_name(
+            conn, team, template.team_channel_name if template else None
         )
 
     @staticmethod

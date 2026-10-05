@@ -20,17 +20,24 @@ def test_managed_channel_list_appends_owned_enabled_team_channels(monkeypatch):
         CREATE TABLE teams (
             id INTEGER PRIMARY KEY, active INTEGER, managed_channel_enabled INTEGER,
             channel_id TEXT, team_name TEXT, team_logo_url TEXT, channel_logo_url TEXT,
-            primary_league TEXT, sport TEXT, template_id INTEGER
+            primary_league TEXT, sport TEXT, template_id INTEGER,
+            provider TEXT, provider_team_id TEXT, team_abbrev TEXT
         );
         CREATE TABLE managed_team_channels (
             team_id INTEGER PRIMARY KEY, dispatcharr_channel_id INTEGER,
             dispatcharr_uuid TEXT, channel_number INTEGER, sync_status TEXT,
             created_at TEXT, updated_at TEXT
         );
-        INSERT INTO teams VALUES
+        INSERT INTO teams (
+            id, active, managed_channel_enabled, channel_id, team_name, team_logo_url,
+            channel_logo_url, primary_league, sport, template_id
+        ) VALUES
             (7, 1, 1, 'team-blue', 'Blue', 'team-logo', 'deprecated-logo', 'nba',
              'basketball', NULL);
-        INSERT INTO teams VALUES
+        INSERT INTO teams (
+            id, active, managed_channel_enabled, channel_id, team_name, team_logo_url,
+            channel_logo_url, primary_league, sport, template_id
+        ) VALUES
             (8, 0, 1, 'team-disabled', 'Disabled', NULL, NULL, 'nba', 'basketball', NULL);
         INSERT INTO managed_team_channels VALUES
             (7, 90, 'team-uuid', 9000, 'ready', '2026-01-01', '2026-01-02');
@@ -115,7 +122,8 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
         CREATE TABLE teams (
             id INTEGER PRIMARY KEY, active INTEGER, managed_channel_enabled INTEGER,
             channel_id TEXT, team_name TEXT, team_logo_url TEXT, channel_logo_url TEXT,
-            primary_league TEXT, sport TEXT, template_id INTEGER
+            primary_league TEXT, sport TEXT, template_id INTEGER,
+            provider TEXT, provider_team_id TEXT, team_abbrev TEXT
         );
         CREATE TABLE managed_team_channels (
             team_id INTEGER PRIMARY KEY, dispatcharr_channel_id INTEGER,
@@ -130,7 +138,10 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
             event_start TEXT, attach_at TEXT, detach_at TEXT, removed_at TEXT
         );
         CREATE TABLE team_epg_xmltv (team_id INTEGER, xmltv_content TEXT, updated_at TEXT);
-        INSERT INTO teams VALUES
+        INSERT INTO teams (
+            id, active, managed_channel_enabled, channel_id, team_name, team_logo_url,
+            channel_logo_url, primary_league, sport, template_id
+        ) VALUES
             (7, 1, 1, 'team-blue', 'Blue', NULL, NULL, 'nba', 'basketball', NULL);
         INSERT INTO managed_team_channels VALUES
             (7, 90, 'team-uuid', 9000, 'ready', '2026-01-01', '2026-01-02');
