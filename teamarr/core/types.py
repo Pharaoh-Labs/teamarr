@@ -171,6 +171,9 @@ class Event:
     # tournament rounds, showcase games. Flips matchup framing to 'vs.' and
     # drops host framing (Gracenote convention, #355 item 3).
     neutral_site: bool = False
+    # The provider has a date but no announced start time (ESPN timeValid=false);
+    # start_time then holds the provider's placeholder, not a real kickoff (#995).
+    time_tbd: bool = False
 
     # Broadcast name → market ('national'/'home'/'away') from ESPN
     # broadcasts[] — data-driven feed discrimination for team-branded and
