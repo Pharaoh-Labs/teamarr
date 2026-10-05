@@ -54,6 +54,9 @@ export interface SchedulerSettings {
   // Scheduled channel reset (for Jellyfin logo cache issues)
   channel_reset_enabled: boolean
   channel_reset_cron: string | null
+  // Source discovery (#997)
+  source_discovery_mode: "off" | "suggest"
+  source_discovery_cron: string
 }
 
 export interface SchedulerSettingsUpdate {
@@ -61,6 +64,8 @@ export interface SchedulerSettingsUpdate {
   interval_minutes?: number
   channel_reset_enabled?: boolean
   channel_reset_cron?: string | null
+  source_discovery_mode?: "off" | "suggest"
+  source_discovery_cron?: string
 }
 
 export interface EPGSettings {
