@@ -1927,6 +1927,39 @@ CREATE TABLE IF NOT EXISTS race_feeds (
 );
 CREATE INDEX IF NOT EXISTS idx_race_feeds_league ON race_feeds(league, enabled);
 
+-- =============================================================================
+-- SOURCE DISCOVERY (#997)
+-- M3U groups that are not sources, and what each scan found in them. A group
+-- qualifies as a suggested source on evidence gathered over days, not one scan:
+-- most real sources are empty or placeholders between match days.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS source_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    m3u_group_id INTEGER NOT NULL UNIQUE,     -- Dispatcharr channel-group id of the M3U group
+    m3u_group_name TEXT NOT NULL,
+    m3u_account_ids TEXT NOT NULL DEFAULT '[]',  -- JSON list of M3U account ids carrying the group
+    stream_count INTEGER DEFAULT 0,           -- streams in the group at the last scan
+    name_leagues TEXT NOT NULL DEFAULT '[]',  -- JSON: subscribed leagues the group NAME mentions
+    status TEXT NOT NULL DEFAULT 'new'
+        CHECK(status IN ('new', 'accepted', 'dismissed')),
+    source_group_id INTEGER,                  -- event_epg_groups.id created when accepted
+    last_seen_at TIMESTAMP,                   -- last scan that still listed the group
+    last_matched_at TIMESTAMP                 -- last scan with a two-sided game match
+);
+
+CREATE TABLE IF NOT EXISTS source_candidate_scans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id INTEGER NOT NULL,
+    scanned_at TIMESTAMP NOT NULL,
+    streams_read INTEGER NOT NULL DEFAULT 0,       -- sampled, non-stale streams put to the matcher
+    game_matches INTEGER NOT NULL DEFAULT 0,       -- distinct streams matched as a two-sided game
+    team_only_matches INTEGER NOT NULL DEFAULT 0,  -- distinct streams matched by one team name alone
+    leagues TEXT NOT NULL DEFAULT '{}',            -- JSON {league: game matches}
+    FOREIGN KEY (candidate_id) REFERENCES source_candidates(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_source_candidate_scans ON source_candidate_scans(candidate_id, scanned_at);
+
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_enabled ON consolidation_exception_keywords(enabled);
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_behavior ON consolidation_exception_keywords(behavior);
 
