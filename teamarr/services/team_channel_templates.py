@@ -34,7 +34,7 @@ def _fields(team: Any) -> Mapping:
         return team
     if is_dataclass(team) and not isinstance(team, type):
         return asdict(team)
-    return dict(team)
+    raise TypeError(f"team must be a mapping or a dataclass, not {type(team).__name__}")
 
 
 def team_channel_context(conn: Connection, team: Any) -> "TemplateContext":
