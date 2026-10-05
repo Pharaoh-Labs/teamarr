@@ -451,6 +451,11 @@ CREATE TABLE IF NOT EXISTS settings (
     channel_reset_enabled BOOLEAN DEFAULT 0,
     channel_reset_cron TEXT DEFAULT NULL,
 
+    -- Source discovery (#997): scan M3U groups that are not sources for subscribed games.
+    -- 'off' | 'suggest' (candidates wait for review). Runs on its own cron, never per generation.
+    source_discovery_mode TEXT DEFAULT 'off',
+    source_discovery_cron TEXT DEFAULT '0 11 * * *',
+
     -- Stream Filtering (global defaults for event groups)
     -- Require event pattern: only match streams that look like events (have vs/@/at/date patterns)
     stream_filter_require_event_pattern BOOLEAN DEFAULT 1,

@@ -123,10 +123,12 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
             detail="interval_minutes must be at least 1",
         )
 
-    # Validate cron expression if provided
-    if update.channel_reset_cron:
+    # Validate cron expressions if provided
+    for cron in (update.channel_reset_cron, update.source_discovery_cron):
+        if not cron:
+            continue
         try:
-            croniter(update.channel_reset_cron)
+            croniter(cron)
         except (KeyError, ValueError) as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -140,6 +142,8 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
             interval_minutes=update.interval_minutes,
             channel_reset_enabled=update.channel_reset_enabled,
             channel_reset_cron=update.channel_reset_cron,
+            source_discovery_mode=update.source_discovery_mode,
+            source_discovery_cron=update.source_discovery_cron,
         )
 
     # Apply scheduler state change immediately if enabled was updated
@@ -152,6 +156,9 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
     if update.channel_reset_enabled is not None or update.channel_reset_cron is not None:
 
         restart_scheduler_sub_task("channel_reset")
+
+    if update.source_discovery_mode is not None or update.source_discovery_cron is not None:
+        restart_scheduler_sub_task("source_discovery")
 
     with get_db() as conn:
         settings = get_scheduler_settings(conn)

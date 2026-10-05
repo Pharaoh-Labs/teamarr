@@ -24,10 +24,12 @@ name hit with no games yet is still worth showing — never worth importing.
 
 import logging
 import re
+import threading
+import time
 import unicodedata
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from sqlite3 import Connection
 from typing import Any
@@ -305,3 +307,58 @@ def _stream_count(group: Any) -> int | None:
     if any(not isinstance(a, dict) for a in accounts):
         return None
     return sum((a.get("stream_count") or 0) for a in accounts)
+
+
+# --- running a scan -----------------------------------------------------------
+
+# How long a scan waits for a generation run to finish before giving up. Both
+# are CPU-bound matching; side by side each slows the other.
+GENERATION_WAIT_SECONDS = 20 * 60
+
+_scan_lock = threading.Lock()
+_state: dict[str, Any] = {"running": False, "progress": None, "last": None}
+
+
+def discovery_status() -> dict[str, Any]:
+    """Whether a scan is running, how far it is, and what the last one did."""
+    return dict(_state)
+
+
+def run_discovery_scan(db_factory: Any) -> dict[str, Any]:
+    """Run one scan now. One at a time; never alongside a generation run.
+
+    Returns the scan summary, or ``{"skipped": True, "reason": ...}``.
+    """
+    from teamarr.consumers import generation_status
+    from teamarr.consumers.event_group_processor import EventGroupProcessor
+    from teamarr.dispatcharr.factory import get_dispatcharr_connection
+
+    if not _scan_lock.acquire(blocking=False):
+        return {"skipped": True, "reason": "A discovery scan is already running"}
+    try:
+        _state.update(running=True, progress=None)
+        dispatcharr = get_dispatcharr_connection(db_factory)
+        if not dispatcharr:
+            return {"skipped": True, "reason": "Dispatcharr not configured or unavailable"}
+
+        deadline = time.monotonic() + GENERATION_WAIT_SECONDS
+        while generation_status.is_in_progress():
+            if time.monotonic() > deadline:
+                return {"skipped": True, "reason": "A generation run was still in progress"}
+            time.sleep(5)
+
+        def progress(done: int, total: int, name: str) -> None:
+            _state["progress"] = {"done": done, "total": total, "group": name}
+
+        processor = EventGroupProcessor(db_factory=db_factory, dispatcharr_client=None)
+        summary = SourceDiscovery(db_factory, dispatcharr, processor).scan(progress=progress)
+        result = asdict(summary)
+        _state["last"] = {"finished_at": now_utc().isoformat(), **result}
+        return result
+    except Exception as e:
+        logger.exception("[DISCOVERY] Scan failed")
+        _state["last"] = {"finished_at": now_utc().isoformat(), "error": str(e)}
+        return {"error": str(e)}
+    finally:
+        _state.update(running=False, progress=None)
+        _scan_lock.release()

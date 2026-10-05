@@ -271,3 +271,87 @@ def test_the_sample_is_an_even_spread_not_the_first_block():
     picked = [s["id"] for s in sample_streams(streams, 50)]
     assert len(picked) == 50 and picked[0] == 0 and picked[-1] >= 980
     assert sample_streams(streams[:10], 50) == streams[:10]
+
+
+# --- API and schedule -------------------------------------------------------------
+
+
+@pytest.fixture()
+def api(db):
+    from fastapi.testclient import TestClient
+
+    from teamarr.api.app import app
+
+    return TestClient(app)
+
+
+def _seed(now=None):
+    from teamarr.utilities.tz import now_utc
+
+    now = now or now_utc()
+    with get_db() as conn:
+        record_scan(conn, [
+            ScanEvidence(m3u_group_id=1, m3u_group_name="USA: ESPN PLUS", streams_read=50,
+                         game_matches=9, leagues={"nhl": 9}),
+            ScanEvidence(m3u_group_id=2, m3u_group_name="Replay | NBA", streams_read=19,
+                         name_leagues=["nba"]),
+            ScanEvidence(m3u_group_id=3, m3u_group_name="UK | News", streams_read=50,
+                         team_only_matches=5),
+            ScanEvidence(m3u_group_id=4, m3u_group_name="LIVE | NBA (Preseason)", streams_read=14,
+                         game_matches=2, leagues={"nba": 2}, name_leagues=["nba"]),
+        ], now)
+
+
+def test_the_review_list_holds_only_groups_worth_suggesting_strongest_first(api):
+    _seed()
+    body = api.get("/api/v1/source-discovery/candidates").json()
+    assert [(c["m3u_group_name"], c["tier"]) for c in body["candidates"]] == [
+        ("USA: ESPN PLUS", "games"),
+        ("LIVE | NBA (Preseason)", "games"),
+        ("Replay | NBA", "name_only"),
+    ]
+    assert body["window_days"] == 7 and body["scan"]["running"] is False
+
+
+def test_a_dismissed_candidate_leaves_the_list_and_can_be_restored(api):
+    _seed()
+    cid = api.get("/api/v1/source-discovery/candidates").json()["candidates"][2]["id"]
+    assert api.post(f"/api/v1/source-discovery/candidates/{cid}/dismiss").status_code == 200
+    names = lambda **p: [  # noqa: E731
+        c["m3u_group_name"]
+        for c in api.get("/api/v1/source-discovery/candidates", params=p).json()["candidates"]
+    ]
+    assert "Replay | NBA" not in names()
+    assert "Replay | NBA" in names(include_dismissed=True)
+    api.post(f"/api/v1/source-discovery/candidates/{cid}/restore")
+    assert "Replay | NBA" in names()
+    assert api.post("/api/v1/source-discovery/candidates/9999/dismiss").status_code == 404
+
+
+def test_the_schedule_is_a_setting_and_a_bad_cron_is_refused(api):
+    got = api.get("/api/v1/settings/scheduler").json()
+    assert (got["source_discovery_mode"], got["source_discovery_cron"]) == ("off", "0 11 * * *")
+    ok = api.put("/api/v1/settings/scheduler",
+                 json={"source_discovery_mode": "suggest", "source_discovery_cron": "30 9 * * *"})
+    assert ok.status_code == 200
+    assert ok.json()["source_discovery_mode"] == "suggest"
+    assert ok.json()["source_discovery_cron"] == "30 9 * * *"
+    bad = api.put("/api/v1/settings/scheduler", json={"source_discovery_cron": "not a cron"})
+    assert bad.status_code == 400
+    assert api.put("/api/v1/settings/scheduler",
+                   json={"source_discovery_mode": "sometimes"}).status_code == 422
+
+
+def test_a_scan_is_skipped_without_dispatcharr_and_only_one_runs_at_a_time(db, monkeypatch):
+    from teamarr.consumers import source_discovery as sd
+
+    monkeypatch.setattr(
+        "teamarr.dispatcharr.factory.get_dispatcharr_connection", lambda *a, **k: None
+    )
+    assert sd.run_discovery_scan(get_db)["skipped"] is True
+    assert sd.discovery_status()["running"] is False
+    assert sd._scan_lock.acquire(blocking=False)
+    try:
+        assert "already running" in sd.run_discovery_scan(get_db)["reason"]
+    finally:
+        sd._scan_lock.release()

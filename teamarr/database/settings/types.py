@@ -103,6 +103,9 @@ class SchedulerSettings:
     # Scheduled channel reset (for Jellyfin logo cache issues)
     channel_reset_enabled: bool = False
     channel_reset_cron: str | None = None
+    # Source discovery (#997): 'off' | 'suggest', on its own cron
+    source_discovery_mode: str = "off"
+    source_discovery_cron: str = "0 11 * * *"
 
 
 @dataclass
