@@ -21,6 +21,7 @@ from teamarr.database.subscription import (
     get_subscription_template_for_event,
     get_subscription_templates,
 )
+from teamarr.utilities.event_status import event_end_time
 from teamarr.utilities.sports import template_duration_override
 from teamarr.utilities.xmltv import programmes_to_xmltv
 
@@ -388,7 +389,7 @@ class XmltvRenderer:
                 use_event = event
                 use_options = replace(
                     options,
-                    event_end_override=event.start_time + timedelta(hours=duration_override),
+                    event_end_override=event_end_time(event, duration_override),
                 )
             else:
                 use_event = event

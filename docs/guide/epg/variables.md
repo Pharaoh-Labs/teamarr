@@ -195,7 +195,7 @@ Game scheduling information.
 | `{game_date_short}` | Short game date | base, .next, .last | `Dec 22` |
 | `{game_day}` | Day of week | base, .next, .last | `Sunday` |
 | `{game_day_short}` | Short day of week | base, .next, .last | `Sun` |
-| `{game_time}` | Game time formatted per user settings. Reads `TBD` when the provider has not announced a start time | base, .next, .last | `1:00 PM EST` |
+| `{game_time}` | Game time formatted per user settings. Reads `TBD` when the provider has not announced a start time; until it does, the game is shown as an all-day programme on its date, and moves to its real slot once the time is published | base, .next, .last | `1:00 PM EST` |
 | `{days_until}` | Days until game | base, .next, .last | `0` |
 | `{today_tonight}` | 'today' or 'tonight' (5pm cutoff) when the game is today; 'tomorrow', the weekday (capitalised: `Sunday`), or the date when it is further out | base, .next, .last | `today` |
 | `{today_tonight_title}` | Title-case form of `{today_tonight}` | base, .next, .last | `Today` |

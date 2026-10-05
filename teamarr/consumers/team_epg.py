@@ -19,7 +19,11 @@ from teamarr.services import SportsDataService
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
-from teamarr.utilities.event_status import is_event_final
+from teamarr.utilities.event_status import (
+    event_end_time,
+    event_programme_start,
+    is_event_final,
+)
 from teamarr.utilities.sports import get_effective_duration
 from teamarr.utilities.tz import now_user, to_user_tz
 
@@ -322,7 +326,7 @@ class TeamEPGGenerator:
                 options.default_duration_hours,
                 template=template_dict,
             )
-            event_end = event.start_time + timedelta(hours=duration)
+            event_end = event_end_time(event, duration)
 
             # Skip completed (final) events - matching V1 logic:
             # - Past day finals: ALWAYS excluded (regardless of include_final_events)
@@ -406,7 +410,7 @@ class TeamEPGGenerator:
         # Caller (generate) returns early when options.template is None, so a
         # template is guaranteed present here.
         assert options.template is not None
-        start = event.start_time - timedelta(minutes=options.pregame_minutes)
+        start = event_programme_start(event, options.pregame_minutes)
         # V1 Parity: Use template custom duration if set
         template_dict = (
             {
@@ -422,7 +426,7 @@ class TeamEPGGenerator:
             options.default_duration_hours,
             template=template_dict,
         )
-        stop = event.start_time + timedelta(hours=duration)
+        stop = event_end_time(event, duration)
 
         # One variable map for the whole programme: every field below resolves
         # against this same, unchanging context, and building the map is the

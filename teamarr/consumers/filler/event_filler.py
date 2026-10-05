@@ -20,6 +20,7 @@ from teamarr.services.sports_data import SportsDataService
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, Odds, TeamChannelContext, TemplateContext
 from teamarr.templates.resolver import TemplateResolver
+from teamarr.utilities.event_status import event_end_time
 from teamarr.utilities.sports import get_sport_duration
 from teamarr.utilities.time_blocks import create_filler_chunks
 
@@ -151,7 +152,7 @@ class EventFillerGenerator:
             event_duration = get_sport_duration(
                 event.sport, options.sport_durations, options.default_duration
             )
-            event_end = event_start + timedelta(hours=event_duration)
+            event_end = event_end_time(event, event_duration)
 
         # Calculate EPG window
         epg_start = options.epg_start or datetime.now(event_start.tzinfo)
@@ -244,7 +245,7 @@ class EventFillerGenerator:
             event_duration = get_sport_duration(
                 event.sport, options.sport_durations, options.default_duration
             )
-            event_end = event_start + timedelta(hours=event_duration)
+            event_end = event_end_time(event, event_duration)
 
         # Calculate EPG window
         epg_start = options.epg_start or datetime.now(event_start.tzinfo)

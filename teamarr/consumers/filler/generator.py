@@ -26,6 +26,7 @@ from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
+from teamarr.utilities.event_status import event_end_time, event_programme_start
 from teamarr.utilities.sports import get_sport_duration, get_sport_from_league
 from teamarr.utilities.time_blocks import create_filler_chunks, crosses_midnight
 from teamarr.utilities.tz import now_user, to_user_tz
@@ -291,8 +292,9 @@ class FillerGenerator:
             first_game = day_events[0]
             pregame_start = skip_pregame_until
             # End filler when game programme starts (event - buffer)
-            buffer = timedelta(minutes=options.pregame_buffer_minutes)
-            pregame_end_utc = first_game.start_time - buffer
+            pregame_end_utc = event_programme_start(
+                first_game, options.pregame_buffer_minutes
+            )
             pregame_end = pregame_end_utc.astimezone(tz)
 
             if pregame_start < pregame_end:
@@ -697,7 +699,7 @@ class FillerGenerator:
         durations = self._options.sport_durations if self._options else {}
         default = self._options.default_duration if self._options else 3.0
         duration_hours = get_sport_duration(event.sport, durations, default)
-        return event.start_time + timedelta(hours=duration_hours)
+        return event_end_time(event, duration_hours)
 
     def _calculate_epg_start(
         self,
