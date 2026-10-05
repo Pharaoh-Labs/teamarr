@@ -40,6 +40,7 @@ decisions (bead tvnk.1, 2026-07-09):
 """
 
 import copy
+import json
 from sqlite3 import Connection
 
 from teamarr.core.filler_types import legacy_conditional_to_rows
@@ -422,6 +423,26 @@ def _with_v80_rows(gen: dict) -> dict:
     return g
 
 
+_LITERAL_ARTICLE_REVERTS = (
+    ("{home_team_the.next} (", "The {home_team.next} ("),
+    ("host {away_team_the.next} (", "host the {away_team.next} ("),
+    ("{away_team_the} ({away_team_record}) and {home_team_the} (",
+     "The {away_team} ({away_team_record}) and the {home_team} ("),
+    ("{home_team_the} ({home_team_record}) host {away_team_the} (",
+     "The {home_team} ({home_team_record}) host the {away_team} ("),
+)
+
+
+def _revert_article_aware(spec: dict) -> dict:
+    """The Default starters as #991 first landed on dev: a literal "The"
+    before each side instead of the article-aware names. Never released, but
+    a dev-channel install that seeded in that window carries it."""
+    text = json.dumps(spec)
+    for new, old in _LITERAL_ARTICLE_REVERTS:
+        text = text.replace(new, old)
+    return json.loads(text)
+
+
 def _pre_style_pass(name: str, spec: dict) -> dict:
     """The spec as it stood before the #991 style pass (generation G8).
 
@@ -530,7 +551,10 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     if g0 != g2:
         legacy_chain.append(g0)
 
-    gens: list[dict] = [g8] if g8 != spec else []
+    literal_article = _revert_article_aware(spec)
+    gens: list[dict] = [literal_article] if literal_article != spec else []
+    if g8 != spec:
+        gens.append(g8)
     if g7 != g8:
         gens.append(g7)
     if g6 != g7:
@@ -562,14 +586,16 @@ def _matches_any_generation(row, name: str, spec: dict) -> bool:
 # One sentence shape per fact, written once and reused by every starter that
 # states it, so the same thing is never said two ways.
 
-# US-pro matchup, home team first as a guide writes it ("The Panthers (1-2)
+# Default matchup, home team first as a guide writes it ("The Panthers (1-2)
 # host the Lions (2-1) at …"); an empty record's brackets are cleaned away.
+# Article-aware: the Default starters are the catch-all, so they also carry
+# national teams and clubs that take no article ("Cyprus (1-1-1) host Latvia").
 _PRO_HOST = (
-    "The {home_team} ({home_team_record}) host the {away_team} ({away_team_record}) at {venue}"
+    "{home_team_the} ({home_team_record}) host {away_team_the} ({away_team_record}) at {venue}"
 )
 # Nobody hosts a neutral-site or marquee game.
 _PRO_MEET = (
-    "The {away_team} ({away_team_record}) and the {home_team} ({home_team_record}) "
+    "{away_team_the} ({away_team_record}) and {home_team_the} ({home_team_record}) "
     "meet at {venue}"
 )
 # Team-channel result, winner's score first whoever won: "The Lions lost to
@@ -655,8 +681,8 @@ def _team_base(**overrides) -> dict:
             "subtitle": "{team1.next} {at_vs.next} {team2.next}",
             "description": "{game_preview.next}",
             "description_fallback": (
-                "The {home_team.next} ({home_team_record.next}) host the "
-                "{away_team.next} ({away_team_record.next}) {today_tonight.next} "
+                "{home_team_the.next} ({home_team_record.next}) host "
+                "{away_team_the.next} ({away_team_record.next}) {today_tonight.next} "
                 "at {game_time.next}."
             ),
             "art_url": _ART_NEXT,
@@ -807,7 +833,7 @@ def _event_base(**overrides) -> dict:
             "subtitle": "{team1} {at_vs} {team2}",
             "description": "{game_preview}",
             "description_fallback": (
-                "The {home_team} ({home_team_record}) host the {away_team} "
+                "{home_team_the} ({home_team_record}) host {away_team_the} "
                 "({away_team_record}) {today_tonight} at {game_time}."
             ),
             "art_url": _EVENT_ART,

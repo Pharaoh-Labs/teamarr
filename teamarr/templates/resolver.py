@@ -287,6 +287,9 @@ class TemplateResolver:
         # the rendered text (Gracenote: "The Washington Mystics play…").
         if text.startswith("the "):
             text = f"T{text[1:]}"
+        # …and when it opens a later sentence ("…Game 5. the Pistons and…").
+        # "vs. the Senators" is a connector, not a sentence end.
+        text = re.sub(r"(?<!vs)\. the ", ". The ", text)
 
         return text
 
