@@ -35,7 +35,7 @@ from teamarr.providers.espn.editorial_canary import EditorialDriftCanary
 from teamarr.providers.espn.mma import MMAParserMixin
 from teamarr.providers.espn.tennis import TennisParserMixin
 from teamarr.providers.espn.tournament import TournamentParserMixin
-from teamarr.utilities.event_status import is_event_final
+from teamarr.utilities.event_status import is_event_final, unannounced_day_start
 
 logger = logging.getLogger(__name__)
 
@@ -870,8 +870,11 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             neutral_site = bool(competition.get("neutralSite"))
             # ESPN states an unannounced start time outright, on the competition
             # (scoreboard, schedule) or the event wrapper; the timestamp it sends
-            # alongside is midnight Eastern, not a kickoff (#995).
+            # alongside is midnight Eastern, not a kickoff (#995). Only its date
+            # means anything, so the event is anchored to the start of that day.
             time_tbd = competition.get("timeValid") is False or data.get("timeValid") is False
+            if time_tbd:
+                start_time = unannounced_day_start(start_time)
             self._editorial_canary.record(
                 competition,
                 sport=sport,

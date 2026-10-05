@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 
 from teamarr.consumers.matching.result import ExcludedReason
 from teamarr.core import Event
-from teamarr.utilities.event_status import is_event_final
+from teamarr.utilities.event_status import event_end_time, is_event_final
 from teamarr.utilities.sports import get_sport_duration
 from teamarr.utilities.time_blocks import crosses_midnight
 from teamarr.utilities.tz import now_user, to_user_tz
@@ -401,7 +401,7 @@ class ChannelLifecycleManager:
             duration_hours = get_sport_duration(
                 event.sport, self.sport_durations, self.default_duration_hours
             )
-        return to_user_tz(event.start_time) + timedelta(hours=duration_hours)
+        return to_user_tz(event_end_time(event, duration_hours))
 
     def event_crosses_midnight(self, event: Event) -> bool:
         """Check if event crosses midnight."""

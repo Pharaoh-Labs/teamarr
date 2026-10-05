@@ -3,7 +3,58 @@
 Single source of truth for determining event final status.
 """
 
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from teamarr.core import Event
+
+# Where a provider's "time not announced" placeholder is midnight (ESPN).
+PLACEHOLDER_TIMEZONE = ZoneInfo("America/New_York")
+
+
+def unannounced_day_start(placeholder: datetime) -> datetime:
+    """Start of the game's day in the user's timezone, for an unannounced time (#995).
+
+    A provider with no start time to give sends midnight Eastern of the game's
+    date. Only the date in that timestamp is information. Read as an instant
+    it lands on the previous evening for anyone west of Eastern, so the game
+    is anchored to midnight of that same calendar date where the user is.
+    """
+    from teamarr.config import get_user_timezone
+
+    day = placeholder.astimezone(PLACEHOLDER_TIMEZONE).date()
+    # UTC like every other event start: arithmetic between two datetimes in
+    # one zone is wall-clock in Python and miscounts a day with a clock change.
+    return datetime(day.year, day.month, day.day, tzinfo=get_user_timezone()).astimezone(UTC)
+
+
+def event_programme_start(event: Event, pregame_minutes: float = 0) -> datetime:
+    """When the event's own programme starts: its start less the pregame lead-in.
+
+    A game with no announced time gets no lead-in — its programme is the day.
+    """
+    if getattr(event, "time_tbd", False):
+        return event.start_time
+    return event.start_time - timedelta(minutes=pregame_minutes)
+
+
+def event_end_time(event: Event, duration_hours: float) -> datetime:
+    """When the event ends: its start plus the duration that applies to it.
+
+    A game with no announced time (#995) is an all-day placeholder: it runs to
+    the next midnight in the user's timezone, whatever the duration. Every
+    span calculation for an event (programme, filler, channel deletion) must
+    come through here, or the placeholder day and the filler around it overlap.
+    """
+    if getattr(event, "time_tbd", False):
+        from teamarr.utilities.tz import to_user_tz
+
+        local = to_user_tz(event.start_time)
+        next_day = (local + timedelta(days=1)).date()
+        return datetime(
+            next_day.year, next_day.month, next_day.day, tzinfo=local.tzinfo
+        ).astimezone(UTC)
+    return event.start_time + timedelta(hours=duration_hours)
 
 
 def is_event_final(event: Event) -> bool:
