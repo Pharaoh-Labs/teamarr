@@ -34,14 +34,18 @@ _STOCK_CONDITIONALS = {
 def _released_generations(name, spec):
     """Prior generations that shipped in a release, newest first.
 
-    Leaves out the literal-"The" wording of the Default starters, which
-    reached dev between #992 and its follow-up and never a release; it has
-    its own test below. Keeps the indexes used here the same for every
+    Leaves out wordings that reached dev between #992 and their fix-ups and
+    never a release — the Default starters' literal "The" and College Team's
+    old conference row; each has its own test below. Keeps the indexes used here the same for every
     starter."""
-    from teamarr.database.default_templates import _prior_generations, _revert_article_aware
+    from teamarr.database.default_templates import (
+        _prior_generations,
+        _revert_article_aware,
+        _revert_conference_row,
+    )
 
-    unreleased = _revert_article_aware(spec)
-    return [g for g in _prior_generations(name, spec) if g != unreleased or g == spec]
+    unreleased = [_revert_article_aware(spec), _revert_conference_row(spec)]
+    return [g for g in _prior_generations(name, spec) if g not in unreleased or g == spec]
 
 
 
@@ -1043,3 +1047,34 @@ def test_default_matchup_line_is_article_aware():
     for name in ("Default Team (Starter)", "Default Event (Starter)"):
         for where, text in _all_text(_spec(name)):
             assert "The {home_team}" not in text and "the {away_team}" not in text, where
+
+
+def test_college_conference_row_reads_with_or_without_a_name():
+    """#996: the row fires on a shared conference id, so it must read whether
+    or not a display name is known — "in Big Ten conference play" or just "in
+    conference play", never "in Conference 5 play" or "in play"."""
+    row = next(
+        r for r in _spec("College Team (Starter)")["conditional_descriptions"]
+        if r["label"] == "Conference game"
+    )
+    assert "in {college_conference_abbrev} conference play at {venue}" in row["template"]
+    assert "{college_conference}" not in row["template"]
+
+
+def test_college_team_with_the_old_conference_row_heals_in_place(db_conn):
+    from teamarr.database.default_templates import _revert_conference_row
+
+    db_conn.execute("DELETE FROM templates")
+    db_conn.commit()
+    name = "College Team (Starter)"
+    spec = _spec(name)
+    old = _revert_conference_row(spec)
+    assert old != spec
+    tid = create_template(db_conn, **old)
+
+    seed_default_templates(db_conn)
+
+    row = {t.name: t for t in get_all_templates(db_conn)}[name]
+    assert row.id == tid
+    texts = [r["template"] for r in row.conditional_descriptions]
+    assert any("{college_conference_abbrev} conference play" in t for t in texts)

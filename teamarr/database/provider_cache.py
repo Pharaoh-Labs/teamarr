@@ -296,9 +296,17 @@ def stats_to_dict(stats: TeamStats) -> dict:
         "conference": stats.conference,
         "conference_abbrev": stats.conference_abbrev,
         "division": stats.division,
+        "conference_id": stats.conference_id,
+        "division_id": stats.division_id,
         "ppg": stats.ppg,
         "papg": stats.papg,
     }
+
+
+def _real_group_name(value: str | None) -> str | None:
+    from teamarr.database.provider_groups import is_placeholder_group_name
+
+    return None if is_placeholder_group_name(value) else value
 
 
 def dict_to_stats(data: dict) -> TeamStats:
@@ -315,9 +323,12 @@ def dict_to_stats(data: dict) -> TeamStats:
         rank=data.get("rank"),
         playoff_seed=data.get("playoff_seed"),
         games_back=data.get("games_back"),
-        conference=data.get("conference"),
-        conference_abbrev=data.get("conference_abbrev"),
-        division=data.get("division"),
+        # Rows cached before #996 hold "Conference 5" where a name belongs.
+        conference=_real_group_name(data.get("conference")),
+        conference_abbrev=_real_group_name(data.get("conference_abbrev")),
+        division=_real_group_name(data.get("division")),
+        conference_id=data.get("conference_id"),
+        division_id=data.get("division_id"),
         ppg=data.get("ppg"),
         papg=data.get("papg"),
     )
