@@ -132,7 +132,12 @@ export const useUpdateSchedulerSettings = settingsMutationHook(updateSchedulerSe
 ])
 
 export const useEPGSettings = settingsQueryHook("epg", getEPGSettings)
-export const useUpdateEPGSettings = settingsMutationHook(updateEPGSettings, [["settings", "epg"]])
+// Also refetches the sources list: saving the Dispatcharr-as-a-Stream-Source
+// selection creates or disables source rows on the server (#986).
+export const useUpdateEPGSettings = settingsMutationHook(updateEPGSettings, [
+  ["settings", "epg"],
+  ["groups"],
+])
 
 export const useDurationSettings = settingsQueryHook("durations", getDurationSettings)
 export const useUpdateDurationSettings = settingsMutationHook(updateDurationSettings, [
