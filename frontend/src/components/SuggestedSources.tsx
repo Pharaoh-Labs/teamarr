@@ -47,11 +47,11 @@ function evidenceText(c: SourceCandidate, leagueName: LeagueName): string {
   return ""
 }
 
-const SECTIONS: { tier: SuggestionTier; title: string }[] = [
-  { tier: "games", title: "Events found" },
-  { tier: "teams", title: "Team streams" },
-  { tier: "name_only", title: "Name only" },
-]
+const TIER_BADGE: Record<SuggestionTier, { label: string; variant: "success" | "info" | "outline" }> = {
+  games: { label: "Events found", variant: "success" },
+  teams: { label: "Team streams", variant: "info" },
+  name_only: { label: "Name only", variant: "outline" },
+}
 
 /**
  * Suggested sources (#997): M3U groups that are not sources but carry — or by
@@ -150,14 +150,18 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
   const open = candidates.filter((c) => c.status !== "dismissed")
   const dismissed = candidates.filter((c) => c.status === "dismissed")
   // Only what is still listed can be acted on (a refresh may have removed rows).
-  const listed = new Set(open.flatMap((c) => [c.id, ...c.alternates.map((a) => a.id)]))
+  const listed = new Set(open.map((c) => c.id))
   const selectedIds = [...selected].filter((id) => listed.has(id))
 
-  const row = (c: SourceCandidate, alternate = false) => (
-    <div
-      key={c.id}
-      className={`flex items-center gap-3 px-3 py-2 text-sm ${alternate ? "pl-10 bg-muted/30" : ""}`}
-    >
+  // Flat list, one block per M3U account (the API returns it in that order).
+  const byAccount = new Map<string, SourceCandidate[]>()
+  for (const c of open) {
+    const account = c.m3u_account_name ?? "Unknown account"
+    byAccount.set(account, [...(byAccount.get(account) ?? []), c])
+  }
+
+  const row = (c: SourceCandidate) => (
+    <div key={c.id} className="flex items-center gap-3 px-3 py-2 text-sm">
       {c.status !== "dismissed" && (
         <Checkbox
           checked={selected.has(c.id)}
@@ -168,16 +172,22 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium truncate">{c.m3u_group_name}</span>
-          {alternate && (
-            <Badge variant="outline" className="text-xs">Same events</Badge>
-          )}
-          {c.status === "dismissed" && (
+          {c.status === "dismissed" ? (
             <Badge variant="secondary" className="text-xs">Dismissed</Badge>
+          ) : (
+            c.tier && (
+              <Badge variant={TIER_BADGE[c.tier].variant} className="text-xs">
+                {TIER_BADGE[c.tier].label}
+              </Badge>
+            )
           )}
           <span className="text-xs text-muted-foreground">{c.stream_count} streams</span>
         </div>
         {c.tier && (
-          <div className="text-xs text-muted-foreground">{evidenceText(c, leagueName)}</div>
+          <div className="text-xs text-muted-foreground">
+            {evidenceText(c, leagueName)}
+            {c.same_events_as && ` · same events as ${c.same_events_as}`}
+          </div>
         )}
       </div>
       {c.status === "dismissed" ? (
@@ -228,8 +238,8 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
       <div className="space-y-3 pt-2">
         <p className="text-xs text-muted-foreground">
           Teamarr can look through every M3U group that is not already a source and suggest the
-          ones carrying events in leagues you subscribe to. Replay groups are left out, and
-          groups carrying the same events are shown together. A source added from here is{" "}
+          ones carrying events in leagues you subscribe to, listed by the M3U account they come
+          from. Replay groups are left out. A source added from here is{" "}
           <span className="font-medium">managed</span>: it is switched off when it has matched
           nothing for two weeks and back on when its group has games again. Sources you add or
           edit yourself are never changed.
@@ -302,13 +312,11 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
           </p>
         )}
 
-        {SECTIONS.map(({ tier, title }) => {
-          const rows = open.filter((c) => c.tier === tier)
-          if (rows.length === 0) return null
-          const ids = rows.flatMap((c) => [c.id, ...c.alternates.map((a) => a.id)])
+        {[...byAccount.entries()].map(([account, rows]) => {
+          const ids = rows.map((c) => c.id)
           const allSelected = ids.every((id) => selected.has(id))
           return (
-            <div key={tier} className="space-y-1">
+            <div key={account} className="space-y-1">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <Checkbox
                   checked={allSelected}
@@ -322,12 +330,12 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
                       return next
                     })
                   }
-                  aria-label={`Select all in ${title}`}
+                  aria-label={`Select all from ${account}`}
                 />
-                {title} ({rows.length})
+                {account} ({rows.length})
               </div>
-              <div className="divide-y divide-border rounded-lg border border-border max-h-96 overflow-y-auto">
-                {rows.flatMap((c) => [row(c), ...c.alternates.map((a) => row(a, true))])}
+              <div className="divide-y divide-border rounded-lg border border-border">
+                {rows.map((c) => row(c))}
               </div>
             </div>
           )

@@ -41,6 +41,8 @@ class CandidateResponse(BaseModel):
     m3u_group_id: int
     m3u_group_name: str
     m3u_account_ids: list[int]
+    # Name of the M3U account the group comes from — the list is organized by it.
+    m3u_account_name: str | None = None
     stream_count: int
     status: str
     tier: str | None  # 'games' | 'teams' | 'name_only' | None (not suggested)
@@ -53,9 +55,9 @@ class CandidateResponse(BaseModel):
     scans: int
     last_seen_at: str | None
     last_matched_at: str | None
-    # Other groups carrying the same events. Each is its own candidate and can
-    # be added or dismissed on its own.
-    alternates: list[CandidateResponse] = []
+    # Another suggested group carrying the same events, when there is one with
+    # more of them. Information only: this group is its own candidate.
+    same_events_as: str | None = None
 
 
 class CandidateListResponse(BaseModel):
@@ -64,8 +66,29 @@ class CandidateListResponse(BaseModel):
     scan: dict
 
 
-def _to_response(candidate: CandidateEvidence) -> CandidateResponse:
+def _account_names() -> dict[int, str]:
+    """M3U account id -> name. Empty when Dispatcharr cannot be asked."""
+    from teamarr.dispatcharr.factory import get_dispatcharr_connection
+
+    try:
+        dispatcharr = get_dispatcharr_connection(get_db)
+        if not dispatcharr:
+            return {}
+        return {a.id: a.name for a in dispatcharr.m3u.list_accounts()}
+    except Exception as e:
+        logger.warning("[DISCOVERY] Failed to list M3U accounts: %s", e)
+        return {}
+
+
+def _to_response(
+    candidate: CandidateEvidence, accounts: dict[int, str] | None = None
+) -> CandidateResponse:
+    names = [
+        (accounts or {}).get(account_id) or f"Account {account_id}"
+        for account_id in candidate.m3u_account_ids
+    ]
     return CandidateResponse(
+        m3u_account_name=", ".join(names) if names else None,
         id=candidate.id,
         m3u_group_id=candidate.m3u_group_id,
         m3u_group_name=candidate.m3u_group_name,
@@ -91,8 +114,9 @@ def list_candidates(include_dismissed: bool = False) -> CandidateListResponse:
 
     Only groups worth suggesting are returned: ones whose streams matched
     events in the evidence window, team-stream groups, then ones whose name
-    alone names a subscribed league. Replay groups are never returned. Groups
-    carrying the same events are folded into one row with ``alternates``.
+    alone names a subscribed league. Replay groups are never returned. The
+    list is flat, ordered by M3U account; a group that carries the same events
+    as a stronger one says so in ``same_events_as``.
     Dismissed groups are left out unless ``include_dismissed`` is set.
     """
     with get_db() as conn:
@@ -107,19 +131,22 @@ def list_candidates(include_dismissed: bool = False) -> CandidateListResponse:
         elif suggestion_tier(candidate) is not None:
             shown.append(candidate)
 
-    # Dismissed groups are listed on their own, never folded into a suggestion.
-    open_groups = fold_same_content([c for c in shown if c.status != "dismissed"])
+    accounts = _account_names()
     rows = []
-    for primary, *alternates in open_groups:
-        row = _to_response(primary)
-        row.alternates = [_to_response(alt) for alt in alternates]
-        rows.append(row)
-    rows.extend(_to_response(c) for c in shown if c.status == "dismissed")
+    for primary, *others in fold_same_content([c for c in shown if c.status != "dismissed"]):
+        rows.append(_to_response(primary, accounts))
+        for other in others:
+            row = _to_response(other, accounts)
+            row.same_events_as = primary.m3u_group_name
+            rows.append(row)
+    rows.extend(_to_response(c, accounts) for c in shown if c.status == "dismissed")
 
+    # Flat, by M3U account, strongest evidence first within each.
     tier_order = {TIER_GAMES: 0, TIER_TEAMS: 1, TIER_NAME_ONLY: 2}
     rows.sort(
         key=lambda r: (
             r.status == "dismissed",
+            (r.m3u_account_name or "~").lower(),
             tier_order.get(r.tier or "", 3),
             -r.best_game_matches,
             r.m3u_group_name.lower(),

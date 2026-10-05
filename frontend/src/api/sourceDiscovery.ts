@@ -21,8 +21,10 @@ export interface SourceCandidate {
   scans: number
   last_seen_at: string | null
   last_matched_at: string | null
-  // Other groups carrying the same events; each can be added on its own.
-  alternates: SourceCandidate[]
+  // M3U account the group comes from; the list is organized by it.
+  m3u_account_name: string | null
+  // A stronger suggestion carrying the same events, if any (information only).
+  same_events_as: string | null
 }
 
 export interface DiscoveryScanState {

@@ -436,20 +436,22 @@ def test_the_review_list_holds_only_groups_worth_suggesting_strongest_first(api)
     body = api.get("/api/v1/source-discovery/candidates").json()
     assert [(c["m3u_group_name"], c["tier"]) for c in body["candidates"]] == [
         ("Sports | ESPN PLUS (2)", "games"),
+        ("USA: ESPN PLUS", "games"),
         ("LIVE | NBA (Preseason)", "games"),
         ("USA | NFL Teams", "teams"),
         ("Sports | NBA Extra", "name_only"),
     ]
-    folded = body["candidates"][0]
-    assert [a["m3u_group_name"] for a in folded["alternates"]] == ["USA: ESPN PLUS"]
-    assert folded["events"] == 9
-    assert body["candidates"][2]["team_leagues"] == {"nfl": 30}
+    by_name = {c["m3u_group_name"]: c for c in body["candidates"]}
+    assert by_name["USA: ESPN PLUS"]["same_events_as"] == "Sports | ESPN PLUS (2)"
+    assert by_name["Sports | ESPN PLUS (2)"]["same_events_as"] is None
+    assert by_name["Sports | ESPN PLUS (2)"]["events"] == 9
+    assert by_name["USA | NFL Teams"]["team_leagues"] == {"nfl": 30}
     assert body["window_days"] == 7 and body["scan"]["running"] is False
 
 
 def test_a_dismissed_candidate_leaves_the_list_and_can_be_restored(api):
     _seed()
-    cid = api.get("/api/v1/source-discovery/candidates").json()["candidates"][3]["id"]
+    cid = api.get("/api/v1/source-discovery/candidates").json()["candidates"][4]["id"]
     assert api.post(f"/api/v1/source-discovery/candidates/{cid}/dismiss").status_code == 200
     names = lambda **p: [  # noqa: E731
         c["m3u_group_name"]
@@ -497,7 +499,7 @@ def test_a_scan_is_skipped_without_dispatcharr_and_only_one_runs_at_a_time(db, m
 def _accept_first(api):
     _seed()
     listed = api.get("/api/v1/source-discovery/candidates").json()["candidates"]
-    cid = listed[0]["alternates"][0]["id"]  # "USA: ESPN PLUS", M3U group 1
+    cid = next(c["id"] for c in listed if c["m3u_group_name"] == "USA: ESPN PLUS")  # group 1
     resp = api.post(f"/api/v1/source-discovery/candidates/{cid}/accept")
     assert resp.status_code == 201, resp.text
     return cid, resp.json()["source_group_id"]
@@ -668,3 +670,30 @@ def test_a_removed_managed_source_is_added_back_when_its_group_returns(api):
             "SELECT managed, enabled, m3u_group_id FROM event_epg_groups "
             "WHERE name = 'USA: ESPN PLUS'").fetchone()
     assert tuple(row) == (1, 1, 1)
+
+
+def test_the_list_is_flat_and_ordered_by_m3u_account(api, monkeypatch):
+    from teamarr.utilities.tz import now_utc
+
+    monkeypatch.setattr(
+        "teamarr.api.routes.source_discovery._account_names", lambda: {4: "Onyx", 2: "Aura"}
+    )
+    with get_db() as conn:
+        record_scan(conn, [
+            ScanEvidence(m3u_group_id=1, m3u_group_name="LIVE | NHL", m3u_account_ids=[4],
+                         game_matches=3, leagues={"nhl": 3}),
+            ScanEvidence(m3u_group_id=2, m3u_group_name="Sports | NHL", m3u_account_ids=[2],
+                         streams_read=5, name_leagues=["nhl"]),
+            ScanEvidence(m3u_group_id=3, m3u_group_name="LIVE | ESPN+", m3u_account_ids=[4],
+                         game_matches=40, leagues={"nhl": 40}),
+            ScanEvidence(m3u_group_id=4, m3u_group_name="Sports | F1", m3u_account_ids=[9],
+                         game_matches=5, leagues={"f1": 5}),
+        ], now_utc())
+    rows = api.get("/api/v1/source-discovery/candidates").json()["candidates"]
+    assert [(r["m3u_account_name"], r["m3u_group_name"]) for r in rows] == [
+        ("Account 9", "Sports | F1"),
+        ("Aura", "Sports | NHL"),
+        ("Onyx", "LIVE | ESPN+"),
+        ("Onyx", "LIVE | NHL"),
+    ]
+    assert all("alternates" not in r for r in rows)

@@ -72,8 +72,8 @@ Providers add, rename and drop M3U groups through the year, so a hand-kept sourc
 
 **What gets suggested.** Evidence is kept for a week, because most groups are empty or placeholders between match days:
 
-| Section | Meaning |
-|---------|---------|
+| Badge | Meaning |
+|-------|---------|
 | **Events found** | A scan matched streams in the group to real events. Three matched streams are enough; one is enough when the group's name also names a subscribed league. |
 | **Team streams** | The group's name names a subscribed league and its streams are that league's teams ("NFL | Dallas Cowboys"). Added as a team-stream source. |
 | **Name only** | The group's name names a subscribed league, but no scan has matched anything in it yet — usually a group waiting for match day. It drops off the list by itself if it has had streams every day for a week and still matched nothing. |
@@ -84,9 +84,9 @@ Three kinds of group are never suggested:
 - **News and regional channels.** A stream that only names one team counts as evidence only in a league the group's own name names, so a channel that happens to contain a country name does not qualify its group.
 - **Groups you dismissed.**
 
-Groups that carry the same events — the same feeds listed under several groups or providers — are shown together, the others indented under the first as **Same events**. Each can still be added on its own.
+The list is flat and organized by the M3U account each group comes from. When two suggested groups carry the same events — the same feeds listed under several groups or providers — the weaker one says *same events as …*. Each can still be added on its own.
 
-**Add** creates the source. **✕** dismisses the group. Tick several rows (or a whole section) to add or dismiss them together.
+**Add** creates the source. **✕** dismisses the group. Tick several rows (or a whole account) to add or dismiss them together.
 
 **Decisions are remembered.** You rule on a group once:
 
