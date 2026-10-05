@@ -117,7 +117,8 @@ def _national_ctx(**kw):
     return _ctx(ev)
 
 
-def _college_ctx(*, home_rank=None, away_rank=None, conference=None, **kw):
+def _college_ctx(*, home_rank=None, away_rank=None, conference=None,
+                 conference_abbrev=None, conference_id=None, **kw):
     home = _team("Arkansas Razorbacks", "ARK", "mens-college-basketball", "basketball", "1")
     away = _team("Texas A&M Aggies", "TAMU", "mens-college-basketball", "basketball", "2")
     ev = _event(home, away, "mens-college-basketball", "basketball",
@@ -125,8 +126,11 @@ def _college_ctx(*, home_rank=None, away_rank=None, conference=None, **kw):
                 home_last_five="4-1", away_last_five="3-2", **kw)
     return _ctx(
         ev,
-        team_stats=TeamStats(record="20-7", rank=home_rank, conference=conference),
-        opponent_stats=TeamStats(record="19-8", rank=away_rank, conference=conference),
+        team_stats=TeamStats(record="20-7", rank=home_rank, conference=conference,
+                             conference_abbrev=conference_abbrev, conference_id=conference_id),
+        opponent_stats=TeamStats(record="19-8", rank=away_rank, conference=conference,
+                                 conference_abbrev=conference_abbrev,
+                                 conference_id=conference_id),
     )
 
 
@@ -315,9 +319,20 @@ def test_college_one_ranked_team_shows_only_that_rank(resolver):
 
 def test_college_conference_game_names_the_conference(resolver):
     spec = SPECS["College Team (Starter)"]
-    ctx = _college_ctx(conference="Southeastern Conference")
+    ctx = _college_ctx(conference="Southeastern Conference", conference_abbrev="SEC",
+                       conference_id="8")
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
-    assert "in Southeastern Conference play" in out
+    assert "in SEC conference play at" in out
+
+
+def test_college_conference_game_reads_without_a_conference_name(resolver):
+    """#996: the row fires on the shared conference id; with no display name
+    known it says "in conference play", never an id or a gap."""
+    spec = SPECS["College Team (Starter)"]
+    ctx = _college_ctx(conference_id="62")
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert "in conference play at" in out
+    assert "Conference 62" not in out
 
 
 def test_marquee_note_leads_us_pro_description(resolver):

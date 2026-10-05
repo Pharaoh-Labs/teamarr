@@ -423,6 +423,20 @@ def _with_v80_rows(gen: dict) -> dict:
     return g
 
 
+# The conference row before #996: the full conference name, which rendered
+# "in Conference 5 play" (an id) and would read "in play" with no name.
+_CONFERENCE_ROW_REVERT = (
+    "in {college_conference_abbrev} conference play at",
+    "in {college_conference} play at",
+)
+
+
+def _revert_conference_row(spec: dict) -> dict:
+    """College Team as it stood on dev before #996 reworded its conference row."""
+    new, old = _CONFERENCE_ROW_REVERT
+    return json.loads(json.dumps(spec).replace(new, old))
+
+
 _LITERAL_ARTICLE_REVERTS = (
     ("{home_team_the.next} (", "The {home_team.next} ("),
     ("host {away_team_the.next} (", "host the {away_team.next} ("),
@@ -551,8 +565,14 @@ def _prior_generations(name: str, spec: dict) -> list[dict]:
     if g0 != g2:
         legacy_chain.append(g0)
 
-    literal_article = _revert_article_aware(spec)
-    gens: list[dict] = [literal_article] if literal_article != spec else []
+    # Wordings that reached dev between #992 and their fix-ups, never a
+    # release: College Team's conference row (#996), the Default starters'
+    # literal "The" (#994).
+    pre_996 = _revert_conference_row(spec)
+    literal_article = _revert_article_aware(pre_996)
+    gens: list[dict] = [pre_996] if pre_996 != spec else []
+    if literal_article != pre_996:
+        gens.append(literal_article)
     if g8 != spec:
         gens.append(g8)
     if g7 != g8:
@@ -1089,7 +1109,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
                 "template": (
                     "{home_team_rank_display} {home_team} ({home_team_record}) host "
                     "{away_team_rank_display} {away_team} ({away_team_record}) in "
-                    "{college_conference} play at {venue}. "
+                    "{college_conference_abbrev} conference play at {venue}. "
                     "{last_five_summary} {series_summary}."
                 ),
                 "priority": 18,

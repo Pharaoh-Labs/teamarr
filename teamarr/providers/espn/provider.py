@@ -1365,8 +1365,17 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         streak_str = self._format_streak(streak_count)
 
         # Get conference/division
-        groups = team_data.get("groups", {})
-        conference, conference_abbrev, division = self._parse_groups(groups)
+        # Group ids identify the conference and division; ESPN sends no names
+        # with them. The standing line names the team's own group ("12th in
+        # Big Ten", "3rd in NFC North") — the conference for a college team,
+        # the division for a pro one. SportsDataService fills fuller names
+        # from the cached group tree where the league has one (#996).
+        groups = team_data.get("groups") or {}
+        conference_id, division_id = self._parse_groups(groups)
+        standing_group = self._standing_group_name(team_data.get("standingSummary"))
+        own_group_is_conference = bool(groups.get("isConference"))
+        conference = standing_group if own_group_is_conference else None
+        division = None if own_group_is_conference else standing_group
 
         return TeamStats(
             record=record_str,
@@ -1383,8 +1392,10 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             playoff_seed=int(stats.get("playoffSeed", 0)) or None,
             games_back=float(stats.get("gamesBehind", 0)) or None,
             conference=conference,
-            conference_abbrev=conference_abbrev,
+            conference_abbrev=conference,
             division=division,
+            conference_id=conference_id,
+            division_id=division_id,
             ppg=float(stats.get("avgPointsFor", 0)) or None,
             papg=float(stats.get("avgPointsAgainst", 0)) or None,
         )
@@ -1507,31 +1518,35 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             return f"L{abs(streak_count)}"
         return ""
 
-    def _parse_groups(self, groups: dict) -> tuple[str | None, str | None, str | None]:
-        """Parse conference/division from groups structure.
+    def _parse_groups(self, groups: dict) -> tuple[str | None, str | None]:
+        """(conference_id, division_id) from a team's groups structure.
 
-        Returns (conference_name, conference_abbrev, division_name).
-        Note: Full conference/division names require additional API calls
-        to the Core API. For now, we return IDs as placeholders.
+        ESPN's shape varies:
+        - isConference=true (college): groups.id is the conference, its
+          parent the division (FBS, NCAA Division I)
+        - otherwise (pro): groups.id is the division, its parent the conference
+
+        Ids only. These used to be returned dressed as names ("Conference 5"),
+        which the guide then printed (#996).
         """
         if not groups:
-            return None, None, None
+            return None, None
 
-        # ESPN structure varies:
-        # - Pro leagues: groups.id = division, groups.parent.id = conference
-        # - College: groups.id = subdivision, groups.parent.id = conference
-        # - isConference=true: groups.id is the conference itself
+        def key(value) -> str | None:
+            return str(value) if value not in (None, "") else None
 
-        is_conference = groups.get("isConference", False)
-        group_id = groups.get("id")
-        parent_id = groups.get("parent", {}).get("id")
+        group_id = key(groups.get("id"))
+        parent_id = key((groups.get("parent") or {}).get("id"))
+        if groups.get("isConference", False):
+            return group_id, parent_id
+        return parent_id, group_id
 
-        if is_conference:
-            # groups.id is the conference
-            return f"Conference {group_id}", None, None
+    _STANDING_GROUP = re.compile(
+        r"^\s*(?:T-?|Tied\s+(?:for\s+)?)?\d+(?:st|nd|rd|th)\s+in\s+(.+?)\s*$"
+    )
 
-        # groups.id is division/subdivision, parent is conference
-        conference = f"Conference {parent_id}" if parent_id else None
-        division = f"Division {group_id}" if group_id else None
-
-        return conference, None, division
+    @classmethod
+    def _standing_group_name(cls, standing_summary: str | None) -> str | None:
+        """The group named in a standing line: '12th in Big Ten' -> 'Big Ten'."""
+        match = cls._STANDING_GROUP.match(standing_summary or "")
+        return match.group(1) if match else None

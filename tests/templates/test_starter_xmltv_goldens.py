@@ -175,8 +175,10 @@ def _college_event(**kw):
 
 
 COLLEGE_STATS = {
-    "1": TeamStats(record="20-7", rank=20, conference="Southeastern Conference"),
-    "2": TeamStats(record="19-8", rank=15, conference="Southeastern Conference"),
+    "1": TeamStats(record="20-7", rank=20, conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
+    "2": TeamStats(record="19-8", rank=15, conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
 }
 
 
@@ -420,8 +422,10 @@ def _case_college_team(conn):
                      "basketball", "4", short="Wildcats")
     stats = dict(COLLEGE_STATS)
     stats.update({
-        "3": TeamStats(record="15-12", conference="Southeastern Conference"),
-        "4": TeamStats(record="21-6", rank=8, conference="Southeastern Conference"),
+        "3": TeamStats(record="15-12", conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
+        "4": TeamStats(record="21-6", rank=8, conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
     })
     return _render_team_starter(
         conn, "College Team (Starter)",

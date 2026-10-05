@@ -318,10 +318,14 @@ class TeamStats:
     playoff_seed: int | None = None
     games_back: float | None = None
 
-    # Conference/division
+    # Conference/division. The ids are the provider's group keys and are what
+    # two teams are compared on; the names are for display and may be empty
+    # when the provider's group tree is not cached for the league (#996).
     conference: str | None = None  # Full name
     conference_abbrev: str | None = None
     division: str | None = None
+    conference_id: str | None = None
+    division_id: str | None = None
 
     # Scoring stats
     ppg: float | None = None  # Points per game
