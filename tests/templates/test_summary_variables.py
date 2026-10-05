@@ -260,3 +260,27 @@ def test_series_score_and_summary_short_empty_in_regular_season():
     ))
     assert extract_series_score(ctx, gc) == ""
     assert extract_series_summary_short(ctx, gc) == ""
+
+
+def test_preview_text_prefers_headline_over_description():
+    # Preview articles carry no shortLinkText; the description is the wire
+    # story's opening sentence, not a summary of the game (#979).
+    article = {
+        "type": "Preview",
+        "headline": "Flyers take 3-game losing streak into matchup with the Lightning",
+        "description": "Philadelphia Flyers (0-1-2) vs. Tampa Bay Lightning (1-1)",
+    }
+    assert (
+        ESPNProvider._preview_text(article)
+        == "Flyers take 3-game losing streak into matchup with the Lightning"
+    )
+
+
+def test_preview_text_short_link_still_wins():
+    article = {"shortLinkText": "short", "headline": "headline", "description": "body"}
+    assert ESPNProvider._preview_text(article) == "short"
+
+
+def test_preview_text_falls_back_to_description():
+    article = {"headline": " ", "description": "— Bo Bichette continued his tear."}
+    assert ESPNProvider._preview_text(article) == "Bo Bichette continued his tear."

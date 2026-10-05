@@ -752,7 +752,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             # competition), so attach it here. Raw passthrough, empty when absent.
             article = data.get("article") or {}
             if article.get("type") == "Preview":
-                event.game_preview = self._editorial_text(article)
+                event.game_preview = self._preview_text(article)
             from teamarr.providers.espn.preview import apply_generated_preview_fields, select_series
 
             # seasonseries is authoritative over any competition.series value
@@ -938,6 +938,20 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             return short
         desc = obj.get("description") or ""
         return re.sub(r"^\s*[—–-]\s+", "", desc).strip()
+
+    @classmethod
+    def _preview_text(cls, article: dict) -> str:
+        """Preview copy from an ESPN summary article: its headline first.
+
+        Preview articles carry no `shortLinkText`, and their `description` is
+        the wire story's opening sentence — an anecdotal lede, or a bare
+        'Flyers (0-1-2) vs. Lightning (1-1)'. The `headline` is the line that
+        summarises the game ('Flyers take 3-game losing streak into matchup
+        with the Lightning'); 7 of 7 published previews had one (#979).
+        """
+        short = (article.get("shortLinkText") or "").strip()
+        headline = (article.get("headline") or "").strip()
+        return short or headline or cls._editorial_text(article)
 
     @classmethod
     def _headline_of_type(cls, competition: dict, want_type: str) -> str:

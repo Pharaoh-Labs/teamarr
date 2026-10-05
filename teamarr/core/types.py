@@ -190,7 +190,7 @@ class Event:
     soccer_match_note: str = ""  # altGameNote, e.g. "FIFA World Cup, Group J"
     # Per-event tier — from the summary endpoint (overlaid by refresh_event_status,
     # which already fetches it, so zero extra calls).
-    game_preview: str = ""  # summary article[type=Preview].description (pregame)
+    game_preview: str = ""  # summary article[type=Preview] headline (pregame)
     # Active-series state via select_series (#920) — active playoff series
     # outranks a completed regular-season one; also populated from scoreboard
     # competition.series for paths that never hit the summary endpoint.
