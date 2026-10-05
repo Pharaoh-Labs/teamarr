@@ -24,6 +24,7 @@ class PreviewBuilder:
         # Declared for type-checkers only — no runtime effect.
         _db_factory: Any
         _dispatcharr_client: Any
+        _fetch_streams: Any
         _filter_streams: Any
         _get_subscription_leagues: Any
         _match_streams: Any
@@ -88,27 +89,17 @@ class PreviewBuilder:
                         "[EVENT_EPG] Preview: M3U refresh error: %s - continuing anyway", e
                     )
 
-            # Step 1: Fetch streams from M3U group
-            try:
-                raw_streams = self._dispatcharr_client.m3u.list_streams(
-                    group_id=group.m3u_group_id,
-                    account_id=group.m3u_account_id,
-                )
-            except Exception as e:
-                result.errors.append(f"Failed to fetch streams: {e}")
+            # Step 1: Fetch streams exactly as a generation run does (#985). The
+            # run's fetch knows the source kinds a bare M3U-group listing does
+            # not: a Dispatcharr channel-source row reads its own channel
+            # group's streams (it has no M3U group, so listing by one returned
+            # the same unscoped set for every such row), a name-pattern source
+            # re-resolves its groups, and streams carry tvg_id and staleness.
+            streams = self._fetch_streams(group)
+            if not streams:
+                result.errors.append("No streams found for this source")
                 return result
 
-            if not raw_streams:
-                result.errors.append("No streams found in M3U group")
-                return result
-
-            # Convert DispatcharrStream objects to dict format. Carry tvg_id so
-            # EPG program matching (which resolves stream -> channel -> programs)
-            # is exercised in preview exactly as in a real generation run.
-            streams = [
-                {"id": s.id, "name": s.name, "tvg_id": s.tvg_id}
-                for s in raw_streams
-            ]
             result.total_streams = len(streams)
 
             # Step 2: Apply stream filtering
