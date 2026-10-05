@@ -121,15 +121,11 @@ class StreamMatching:
         # Load settings for event filtering
         with self._db_factory() as conn:
             row = conn.execute(
-                "SELECT include_final_events, "
-                "epg_xtream_fallback_enabled, epg_xtream_cache_hours, "
+                "SELECT epg_xtream_fallback_enabled, epg_xtream_cache_hours, "
                 "event_match_days_ahead, "
                 "tennis_majors_only "
                 "FROM settings WHERE id = 1"
             ).fetchone()
-            include_final_events = (
-                bool(row["include_final_events"]) if row else False
-            )
             xtream_fallback = bool(row["epg_xtream_fallback_enabled"]) if row else False
             xtream_cache_hours = (row["epg_xtream_cache_hours"] if row else 24) or 24
             match_days_ahead = (row["event_match_days_ahead"] if row else 3) or 3
@@ -171,7 +167,11 @@ class StreamMatching:
             group_id=group.id,
             search_leagues=search_leagues,
             include_leagues=include_leagues,
-            include_final_events=include_final_events,
+            # Final events are always included: the user toggle was removed in
+            # v2.10.0 and the settings column is vestigial. Reading it here kept
+            # the old default alive — the lifecycle kept the channel while the
+            # matcher dropped its event, leaving an empty guide (#977).
+            include_final_events=True,
             sport_durations=sport_durations,
             generation=getattr(self, "_generation", None),  # Use shared generation if set
             custom_regex_teams=group.custom_regex_teams,
