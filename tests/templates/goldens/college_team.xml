@@ -35,7 +35,7 @@
   <programme start="20260710220000 +0000" stop="20260711040000 +0000" channel="teamarr-team-1">
     <title lang="en">College Basketball: Final</title>
     <sub-title lang="en">Texas A&amp;M Aggies at Arkansas Razorbacks</sub-title>
-    <desc lang="en">The Arkansas Razorbacks and the Texas A&amp;M Aggies are still playing.</desc>
+    <desc lang="en">The game between the Arkansas Razorbacks and the Texas A&amp;M Aggies has not yet ended as of the last update.</desc>
     <icon src="ncaam/TexasAMAggies/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260711040000 +0000" stop="20260711100000 +0000" channel="teamarr-team-1">
@@ -91,7 +91,7 @@
   <programme start="20260712220000 +0000" stop="20260713040000 +0000" channel="teamarr-team-1">
     <title lang="en">College Basketball: Final</title>
     <sub-title lang="en">Kentucky Wildcats at Arkansas Razorbacks</sub-title>
-    <desc lang="en">The Arkansas Razorbacks and the Kentucky Wildcats are still playing.</desc>
+    <desc lang="en">The game between the Arkansas Razorbacks and the Kentucky Wildcats has not yet ended as of the last update.</desc>
     <icon src="ncaam/KentuckyWildcats/ArkansasRazorbacks/cover.png?style=1&amp;logo=true&amp;fallback=true" />
   </programme>
   <programme start="20260713040000 +0000" stop="20260713100000 +0000" channel="teamarr-team-1">

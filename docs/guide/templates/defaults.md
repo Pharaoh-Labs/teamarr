@@ -87,7 +87,7 @@ listings, so the same fact always reads the same way:
 | Matchup (soccer) | "Chelsea face Arsenal at Stamford Bridge." — sides in subtitle order |
 | Result, team channel | "The Detroit Lions lost to the Carolina Panthers, 32-26." — winner's score first |
 | Result, event channel | "The Carolina Panthers beat the Detroit Lions, 32-26." (`{event_result_text}`) |
-| Still playing | "The Detroit Lions and the Carolina Panthers are still playing." |
+| Not yet over | "The game between the Detroit Lions and the Carolina Panthers has not yet ended as of the last update." — the guide knows only what the last run saw |
 | Next game | "Next game: at the Arizona Cardinals, Sunday, Oct 11 at 4:25 PM EDT." |
 | Last game, no score | "Last game: vs the Carolina Panthers, Oct 4." |
 
@@ -107,7 +107,7 @@ listings, so the same fact always reads the same way:
   everywhere.
 - **Postgame** — when ESPN publishes a recap headline, the filler shows it
   via a `has_recap → {game_recap}` condition row; a game that's still
-  running gets the still-playing line; a final game with no recap falls to
+  running gets the not-yet-ended line; a final game with no recap falls to
   the result sentence. Tennis gates its constructed `{tennis_result}` on
   `is_final` instead — it's built from score data, not provider copy.
 

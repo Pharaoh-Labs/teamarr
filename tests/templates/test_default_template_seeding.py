@@ -911,10 +911,9 @@ def test_no_starter_writes_vs_without_its_full_stop(name):
 
 
 @pytest.mark.parametrize("name", ALL_STARTERS)
-def test_no_starter_prints_a_year_in_a_date_or_the_old_stiff_phrases(name):
+def test_no_starter_prints_a_year_in_a_date_or_the_old_next_game_phrase(name):
     for where, text in _all_text(_spec(name)):
         assert "{game_date}" not in text and "{game_date." not in text, f"{name} {where}"
-        assert "as of the last update" not in text, f"{name} {where}"
         assert "will be with" not in text, f"{name} {where}"
 
 
@@ -986,3 +985,27 @@ def test_the_pre_991_snapshot_is_frozen():
         json.dumps(PRE_STYLE_PASS, sort_keys=True).encode()
     ).hexdigest()
     assert digest == "8b21f12d444434e6d9e68f4fff347ff5bf349fa44ed83f617bab3e5b78cecc52"
+
+
+@pytest.mark.parametrize("name", ALL_STARTERS)
+def test_the_in_progress_line_admits_it_may_be_stale(name):
+    """The guide knows only what the last generation saw: the event may be
+    over. Every starter says so, in its own vocabulary."""
+    rows = [r for r in _spec(name)["postgame_conditional_rows"] if r["condition"] == "is_not_final"]
+    assert len(rows) == 1
+    assert rows[0]["template"].endswith("has not yet ended as of the last update.")
+
+
+def test_the_in_progress_line_uses_each_starters_noun():
+    def line(name):
+        return next(
+            r["template"]
+            for r in _spec(name)["postgame_conditional_rows"]
+            if r["condition"] == "is_not_final"
+        )
+
+    assert line("Default Team (Starter)").startswith("The game between ")
+    assert line("Soccer Team (Starter)").startswith("The match between ")
+    assert line("Soccer Club Event (Starter)").startswith("The match between {home_team_the} ")
+    assert line("Combat Event (Starter)").startswith("The bout between ")
+    assert line("Tennis Event (Starter)").startswith("The match between ")

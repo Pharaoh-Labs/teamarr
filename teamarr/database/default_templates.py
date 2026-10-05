@@ -590,9 +590,37 @@ _NEXT_SHORT = (
 )
 
 
+def _not_ended(noun: str, first: str, second: str) -> str:
+    """The in-progress line. Deliberately "as of the last update": the guide
+    only knows what the last generation saw, so the event may well be over."""
+    return f"The {noun} between {first} and {second} has not yet ended as of the last update."
+
+
 def _match(text: str) -> str:
     """The soccer register of a shared phrase: 'match', never 'game'."""
     return text.replace("Next game:", "Next match:").replace("Last game:", "Last match:")
+
+
+def _team_postgame_rows(noun: str) -> list[dict]:
+    """Team after-game rows (#420): has_recap fires only when the provider
+    published a recap; a game still running gets the not-yet-ended line; a
+    final game without a recap falls to the constructed result sentence."""
+    return [
+        {
+            "condition": "has_recap",
+            "condition_value": None,
+            "template": "{game_recap.last}",
+            "priority": 10,
+            "label": "Recap (provider)",
+        },
+        {
+            "condition": "is_not_final",
+            "condition_value": None,
+            "template": _not_ended(noun, "{team_name_the}", "{opponent_the.last}"),
+            "priority": 50,
+            "label": "In progress",
+        },
+    ]
 
 
 def _team_base(**overrides) -> dict:
@@ -648,22 +676,7 @@ def _team_base(**overrides) -> dict:
         # is_final+{game_recap} pairing as the primary mechanism — it fires
         # only when the provider actually published a recap (a final game
         # without one falls straight to the constructed result line).
-        "postgame_conditional_rows": [
-            {
-                "condition": "has_recap",
-                "condition_value": None,
-                "template": "{game_recap.last}",
-                "priority": 10,
-                "label": "Recap (provider)",
-            },
-            {
-                "condition": "is_not_final",
-                "condition_value": None,
-                "template": "{team_name_the} and {opponent_the.last} are still playing.",
-                "priority": 50,
-                "label": "In progress",
-            },
-        ],
+        "postgame_conditional_rows": _team_postgame_rows("game"),
         "idle_content": {
             "title": "No {team_name} Game Today",
             "subtitle": _NEXT_SHORT,
@@ -748,11 +761,11 @@ def _team_base(**overrides) -> dict:
     return base
 
 
-def _event_postgame_rows(still_playing: str) -> list[dict]:
+def _event_postgame_rows(not_ended: str) -> list[dict]:
     """Event after-game rows: the provider recap when one is published, else
-    the still-playing line while the event runs. A final event with no recap
-    falls to the base result sentence. `still_playing` names the sides in the
-    starter's own subtitle order."""
+    the not-yet-ended line while the event runs. A final event with no recap
+    falls to the base result sentence. `not_ended` uses the starter's own
+    noun and names the sides in its subtitle order."""
     return [
         {
             "condition": "has_recap",
@@ -764,7 +777,7 @@ def _event_postgame_rows(still_playing: str) -> list[dict]:
         {
             "condition": "is_not_final",
             "condition_value": None,
-            "template": still_playing,
+            "template": not_ended,
             "priority": 50,
             "label": "In progress",
         },
@@ -816,7 +829,7 @@ def _event_base(**overrides) -> dict:
         # a still-running game gets the in-progress line; a final game with
         # no recap falls to the base "Final: {event_result}".
         "postgame_conditional_rows": _event_postgame_rows(
-            "{away_team_the} and {home_team_the} are still playing."
+            _not_ended("game", "{away_team_the}", "{home_team_the}")
         ),
         "idle_content": {
             # {league}, not {team_name} — event templates have no "our team"
@@ -918,6 +931,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
     # naming; W-D-L records come through the generic record vars.
     _team_base(
         name="Soccer Team (Starter)",
+        postgame_conditional_rows=_team_postgame_rows("match"),
         # Match register (#355 item 5): soccer filler says 'match', never
         # 'game'. College keeps the base text — 'game' IS its register.
         idle_content={
@@ -1156,7 +1170,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         name="Soccer Club Event (Starter)",
         # Home side first, as the soccer subtitle lists it.
         postgame_conditional_rows=_event_postgame_rows(
-            "{home_team_the} and {away_team_the} are still playing."
+            _not_ended("match", "{home_team_the}", "{away_team_the}")
         ),
         pregame_fallback={
             "title": "Coming up: {gracenote_category} at {game_time}",
@@ -1231,7 +1245,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": "The bout between {away_team} and {home_team} is still under way.",
+                "template": _not_ended("bout", "{away_team}", "{home_team}"),
                 "priority": 50,
                 "label": "In progress",
             },
@@ -1264,7 +1278,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
         name="International Event (Starter)",
         # Home side first, as the soccer subtitle lists it.
         postgame_conditional_rows=_event_postgame_rows(
-            "{home_team_the} and {away_team_the} are still playing."
+            _not_ended("match", "{home_team_the}", "{away_team_the}")
         ),
         title_format="{gracenote_category} {year}",
         # "NED v JPN"
@@ -1351,7 +1365,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": "{player1} and {player2} are still playing.",
+                "template": _not_ended("match", "{player1}", "{player2}"),
                 "priority": 50,
                 "label": "In progress",
             },
@@ -1421,7 +1435,9 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": "{race_name} {session_name} is still under way.",
+                "template": (
+                    "{race_name} {session_name} has not yet ended as of the last update."
+                ),
                 "priority": 50,
                 "label": "In progress",
             },

@@ -410,7 +410,7 @@ def test_postgame_not_final_reads_coherently(resolver):
         r for r in spec["postgame_conditional_rows"] if r["condition"] == "is_not_final"
     )
     out = resolver.resolve(not_final["template"], ctx)
-    assert out.startswith("The Boston Celtics and the Detroit Pistons are still playing.")
+    assert out.startswith("The game between the Boston Celtics and the Detroit Pistons")
 
 
 def test_combat_title_and_channel_name(resolver):
