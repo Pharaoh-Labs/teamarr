@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from teamarr.consumers.source_discovery import (
     EVIDENCE_WINDOW_DAYS,
     TIER_GAMES,
+    accept_candidate,
     discovery_status,
     run_discovery_scan,
     suggestion_tier,
@@ -134,3 +135,22 @@ def dismiss_candidate(candidate_id: int) -> dict:
 def restore_candidate(candidate_id: int) -> dict:
     """Undo a dismissal."""
     return _set_status(candidate_id, "new")
+
+
+@router.post("/candidates/{candidate_id}/accept", status_code=status.HTTP_201_CREATED)
+def accept(candidate_id: int) -> dict:
+    """Create a managed source from a candidate.
+
+    A managed source is disabled when it matches nothing for two weeks and
+    re-enabled when its group carries games again; editing it by hand makes
+    it an ordinary source that is never touched.
+    """
+    with get_db() as conn:
+        candidates = {c.id: c for c in get_candidates(conn, now_utc(), EVIDENCE_WINDOW_DAYS)}
+        candidate = candidates.get(candidate_id)
+        if candidate is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
+        if candidate.status == "accepted":
+            raise HTTPException(status.HTTP_409_CONFLICT, "Candidate is already a source")
+        source_id = accept_candidate(conn, candidate)
+    return {"id": candidate_id, "status": "accepted", "source_group_id": source_id}

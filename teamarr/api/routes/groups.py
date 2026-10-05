@@ -315,6 +315,7 @@ class GroupResponse(BaseModel):
     # (None = every group). Created and enabled from Matching → Dispatcharr
     # as a Stream Source; only its scope is editable here.
     is_channel_source: bool = False
+    managed: bool = False  # created by source discovery (#997)
     dispatcharr_channel_group_id: int | None = None
 
 
@@ -746,6 +747,7 @@ def list_groups(
                 overlap_handling=g.overlap_handling,
                 enabled=g.enabled,
                 is_channel_source=g.is_channel_source,
+                managed=g.managed,
                 dispatcharr_channel_group_id=g.dispatcharr_channel_group_id,
                 subscription_leagues=g.subscription_leagues,
                 subscription_soccer_mode=g.subscription_soccer_mode,
@@ -934,6 +936,7 @@ def create_group(request: GroupCreate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        managed=group.managed,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
@@ -1487,6 +1490,7 @@ def get_group_by_id(group_id: int):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        managed=group.managed,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
@@ -1733,6 +1737,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        managed=group.managed,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,

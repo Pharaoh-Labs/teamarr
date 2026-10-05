@@ -36,15 +36,25 @@ from typing import Any
 
 from teamarr.consumers.matching import StreamCategory
 from teamarr.consumers.stream_match_cache import NullStreamMatchCache
-from teamarr.database.groups import EventEPGGroup, get_all_groups
+from teamarr.database.groups import (
+    EventEPGGroup,
+    create_group,
+    delete_group,
+    get_all_groups,
+    get_group_by_name,
+    set_group_managed,
+    set_managed_source_enabled,
+)
 from teamarr.database.source_candidates import (
     CandidateEvidence,
     ScanEvidence,
     dismissed_group_ids,
+    get_candidates,
     record_scan,
+    set_candidate_status,
 )
 from teamarr.services.group_pattern import resolve_group_name_pattern
-from teamarr.utilities.tz import now_utc
+from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +70,13 @@ EVIDENCE_WINDOW_DAYS = 7
 GAME_MATCHES_REQUIRED = 3
 # ... and when the group's name also names a subscribed league.
 GAME_MATCHES_REQUIRED_WITH_NAME = 1
+
+# A managed source that has matched nothing for this long is disabled ...
+MANAGED_IDLE_DAYS = 14
+# ... or this long when its group's name still names a subscribed league.
+MANAGED_IDLE_DAYS_WITH_NAME = 21
+# A disabled managed source whose group has been gone this long is removed.
+MANAGED_GONE_DAYS = 14
 
 # Why a candidate is suggested, strongest first.
 TIER_GAMES = "games"
@@ -149,6 +166,9 @@ class ScanSummary:
     skipped_empty: int = 0
     skipped_dismissed: int = 0
     groups_with_games: int = 0
+    sources_disabled: int = 0
+    sources_reenabled: int = 0
+    sources_removed: int = 0
     streams_matched_against: int = 0
     errors: int = 0
     duration_seconds: float = 0.0
@@ -174,6 +194,10 @@ class SourceDiscovery:
         """M3U group ids some source already reads, by id or by name pattern."""
         taken: set[int] = set()
         for source in get_all_groups(conn, include_disabled=True):
+            # A managed source that was retired is scanned again: games in its
+            # group are what bring it back.
+            if source.managed and not source.enabled:
+                continue
             if source.m3u_group_id:
                 taken.add(source.m3u_group_id)
             if source.m3u_group_name_pattern_enabled and source.m3u_group_name_pattern:
@@ -280,6 +304,9 @@ class SourceDiscovery:
 
         with self._db_factory() as conn:
             record_scan(conn, found, now)
+            maintain_managed_sources(
+                conn, now, {g.id for g in live_groups}, {e.m3u_group_id: e for e in found}, summary
+            )
 
         summary.duration_seconds = round((now_utc() - started).total_seconds(), 1)
         logger.info(
@@ -295,6 +322,110 @@ class SourceDiscovery:
             summary.groups_with_games,
         )
         return summary
+
+
+def accept_candidate(conn: Connection, candidate: CandidateEvidence) -> int:
+    """Turn a candidate into a managed source and return the new source's id.
+
+    The source follows the global subscription and matches by stream name —
+    the kind of evidence that qualified it.
+    """
+    name = candidate.m3u_group_name
+    suffix = 2
+    while get_group_by_name(conn, name) is not None:
+        name = f"{candidate.m3u_group_name} ({suffix})"
+        suffix += 1
+    source_id = create_group(
+        conn,
+        name=name,
+        leagues=[],
+        m3u_group_id=candidate.m3u_group_id,
+        m3u_group_name=candidate.m3u_group_name,
+        m3u_account_id=candidate.m3u_account_ids[0] if candidate.m3u_account_ids else None,
+        name_match_enabled=True,
+    )
+    set_group_managed(conn, source_id, True)
+    set_candidate_status(conn, candidate.id, "accepted", source_group_id=source_id)
+    logger.info("[DISCOVERY] Accepted %r as managed source id=%d", name, source_id)
+    return source_id
+
+
+def _age_days(stamp: str | None, now: datetime) -> float | None:
+    parsed = parse_db_timestamp(stamp) if stamp else None
+    return (now - parsed).total_seconds() / 86400 if parsed else None
+
+
+def maintain_managed_sources(
+    conn: Connection,
+    now: datetime,
+    live_group_ids: set[int],
+    evidence: dict[int, ScanEvidence],
+    summary: ScanSummary,
+) -> None:
+    """Retire managed sources that went quiet and bring back ones with games again.
+
+    Only sources discovery created are touched, and only while still marked
+    managed: a hand edit clears the mark, and a hand-made source never has it.
+
+    * enabled, matched nothing for the idle window -> disabled (settings kept)
+    * disabled, its group shows games in this scan -> enabled again
+    * disabled, its group gone for the gone window -> removed
+    """
+    named = {
+        c.m3u_group_id: bool(c.name_leagues)
+        for c in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted")
+    }
+    created = {
+        row["id"]: row["created_at"]
+        for row in conn.execute("SELECT id, created_at FROM event_epg_groups WHERE managed = 1")
+    }
+    seen = {
+        row["id"]: row["source_last_seen"]
+        for row in conn.execute(
+            "SELECT id, source_last_seen FROM event_epg_groups WHERE managed = 1"
+        )
+    }
+    for source in get_all_groups(conn, include_disabled=True):
+        if not source.managed:
+            continue
+        group_live = source.m3u_group_id in live_group_ids
+        if source.enabled:
+            idle = _age_days(source.last_matched_at or created.get(source.id), now)
+            limit = (
+                MANAGED_IDLE_DAYS_WITH_NAME
+                if named.get(source.m3u_group_id)
+                else MANAGED_IDLE_DAYS
+            )
+            if idle is not None and idle >= limit:
+                set_managed_source_enabled(conn, source.id, False)
+                summary.sources_disabled += 1
+                logger.info(
+                    "[DISCOVERY] Disabled managed source %r: no match in %d days",
+                    source.name, int(idle),
+                )
+            continue
+        found = evidence.get(source.m3u_group_id)
+        if group_live:
+            # Generation runs stop looking at a disabled source, so the scan
+            # keeps its "last seen" current; "gone" is counted from here.
+            conn.execute(
+                "UPDATE event_epg_groups SET source_last_seen = ? WHERE id = ?",
+                (to_db_utc(now), source.id),
+            )
+        if group_live and found and found.game_matches:
+            set_managed_source_enabled(conn, source.id, True)
+            summary.sources_reenabled += 1
+            logger.info("[DISCOVERY] Re-enabled managed source %r: games again", source.name)
+        elif not group_live:
+            gone = _age_days(seen.get(source.id) or created.get(source.id), now)
+            if gone is not None and gone >= MANAGED_GONE_DAYS:
+                delete_group(conn, source.id)
+                summary.sources_removed += 1
+                logger.info(
+                    "[DISCOVERY] Removed managed source %r: group gone %d days",
+                    source.name, int(gone),
+                )
+    conn.commit()
 
 
 def _stream_count(group: Any) -> int | None:

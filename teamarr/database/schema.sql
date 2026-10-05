@@ -748,6 +748,8 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     name_match_enabled BOOLEAN DEFAULT 1,        -- (ahow) Match streams whose name identifies a specific event (TEAM_VS_TEAM/EVENT_CARD/RACING) — the default matching type. DEFAULT 1 backfills existing sources on upgrade. One of three declared matching types alongside team_streams_enabled (Team) and epg_match_enabled (EPG).
     team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
     epg_match_enabled BOOLEAN DEFAULT 0,         -- (183.6) Use Dispatcharr EPG program data to match static-named linear streams (ESPN, NBA1) and time-window them. Requires a Dispatcharr build with /api/epg/programs/search/ (0.24.0+). No global switch — per-source opt-in (3lp1).
+    managed BOOLEAN DEFAULT 0,                   -- (#997) Created by source discovery. Only a managed source is ever disabled or removed on its own; a hand edit clears the flag.
+    last_matched_at TIMESTAMP,                   -- (#997) Last generation run in which this source matched a stream
     is_channel_source BOOLEAN DEFAULT 0,         -- (183.9) System-managed source group whose candidate streams come from curated Dispatcharr channels (their assigned streams + each channel's own EPG) instead of an M3U group. Auto-created/toggled by settings.epg_channel_source_enabled; hidden from the Event Groups UI.
     dispatcharr_channel_group_id INTEGER,        -- (#542) The Dispatcharr channel group a channel-source row reads. One row per selected group; NULL = the catch-all row used when no groups are selected (every group).
 

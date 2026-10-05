@@ -355,3 +355,143 @@ def test_a_scan_is_skipped_without_dispatcharr_and_only_one_runs_at_a_time(db, m
         assert "already running" in sd.run_discovery_scan(get_db)["reason"]
     finally:
         sd._scan_lock.release()
+
+
+# --- managed sources ---------------------------------------------------------------
+
+
+def _accept_first(api):
+    _seed()
+    cid = api.get("/api/v1/source-discovery/candidates").json()["candidates"][0]["id"]
+    resp = api.post(f"/api/v1/source-discovery/candidates/{cid}/accept")
+    assert resp.status_code == 201, resp.text
+    return cid, resp.json()["source_group_id"]
+
+
+def _source(source_id):
+    from teamarr.database.groups import get_group
+
+    with get_db() as conn:
+        return get_group(conn, source_id)
+
+
+def _backdate(source_id, **cols):
+    with get_db() as conn:
+        for col, days in cols.items():
+            conn.execute(
+                f"UPDATE event_epg_groups SET {col} = datetime('now', ?) WHERE id = ?",
+                (f"-{days} days", source_id),
+            )
+        conn.commit()
+
+
+def _maintain(live=(1,), evidence=None):
+    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+    from teamarr.utilities.tz import now_utc
+
+    summary = ScanSummary()
+    with get_db() as conn:
+        maintain_managed_sources(conn, now_utc(), set(live), evidence or {}, summary)
+    return summary
+
+
+def test_accepting_a_candidate_creates_a_managed_source(api):
+    cid, source_id = _accept_first(api)
+    source = _source(source_id)
+    assert (source.name, source.m3u_group_id, source.managed, source.enabled) == (
+        "USA: ESPN PLUS", 1, True, True)
+    listed = api.get("/api/v1/groups").json()["groups"]
+    assert next(g for g in listed if g["id"] == source_id)["managed"] is True
+    names = [c["m3u_group_name"]
+             for c in api.get("/api/v1/source-discovery/candidates").json()["candidates"]]
+    assert "USA: ESPN PLUS" not in names
+    assert api.post(f"/api/v1/source-discovery/candidates/{cid}/accept").status_code == 409
+
+
+def test_a_hand_edit_makes_a_managed_source_the_users_own(api):
+    _, source_id = _accept_first(api)
+    assert api.put(f"/api/v1/groups/{source_id}",
+                   json={"subscription_leagues": ["nhl"]}).status_code == 200
+    assert _source(source_id).managed is False
+
+
+def test_disabling_by_hand_also_claims_it_so_discovery_never_turns_it_back_on(api):
+    _, source_id = _accept_first(api)
+    assert api.post(f"/api/v1/groups/{source_id}/disable").status_code == 200
+    summary = _maintain(evidence={1: ScanEvidence(1, "USA: ESPN PLUS", game_matches=9)})
+    source = _source(source_id)
+    assert (source.managed, source.enabled, summary.sources_reenabled) == (False, False, 0)
+
+
+def test_an_idle_managed_source_is_disabled_and_comes_back_with_games(api):
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=15)
+    assert _maintain().sources_disabled == 1
+    source = _source(source_id)
+    assert (source.enabled, source.managed) == (False, True)
+    assert _maintain(evidence={1: ScanEvidence(1, "USA: ESPN PLUS")}).sources_reenabled == 0
+    again = _maintain(evidence={1: ScanEvidence(1, "USA: ESPN PLUS", game_matches=2)})
+    assert again.sources_reenabled == 1 and _source(source_id).enabled is True
+
+
+def test_a_recent_match_keeps_a_managed_source(api):
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=40, last_matched_at=3)
+    assert _maintain().sources_disabled == 0
+
+
+def test_a_hand_made_source_is_never_touched_however_idle(api):
+    with get_db() as conn:
+        source_id = create_group(conn, name="Mine", leagues=[], m3u_group_id=77)
+        conn.commit()
+    _backdate(source_id, created_at=400)
+    summary = _maintain(live=())
+    assert (summary.sources_disabled, summary.sources_removed) == (0, 0)
+    assert _source(source_id).enabled is True
+
+
+def test_a_retired_source_is_removed_only_once_its_group_has_been_gone_long_enough(api):
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=15)
+    _maintain(live=())                     # idle -> disabled
+    assert _maintain(live=()).sources_removed == 1   # created 15 days ago, group gone
+    assert _source(source_id) is None
+
+
+def test_a_retired_source_whose_group_still_exists_is_kept(api):
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=60)
+    _maintain()
+    assert _maintain().sources_removed == 0
+    assert _source(source_id).enabled is False
+
+
+def test_gone_is_counted_from_the_last_scan_that_saw_the_group(api):
+    """Retired long ago, group vanished yesterday: not removed yet."""
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=60)
+    _maintain()            # disabled
+    _maintain()            # still listed: last seen is now
+    assert _maintain(live=()).sources_removed == 0
+    _backdate(source_id, source_last_seen=15)
+    assert _maintain(live=()).sources_removed == 1
+
+
+def test_a_retired_managed_sources_group_is_scanned_again(api):
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=15)
+    _maintain()
+    summary, m3u, _ = _scan([_group(1, "USA: ESPN PLUS")], {1: [_stream(1, "nhl: A vs B")]})
+    assert m3u.read == [1] and summary.sources_reenabled == 1
+    assert _source(source_id).enabled is True
+
+
+def test_a_run_that_matches_stamps_the_source(db):
+    from teamarr.database.groups import get_group, update_group_stats
+
+    with get_db() as conn:
+        source_id = create_group(conn, name="S", leagues=[], m3u_group_id=5)
+        update_group_stats(conn, source_id, stream_count=10, matched_count=0)
+        assert get_group(conn, source_id).last_matched_at is None
+        update_group_stats(conn, source_id, stream_count=10, matched_count=4)
+        assert get_group(conn, source_id).last_matched_at is not None
