@@ -320,12 +320,13 @@ Motorsports are **Event Only** - no team import available.
 | IndyCar Series | `indycar` | ESPN | Event |
 | IMSA WeatherTech SportsCar Championship | `imsa` | TSDB | Event |
 | FIA World Endurance Championship | `wec` | TSDB | Event |
+| MotoGP World Championship | `motogp` | TSDB | Event |
 
 Motorsports events are race weekends made up of multiple sessions (Practice,
 Qualifying, Race), each exposed as its own EPG program block. See the
-[TSDB provider docs](providers/tsdb.md) for the IMSA/WEC session grouping.
-MotoGP (`motogp`) is currently disabled (`leagues.enabled = 0`) because ESPN's
-`racing/motogp` endpoint returns no usable schedule or logo data.
+[TSDB provider docs](providers/tsdb.md) for the IMSA/WEC/MotoGP session grouping.
+MotoGP comes from TheSportsDB (premium key) because ESPN's `racing/motogp`
+endpoint returns no usable schedule; Moto2 and Moto3 are not configured.
 
 ---
 

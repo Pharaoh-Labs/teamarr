@@ -40,7 +40,7 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
 ## Supported Leagues
 
-TSDB serves **49 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
+TSDB serves **50 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
 
 | League | Code | TSDB ID | Sport |
 |--------|------|---------|-------|------|
@@ -66,6 +66,7 @@ TSDB serves **49 leagues** in total. The table below is representative, not exha
 | Northern Irish Premiership | `nifl.1` | 4659 | Soccer |
 | IMSA SportsCar Championship | `imsa` | 4488 | Motor Racing |
 | FIA World Endurance Championship | `wec` | 4413 | Motor Racing |
+| MotoGP World Championship | `motogp` | 4407 | Motor Racing |
 | English Rugby League Super League | `super-league` | 4415 | Rugby |
 
 ## Event Resolution
@@ -76,7 +77,7 @@ TSDB uses a three-step fallback chain when fetching events:
 2. **`eventsnextleague.php`** — upcoming events filtered by date (fallback; kept after the premium-only change because `eventsday` queries by league *name* while this queries by *ID*, guarding against provider-side name drift)
 3. **`eventsseason.php`** — full-season events filtered by date (last resort, gated to sparse leagues like Unrivaled where the day endpoints return nothing)
 
-### Racing Leagues (IMSA, WEC)
+### Racing Leagues (IMSA, WEC, MotoGP)
 
 Motorsport leagues bypass the fallback chain entirely. `eventsday.php` and
 `eventsnextleague.php` both return "Invalid League ID" for `imsa`/`wec`, so
@@ -89,6 +90,13 @@ groups these by `(strSeason, intRound)` into the same `Event(sessions=[...],
 circuit_name=...)` shape the racing pipeline expects from ESPN/static
 providers — one EPG program block per session (Practice, Qualifying,
 Hyperpole, Race).
+
+MotoGP's weekend as TSDB writes it is `<X> Free Practice 1`, `<X> Practice`,
+`<X> Free Practice 2`, `<X> Qualifying 1`, `<X> Qualifying 2`, `<X> Sprint
+Race` and `<X> GP`. The event written as a Grand Prix is the race; a stream
+labelled just "Qualifying" covers both qualifying rounds. Pre-season tests
+(Valencia, Sepang, Buriram) arrive under round 0 and are not race weekends,
+so they are dropped.
 
 ## Rate Limiting
 
@@ -148,4 +156,4 @@ Other season-adjacent fields (`strSeason` year string, `strGroup`) don't help. P
 |------|---------|
 | `teamarr/providers/tsdb/provider.py` | TSDBProvider class |
 | `teamarr/providers/tsdb/client.py` | HTTP client with preemptive rate limiting |
-| `teamarr/providers/tsdb/racing.py` | Race-weekend session grouping (IMSA, WEC) |
+| `teamarr/providers/tsdb/racing.py` | Race-weekend session grouping (IMSA, WEC, MotoGP) |

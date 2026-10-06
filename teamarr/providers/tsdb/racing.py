@@ -17,13 +17,22 @@ logger = logging.getLogger(__name__)
 
 # Keywords that mark a TSDB event as a non-race session (practice,
 # qualifying, etc). The event in a group whose name contains none of these
-# is the race itself.
+# is the race itself. "sprint" is here for MotoGP, whose Saturday "<X> Sprint
+# Race" would otherwise read as the race and demote the Sunday "<X> GP" to a
+# session (#604).
 _SESSION_KEYWORDS_RE = re.compile(
-    r"practice|qualifying|hyperpole|warm|prologue|fp\d|session", re.IGNORECASE
+    r"practice|qualifying|hyperpole|warm|prologue|fp\d|session|sprint|\btest\b", re.IGNORECASE
 )
+# A name that ends in the race itself, as MotoGP writes it: "Thailand GP".
+_GRAND_PRIX_RE = re.compile(r"^(?P<base>.+?)\s+(?:GP|Grand Prix)$", re.IGNORECASE)
 
 _FREE_PRACTICE_RE = re.compile(r"^(?:free practice|fp)\s*(\d+)$", re.IGNORECASE)
+# MotoGP's Friday afternoon timed session is just "Practice" (#604).
+_PRACTICE_RE = re.compile(r"^practice$", re.IGNORECASE)
 _WARMUP_RE = re.compile(r"^warm[\s-]?up$", re.IGNORECASE)
+# MotoGP: "Qualifying 1" / "Qualifying 2" (#604); WEC: "Qualifying - LMP2".
+_NUMBERED_QUALIFYING_RE = re.compile(r"^qualifying\s*(\d)$", re.IGNORECASE)
+_SPRINT_RE = re.compile(r"^sprint(?:\s+race)?$", re.IGNORECASE)
 _QUALIFYING_RE = re.compile(
     r"^(?:hyperpole\s+)?qualifying(?:\s*[-–]\s*(.+))?$", re.IGNORECASE
 )
@@ -43,21 +52,39 @@ def _parse_session_label(event_name: str, race_name: str | None) -> tuple[str, s
 
     `race_name` is the event name identified as the race itself (if any); an
     exact match short-circuits to `("race", "Race")`, and is also stripped as
-    a prefix from other event names in the group before classification.
+    a prefix from other event names in the group before classification. A
+    race written "<X> GP" strips as "<X>", since its sessions are
+    "<X> Free Practice 1", not "<X> GP Free Practice 1" (#604).
     """
     if race_name and event_name == race_name:
         return "race", "Race"
 
     label = event_name
-    if race_name and event_name.startswith(race_name):
-        label = event_name[len(race_name):].strip()
+    if race_name:
+        base = race_name
+        if match := _GRAND_PRIX_RE.match(race_name):
+            base = match.group("base")
+        if event_name.startswith(base):
+            label = event_name[len(base):].strip()
 
     if match := _FREE_PRACTICE_RE.match(label):
         num = match.group(1)
         return f"fp{num}", f"Practice {num}"
 
+    if _PRACTICE_RE.match(label):
+        return "practice", "Practice"
+
     if _WARMUP_RE.match(label):
         return "warmup", "Warm Up"
+
+    if match := _NUMBERED_QUALIFYING_RE.match(label):
+        # "qualifying_<n>" so a stream saying just "Qualifying" covers both
+        # rounds, the way "qualifying_<class>" works for WEC.
+        num = match.group(1)
+        return f"qualifying_{num}", f"Qualifying {num}"
+
+    if _SPRINT_RE.match(label):
+        return "sprint", "Sprint"
 
     if match := _QUALIFYING_RE.match(label):
         class_part = (match.group(1) or "").strip()
@@ -138,6 +165,18 @@ def _is_race_event(event_name: str) -> bool:
     return not _SESSION_KEYWORDS_RE.search(event_name)
 
 
+def _is_test_round(round_: str, group: list[dict]) -> bool:
+    """TSDB files pre-season tests under round 0 (#604).
+
+    MotoGP's Valencia, Sepang and Buriram tests all share ``intRound=0``;
+    grouped, they would make one bogus "weekend" dated the previous November
+    with nine sessions. They are not race weekends and are dropped.
+    """
+    return round_ == "0" and all(
+        re.search(r"\btest\b", e.get("strEvent", ""), re.IGNORECASE) for e in group
+    )
+
+
 def parse_racing_events(
     events: list[dict], league: str, sport: str, provider_name: str
 ) -> list[Event]:
@@ -168,6 +207,13 @@ def parse_racing_events(
 
     parsed_events = []
     for (season, round_), group in groups.items():
+        if _is_test_round(round_, group):
+            logger.debug(
+                "[TSDB_RACING] %s: dropped %d pre-season test session(s) filed under round 0",
+                league,
+                len(group),
+            )
+            continue
         event = _parse_round_group(group, season, round_, league, sport, provider_name)
         if event:
             parsed_events.append(event)
@@ -187,7 +233,11 @@ def _parse_round_group(
 ) -> Event | None:
     ordered = sorted(group, key=lambda e: _event_start_time(e) or datetime.min.replace(tzinfo=UTC))
 
-    race_event = next((e for e in ordered if _is_race_event(e.get("strEvent", ""))), None)
+    # The race: the event written as a Grand Prix ("Thailand GP") when there is
+    # one, else the event whose name carries no session keyword.
+    race_event = next(
+        (e for e in ordered if _GRAND_PRIX_RE.match(e.get("strEvent", ""))), None
+    ) or next((e for e in ordered if _is_race_event(e.get("strEvent", ""))), None)
     primary = race_event or ordered[-1]
     race_name = race_event.get("strEvent") if race_event else None
 
