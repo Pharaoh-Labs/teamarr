@@ -26,6 +26,9 @@ class SportsSubscription:
     leagues: list[str] = field(default_factory=list)
     soccer_mode: str | None = None  # NULL, 'all', 'teams', 'manual'
     soccer_followed_teams: list[dict] | None = None
+    # (#997) Leagues / sports for which source discovery adds sources on its own.
+    auto_source_leagues: list[str] = field(default_factory=list)
+    auto_source_sports: list[str] = field(default_factory=list)
     updated_at: str | None = None
 
 
@@ -95,11 +98,22 @@ def _row_to_subscription(row) -> SportsSubscription:
         except (json.JSONDecodeError, TypeError):
             pass
 
+    def _json_list(key: str) -> list:
+        if key not in row.keys() or not row[key]:
+            return []
+        try:
+            value = json.loads(row[key])
+        except (json.JSONDecodeError, TypeError):
+            return []
+        return value if isinstance(value, list) else []
+
     return SportsSubscription(
         id=row["id"],
         leagues=leagues,
         soccer_mode=row["soccer_mode"],
         soccer_followed_teams=soccer_followed_teams,
+        auto_source_leagues=_json_list("auto_source_leagues"),
+        auto_source_sports=_json_list("auto_source_sports"),
         updated_at=row["updated_at"],
     )
 
@@ -207,6 +221,8 @@ def update_subscription(
     leagues: list[str] | None | EllipsisType = ...,
     soccer_mode: str | None | EllipsisType = ...,
     soccer_followed_teams: list[dict] | None | EllipsisType = ...,
+    auto_source_leagues: list[str] | EllipsisType = ...,
+    auto_source_sports: list[str] | EllipsisType = ...,
 ) -> SportsSubscription:
     """Update the global sports subscription.
 
@@ -239,6 +255,14 @@ def update_subscription(
         params.append(
             json.dumps(soccer_followed_teams) if soccer_followed_teams else None
         )
+
+    if auto_source_leagues is not ...:
+        updates.append("auto_source_leagues = ?")
+        params.append(json.dumps(sorted({c.lower() for c in auto_source_leagues})))
+
+    if auto_source_sports is not ...:
+        updates.append("auto_source_sports = ?")
+        params.append(json.dumps(sorted({c.lower() for c in auto_source_sports})))
 
     if updates:
         updates.append("updated_at = CURRENT_TIMESTAMP")

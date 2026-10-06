@@ -106,6 +106,7 @@ class SchedulerSettings:
     # Source discovery (#997): 'off' | 'suggest', on its own cron
     source_discovery_mode: str = "off"
     source_discovery_cron: str = "0 11 * * *"
+    source_discovery_auto_max_streams: int = 1000
 
 
 @dataclass

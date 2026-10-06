@@ -317,6 +317,7 @@ class GroupResponse(BaseModel):
     # as a Stream Source; only its scope is editable here.
     is_channel_source: bool = False
     managed: bool = False  # created by source discovery (#997)
+    auto_added_at: str | None = None  # discovery added it on its own (#997)
     dispatcharr_channel_group_id: int | None = None
 
 
@@ -749,6 +750,7 @@ def list_groups(
                 enabled=g.enabled,
                 is_channel_source=g.is_channel_source,
                 managed=g.managed,
+                auto_added_at=g.auto_added_at,
                 dispatcharr_channel_group_id=g.dispatcharr_channel_group_id,
                 subscription_leagues=g.subscription_leagues,
                 subscription_soccer_mode=g.subscription_soccer_mode,
@@ -938,6 +940,7 @@ def create_group(request: GroupCreate):
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
         managed=group.managed,
+        auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
@@ -1492,6 +1495,7 @@ def get_group_by_id(group_id: int):
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
         managed=group.managed,
+        auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
@@ -1739,6 +1743,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
         managed=group.managed,
+        auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,

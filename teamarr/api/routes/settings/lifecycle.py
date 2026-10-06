@@ -117,6 +117,15 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
         update_scheduler_settings,
     )
 
+    if (
+        update.source_discovery_auto_max_streams is not None
+        and update.source_discovery_auto_max_streams < 1
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source_discovery_auto_max_streams must be at least 1",
+        )
+
     if update.interval_minutes is not None and update.interval_minutes < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -144,6 +153,7 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
             channel_reset_cron=update.channel_reset_cron,
             source_discovery_mode=update.source_discovery_mode,
             source_discovery_cron=update.source_discovery_cron,
+            source_discovery_auto_max_streams=update.source_discovery_auto_max_streams,
         )
 
     # Apply scheduler state change immediately if enabled was updated

@@ -68,11 +68,13 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
 
   const [enabled, setEnabled] = useState(false)
   const [cron, setCron] = useState("")
+  const [maxStreams, setMaxStreams] = useState("1000")
   const [synced, setSynced] = useState<typeof schedulerData>(undefined)
   if (schedulerData && schedulerData !== synced) {
     setSynced(schedulerData)
     setEnabled(schedulerData.source_discovery_mode !== "off")
     setCron(schedulerData.source_discovery_cron ?? "")
+    setMaxStreams(String(schedulerData.source_discovery_auto_max_streams ?? 1000))
   }
 
   const { data } = useQuery({
@@ -110,9 +112,11 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
 
   const saveSchedule = async () => {
     try {
+      const cap = Number.parseInt(maxStreams, 10)
       await updateScheduler.mutateAsync({
         source_discovery_mode: enabled ? "suggest" : "off",
         source_discovery_cron: cron,
+        ...(Number.isFinite(cap) && cap > 0 ? { source_discovery_auto_max_streams: cap } : {}),
       })
       toast.success("Source discovery settings saved")
     } catch (err) {
@@ -187,6 +191,7 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
           <div className="text-xs text-muted-foreground">
             {evidenceText(c, leagueName)}
             {c.same_events_as && ` · same events as ${c.same_events_as}`}
+            {c.status !== "dismissed" && c.auto_hold && ` · not added automatically: ${c.auto_hold}`}
           </div>
         )}
       </div>
@@ -239,7 +244,9 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
         <p className="text-xs text-muted-foreground">
           Teamarr can look through every M3U group that is not already a source and suggest the
           ones carrying events in leagues you subscribe to, listed by the M3U account they come
-          from. Replay groups are left out. Discovery reads stream names only: it does not use
+          from. Replay groups are left out. Switch a league or sport to automatic under
+          Subscriptions → Find sources automatically and its groups are added without asking,
+          once they have shown events on two different days. Discovery reads stream names only: it does not use
           EPG matching, so linear channels such as ESPN or TSN1 are never suggested. Add those
           as an EPG-matching source yourself, or select their channel group under Matching →
           Dispatcharr as a Stream Source. A source added from here is{" "}
@@ -267,6 +274,19 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
             />
           </div>
           <div className="text-xs pb-1.5">{enabled && <CronPreview expression={cron} />}</div>
+          <div className="space-y-1">
+            <Label htmlFor="discovery-cap" className="text-xs" title="Automatic mode (Subscriptions → Find sources automatically) adds groups up to this size; a bigger group is only suggested.">
+              Auto-add groups up to (streams)
+            </Label>
+            <Input
+              id="discovery-cap"
+              type="number"
+              min={1}
+              value={maxStreams}
+              onChange={(e) => setMaxStreams(e.target.value)}
+              className="h-8 w-28"
+            />
+          </div>
           <div className="ml-auto">
             <SaveButton onClick={saveSchedule} pending={updateScheduler.isPending} />
           </div>
@@ -278,7 +298,9 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
               ? `Last scan failed: ${last.error}`
               : `Last scan: ${last.groups_scanned ?? 0} groups in ${last.duration_seconds ?? 0}s, ${
                   last.groups_with_games ?? 0
-                } carrying subscribed games.`}
+                } carrying subscribed events${
+                  last.sources_auto_added ? `, ${last.sources_auto_added} added automatically` : ""
+                }.`}
           </p>
         )}
 

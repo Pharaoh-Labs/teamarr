@@ -18,6 +18,8 @@ from teamarr.consumers.source_discovery import (
     TIER_NAME_ONLY,
     TIER_TEAMS,
     accept_candidate,
+    auto_add_decision,
+    auto_leagues,
     discovery_status,
     fold_same_content,
     run_discovery_scan,
@@ -52,6 +54,9 @@ class CandidateResponse(BaseModel):
     events: int  # distinct events matched in the window
     best_game_matches: int
     days_matched: int
+    evidence_days: int
+    # Why automatic mode has not added this group (None = it would, next scan).
+    auto_hold: str | None = None
     scans: int
     last_seen_at: str | None
     last_matched_at: str | None
@@ -81,7 +86,9 @@ def _account_names() -> dict[int, str]:
 
 
 def _to_response(
-    candidate: CandidateEvidence, accounts: dict[int, str] | None = None
+    candidate: CandidateEvidence,
+    accounts: dict[int, str] | None = None,
+    auto: tuple[set[str], int] | None = None,
 ) -> CandidateResponse:
     names = [
         (accounts or {}).get(account_id) or f"Account {account_id}"
@@ -102,6 +109,8 @@ def _to_response(
         events=len(candidate.event_ids),
         best_game_matches=candidate.best_game_matches,
         days_matched=candidate.days_matched,
+        evidence_days=candidate.evidence_days,
+        auto_hold=auto_add_decision(candidate, auto[0], auto[1]) if auto else None,
         scans=candidate.scans,
         last_seen_at=candidate.last_seen_at,
         last_matched_at=candidate.last_matched_at,
@@ -132,11 +141,18 @@ def list_candidates(include_dismissed: bool = False) -> CandidateListResponse:
             shown.append(candidate)
 
     accounts = _account_names()
+    with get_db() as conn:
+        from teamarr.database.settings import get_scheduler_settings
+
+        toggled = auto_leagues(conn)
+        auto = (toggled, get_scheduler_settings(conn).source_discovery_auto_max_streams)
+    if not toggled:
+        auto = None
     rows = []
     for primary, *others in fold_same_content([c for c in shown if c.status != "dismissed"]):
-        rows.append(_to_response(primary, accounts))
+        rows.append(_to_response(primary, accounts, auto))
         for other in others:
-            row = _to_response(other, accounts)
+            row = _to_response(other, accounts, auto)
             row.same_events_as = primary.m3u_group_name
             rows.append(row)
     rows.extend(_to_response(c, accounts) for c in shown if c.status == "dismissed")
