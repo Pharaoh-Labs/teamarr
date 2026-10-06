@@ -1,7 +1,8 @@
 import { api } from "./client"
 
-// Why a candidate is suggested: it matched games, or only its name fits.
-export type SuggestionTier = "games" | "name_only"
+// Why a candidate is suggested: its streams matched events, they matched teams
+// of the league its name names, or only its name fits.
+export type SuggestionTier = "games" | "teams" | "name_only"
 
 export interface SourceCandidate {
   id: number
@@ -13,11 +14,17 @@ export interface SourceCandidate {
   tier: SuggestionTier | null
   name_leagues: string[]
   leagues: Record<string, number>
+  team_leagues: Record<string, number>
+  events: number
   best_game_matches: number
   days_matched: number
   scans: number
   last_seen_at: string | null
   last_matched_at: string | null
+  // M3U account the group comes from; the list is organized by it.
+  m3u_account_name: string | null
+  // A stronger suggestion carrying the same events, if any (information only).
+  same_events_as: string | null
 }
 
 export interface DiscoveryScanState {

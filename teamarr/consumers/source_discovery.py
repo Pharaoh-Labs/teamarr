@@ -18,8 +18,13 @@ shape this module:
 * **One scan proves little.** On a Monday 61 of 93 real sources matched
   nothing. Evidence is kept per scan and judged over a window.
 
-The group name is a second, weaker layer: it lowers the bar for content, and a
-name hit with no games yet is still worth showing — never worth importing.
+The group name is a second, weaker layer: it lowers the bar for content, lets
+one-team matches count when they are in the league the name names, and a name
+hit with nothing matched yet is still worth showing — never worth importing.
+
+Every stream of a group is read and matched. A first version sampled 50 per
+group and under-counted the large ones badly (7 matches where a full read
+found 98); a full pass over 119,000 streams is a few minutes once a day.
 """
 
 import logging
@@ -48,7 +53,9 @@ from teamarr.database.groups import (
 from teamarr.database.source_candidates import (
     CandidateEvidence,
     ScanEvidence,
-    dismissed_group_ids,
+    dismiss_group,
+    dismissed_groups,
+    forget_removed_source,
     get_candidates,
     record_scan,
     set_candidate_status,
@@ -58,18 +65,22 @@ from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
 
 logger = logging.getLogger(__name__)
 
-# Streams put to the matcher per group. A group either carries games or it
-# does not; a spread of this many tells which without matching all of it.
-STREAM_SAMPLE_SIZE = 50
-# Streams read per group before stale ones are dropped and the sample is taken.
-STREAM_READ_LIMIT = 300
-
 # Evidence is judged over this many days of scans.
 EVIDENCE_WINDOW_DAYS = 7
 # Game matches one scan must have seen for content alone to qualify a group.
 GAME_MATCHES_REQUIRED = 3
 # ... and when the group's name also names a subscribed league.
 GAME_MATCHES_REQUIRED_WITH_NAME = 1
+# Streams matched on one team name, in a league the group's name names, for a
+# team-stream group to qualify. Without the name they are never evidence.
+TEAM_MATCHES_REQUIRED = 3
+# A group is a replay group when at least this share of its streams say so.
+REPLAY_STREAM_SHARE = 0.5
+# Two groups are the same content when their matched events overlap this much.
+SAME_CONTENT_OVERLAP = 0.8
+# ... and only when both matched at least this many. One shared event says
+# little: every F1 group in a race week matches the same single Grand Prix.
+SAME_CONTENT_MIN_EVENTS = 3
 
 # A managed source that has matched nothing for this long is disabled ...
 MANAGED_IDLE_DAYS = 14
@@ -80,7 +91,10 @@ MANAGED_GONE_DAYS = 14
 
 # Why a candidate is suggested, strongest first.
 TIER_GAMES = "games"
+TIER_TEAMS = "teams"
 TIER_NAME_ONLY = "name_only"
+
+_REPLAY_WORD = re.compile(r"\breplays?\b", re.IGNORECASE)
 
 
 def _name_key(text: str) -> str:
@@ -128,32 +142,80 @@ def leagues_named_by(group_name: str, surfaces: dict[str, set[str]]) -> list[str
     return sorted(found)
 
 
-def sample_streams(streams: list[dict], size: int = STREAM_SAMPLE_SIZE) -> list[dict]:
-    """An even spread of ``size`` streams, in id order.
+def is_replay_group(group_name: str, stream_names: list[str]) -> bool:
+    """Whether a group holds replays rather than live events.
 
-    Providers list a group in blocks (one network's feeds, then the next), so
-    the first N would sample one block.
+    Providers label these themselves: the group is called "Replay | NBA", or
+    its streams are "NBA Replay 9", "SPFL Replay Highlights" — a word in the
+    name and no fixture. Such a group names a league and never matches an
+    event, so the name layer alone would suggest it for ever.
     """
-    ordered = sorted(streams, key=lambda s: s["id"])
-    if len(ordered) <= size:
-        return ordered
-    step = len(ordered) / size
-    return [ordered[int(i * step)] for i in range(size)]
+    if _REPLAY_WORD.search(group_name):
+        return True
+    if not stream_names:
+        return False
+    saying_so = sum(1 for name in stream_names if _REPLAY_WORD.search(name))
+    return saying_so / len(stream_names) >= REPLAY_STREAM_SHARE
+
+
+def team_stream_leagues(candidate: CandidateEvidence) -> dict[str, int]:
+    """One-team matches that count: those in a league the group's name names."""
+    named = set(candidate.name_leagues)
+    return {lg: n for lg, n in candidate.team_leagues.items() if lg in named}
 
 
 def suggestion_tier(candidate: CandidateEvidence) -> str | None:
-    """Why this candidate is worth suggesting, or None when it is not.
-
-    Team-only matches never count: they do not appear here at all.
-    """
+    """Why this candidate is worth suggesting, or None when it is not."""
+    if candidate.replay:
+        return None
     required = (
         GAME_MATCHES_REQUIRED_WITH_NAME if candidate.name_leagues else GAME_MATCHES_REQUIRED
     )
     if candidate.best_game_matches >= required:
         return TIER_GAMES
-    if candidate.name_leagues:
+    if max(team_stream_leagues(candidate).values(), default=0) >= TEAM_MATCHES_REQUIRED:
+        return TIER_TEAMS
+    if candidate.name_leagues and not _name_only_went_stale(candidate):
         return TIER_NAME_ONLY
     return None
+
+
+def _name_only_went_stale(candidate: CandidateEvidence) -> bool:
+    """A name-only group that had streams on every scan for a full window and
+    never matched anything is not waiting for match day — it is dead weight.
+    It is suggested again the moment a scan matches something in it."""
+    return (
+        candidate.scan_days >= EVIDENCE_WINDOW_DAYS
+        and candidate.scan_days_with_streams == candidate.scan_days
+    )
+
+
+def fold_same_content(candidates: list[CandidateEvidence]) -> list[list[CandidateEvidence]]:
+    """Group candidates that carry the same events: ``[[primary, *alternates], ...]``.
+
+    Providers and resellers list the same feeds under several groups. Each
+    stays its own candidate — any of them can be added — but they are shown as
+    one suggestion. The primary is the one with the most matched events.
+    Candidates with fewer than a handful of matched events are never folded.
+    """
+    ordered = sorted(candidates, key=lambda c: (-len(c.event_ids), c.m3u_group_name.lower()))
+    folded: list[list[CandidateEvidence]] = []
+    for cand in ordered:
+        home = None
+        if len(cand.event_ids) >= SAME_CONTENT_MIN_EVENTS:
+            for cluster in folded:
+                primary = cluster[0].event_ids
+                if len(primary) < SAME_CONTENT_MIN_EVENTS:
+                    continue
+                overlap = len(cand.event_ids & primary) / len(cand.event_ids | primary)
+                if overlap >= SAME_CONTENT_OVERLAP:
+                    home = cluster
+                    break
+        if home is None:
+            folded.append([cand])
+        else:
+            home.append(cand)
+    return folded
 
 
 @dataclass
@@ -169,6 +231,8 @@ class ScanSummary:
     sources_disabled: int = 0
     sources_reenabled: int = 0
     sources_removed: int = 0
+    sources_readded: int = 0
+    skipped_replay: int = 0
     streams_matched_against: int = 0
     errors: int = 0
     duration_seconds: float = 0.0
@@ -206,7 +270,7 @@ class SourceDiscovery:
         return taken
 
     def _scan_group(self, group: Any, leagues: list[str], today: date) -> ScanEvidence:
-        raw = self._m3u.list_streams(group_id=group.id, limit=STREAM_READ_LIMIT)
+        raw = self._m3u.list_streams(group_id=group.id)
         evidence = ScanEvidence(
             m3u_group_id=group.id,
             m3u_group_name=group.name,
@@ -219,6 +283,9 @@ class SourceDiscovery:
             for s in raw
             if not s.is_stale
         ]
+        if is_replay_group(group.name, [s["name"] for s in streams]):
+            evidence.replay = True
+            return evidence
         # A throwaway, unsaved source: every matching type the name path has,
         # no EPG (that needs a guide lookup per stream, and a group that only
         # matches through its guide is found by the channel-source path).
@@ -229,7 +296,7 @@ class SourceDiscovery:
             team_streams_enabled=True,
             epg_match_enabled=False,
         )
-        kept, _ = self._processor._filter_streams(sample_streams(streams), probe)
+        kept, _ = self._processor._filter_streams(streams, probe)
         evidence.streams_read = len(kept)
         if not kept:
             return evidence
@@ -241,18 +308,37 @@ class SourceDiscovery:
             cache=NullStreamMatchCache(self._db_factory),
         )
         games: dict[int, str] = {}
-        team_only: set[int] = set()
+        team_only: dict[int, str] = {}
         for r in result.results:
             if not r.matched:
                 continue
             if r.category == StreamCategory.TEAM_ONLY:
-                team_only.add(r.stream_id)
+                team_only.setdefault(r.stream_id, r.league or "")
             else:
                 games.setdefault(r.stream_id, r.league or "")
+                event = getattr(r, "event", None)
+                if event is not None:
+                    evidence.event_ids.add(f"{event.provider}:{event.id}")
+        for stream_id in games:
+            team_only.pop(stream_id, None)
         evidence.game_matches = len(games)
-        evidence.team_only_matches = len(team_only - set(games))
+        evidence.team_only_matches = len(team_only)
         evidence.leagues = dict(Counter(lg for lg in games.values() if lg))
+        evidence.team_leagues = dict(Counter(lg for lg in team_only.values() if lg))
         return evidence
+
+    @staticmethod
+    def _yield_to_generation() -> None:
+        """Wait out a generation run that started mid-scan.
+
+        A full scan takes minutes; both are CPU-bound matching, and the
+        generation run is the one with a schedule to keep.
+        """
+        from teamarr.consumers import generation_status
+
+        deadline = time.monotonic() + GENERATION_WAIT_SECONDS
+        while generation_status.is_in_progress() and time.monotonic() < deadline:
+            time.sleep(2)
 
     def scan(
         self,
@@ -268,15 +354,21 @@ class SourceDiscovery:
 
         with self._db_factory() as conn:
             taken = self._source_group_ids(conn, live_groups)
-            dismissed = dismissed_group_ids(conn)
+            dismissed, dismissed_names = dismissed_groups(conn)
             leagues = self._processor._get_subscription_leagues(conn, None)
             surfaces = league_name_surfaces(conn, leagues)
 
         todo = []
+        renamed: list[Any] = []
         for group in live_groups:
             if group.id in taken:
                 summary.skipped_sources += 1
             elif group.id in dismissed:
+                summary.skipped_dismissed += 1
+            elif (group.name or "").strip().lower() in dismissed_names:
+                # A dismissed group back under a new id (a provider rename
+                # makes Dispatcharr create a new group): still dismissed.
+                renamed.append(group)
                 summary.skipped_dismissed += 1
             elif _stream_count(group) == 0:
                 summary.skipped_empty += 1
@@ -288,6 +380,7 @@ class SourceDiscovery:
             for index, group in enumerate(todo):
                 if progress:
                     progress(index, len(todo), group.name)
+                self._yield_to_generation()
                 try:
                     evidence = self._scan_group(group, leagues, now.date())
                 except Exception:
@@ -297,13 +390,18 @@ class SourceDiscovery:
                     continue
                 evidence.name_leagues = leagues_named_by(group.name, surfaces)
                 summary.groups_scanned += 1
+                if evidence.replay:
+                    summary.skipped_replay += 1
                 summary.streams_matched_against += evidence.streams_read
                 if evidence.game_matches:
                     summary.groups_with_games += 1
                 found.append(evidence)
 
         with self._db_factory() as conn:
+            for group in renamed:
+                dismiss_group(conn, group.id, group.name)
             record_scan(conn, found, now)
+            readd_approved_sources(conn, now, summary)
             maintain_managed_sources(
                 conn, now, {g.id for g in live_groups}, {e.m3u_group_id: e for e in found}, summary
             )
@@ -311,7 +409,7 @@ class SourceDiscovery:
         summary.duration_seconds = round((now_utc() - started).total_seconds(), 1)
         logger.info(
             "[DISCOVERY] Scanned %d of %d M3U groups in %.1fs (%d already sources, %d empty, "
-            "%d dismissed, %d errors): %d carry subscribed games",
+            "%d dismissed, %d errors, %d replay): %d carry subscribed games",
             summary.groups_scanned,
             summary.groups_total,
             summary.duration_seconds,
@@ -319,6 +417,7 @@ class SourceDiscovery:
             summary.skipped_empty,
             summary.skipped_dismissed,
             summary.errors,
+            summary.skipped_replay,
             summary.groups_with_games,
         )
         return summary
@@ -327,9 +426,12 @@ class SourceDiscovery:
 def accept_candidate(conn: Connection, candidate: CandidateEvidence) -> int:
     """Turn a candidate into a managed source and return the new source's id.
 
-    The source follows the global subscription and matches by stream name —
-    the kind of evidence that qualified it.
+    The source follows the global subscription and matches the way its
+    evidence did: by stream name when streams matched games, as team streams
+    when they matched on one team name in the league the group is named for.
     """
+    team_streams = bool(team_stream_leagues(candidate))
+    name_match = candidate.best_game_matches > 0 or not team_streams
     name = candidate.m3u_group_name
     suffix = 2
     while get_group_by_name(conn, name) is not None:
@@ -342,12 +444,28 @@ def accept_candidate(conn: Connection, candidate: CandidateEvidence) -> int:
         m3u_group_id=candidate.m3u_group_id,
         m3u_group_name=candidate.m3u_group_name,
         m3u_account_id=candidate.m3u_account_ids[0] if candidate.m3u_account_ids else None,
-        name_match_enabled=True,
+        name_match_enabled=name_match,
+        team_streams_enabled=team_streams,
     )
     set_group_managed(conn, source_id, True)
     set_candidate_status(conn, candidate.id, "accepted", source_group_id=source_id)
     logger.info("[DISCOVERY] Accepted %r as managed source id=%d", name, source_id)
     return source_id
+
+
+def readd_approved_sources(conn: Connection, now: datetime, summary: ScanSummary) -> None:
+    """Add back a source the user already approved once its group is back.
+
+    A managed source is removed when its group has been gone long enough. If
+    the group returns the user is not asked again: the candidate is still
+    ``accepted``, just without a source, and qualifying evidence re-creates it.
+    """
+    for candidate in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted"):
+        if candidate.source_group_id is not None:
+            continue
+        if suggestion_tier(candidate) in (TIER_GAMES, TIER_TEAMS):
+            accept_candidate(conn, candidate)
+            summary.sources_readded += 1
 
 
 def _age_days(stamp: str | None, now: datetime) -> float | None:
@@ -421,6 +539,7 @@ def maintain_managed_sources(
             gone = _age_days(seen.get(source.id) or created.get(source.id), now)
             if gone is not None and gone >= MANAGED_GONE_DAYS:
                 delete_group(conn, source.id)
+                forget_removed_source(conn, source.id)
                 summary.sources_removed += 1
                 logger.info(
                     "[DISCOVERY] Removed managed source %r: group gone %d days",

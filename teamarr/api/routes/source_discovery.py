@@ -15,10 +15,14 @@ from pydantic import BaseModel
 from teamarr.consumers.source_discovery import (
     EVIDENCE_WINDOW_DAYS,
     TIER_GAMES,
+    TIER_NAME_ONLY,
+    TIER_TEAMS,
     accept_candidate,
     discovery_status,
+    fold_same_content,
     run_discovery_scan,
     suggestion_tier,
+    team_stream_leagues,
 )
 from teamarr.database import get_db
 from teamarr.database.source_candidates import (
@@ -37,16 +41,23 @@ class CandidateResponse(BaseModel):
     m3u_group_id: int
     m3u_group_name: str
     m3u_account_ids: list[int]
+    # Name of the M3U account the group comes from — the list is organized by it.
+    m3u_account_name: str | None = None
     stream_count: int
     status: str
-    tier: str | None  # 'games' | 'name_only' | None (not suggested)
+    tier: str | None  # 'games' | 'teams' | 'name_only' | None (not suggested)
     name_leagues: list[str]
     leagues: dict[str, int]
+    team_leagues: dict[str, int]  # one-team matches in a league the name names
+    events: int  # distinct events matched in the window
     best_game_matches: int
     days_matched: int
     scans: int
     last_seen_at: str | None
     last_matched_at: str | None
+    # Another suggested group carrying the same events, when there is one with
+    # more of them. Information only: this group is its own candidate.
+    same_events_as: str | None = None
 
 
 class CandidateListResponse(BaseModel):
@@ -55,8 +66,29 @@ class CandidateListResponse(BaseModel):
     scan: dict
 
 
-def _to_response(candidate: CandidateEvidence) -> CandidateResponse:
+def _account_names() -> dict[int, str]:
+    """M3U account id -> name. Empty when Dispatcharr cannot be asked."""
+    from teamarr.dispatcharr.factory import get_dispatcharr_connection
+
+    try:
+        dispatcharr = get_dispatcharr_connection(get_db)
+        if not dispatcharr:
+            return {}
+        return {a.id: a.name for a in dispatcharr.m3u.list_accounts()}
+    except Exception as e:
+        logger.warning("[DISCOVERY] Failed to list M3U accounts: %s", e)
+        return {}
+
+
+def _to_response(
+    candidate: CandidateEvidence, accounts: dict[int, str] | None = None
+) -> CandidateResponse:
+    names = [
+        (accounts or {}).get(account_id) or f"Account {account_id}"
+        for account_id in candidate.m3u_account_ids
+    ]
     return CandidateResponse(
+        m3u_account_name=", ".join(names) if names else None,
         id=candidate.id,
         m3u_group_id=candidate.m3u_group_id,
         m3u_group_name=candidate.m3u_group_name,
@@ -66,6 +98,8 @@ def _to_response(candidate: CandidateEvidence) -> CandidateResponse:
         tier=suggestion_tier(candidate),
         name_leagues=candidate.name_leagues,
         leagues=candidate.leagues,
+        team_leagues=team_stream_leagues(candidate),
+        events=len(candidate.event_ids),
         best_game_matches=candidate.best_game_matches,
         days_matched=candidate.days_matched,
         scans=candidate.scans,
@@ -78,23 +112,45 @@ def _to_response(candidate: CandidateEvidence) -> CandidateResponse:
 def list_candidates(include_dismissed: bool = False) -> CandidateListResponse:
     """Suggested sources, strongest evidence first.
 
-    Only groups worth suggesting are returned: ones with game matches in the
-    evidence window, then ones whose name alone names a subscribed league.
+    Only groups worth suggesting are returned: ones whose streams matched
+    events in the evidence window, team-stream groups, then ones whose name
+    alone names a subscribed league. Replay groups are never returned. The
+    list is flat, ordered by M3U account; a group that carries the same events
+    as a stronger one says so in ``same_events_as``.
     Dismissed groups are left out unless ``include_dismissed`` is set.
     """
     with get_db() as conn:
         candidates = get_candidates(conn, now_utc(), EVIDENCE_WINDOW_DAYS)
-    rows = []
+    shown = []
     for candidate in candidates:
         if candidate.status == "accepted":
             continue
-        if candidate.status == "dismissed" and not include_dismissed:
-            continue
-        row = _to_response(candidate)
-        if row.tier is not None or candidate.status == "dismissed":
+        if candidate.status == "dismissed":
+            if include_dismissed:
+                shown.append(candidate)
+        elif suggestion_tier(candidate) is not None:
+            shown.append(candidate)
+
+    accounts = _account_names()
+    rows = []
+    for primary, *others in fold_same_content([c for c in shown if c.status != "dismissed"]):
+        rows.append(_to_response(primary, accounts))
+        for other in others:
+            row = _to_response(other, accounts)
+            row.same_events_as = primary.m3u_group_name
             rows.append(row)
+    rows.extend(_to_response(c, accounts) for c in shown if c.status == "dismissed")
+
+    # Flat, by M3U account, strongest evidence first within each.
+    tier_order = {TIER_GAMES: 0, TIER_TEAMS: 1, TIER_NAME_ONLY: 2}
     rows.sort(
-        key=lambda r: (r.tier != TIER_GAMES, -r.best_game_matches, r.m3u_group_name.lower())
+        key=lambda r: (
+            r.status == "dismissed",
+            (r.m3u_account_name or "~").lower(),
+            tier_order.get(r.tier or "", 3),
+            -r.best_game_matches,
+            r.m3u_group_name.lower(),
+        )
     )
     return CandidateListResponse(
         window_days=EVIDENCE_WINDOW_DAYS, candidates=rows, scan=discovery_status()
