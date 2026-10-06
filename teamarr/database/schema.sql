@@ -1468,9 +1468,11 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nascar-xfinity',  'nascar', '2', NULL, 'NASCAR O''Reilly Auto Parts Series',   'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR ORAP',  'nascar-xfinity',  'event', NULL, NULL, NULL, NULL, 1),
     ('nascar-truck',    'nascar', '3', NULL, 'NASCAR Craftsman Truck Series',         'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Trucks','nascar-truck',    'event', NULL, NULL, NULL, NULL, 1),
     ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/i/espn/teamlogos/500/indycar_series.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL, 1),
-    -- Disabled: ESPN's racing/motogp scoreboard endpoint returns HTTP 400 (no usable schedule/logo data).
-    -- Re-enable once migrated to TSDB (idLeague 4407) - planned v2 feature alongside IMSA/WEC session grouping.
-    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'MotoGP Racing', NULL, NULL, NULL, 0),
+    -- MotoGP via TSDB (#604): ESPN's racing/motogp endpoint returns HTTP 400. Premium key, like IMSA/WEC;
+    -- race weekends are grouped from TSDB's per-session events (Free Practice 1, Practice, Sprint Race,
+    -- Qualifying 1/2, Free Practice 2, GP) by parse_racing_events. Moto2/Moto3 are separate TSDB leagues
+    -- (4436/4437) and are not configured.
+    ('motogp', 'tsdb', '4407', 'MotoGP', 'MotoGP World Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/gg3c201768486075.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'MotoGP Racing', NULL, NULL, NULL, 1),
 
     -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
     -- per-event-per-session season data (teamarr/providers/tsdb/racing.py).

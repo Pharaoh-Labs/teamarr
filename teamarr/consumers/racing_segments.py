@@ -66,6 +66,9 @@ SESSION_DURATION_HOURS = {
     "sprint_qualifying": 1.0,
     "sprint": 1.0,
     "qualifying": 1.0,
+    # MotoGP (#604): Q1 and Q2 are 15-minute sessions 25 minutes apart.
+    "qualifying_1": 0.5,
+    "qualifying_2": 0.5,
 }
 
 # Per-league fallback race durations (hours), for endurance series whose
