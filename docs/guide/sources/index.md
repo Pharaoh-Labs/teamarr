@@ -78,6 +78,8 @@ Providers add, rename and drop M3U groups through the year, so a hand-kept sourc
 | **Team streams** | The group's name names a subscribed league and its streams are that league's teams ("NFL | Dallas Cowboys"). Added as a team-stream source. |
 | **Name only** | The group's name names a subscribed league, but no scan has matched anything in it yet — usually a group waiting for match day. It drops off the list by itself if it has had streams every day for a week and still matched nothing. |
 
+Discovery reads stream names only. **It does not use EPG matching**: reading the guide for hundreds of linear channels on every scan would cost far more than it finds. A group of linear channels ("ESPN", "TSN1", "Sky Sports Main Event") therefore produces no evidence and is never suggested or added automatically. Add it yourself as an EPG-matching source, or select its channel group under *Matching → Dispatcharr as a Stream Source*.
+
 Three kinds of group are never suggested:
 
 - **Replay groups.** A group whose name says "replay", or whose streams mostly do ("NBA Replay 9"), is left out entirely.

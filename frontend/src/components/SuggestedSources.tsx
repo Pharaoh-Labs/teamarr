@@ -239,7 +239,10 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
         <p className="text-xs text-muted-foreground">
           Teamarr can look through every M3U group that is not already a source and suggest the
           ones carrying events in leagues you subscribe to, listed by the M3U account they come
-          from. Replay groups are left out. A source added from here is{" "}
+          from. Replay groups are left out. Discovery reads stream names only: it does not use
+          EPG matching, so linear channels such as ESPN or TSN1 are never suggested. Add those
+          as an EPG-matching source yourself, or select their channel group under Matching →
+          Dispatcharr as a Stream Source. A source added from here is{" "}
           <span className="font-medium">managed</span>: it is switched off when it has matched
           nothing for two weeks and back on when its group has games again. Sources you add or
           edit yourself are never changed.
