@@ -726,9 +726,14 @@ export function EventGroups() {
                               <Badge
                                 variant="info"
                                 className="text-xs"
-                                title="Added by source discovery. It is switched off when it has matched nothing for two weeks and back on when its group has games again. Editing it makes it an ordinary source."
+                                title={
+                                  (group.auto_added_at
+                                    ? `Added automatically by source discovery on ${group.auto_added_at.slice(0, 10)}. `
+                                    : "Added from the Suggested sources list. ") +
+                                  "It is switched off when it has matched nothing for two weeks and back on when its group has events again. Editing it makes it an ordinary source."
+                                }
                               >
-                                Managed
+                                {group.auto_added_at ? "Auto-added" : "Managed"}
                               </Badge>
                             )}
                             {/* Stale-source badge (lylt) */}

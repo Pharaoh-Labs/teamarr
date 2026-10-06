@@ -13,6 +13,9 @@ export interface SportsSubscription {
     team_id: string
     name?: string | null
   }> | null
+  // (#997) leagues / sports for which source discovery adds sources on its own
+  auto_source_leagues: string[]
+  auto_source_sports: string[]
   updated_at: string | null
 }
 
@@ -24,6 +27,8 @@ export interface SubscriptionUpdate {
     team_id: string
     name?: string | null
   }> | null
+  auto_source_leagues?: string[]
+  auto_source_sports?: string[]
 }
 
 export interface SubscriptionTemplate {

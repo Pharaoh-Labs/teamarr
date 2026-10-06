@@ -53,6 +53,7 @@ class CandidateEvidence:
     scans: int = 0  # scans inside the window
     scan_days: int = 0  # distinct days inside the window with a scan
     scan_days_with_streams: int = 0  # ... on which the group had streams to match
+    evidence_days: int = 0  # distinct days on which something matched (games or teams)
     best_game_matches: int = 0  # most game matches any one scan saw
     days_matched: int = 0  # scans inside the window with a game match
     team_only_matches: int = 0  # most team-only matches any one scan saw
@@ -153,6 +154,7 @@ def get_candidates(
         (since,),
     ).fetchall()
     days: dict[tuple[int, str], bool] = {}
+    matched_days: set[tuple[int, str]] = set()
     for scan in scans:
         cand = candidates.get(scan["candidate_id"])
         if cand is None:
@@ -160,6 +162,8 @@ def get_candidates(
         cand.scans += 1
         day = (cand.id, str(scan["scanned_at"])[:10])
         days[day] = days.get(day, False) or bool(scan["streams_read"])
+        if scan["game_matches"] or scan["team_only_matches"]:
+            matched_days.add(day)
         for league, count in json.loads(scan["team_leagues"] or "{}").items():
             cand.team_leagues[league] = max(cand.team_leagues.get(league, 0), count)
         cand.event_ids |= set(json.loads(scan["event_ids"] or "[]"))
@@ -172,6 +176,8 @@ def get_candidates(
     for (candidate_id, _), had_streams in days.items():
         candidates[candidate_id].scan_days += 1
         candidates[candidate_id].scan_days_with_streams += int(had_streams)
+    for candidate_id, _ in matched_days:
+        candidates[candidate_id].evidence_days += 1
     return list(candidates.values())
 
 

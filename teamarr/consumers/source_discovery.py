@@ -89,6 +89,13 @@ MANAGED_IDLE_DAYS_WITH_NAME = 21
 # A disabled managed source whose group has been gone this long is removed.
 MANAGED_GONE_DAYS = 14
 
+# Automatic mode (#997): a group is added on its own only with evidence on this
+# many different scan days (a one-off listing never imports) ...
+AUTO_EVIDENCE_DAYS = 2
+# ... and when at least this share of its matched streams are in leagues the
+# user turned automatic mode on for.
+AUTO_LEAGUE_SHARE = 0.5
+
 # Why a candidate is suggested, strongest first.
 TIER_GAMES = "games"
 TIER_TEAMS = "teams"
@@ -168,9 +175,7 @@ def suggestion_tier(candidate: CandidateEvidence) -> str | None:
     """Why this candidate is worth suggesting, or None when it is not."""
     if candidate.replay:
         return None
-    required = (
-        GAME_MATCHES_REQUIRED_WITH_NAME if candidate.name_leagues else GAME_MATCHES_REQUIRED
-    )
+    required = GAME_MATCHES_REQUIRED_WITH_NAME if candidate.name_leagues else GAME_MATCHES_REQUIRED
     if candidate.best_game_matches >= required:
         return TIER_GAMES
     if max(team_stream_leagues(candidate).values(), default=0) >= TEAM_MATCHES_REQUIRED:
@@ -232,6 +237,7 @@ class ScanSummary:
     sources_reenabled: int = 0
     sources_removed: int = 0
     sources_readded: int = 0
+    sources_auto_added: int = 0
     skipped_replay: int = 0
     streams_matched_against: int = 0
     errors: int = 0
@@ -402,6 +408,7 @@ class SourceDiscovery:
                 dismiss_group(conn, group.id, group.name)
             record_scan(conn, found, now)
             readd_approved_sources(conn, now, summary)
+            auto_add_sources(conn, now, summary)
             maintain_managed_sources(
                 conn, now, {g.id for g in live_groups}, {e.m3u_group_id: e for e in found}, summary
             )
@@ -423,8 +430,12 @@ class SourceDiscovery:
         return summary
 
 
-def accept_candidate(conn: Connection, candidate: CandidateEvidence) -> int:
+def accept_candidate(
+    conn: Connection, candidate: CandidateEvidence, auto_added_at: str | None = None
+) -> int:
     """Turn a candidate into a managed source and return the new source's id.
+
+    ``auto_added_at`` marks a source automatic mode added rather than the user.
 
     The source follows the global subscription and matches the way its
     evidence did: by stream name when streams matched games, as team streams
@@ -447,10 +458,79 @@ def accept_candidate(conn: Connection, candidate: CandidateEvidence) -> int:
         name_match_enabled=name_match,
         team_streams_enabled=team_streams,
     )
-    set_group_managed(conn, source_id, True)
+    set_group_managed(conn, source_id, True, auto_added_at=auto_added_at)
     set_candidate_status(conn, candidate.id, "accepted", source_group_id=source_id)
-    logger.info("[DISCOVERY] Accepted %r as managed source id=%d", name, source_id)
+    logger.info(
+        "[DISCOVERY] %s %r as managed source id=%d",
+        "Added automatically" if auto_added_at else "Accepted",
+        name,
+        source_id,
+    )
     return source_id
+
+
+def auto_leagues(conn: Connection) -> set[str]:
+    """Leagues automatic mode is on for: toggled leagues plus every league of a
+    toggled sport, including leagues discovered after the toggle was set."""
+    from teamarr.database.subscription import get_subscription
+
+    sub = get_subscription(conn)
+    leagues = {code.lower() for code in sub.auto_source_leagues}
+    sports = {sport.lower() for sport in sub.auto_source_sports}
+    if sports:
+        for table, code_col, sport_col in (
+            ("leagues", "league_code", "sport"),
+            ("league_cache", "league_slug", "sport"),
+        ):
+            for row in conn.execute(f"SELECT {code_col}, {sport_col} FROM {table}"):
+                if (row[1] or "").lower() in sports and row[0]:
+                    leagues.add(row[0].lower())
+    return leagues
+
+
+def auto_add_decision(
+    candidate: CandidateEvidence, toggled: set[str], max_streams: int
+) -> str | None:
+    """Why automatic mode leaves a candidate alone, or None when it adds it.
+
+    The reasons are the rules, so the review list can show them.
+    """
+    tier = suggestion_tier(candidate)
+    if tier not in (TIER_GAMES, TIER_TEAMS):
+        return "not enough evidence"
+    if candidate.evidence_days < AUTO_EVIDENCE_DAYS:
+        return "seen on one day only"
+    if candidate.stream_count > max_streams:
+        return f"more than {max_streams} streams"
+    if tier == TIER_GAMES:
+        total = sum(candidate.leagues.values())
+        in_toggled = sum(n for lg, n in candidate.leagues.items() if lg.lower() in toggled)
+        if not total or in_toggled / total < AUTO_LEAGUE_SHARE:
+            return "its leagues are not set to automatic"
+    else:
+        if not any(lg.lower() in toggled for lg in team_stream_leagues(candidate)):
+            return "its league is not set to automatic"
+    return None
+
+
+def auto_add_sources(conn: Connection, now: datetime, summary: ScanSummary) -> None:
+    """Add qualifying candidates as managed sources for the toggled leagues (#997).
+
+    Same machinery as pressing Add, pressed by the scan. Dismissed groups,
+    name-only groups and replay groups never reach here; the stream-count cap
+    keeps the network catch-alls the user's own call.
+    """
+    from teamarr.database.settings import get_scheduler_settings
+
+    toggled = auto_leagues(conn)
+    if not toggled:
+        return
+    max_streams = get_scheduler_settings(conn).source_discovery_auto_max_streams
+    stamp = to_db_utc(now)
+    for candidate in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="new"):
+        if auto_add_decision(candidate, toggled, max_streams) is None:
+            accept_candidate(conn, candidate, auto_added_at=stamp)
+            summary.sources_auto_added += 1
 
 
 def readd_approved_sources(conn: Connection, now: datetime, summary: ScanSummary) -> None:
@@ -511,16 +591,15 @@ def maintain_managed_sources(
         if source.enabled:
             idle = _age_days(source.last_matched_at or created.get(source.id), now)
             limit = (
-                MANAGED_IDLE_DAYS_WITH_NAME
-                if named.get(source.m3u_group_id)
-                else MANAGED_IDLE_DAYS
+                MANAGED_IDLE_DAYS_WITH_NAME if named.get(source.m3u_group_id) else MANAGED_IDLE_DAYS
             )
             if idle is not None and idle >= limit:
                 set_managed_source_enabled(conn, source.id, False)
                 summary.sources_disabled += 1
                 logger.info(
                     "[DISCOVERY] Disabled managed source %r: no match in %d days",
-                    source.name, int(idle),
+                    source.name,
+                    int(idle),
                 )
             continue
         found = evidence.get(source.m3u_group_id)
@@ -543,7 +622,8 @@ def maintain_managed_sources(
                 summary.sources_removed += 1
                 logger.info(
                     "[DISCOVERY] Removed managed source %r: group gone %d days",
-                    source.name, int(gone),
+                    source.name,
+                    int(gone),
                 )
     conn.commit()
 

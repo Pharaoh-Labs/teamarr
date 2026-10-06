@@ -18,6 +18,10 @@ export interface SourceCandidate {
   events: number
   best_game_matches: number
   days_matched: number
+  evidence_days: number
+  // Why automatic mode has not added this group; null = it will on the next scan.
+  // Absent meaning when no league is set to automatic (always null then).
+  auto_hold: string | null
   scans: number
   last_seen_at: string | null
   last_matched_at: string | null
@@ -38,6 +42,7 @@ export interface DiscoveryScanState {
         sources_disabled: number
         sources_reenabled: number
         sources_removed: number
+        sources_auto_added: number
       }>)
     | null
 }

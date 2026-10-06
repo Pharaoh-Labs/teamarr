@@ -455,6 +455,7 @@ CREATE TABLE IF NOT EXISTS settings (
     -- 'off' | 'suggest' (candidates wait for review). Runs on its own cron, never per generation.
     source_discovery_mode TEXT DEFAULT 'off',
     source_discovery_cron TEXT DEFAULT '0 11 * * *',
+    source_discovery_auto_max_streams INTEGER DEFAULT 1000,  -- a bigger group is suggested, never auto-added
 
     -- Stream Filtering (global defaults for event groups)
     -- Require event pattern: only match streams that look like events (have vs/@/at/date patterns)
@@ -748,6 +749,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     name_match_enabled BOOLEAN DEFAULT 1,        -- (ahow) Match streams whose name identifies a specific event (TEAM_VS_TEAM/EVENT_CARD/RACING) — the default matching type. DEFAULT 1 backfills existing sources on upgrade. One of three declared matching types alongside team_streams_enabled (Team) and epg_match_enabled (EPG).
     team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
     epg_match_enabled BOOLEAN DEFAULT 0,         -- (183.6) Use Dispatcharr EPG program data to match static-named linear streams (ESPN, NBA1) and time-window them. Requires a Dispatcharr build with /api/epg/programs/search/ (0.24.0+). No global switch — per-source opt-in (3lp1).
+    auto_added_at TIMESTAMP,                     -- (#997) Set when source discovery added it on its own (a toggled league); NULL = the user pressed Add
     managed BOOLEAN DEFAULT 0,                   -- (#997) Created by source discovery. Only a managed source is ever disabled or removed on its own; a hand edit clears the flag.
     last_matched_at TIMESTAMP,                   -- (#997) Last generation run in which this source matched a stream
     is_channel_source BOOLEAN DEFAULT 0,         -- (183.9) System-managed source group whose candidate streams come from curated Dispatcharr channels (their assigned streams + each channel's own EPG) instead of an M3U group. Auto-created/toggled by settings.epg_channel_source_enabled; hidden from the Event Groups UI.
@@ -819,6 +821,10 @@ CREATE TABLE IF NOT EXISTS sports_subscription (
     soccer_mode TEXT DEFAULT NULL
         CHECK(soccer_mode IS NULL OR soccer_mode IN ('all', 'teams', 'manual')),
     soccer_followed_teams JSON DEFAULT NULL,
+    -- (#997) Source discovery adds sources on its own for these leagues / every
+    -- league of these sports. Empty = suggest only.
+    auto_source_leagues JSON NOT NULL DEFAULT '[]',
+    auto_source_sports JSON NOT NULL DEFAULT '[]',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

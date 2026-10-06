@@ -131,6 +131,7 @@ class EventEPGGroup:
     # Created by source discovery (#997). Only a managed source is ever
     # disabled or removed on its own; a hand edit clears the flag.
     managed: bool = False
+    auto_added_at: str | None = None  # Set when discovery added it on its own (#997)
     last_matched_at: str | None = None  # Last run in which it matched a stream
     # (#542) Dispatcharr channel group a channel-source row reads; None = all
     dispatcharr_channel_group_id: int | None = None
@@ -289,6 +290,7 @@ def _row_to_group(row) -> EventEPGGroup:
             bool(row["is_channel_source"]) if "is_channel_source" in row.keys() else False
         ),
         managed=bool(row["managed"]) if "managed" in row.keys() else False,
+        auto_added_at=row["auto_added_at"] if "auto_added_at" in row.keys() else None,
         last_matched_at=row["last_matched_at"] if "last_matched_at" in row.keys() else None,
         dispatcharr_channel_group_id=(
             row["dispatcharr_channel_group_id"]
@@ -1148,11 +1150,23 @@ def set_managed_source_enabled(conn: Connection, group_id: int, enabled: bool) -
     )
 
 
-def set_group_managed(conn: Connection, group_id: int, managed: bool) -> None:
-    """Mark a source as owned by source discovery, or hand it to the user (#997)."""
-    conn.execute(
-        "UPDATE event_epg_groups SET managed = ? WHERE id = ?", (int(managed), group_id)
-    )
+def set_group_managed(
+    conn: Connection, group_id: int, managed: bool, auto_added_at: str | None = None
+) -> None:
+    """Mark a source as owned by source discovery, or hand it to the user (#997).
+
+    ``auto_added_at`` records that discovery added it on its own rather than
+    the user pressing Add; it is shown on the source and never cleared.
+    """
+    if auto_added_at is not None:
+        conn.execute(
+            "UPDATE event_epg_groups SET managed = ?, auto_added_at = ? WHERE id = ?",
+            (int(managed), auto_added_at, group_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE event_epg_groups SET managed = ? WHERE id = ?", (int(managed), group_id)
+        )
     conn.commit()
 
 

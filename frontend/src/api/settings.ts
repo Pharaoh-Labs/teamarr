@@ -57,6 +57,8 @@ export interface SchedulerSettings {
   // Source discovery (#997)
   source_discovery_mode: "off" | "suggest"
   source_discovery_cron: string
+  // (#997) a group with more streams is suggested, never added automatically
+  source_discovery_auto_max_streams: number
 }
 
 export interface SchedulerSettingsUpdate {
@@ -66,6 +68,7 @@ export interface SchedulerSettingsUpdate {
   channel_reset_cron?: string | null
   source_discovery_mode?: "off" | "suggest"
   source_discovery_cron?: string
+  source_discovery_auto_max_streams?: number
 }
 
 export interface EPGSettings {
