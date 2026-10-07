@@ -157,6 +157,20 @@ CREATE INDEX IF NOT EXISTS idx_teams_sport ON teams(sport);
 -- Persistent Dispatcharr ownership records for opt-in Team EPG channels.
 -- ``teams.channel_id`` stays the XMLTV identity; this table is the sole
 -- authority for Teamarr ownership and must never be inferred from a tvg_id.
+-- Channels Teamarr last pushed to a Plex DVR device, per scope.
+-- Scope is (server, device, channel profile) so two Teamarr server entries
+-- pointing at one root-profile device never clobber each other's set.
+-- Used ONLY to remove Teamarr's own stale channels; a channel absent here is
+-- never disabled. channel_profile_id '' means "unscoped".
+CREATE TABLE IF NOT EXISTS plex_pushed_channels (
+    server_url         TEXT NOT NULL,
+    device_key         TEXT NOT NULL,
+    channel_profile_id TEXT NOT NULL DEFAULT '',
+    channel_keys       TEXT NOT NULL,          -- JSON array of device-channel strings
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (server_url, device_key, channel_profile_id)
+);
+
 CREATE TABLE IF NOT EXISTS managed_team_channels (
     team_id INTEGER PRIMARY KEY,
     dispatcharr_channel_id INTEGER,
@@ -600,6 +614,14 @@ CREATE TABLE IF NOT EXISTS settings (
     -- may linger in upgraded databases; they are unread.
     channelsdvr_enabled BOOLEAN DEFAULT 0,
     channelsdvr_servers JSON,
+
+    -- Plex Integration (Live TV Guide + Channel-Map Refresh)
+    -- plex_servers is a JSON list of {name, url, token, dvr_id, device_key}
+    -- entries. dvr_id/device_key are the matched Plex DVR + HDHomeRun device
+    -- (from GET /livetv/dvrs), discovered and picked in the Settings UI;
+    -- a server missing either is skipped at refresh time.
+    plex_enabled BOOLEAN DEFAULT 0,
+    plex_servers JSON,
 
     -- Schema Version
     schema_version INTEGER DEFAULT 99
