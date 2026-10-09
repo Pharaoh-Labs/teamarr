@@ -100,6 +100,7 @@ def test_pydantic_models_field_parity():
         ("emby", m.EmbySettingsModel, m.EmbySettingsUpdate),
         ("jellyfin", m.JellyfinSettingsModel, m.JellyfinSettingsUpdate),
         ("channelsdvr", m.ChannelsDVRSettingsModel, m.ChannelsDVRSettingsUpdate),
+        ("plex", m.PlexSettingsModel, m.PlexSettingsUpdate),
         ("proxy", m.ProxySettingsModel, m.ProxySettingsUpdate),
     ]
     # Update models may carry control flags that are not persisted fields.

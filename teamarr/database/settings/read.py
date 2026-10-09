@@ -25,6 +25,7 @@ from .types import (
     JellyfinSettings,
     LifecycleSettings,
     ManagedTeamChannelSettings,
+    PlexSettings,
     ProxySettings,
     SchedulerSettings,
     StreamFilterSettings,
@@ -173,6 +174,11 @@ def get_jellyfin_settings(conn: Connection) -> JellyfinSettings:
 def get_channelsdvr_settings(conn: Connection) -> ChannelsDVRSettings:
     """Get Channels DVR integration settings."""
     return _get_group(conn, "channelsdvr")
+
+
+def get_plex_settings(conn: Connection) -> PlexSettings:
+    """Get Plex integration settings."""
+    return _get_group(conn, "plex")
 
 
 def get_proxy_settings(conn: Connection) -> ProxySettings:

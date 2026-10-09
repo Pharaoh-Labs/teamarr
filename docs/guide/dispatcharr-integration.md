@@ -52,7 +52,7 @@ Once connected, each generation run manages the full channel lifecycle in Dispat
 3. **Channels are created** with names, logos, EPG data, streams, and profile/group assignments
 4. **Channels are updated** when event data changes (scores, status, streams), **deleted** when events end (based on [lifecycle timing](channels/lifecycle)), and drift is reconciled
 5. **Dispatcharr's EPG source is refreshed** and channels are associated with their guide data
-6. Configured **media servers** (Emby, Jellyfin, Channels DVR) are refreshed in parallel
+6. Configured **media servers** (Emby, Jellyfin, Channels DVR, Plex) are refreshed in parallel
 
 ### Profile & Group Sync
 
