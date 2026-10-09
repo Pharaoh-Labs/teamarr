@@ -333,7 +333,7 @@ class PlexClient:
         delta here; every enabled channel's binding must be resubmitted
         every time, even unchanged.
         """
-        params: list[tuple[str, str]] = [
+        params: list[tuple[str, Any]] = [
             ("channelsEnabled", ",".join(enabled_channel_keys)),
         ]
         for key, value in channel_mapping.items():
