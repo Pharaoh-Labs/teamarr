@@ -11,6 +11,7 @@ are released between runs, and the catalog index is equivalent to what the
 resolver builds for itself.
 """
 
+from datetime import date
 from types import SimpleNamespace
 
 from teamarr.consumers.event_group_processor.matching import StreamMatching
@@ -127,9 +128,7 @@ def test_prebuilt_catalog_matches_the_resolver_built_inline():
     ]
     active = {7}
 
-    inline, inline_stats = resolve_program_tvg_ids(
-        streams, EPG_DATA, {}, active_source_ids=active
-    )
+    inline, inline_stats = resolve_program_tvg_ids(streams, EPG_DATA, {}, active_source_ids=active)
     prebuilt, prebuilt_stats = resolve_program_tvg_ids(
         streams,
         EPG_DATA,
@@ -143,7 +142,7 @@ def test_prebuilt_catalog_matches_the_resolver_built_inline():
 
 
 def test_ambiguous_names_stay_ambiguous_through_the_prebuilt_catalog():
-    """"ESPN" maps to two tvg_ids, so it must resolve to neither."""
+    """ "ESPN" maps to two tvg_ids, so it must resolve to neither."""
     streams = [{"id": 10, "tvg_id": "raw-espn", "name": "ESPN"}]
 
     resolution, stats = resolve_program_tvg_ids(
@@ -156,3 +155,51 @@ def test_ambiguous_names_stay_ambiguous_through_the_prebuilt_catalog():
 
     assert resolution == {}
     assert stats["ambiguous_name"] == 1
+
+
+# ============================== #1029: an opted-in group never gets a None index
+
+
+def _epg_group():
+    return SimpleNamespace(id=5, epg_match_enabled=True, m3u_account_id=None)
+
+
+def test_builder_says_unavailable_when_the_catalog_cannot_be_read():
+    """A failed catalog fetch used to return None, and every linear stream then
+    kept the name path's skip — a broken guide looked like a provider that
+    writes no matchups."""
+    h, counter = _harness()
+    counter.get_epg_data_list = lambda: (_ for _ in ()).throw(RuntimeError("down"))
+
+    index = h._build_epg_index(_epg_group(), [{"id": 1, "tvg_id": "espn"}], date(2026, 6, 1), 3)
+
+    assert index is not None
+    assert not index
+    assert "catalog could not be read" in index.unavailable
+
+
+def test_builder_says_unavailable_without_a_dispatcharr_connection():
+    h, _ = _harness()
+    h._dispatcharr_client = None
+
+    index = h._build_epg_index(_epg_group(), [{"id": 1, "tvg_id": "espn"}], date(2026, 6, 1), 3)
+
+    assert index is not None and index.unavailable == "no Dispatcharr connection"
+
+
+def test_builder_returns_an_empty_index_when_no_stream_has_a_tvg_id():
+    """Nothing to look a guide up by is each stream's own verdict (#877), not a
+    guide outage: the index is empty and carries no reason."""
+    h, _ = _harness()
+
+    index = h._build_epg_index(_epg_group(), [{"id": 1, "name": "ITV1 HD RT"}], date(2026, 6, 1), 3)
+
+    assert index is not None
+    assert not index
+    assert index.unavailable is None
+
+
+def test_builder_still_returns_none_for_a_group_that_did_not_opt_in():
+    h, _ = _harness()
+    group = SimpleNamespace(id=5, epg_match_enabled=False)
+    assert h._build_epg_index(group, [{"id": 1, "tvg_id": "espn"}], date(2026, 6, 1), 3) is None

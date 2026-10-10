@@ -145,6 +145,13 @@ class FailedReason(Enum):
     # path's skip ("team_streams_disabled"), which sends the user to a setting
     # that has nothing to do with it.
     NO_EPG_CHANNEL = "no_epg_channel"
+    # EPG path could not read the guide at all this run (#1029): no Dispatcharr
+    # connection, the catalog fetch failed, or the build has no programme
+    # search. Distinct from NO_EPG_CHANNEL, where the guide was read and held
+    # nothing for this stream. Without it every linear stream in the source
+    # kept the name path's skip, and a run with a broken guide looked exactly
+    # like a provider that writes no matchups.
+    EPG_UNAVAILABLE = "epg_unavailable"
 
     # Date validation failures (stream has date that doesn't match any event)
     DATE_MISMATCH = "date_mismatch"  # Stream date != event date
@@ -481,6 +488,7 @@ FAILED_DISPLAY: dict[FailedReason | None, str] = {
     FailedReason.TENNIS_MATCHUP_UNKNOWN: "Tennis matchup not known",
     FailedReason.NO_EPG_PROGRAM_MATCH: "No guide programme matched",
     FailedReason.NO_EPG_CHANNEL: "No guide found for this stream",
+    FailedReason.EPG_UNAVAILABLE: "Guide could not be read",
     FailedReason.DATE_MISMATCH: "Stream date doesn't match event",
 }
 
