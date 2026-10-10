@@ -153,6 +153,8 @@ class FakeManagedChannel:
     league: str = "nfl"
     event_date: str | None = None
     primary_stream_id: int | None = None
+    segment: str | None = None
+    feed_key: str | None = None
 
 
 @dataclass

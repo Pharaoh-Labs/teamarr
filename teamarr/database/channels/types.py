@@ -61,6 +61,10 @@ class ManagedChannel:
     event_end_estimate: datetime | None = None
     # (#950) Event season type; season-conditioned pinned blocks read it on re-layout.
     season_type: str | None = None
+    # (#1018) Session / card-segment code and race-feed key the channel was created
+    # for; segment- and feed-conditioned pinned blocks read them on re-layout.
+    segment: str | None = None
+    feed_key: str | None = None
     # (#539) Whether the event lists a home/away-market broadcaster; None = unknown.
     has_local_broadcast: bool | None = None
     scheduled_delete_at: datetime | None = None
@@ -117,6 +121,8 @@ class ManagedChannel:
             sport=row.get("sport"),
             event_end_estimate=row.get("event_end_estimate"),
             season_type=row.get("season_type"),
+            segment=row.get("segment"),
+            feed_key=row.get("feed_key"),
             has_local_broadcast=(
                 bool(row["has_local_broadcast"])
                 if row.get("has_local_broadcast") is not None

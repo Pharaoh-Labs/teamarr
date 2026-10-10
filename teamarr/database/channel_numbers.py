@@ -340,6 +340,9 @@ def get_next_channel_number(
     home_team: str | None = None,
     away_team: str | None = None,
     season_type: str | None = None,
+    segment: str | None = None,
+    exception_keyword: str | None = None,
+    feed_key: str | None = None,
 ) -> int | None:
     """Get the next available channel number for a new channel.
 
@@ -352,7 +355,8 @@ def get_next_channel_number(
         conn: Database connection
         league: League code for the event
         external_occupied: Channel numbers occupied by non-Teamarr channels (#146)
-        sport / home_team / away_team: Lane resolution keys (team pins match either side)
+        sport / home_team / away_team / season_type / segment / exception_keyword /
+            feed_key: Lane resolution keys (team pins match either side)
 
     Returns:
         Next available channel number, or None if the lane (and, for a bounded
@@ -361,7 +365,10 @@ def get_next_channel_number(
     from teamarr.database.numbering_exceptions import LaneResolver
 
     resolver = LaneResolver.load(conn, _default_lane(conn))
-    lane = resolver.resolve(sport, league, home_team, away_team, season_type)
+    lane = resolver.resolve(
+        sport, league, home_team, away_team, season_type,
+        segment, exception_keyword, feed_key,
+    )
 
     used_set = _get_all_used_channels(conn)
     if external_occupied:
@@ -477,6 +484,16 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
         if _table_has_column(conn, "managed_channels", "season_type")
         else "NULL AS season_type"
     )
+    segment_col = (
+        "mc.segment"
+        if _table_has_column(conn, "managed_channels", "segment")
+        else "NULL AS segment"
+    )
+    feed_key_col = (
+        "mc.feed_key"
+        if _table_has_column(conn, "managed_channels", "feed_key")
+        else "NULL AS feed_key"
+    )
     plugin_clause = (
         " OR mc.plugin_id IS NOT NULL"
         if _table_has_column(conn, "managed_channels", "plugin_id")
@@ -499,7 +516,9 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
             mc.event_date,
             mc.exception_keyword,
             mc.created_at,
-            {season_col}
+            {season_col},
+            {segment_col},
+            {feed_key_col}
         FROM managed_channels mc
         LEFT JOIN event_epg_groups g ON mc.event_epg_group_id = g.id
         WHERE (g.enabled = 1 OR mc.event_epg_group_id IS NULL{plugin_clause})
@@ -526,6 +545,8 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
                 "exception_keyword": row["exception_keyword"],
                 "created_at": row["created_at"],
                 "season_type": row["season_type"],
+                "segment": row["segment"],
+                "feed_key": row["feed_key"],
             }
         )
 
@@ -649,6 +670,9 @@ def reassign_all_channels(
             ch.get("home_team"),
             ch.get("away_team"),
             ch.get("season_type"),
+            ch.get("segment"),
+            ch.get("exception_keyword"),
+            ch.get("feed_key"),
         )
         by_lane[lane.id].append(ch)
 

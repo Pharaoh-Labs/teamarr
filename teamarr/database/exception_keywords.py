@@ -43,6 +43,9 @@ class ExceptionKeyword:
     event_group_ids: list[int] = field(default_factory=list)
     # Precedence among keywords matching one stream (#931); None = unordered.
     sort_order: int | None = None
+    # race_feeds.feed_key when the keyword is a race feed (#1018); None for
+    # global keywords. Read by the channel creator, never matched on.
+    feed_key: str | None = None
 
     @property
     def match_term_list(self) -> list[str]:

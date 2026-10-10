@@ -76,6 +76,7 @@ class RaceFeed:
             behavior=self.behavior,
             enabled=self.enabled,
             created_at=self.created_at,
+            feed_key=self.feed_key,
         )
 
 

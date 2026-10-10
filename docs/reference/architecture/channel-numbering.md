@@ -37,8 +37,8 @@ holds golden-equivalence tests that assert this for compact, gap and strict.
 
 ## Resolution: most specific wins
 
-`LaneResolver.resolve(sport, league, home_team, away_team, season_type)`
-returns the lane for a channel. Precedence:
+`LaneResolver.resolve(sport, league, home_team, away_team, season_type,
+segment, exception_keyword, feed_key)` returns the lane for a channel. Precedence:
 
 1. **Team** pin matching the home team
 2. **Team** pin matching the away team
@@ -71,6 +71,40 @@ play-in games land in a Postseason block.
 The season is stored on the channel (`managed_channels.season_type`, written
 at creation and kept current by the settings sync), because re-layout
 resolves lanes from the stored row and has no event to ask.
+
+### Segment and feed conditions (#1018)
+
+A pin may also carry `segments` (a list of session / card-segment codes such
+as `race`, `qualifying`, `sprint_qualifying`, `prelims`) and a `feed`
+condition. A row with any unsatisfied condition is not a candidate. Among the
+candidates, scope rank decides first, then the number of satisfied conditions
+(season, segments, feed), then `(sort_order, id)`. A season-only row therefore
+resolves exactly as before.
+
+`feed` values:
+
+| Value | Satisfied by |
+|---|---|
+| `main` | a channel with no exception keyword |
+| `any` | any exception-keyword channel |
+| `driver` / `variant` | a race feed whose `feed_key` starts `driver:` / `variant:` |
+| `feed:<feed_key>` | one race feed, e.g. `feed:driver:charles-leclerc` |
+| `keyword:<label>` | one exception keyword, matched case-insensitively |
+
+A channel whose segment is `NULL` satisfies no segments condition, and a
+channel with no `feed_key` satisfies no `driver`, `variant` or `feed:` condition.
+
+Both inputs are stored on the channel row (`managed_channels.segment`, the
+lowercase suffix of `event_id`; `managed_channels.feed_key`) because re-layout
+has no event. The creator takes the segment from the event and maps the
+matched keyword back to its race feed (`ChannelLifecycleService._feed_key_for`,
+via `RaceFeed.as_keyword()` carrying `feed_key`). Channels created before the upgrade have no segment and no feed key, so they match no segments, driver, variant or single-feed condition until recreated. They still match main, any-keyword and keyword conditions, so adding a feed-only block can move an existing channel on the next re-grid. A league block whose only condition is `feed = main` also takes that league's team channels and any channel without a keyword. A racing event with no session data carries no segment, so it matches no segments block.
+
+Example, F1 with four blocks, each a league pin: main channel for `race`,
+`qualifying`, `sprint_qualifying`, `sprint` at 1200 (`feed=main`); driver feeds
+at 1300 (`feed=driver`); other race feeds at 1400 (`feed=variant`); an
+unconditioned pin at 1500 takes practice. Every row is a candidate at league
+rank, so a main race channel (two conditions) beats the unconditioned pin.
 
 ### Channel group on a block (#950)
 
@@ -192,6 +226,8 @@ CREATE TABLE numbering_exceptions (
     sort_order INTEGER NOT NULL DEFAULT 0,
     enabled BOOLEAN DEFAULT 1,
     season_type TEXT,               -- NULL = any season (#950)
+    segments TEXT,                  -- NULL = any; comma-joined segment codes (#1018)
+    feed TEXT,                      -- NULL = any; main|any|driver|variant|feed:<key>|keyword:<label>
     channel_group_id INTEGER,       -- output group for the block's channels (#950)
     channel_group_mode TEXT,        -- ...or a pattern, e.g. '09 TEAMARR {league}'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

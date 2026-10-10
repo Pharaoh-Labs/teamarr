@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { LoaderCircle, Pin, Plus, Trash2 } from "lucide-react"
@@ -20,6 +20,8 @@ import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { TeamPicker } from "@/components/TeamPicker"
 import { getLeagues, getTeamPickerLeagues } from "@/api/teams"
+import { useRaceFeeds } from "@/hooks/useRaceFeeds"
+import type { RaceFeed } from "@/api/raceFeeds"
 import { useSports } from "@/hooks/useSports"
 import { getSportDisplayName } from "@/lib/utils"
 import {
@@ -42,7 +44,10 @@ import type { TeamFilterEntry } from "@/api/types"
  * re-grid in sticky modes, so the change lands on the next generation.
  *
  * A block may be limited to one season type and may name the channel group its
- * channels go to (#950) — "NBA postseason at 900, in 09 TEAMARR {league}".
+ * channels go to (#950) — "NBA postseason at 900, in 09 TEAMARR {league}". It may
+ * also be limited to session / card-segment codes and to one kind of channel
+ * (main, driver feeds, other race feeds, one feed) — "F1 race and qualifying at
+ * 1200" (#1018).
  */
 
 const SEASON_OPTIONS: { value: string; label: string }[] = [
@@ -51,6 +56,150 @@ const SEASON_OPTIONS: { value: string; label: string }[] = [
   { value: "regular", label: "Regular season" },
   { value: "postseason", label: "Postseason" },
 ]
+
+const FEED_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Any channel" },
+  { value: "main", label: "Main channel only" },
+  { value: "any", label: "Any keyword channel" },
+  { value: "driver", label: "Any driver feed" },
+  { value: "variant", label: "Any other race feed" },
+]
+
+// Select value that reveals the keyword-label input; the stored value is
+// "keyword:<label>".
+const KEYWORD_OPTION = "__keyword__"
+
+const parseSegments = (raw: string): string[] | null => {
+  const codes = Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((c) => c.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+  return codes.length ? codes : null
+}
+
+const feedLabel = (feed: string, feeds: RaceFeed[]): string => {
+  const preset = FEED_OPTIONS.find((o) => o.value === feed)
+  if (preset) return preset.label
+  if (feed.startsWith("feed:")) {
+    const row = feeds.find((f) => f.feed_key === feed.slice(5))
+    return row ? row.label : feed.slice(5)
+  }
+  if (feed.startsWith("keyword:")) return `Keyword ${feed.slice(8)}`
+  return feed
+}
+
+/** Feed condition select; ``feeds`` are the block league's race feeds. */
+function FeedSelect({
+  value,
+  onChange,
+  feeds,
+  id,
+  className,
+  onKeywordEmpty,
+}: {
+  value: string
+  onChange: (v: string) => void
+  feeds: RaceFeed[]
+  id?: string
+  className?: string
+  /** Called with true while keyword mode is chosen and the label is empty. */
+  onKeywordEmpty?: (empty: boolean) => void
+}) {
+  const [keywordMode, setKeywordMode] = useState(value.startsWith("keyword:"))
+  const [keywordText, setKeywordText] = useState(
+    value.startsWith("keyword:") ? value.slice(8) : ""
+  )
+  useEffect(() => () => onKeywordEmpty?.(false), [onKeywordEmpty])
+  const known =
+    FEED_OPTIONS.some((o) => o.value === value) ||
+    value.startsWith("keyword:") ||
+    feeds.some((f) => `feed:${f.feed_key}` === value)
+  const onSelect = (v: string) => {
+    if (v === KEYWORD_OPTION) {
+      setKeywordMode(true)
+      onKeywordEmpty?.(!keywordText.trim())
+      return
+    }
+    setKeywordMode(false)
+    onKeywordEmpty?.(false)
+    onChange(v)
+  }
+  return (
+    <>
+    <Select
+      id={id}
+      value={keywordMode ? KEYWORD_OPTION : value}
+      onChange={(e) => onSelect(e.target.value)}
+      className={className}
+      aria-label="Feed"
+    >
+      {FEED_OPTIONS.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+      {feeds.map((f) => (
+        <option key={f.feed_key} value={`feed:${f.feed_key}`}>
+          {f.label}
+        </option>
+      ))}
+      <option value={KEYWORD_OPTION}>Specific keyword…</option>
+      {!known && <option value={value}>{feedLabel(value, feeds)}</option>}
+    </Select>
+    {keywordMode && (
+      <Input
+        value={keywordText}
+        onChange={(e) => {
+          setKeywordText(e.target.value)
+          onKeywordEmpty?.(!e.target.value.trim())
+        }}
+        onBlur={() => {
+          const label = keywordText.trim()
+          if (label) {
+            if (value !== `keyword:${label}`) onChange(`keyword:${label}`)
+          } else if (value.startsWith("keyword:")) {
+            onChange("")
+          }
+        }}
+        className="w-36 h-8"
+        placeholder="Keyword label"
+        aria-label="Keyword label"
+      />
+    )}
+    </>
+  )
+}
+
+/** FeedSelect for a league block: loads that league's race feeds. */
+function LeagueFeedSelect(props: {
+  league: string
+  value: string
+  onChange: (v: string) => void
+  id?: string
+  className?: string
+  onKeywordEmpty?: (empty: boolean) => void
+}) {
+  const { league, ...rest } = props
+  const { data } = useRaceFeeds(league)
+  return <FeedSelect {...rest} feeds={data?.feeds ?? []} />
+}
+
+/** Segments and feed of a block as summary-row text; league blocks resolve feed labels. */
+function BlockConditions({ b }: { b: NumberingException }) {
+  const isLeague = b.scope === "league" && !!b.league_code
+  const { data } = useRaceFeeds(isLeague ? b.league_code! : undefined, isLeague)
+  const feeds = isLeague ? (data?.feeds ?? []) : []
+  return (
+    <>
+      {b.segments && ` · segments: ${b.segments.join(", ")}`}
+      {b.feed && ` · feed: ${feedLabel(b.feed, feeds)}`}
+    </>
+  )
+}
 
 const SCOPE_LABEL: Record<NumberingScope, string> = {
   team: "Team",
@@ -114,6 +263,24 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
     }
   }
 
+  const onSegmentsBlur = async (b: NumberingException, raw: string) => {
+    const next = parseSegments(raw)
+    if ((next ?? []).join(",") === (b.segments ?? []).join(",")) return
+    try {
+      await update.mutateAsync({ id: b.id, data: { segments: next, set_segments: true } })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update segments")
+    }
+  }
+
+  const onFeedChange = async (b: NumberingException, value: string) => {
+    try {
+      await update.mutateAsync({ id: b.id, data: { feed: value || null, set_feed: true } })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update feed")
+    }
+  }
+
   const onGroupBlur = async (b: NumberingException, raw: string) => {
     const v = raw.trim()
     if (v === (b.channel_group_mode ?? "")) return
@@ -146,7 +313,8 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
               belongs to one block — to put a team first inside its league&apos;s block, use
               Priority Teams above. Blocks spill forward if they fill up. A block can be
               limited to one season (playoffs only, say) and can send its channels to its
-              own channel group.
+              own channel group. Racing blocks can also be limited to sessions (race,
+              qualifying…) and to the main channel or a kind of feed.
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -168,7 +336,7 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
             {sorted.map((b) => (
               <div
                 key={b.id}
-                className={`flex items-center gap-3 px-3 py-2 ${b.enabled ? "" : "opacity-60"}`}
+                className={`flex flex-wrap items-center gap-3 px-3 py-2 ${b.enabled ? "" : "opacity-60"}`}
               >
                 <Input
                   type="number"
@@ -192,6 +360,7 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                   <div className="text-xs text-muted-foreground">
                     {getSportDisplayName(b.sport, sportsMap)}
                     {b.end != null && ` · ends at ${b.end}`}
+                    <BlockConditions b={b} />
                     {` · ${b.channel_count} channel${b.channel_count === 1 ? "" : "s"} today`}
                   </div>
                 </div>
@@ -207,6 +376,29 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                     </option>
                   ))}
                 </Select>
+                <Input
+                  defaultValue={(b.segments ?? []).join(", ")}
+                  key={`segments-${b.id}-${(b.segments ?? []).join(",")}`}
+                  className="w-36 h-8"
+                  placeholder="Any segment"
+                  onBlur={(e) => onSegmentsBlur(b, e.target.value)}
+                  aria-label="Segments"
+                />
+                {b.scope === "league" && b.league_code ? (
+                  <LeagueFeedSelect
+                    league={b.league_code}
+                    value={b.feed ?? ""}
+                    onChange={(v) => onFeedChange(b, v)}
+                    className="w-44 h-8"
+                  />
+                ) : (
+                  <FeedSelect
+                    value={b.feed ?? ""}
+                    onChange={(v) => onFeedChange(b, v)}
+                    feeds={[]}
+                    className="w-44 h-8"
+                  />
+                )}
                 <Input
                   defaultValue={b.channel_group_mode ?? ""}
                   key={`group-${b.id}-${b.channel_group_mode ?? ""}`}
@@ -324,6 +516,9 @@ function AddBlockDialog({
   const [label, setLabel] = useState("")
   const [showEnd, setShowEnd] = useState(false)
   const [season, setSeason] = useState("")
+  const [segments, setSegments] = useState("")
+  const [feed, setFeed] = useState("")
+  const [keywordEmpty, setKeywordEmpty] = useState(false)
   const [groupPattern, setGroupPattern] = useState("")
 
   const reset = () => {
@@ -336,6 +531,9 @@ function AddBlockDialog({
     setLabel("")
     setShowEnd(false)
     setSeason("")
+    setSegments("")
+    setFeed("")
+    setKeywordEmpty(false)
     setGroupPattern("")
   }
 
@@ -352,7 +550,8 @@ function AddBlockDialog({
     !isNaN(startNum) &&
     startNum >= 1 &&
     (endNum === null || (!isNaN(endNum) && endNum >= startNum)) &&
-    (scope === "team" ? team.length === 1 : scope === "league" ? !!leagueCode : !!sport)
+    (scope === "team" ? team.length === 1 : scope === "league" ? !!leagueCode : !!sport) &&
+    !keywordEmpty
 
   const submit = async () => {
     if (!valid) return
@@ -368,6 +567,8 @@ function AddBlockDialog({
         team_id: scope === "team" ? team[0].team_id : null,
         team_league: scope === "team" ? team[0].league : null,
         season_type: season || null,
+        segments: parseSegments(segments),
+        feed: feed || null,
         channel_group_mode: groupPattern.trim() || null,
       })
       toast.success("Block added — re-grid queued for the next generation")
@@ -508,6 +709,45 @@ function AddBlockDialog({
             A season limits the block to those games; the rest number as if the block were
             not there. A channel group pattern (with {"{sport}"} or {"{league}"}) overrides the
             group these channels would otherwise use.
+          </p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="pin-segments">Segments (optional)</Label>
+              <Input
+                id="pin-segments"
+                value={segments}
+                onChange={(e) => setSegments(e.target.value)}
+                placeholder="race, qualifying"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pin-feed">Feed</Label>
+              {scope === "league" && leagueCode ? (
+                <LeagueFeedSelect
+                  id="pin-feed"
+                  league={leagueCode}
+                  value={feed}
+                  onChange={setFeed}
+                  onKeywordEmpty={setKeywordEmpty}
+                />
+              ) : (
+                <FeedSelect
+                  id="pin-feed"
+                  value={feed}
+                  onChange={setFeed}
+                  feeds={[]}
+                  onKeywordEmpty={setKeywordEmpty}
+                />
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Segments are session or card codes, comma-separated and matched exactly as
+            typed. Common codes: race, qualifying, sprint, sprint_qualifying, fp1, fp2, fp3,
+            early_prelims, prelims, main_card. The block then holds only those. Feed limits it to the main
+            channel or a kind of race feed. A block with more conditions wins over a
+            plainer block for the same league.
           </p>
 
           {showEnd ? (
