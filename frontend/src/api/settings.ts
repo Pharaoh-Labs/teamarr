@@ -55,8 +55,8 @@ export interface SchedulerSettings {
   channel_reset_enabled: boolean
   channel_reset_cron: string | null
   // Source discovery (#997)
+  // the scan runs once a day at a fixed hour; the mode is the on/off switch (#1027)
   source_discovery_mode: "off" | "suggest"
-  source_discovery_cron: string
   // (#997) a group with more streams is suggested, never added automatically
   source_discovery_auto_max_streams: number
 }
@@ -67,7 +67,6 @@ export interface SchedulerSettingsUpdate {
   channel_reset_enabled?: boolean
   channel_reset_cron?: string | null
   source_discovery_mode?: "off" | "suggest"
-  source_discovery_cron?: string
   source_discovery_auto_max_streams?: number
 }
 

@@ -103,9 +103,9 @@ class SchedulerSettings:
     # Scheduled channel reset (for Jellyfin logo cache issues)
     channel_reset_enabled: bool = False
     channel_reset_cron: str | None = None
-    # Source discovery (#997): 'off' | 'suggest', on its own cron
-    source_discovery_mode: str = "off"
-    source_discovery_cron: str = "0 11 * * *"
+    # Source discovery (#997): 'off' | 'suggest'. The scan runs once a day at a
+    # fixed hour (SOURCE_DISCOVERY_CRON, #1027); the switch is the only control.
+    source_discovery_mode: str = "suggest"
     source_discovery_auto_max_streams: int = 1000
 
 

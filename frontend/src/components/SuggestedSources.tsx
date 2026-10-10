@@ -6,11 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { CollapsibleSection } from "@/components/ui/collapsible-section"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { SaveButton } from "@/components/ui/save-button"
 import { Switch } from "@/components/ui/switch"
-import { CronPreview } from "@/components/CronPreview"
 import { useSchedulerSettings, useUpdateSchedulerSettings } from "@/hooks/useSettings"
 import {
   acceptSourceCandidate,
@@ -56,8 +52,11 @@ const TIER_BADGE: Record<SuggestionTier, { label: string; variant: "success" | "
 /**
  * Suggested sources (#997): M3U groups that are not sources but carry — or by
  * their name should carry — games in subscribed leagues. Found by a scan that
- * runs on its own schedule; accepting one creates a managed source, which is
- * retired on its own when it goes quiet. Hand-made sources are never touched.
+ * runs once a day while the "Scan daily" switch in the header is on (#1027:
+ * no cron to set, the tiers read a week of evidence); accepting one creates a
+ * managed source, which is retired on its own when it goes quiet. Hand-made
+ * sources are never touched. The auto-add stream cap lives with the automatic
+ * mode toggles on the Subscriptions page.
  */
 export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
   const queryClient = useQueryClient()
@@ -66,16 +65,7 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
   const { data: schedulerData } = useSchedulerSettings()
   const updateScheduler = useUpdateSchedulerSettings()
 
-  const [enabled, setEnabled] = useState(false)
-  const [cron, setCron] = useState("")
-  const [maxStreams, setMaxStreams] = useState("1000")
-  const [synced, setSynced] = useState<typeof schedulerData>(undefined)
-  if (schedulerData && schedulerData !== synced) {
-    setSynced(schedulerData)
-    setEnabled(schedulerData.source_discovery_mode !== "off")
-    setCron(schedulerData.source_discovery_cron ?? "")
-    setMaxStreams(String(schedulerData.source_discovery_auto_max_streams ?? 1000))
-  }
+  const scanDaily = schedulerData ? schedulerData.source_discovery_mode !== "off" : true
 
   const { data } = useQuery({
     queryKey: [...QUERY_KEY, showDismissed],
@@ -110,19 +100,11 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
   const dismiss = useMutation({ mutationFn: dismissSourceCandidate, onSuccess: refresh, onError })
   const restore = useMutation({ mutationFn: restoreSourceCandidate, onSuccess: refresh, onError })
 
-  const saveSchedule = async () => {
-    try {
-      const cap = Number.parseInt(maxStreams, 10)
-      await updateScheduler.mutateAsync({
-        source_discovery_mode: enabled ? "suggest" : "off",
-        source_discovery_cron: cron,
-        ...(Number.isFinite(cap) && cap > 0 ? { source_discovery_auto_max_streams: cap } : {}),
-      })
-      toast.success("Source discovery settings saved")
-    } catch (err) {
-      onError(err)
-    }
-  }
+  const setScanDaily = (on: boolean) =>
+    updateScheduler.mutate(
+      { source_discovery_mode: on ? "suggest" : "off" },
+      { onSuccess: () => toast.success(on ? "Daily scan on" : "Daily scan off"), onError },
+    )
 
   // Bulk add / dismiss: one request per group, then one refresh.
   const bulk = useMutation({
@@ -230,21 +212,32 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
       variant="subsection"
       persistKey="sources.suggested"
       actions={
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => scan.mutate()}>
-          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${busy ? "animate-spin" : ""}`} />
-          {scanState?.running
-            ? scanState.progress
-              ? `Scanning ${scanState.progress.done + 1} of ${scanState.progress.total}`
-              : "Scanning…"
-            : "Scan now"}
-        </Button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            Scan daily
+            <Switch
+              checked={scanDaily}
+              disabled={!schedulerData || updateScheduler.isPending}
+              onCheckedChange={setScanDaily}
+              aria-label="Scan for sources once a day"
+            />
+          </label>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => scan.mutate()}>
+            <RefreshCw className={`h-3.5 w-3.5 mr-1 ${busy ? "animate-spin" : ""}`} />
+            {scanState?.running
+              ? scanState.progress
+                ? `Scanning ${scanState.progress.done + 1} of ${scanState.progress.total}`
+                : "Scanning…"
+              : "Scan now"}
+          </Button>
+        </div>
       }
     >
       <div className="space-y-3 pt-2">
         <p className="text-xs text-muted-foreground">
-          Teamarr can look through every M3U group that is not already a source and suggest the
-          ones carrying events in leagues you subscribe to, listed by the M3U account they come
-          from. Replay groups are left out. Switch a league or sport to automatic under
+          Once a day, Teamarr looks through every M3U group that is not already a source and
+          suggests the ones carrying events in leagues you subscribe to, listed by the M3U account
+          they come from. Replay groups are left out. Switch a league or sport to automatic under
           Subscriptions → Find sources automatically and its groups are added without asking,
           once they have shown events on two different days. Discovery reads stream names only: it does not use
           EPG matching, so linear channels such as ESPN or TSN1 are never suggested. Add those
@@ -254,43 +247,6 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
           nothing for two weeks and back on when its group has games again. Sources you add or
           edit yourself are never changed.
         </p>
-
-        <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border p-3">
-          <div className="flex items-center gap-2">
-            <Switch id="discovery-enabled" checked={enabled} onCheckedChange={setEnabled} />
-            <Label htmlFor="discovery-enabled">Scan on a schedule</Label>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="discovery-cron" className="text-xs">
-              Schedule (cron expression)
-            </Label>
-            <Input
-              id="discovery-cron"
-              value={cron}
-              onChange={(e) => setCron(e.target.value)}
-              disabled={!enabled}
-              className="font-mono h-8 w-40"
-              placeholder="0 11 * * *"
-            />
-          </div>
-          <div className="text-xs pb-1.5">{enabled && <CronPreview expression={cron} />}</div>
-          <div className="space-y-1">
-            <Label htmlFor="discovery-cap" className="text-xs" title="Automatic mode (Subscriptions → Find sources automatically) adds groups up to this size; a bigger group is only suggested.">
-              Auto-add groups up to (streams)
-            </Label>
-            <Input
-              id="discovery-cap"
-              type="number"
-              min={1}
-              value={maxStreams}
-              onChange={(e) => setMaxStreams(e.target.value)}
-              className="h-8 w-28"
-            />
-          </div>
-          <div className="ml-auto">
-            <SaveButton onClick={saveSchedule} pending={updateScheduler.isPending} />
-          </div>
-        </div>
 
         {last && (
           <p className="text-xs text-muted-foreground">

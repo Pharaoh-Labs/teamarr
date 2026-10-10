@@ -576,18 +576,16 @@ def test_a_dismissed_candidate_leaves_the_list_and_can_be_restored(api):
     assert api.post("/api/v1/source-discovery/candidates/9999/dismiss").status_code == 404
 
 
-def test_the_schedule_is_a_setting_and_a_bad_cron_is_refused(api):
+def test_the_scan_is_on_by_default_and_the_only_control_is_the_switch(api):
+    """#1027: the scan runs once a day at a fixed hour; no cron to set."""
     got = api.get("/api/v1/settings/scheduler").json()
-    assert (got["source_discovery_mode"], got["source_discovery_cron"]) == ("off", "0 11 * * *")
-    ok = api.put(
-        "/api/v1/settings/scheduler",
-        json={"source_discovery_mode": "suggest", "source_discovery_cron": "30 9 * * *"},
-    )
-    assert ok.status_code == 200
-    assert ok.json()["source_discovery_mode"] == "suggest"
-    assert ok.json()["source_discovery_cron"] == "30 9 * * *"
-    bad = api.put("/api/v1/settings/scheduler", json={"source_discovery_cron": "not a cron"})
-    assert bad.status_code == 400
+    assert got["source_discovery_mode"] == "suggest"
+    assert "source_discovery_cron" not in got
+    off = api.put("/api/v1/settings/scheduler", json={"source_discovery_mode": "off"})
+    assert off.status_code == 200
+    assert off.json()["source_discovery_mode"] == "off"
+    on = api.put("/api/v1/settings/scheduler", json={"source_discovery_mode": "suggest"})
+    assert on.json()["source_discovery_mode"] == "suggest"
     assert (
         api.put(
             "/api/v1/settings/scheduler", json={"source_discovery_mode": "sometimes"}
