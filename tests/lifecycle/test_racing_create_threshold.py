@@ -5,10 +5,10 @@ session (e.g. Friday practice), so once practice entered the pre-buffer
 window `should_create_channel` approved every session channel — the race-day
 channel appeared up to ~35h early with a 1440-minute pre-buffer.
 
-The delete side is already session-aware (`get_event_end_time`); these tests
-pin the create side's mirror: each session channel's threshold derives from
-its own `segment_start`, and callers passing no segment keep the old
-event-anchored behavior.
+The delete side takes the session code instead (`get_event_end_time(segment=)`,
+see test_racing_delete_time.py); these tests pin the create side: each session
+channel's threshold derives from its own `segment_start`, and callers passing
+no segment keep the old event-anchored behavior.
 """
 
 from datetime import UTC, datetime
