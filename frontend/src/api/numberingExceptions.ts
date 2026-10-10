@@ -10,6 +10,11 @@ export type NumberingScope = "team" | "league" | "sport"
 // Season condition on a block (#950): null = any season.
 export type NumberingSeason = "preseason" | "regular" | "postseason"
 
+// Feed condition on a block (#1018): null = any channel. "main" = no keyword,
+// "any" = any keyword channel, "driver" / "variant" = a race feed of that kind,
+// "feed:<feed_key>" = one race feed, "keyword:<label>" = one exception keyword.
+export type NumberingFeed = string
+
 export interface NumberingException {
   id: number
   scope: NumberingScope
@@ -24,6 +29,8 @@ export interface NumberingException {
   sort_order: number
   enabled: boolean
   season_type: string | null
+  segments: string[] | null
+  feed: NumberingFeed | null
   channel_group_id: number | null
   channel_group_mode: string | null
   display_name: string | null
@@ -41,6 +48,8 @@ export interface NumberingExceptionCreate {
   team_id?: string | null
   team_league?: string | null
   season_type?: string | null
+  segments?: string[] | null
+  feed?: NumberingFeed | null
   channel_group_mode?: string | null
 }
 
@@ -54,6 +63,10 @@ export interface NumberingExceptionUpdate {
   // Replaced only when the matching set_* flag is true (null clears).
   season_type?: string | null
   set_season_type?: boolean
+  segments?: string[] | null
+  set_segments?: boolean
+  feed?: NumberingFeed | null
+  set_feed?: boolean
   channel_group_id?: number | null
   channel_group_mode?: string | null
   set_channel_group?: boolean

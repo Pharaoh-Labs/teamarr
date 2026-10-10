@@ -18,6 +18,16 @@ resolution falls through to the next scope or the default lane. A pin may
 also name the output channel group for the channels it holds, which keeps the
 number range and the group in step.
 
+A pin may also carry a *segments condition* (session or card-segment codes,
+"race, qualifying") and a *feed condition* (main channel, any keyword channel,
+any driver or variant race feed, one race feed, or one keyword), both #1018.
+A pin with conditions is a candidate only for channels that satisfy every one
+of them; a channel with no segment satisfies no segments condition, and a
+channel with no feed identity (rows created before the columns) satisfies only
+``main`` and ``any``-by-keyword. Within one scope the candidate with the most
+conditions wins, then ``(sort_order, id)``; scope rank still comes first. A
+pin with no conditions behaves exactly as before.
+
 A start belongs to one block. Two rows may share a start only as members of
 the same named group — the lane is keyed on ``start``, so an ungrouped
 collision ("Brewers at 550" *and* "MLB at 550") would silently merge into one
@@ -31,6 +41,7 @@ placement code (compact / gap / strict) inside each lane. See
 """
 
 import logging
+import re
 import sqlite3
 from dataclasses import dataclass
 from sqlite3 import Connection
@@ -39,6 +50,10 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ("team", "league", "sport")
 SEASON_TYPES = ("preseason", "regular", "postseason", "offseason")
+FEED_KINDS = ("main", "any", "driver", "variant")
+
+_SEGMENT_CODE = re.compile(r"^[a-z0-9_]+$")
+_FEED_KEY = re.compile(r"^(driver|variant):[a-z0-9][a-z0-9-]*$")
 
 # Precedence rank per scope — lower wins. Team pins are split by which side
 # matched so a home-team pin beats an away-team pin when both are pinned.
@@ -88,6 +103,8 @@ class NumberingException:
     season_type: str | None = None
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
+    segments: list[str] | None = None
+    feed: str | None = None
 
     @property
     def has_channel_group(self) -> bool:
@@ -101,8 +118,56 @@ class NumberingException:
 _COLUMNS = (
     'id, scope, sport, league_code, team_name, provider, provider_team_id, '
     'start, "end", label, sort_order, enabled, created_at, updated_at, '
-    "season_type, channel_group_id, channel_group_mode"
+    "season_type, channel_group_id, channel_group_mode, segments, feed"
 )
+
+
+def normalize_segments(raw: str | list[str] | None) -> list[str] | None:
+    """Segment codes as stored: trimmed, lowercase, deduped in first-seen order.
+
+    Accepts a comma-separated string or a list; empty becomes None (any).
+    """
+    if raw is None:
+        return None
+    items = raw.split(",") if isinstance(raw, str) else [str(i) for i in raw]
+    seen: list[str] = []
+    for item in items:
+        code = item.strip().lower()
+        if code and code not in seen:
+            seen.append(code)
+    return seen or None
+
+
+def normalize_feed(raw: str | None) -> str | None:
+    """Feed condition as stored: kinds and prefixes lowercase, a keyword label
+    keeps its case. Empty becomes None (any)."""
+    value = (raw or "").strip()
+    if not value:
+        return None
+    head, sep, rest = value.partition(":")
+    head = head.strip().lower()
+    if not sep:
+        return head
+    rest = rest.strip()
+    if head == "feed":
+        rest = rest.lower()
+    return f"{head}:{rest}"
+
+
+def _feed_matches(feed: str, exception_keyword: str | None, feed_key: str | None) -> bool:
+    """Whether a channel's keyword / race-feed identity satisfies a feed condition."""
+    keyword = (exception_keyword or "").strip()
+    if feed == "main":
+        return not keyword
+    if feed == "any":
+        return bool(keyword)
+    if feed in ("driver", "variant"):
+        return bool(feed_key) and feed_key.startswith(f"{feed}:")
+    if feed.startswith("feed:"):
+        return bool(feed_key) and feed_key == feed[5:]
+    if feed.startswith("keyword:"):
+        return bool(keyword) and keyword.lower() == feed[8:].lower()
+    return False
 
 
 def _row_to_exception(row: sqlite3.Row) -> NumberingException:
@@ -124,6 +189,8 @@ def _row_to_exception(row: sqlite3.Row) -> NumberingException:
         season_type=row["season_type"] or None,
         channel_group_id=row["channel_group_id"],
         channel_group_mode=row["channel_group_mode"] or None,
+        segments=normalize_segments(row["segments"]),
+        feed=normalize_feed(row["feed"]),
     )
 
 
@@ -189,17 +256,37 @@ def _next_sort_order(conn: Connection) -> int:
 
 
 def _validate(
-    scope: str, start: int, end: int | None, season_type: str | None = None
+    scope: str,
+    start: int,
+    end: int | None,
+    season_type: str | None = None,
+    segments: list[str] | None = None,
+    feed: str | None = None,
 ) -> str | None:
     if scope not in SCOPES:
         return f"invalid scope '{scope}'"
     if season_type is not None and season_type not in SEASON_TYPES:
         return f"invalid season_type '{season_type}'"
+    for code in segments or ():
+        if not _SEGMENT_CODE.match(code):
+            return f"invalid segment '{code}'"
+    if feed is not None and not _valid_feed(feed):
+        return f"invalid feed '{feed}'"
     if start < 1:
         return "start must be >= 1"
     if end is not None and end < start:
         return "end must be >= start"
     return None
+
+
+def _valid_feed(feed: str) -> bool:
+    if feed in FEED_KINDS:
+        return True
+    if feed.startswith("feed:"):
+        return bool(_FEED_KEY.match(feed[5:]))
+    if feed.startswith("keyword:"):
+        return bool(feed[8:].strip())
+    return False
 
 
 def _check_start_conflict(
@@ -248,6 +335,8 @@ def add_numbering_exception(
     season_type: str | None = None,
     channel_group_id: int | None = None,
     channel_group_mode: str | None = None,
+    segments: list[str] | str | None = None,
+    feed: str | None = None,
 ) -> NumberingException | None:
     """Add a pinned block.
 
@@ -263,7 +352,9 @@ def add_numbering_exception(
     the group ``label``.
     """
     season_type = (season_type or "").strip().lower() or None
-    err = _validate(scope, start, end, season_type)
+    segment_codes = normalize_segments(segments)
+    feed = normalize_feed(feed)
+    err = _validate(scope, start, end, season_type, segment_codes, feed)
     if err:
         logger.warning("[NUMBERING_EXC] %s", err)
         return None
@@ -328,14 +419,15 @@ def add_numbering_exception(
         INSERT INTO numbering_exceptions
             (scope, sport, league_code, team_name, provider, provider_team_id,
              start, "end", label, sort_order,
-             season_type, channel_group_id, channel_group_mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             season_type, channel_group_id, channel_group_mode, segments, feed)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scope, sport, league_code, team_name, provider, provider_team_id,
             int(start), int(end) if end is not None else None,
             (label or "").strip() or None, _next_sort_order(conn),
             season_type, channel_group_id, (channel_group_mode or "").strip() or None,
+            ",".join(segment_codes) if segment_codes else None, feed,
         ),
     )
     _arm_relayout(conn)
@@ -359,11 +451,14 @@ def update_numbering_exception(
     season_type: str | None | object = ...,
     channel_group_id: int | None | object = ...,
     channel_group_mode: str | None | object = ...,
+    segments: list[str] | str | None | object = ...,
+    feed: str | None | object = ...,
 ) -> NumberingException | None:
-    """Update a block's range / label / enabled flag / season condition /
-    channel group. Scope and identity are immutable — delete and re-add to
-    re-scope. ``end``, ``label``, ``season_type`` and the channel group fields
-    accept ``None`` to clear; leave at the default sentinel to keep."""
+    """Update a block's range / label / enabled flag / season, segments and
+    feed conditions / channel group. Scope and identity are immutable — delete
+    and re-add to re-scope. ``end``, ``label``, ``season_type``, ``segments``,
+    ``feed`` and the channel group fields accept ``None`` to clear; leave at
+    the default sentinel to keep."""
     current = get_numbering_exception(conn, exception_id)
     if current is None:
         return None
@@ -376,7 +471,17 @@ def update_numbering_exception(
         new_season = current.season_type
     else:
         new_season = (season_type.strip().lower() or None) if isinstance(season_type, str) else None
-    err = _validate(current.scope, new_start, new_end, new_season)
+    if segments is ...:
+        new_segments = current.segments
+    else:
+        new_segments = normalize_segments(
+            segments if isinstance(segments, (str, list)) else None
+        )
+    if feed is ...:
+        new_feed = current.feed
+    else:
+        new_feed = normalize_feed(feed) if isinstance(feed, str) else None
+    err = _validate(current.scope, new_start, new_end, new_season, new_segments, new_feed)
     if err:
         logger.warning("[NUMBERING_EXC] %s", err)
         return None
@@ -402,12 +507,14 @@ def update_numbering_exception(
         UPDATE numbering_exceptions
         SET start = ?, "end" = ?, label = ?, enabled = ?,
             season_type = ?, channel_group_id = ?, channel_group_mode = ?,
+            segments = ?, feed = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
         """,
         (
             new_start, new_end, new_label, int(new_enabled),
-            new_season, new_group_id, new_group_mode, exception_id,
+            new_season, new_group_id, new_group_mode,
+            ",".join(new_segments) if new_segments else None, new_feed, exception_id,
         ),
     )
     _arm_relayout(conn)
@@ -435,13 +542,13 @@ class LaneResolver:
     Built once per allocation pass (``LaneResolver.load(conn)``) so resolving
     hundreds of channels costs no queries. ``default`` is the global range lane.
 
-    Within one precedence level a channel matches at most one row per season
-    condition (one league, one sport, one home team, one away team); a row
-    whose condition names the channel's season outranks the unconditioned row
-    of the same level (#950), and a row whose condition names another season
-    is not a candidate at all. The ``(sort_order, id)`` ordering is a
-    deterministic fallback for legacy rows created before starts became
-    unique per group.
+    Within one precedence level a row is a candidate only if the channel
+    satisfies every condition it carries (season #950, segments and feed
+    #1018). Among the candidates the row with the most conditions outranks the
+    rest, so a season-conditioned pin beats the unconditioned one and a pin
+    with segments and a feed beats a pin with either alone. The
+    ``(sort_order, id)`` ordering breaks ties, and is the deterministic
+    fallback for legacy rows created before starts became unique per group.
     """
 
     def __init__(self, exceptions: list[NumberingException], default: Lane):
@@ -489,9 +596,15 @@ class LaneResolver:
         home_team: str | None = None,
         away_team: str | None = None,
         season_type: str | None = None,
+        segment: str | None = None,
+        exception_keyword: str | None = None,
+        feed_key: str | None = None,
     ) -> Lane:
         """Most-specific-wins lane for one channel; default when nothing matches."""
-        e = self.match(sport, league, home_team, away_team, season_type)
+        e = self.match(
+            sport, league, home_team, away_team, season_type,
+            segment, exception_keyword, feed_key,
+        )
         return self.lane_for(e) if e is not None else self.default
 
     def match(
@@ -501,24 +614,41 @@ class LaneResolver:
         home_team: str | None = None,
         away_team: str | None = None,
         season_type: str | None = None,
+        segment: str | None = None,
+        exception_keyword: str | None = None,
+        feed_key: str | None = None,
     ) -> NumberingException | None:
         """The pinned-block row a channel resolves to, or None for the default lane.
 
-        ``season_type`` None (unknown) satisfies no season condition, so such
-        a channel can only land on unconditioned pins.
+        ``season_type`` None (unknown) satisfies no season condition, and
+        ``segment`` None satisfies no segments condition, so such a channel can
+        only land on pins without that condition. ``exception_keyword`` and
+        ``feed_key`` identify a keyword channel and, when its keyword came from
+        a race feed, the feed.
         """
         if not self._exceptions:
             return None
         s = (sport or "").lower()
         season = (season_type or "").lower() or None
+        seg = (segment or "").strip().lower() or None
         candidates: list[tuple[int, int, int, int, NumberingException]] = []
 
         def consider(rank: int, lst: list[NumberingException] | None) -> None:
             for e in lst or ():
-                if e.season_type is None:
-                    candidates.append((rank, 1, e.sort_order, e.id, e))
-                elif e.season_type == season:
-                    candidates.append((rank, 0, e.sort_order, e.id, e))
+                conditions = 0
+                if e.season_type is not None:
+                    if e.season_type != season:
+                        continue
+                    conditions += 1
+                if e.segments:
+                    if seg is None or seg not in e.segments:
+                        continue
+                    conditions += 1
+                if e.feed is not None:
+                    if not _feed_matches(e.feed, exception_keyword, feed_key):
+                        continue
+                    conditions += 1
+                candidates.append((rank, -conditions, e.sort_order, e.id, e))
 
         consider(_RANK_TEAM_HOME, self._teams.get((s, (home_team or "").lower())))
         consider(_RANK_TEAM_AWAY, self._teams.get((s, (away_team or "").lower())))

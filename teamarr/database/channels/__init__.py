@@ -34,6 +34,7 @@ from .history import (
 from .keywords import (
     check_exception_keyword,
     event_identity_text,
+    find_exception_keyword,
     get_exception_keywords,
     get_keywords_for_league,
     keyword_display_value,
@@ -120,6 +121,7 @@ __all__ = [
     "keyword_display_value",
     "get_keywords_for_league",
     "check_exception_keyword",
+    "find_exception_keyword",
     "event_identity_text",
     # Settings helpers
     "get_dispatcharr_settings",
