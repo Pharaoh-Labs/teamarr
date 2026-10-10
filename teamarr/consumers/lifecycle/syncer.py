@@ -150,7 +150,12 @@ class ChannelSyncer(_LifecycleHost):
                         effective_group_mode = lc.channel_group_mode
             # A pinned block's own group outranks both (#950) — same call as
             # the create path, or the channel would flip groups every run.
-            block_group = self._pinned_block_group(event)
+            block_group = self._pinned_block_group(
+                event,
+                getattr(existing, "segment", None),
+                matched_keyword,
+                getattr(existing, "feed_key", None),
+            )
             if block_group is not None:
                 if block_group[0] is not None:
                     effective_group_id = block_group[0]

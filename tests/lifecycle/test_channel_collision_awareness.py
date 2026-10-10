@@ -159,7 +159,8 @@ class TestPinnedBlocksWithExternals:
                 provider TEXT, provider_team_id TEXT, start INTEGER NOT NULL, "end" INTEGER,
                 label TEXT, sort_order INTEGER NOT NULL DEFAULT 0, enabled BOOLEAN DEFAULT 1,
                 created_at TEXT, updated_at TEXT,
-                season_type TEXT, channel_group_id INTEGER, channel_group_mode TEXT
+                season_type TEXT, channel_group_id INTEGER, channel_group_mode TEXT,
+                segments TEXT, feed TEXT
             );
             """
         )

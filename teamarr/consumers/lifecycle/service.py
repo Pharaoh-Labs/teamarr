@@ -23,6 +23,7 @@ import threading
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.database.exception_keywords import ExceptionKeyword
 from teamarr.templates import ContextBuilder, TemplateResolver
 from teamarr.utilities.art_url import read_art_base_url
 
@@ -435,7 +436,31 @@ class ChannelLifecycleService(
         stream: dict | None = None,
         event_group_id: int | None = None,
     ) -> tuple[str | None, str | None]:
-        """Check if stream name matches any exception keyword.
+        """(label, behavior) of the matching keyword, or (None, None).
+
+        Arguments are those of :meth:`_match_exception_keyword`.
+        """
+        kw = self._match_exception_keyword(
+            stream_name,
+            conn,
+            event,
+            program_title,
+            stream=stream,
+            event_group_id=event_group_id,
+        )
+        return (kw.label, kw.behavior) if kw else (None, None)
+
+    def _match_exception_keyword(
+        self,
+        stream_name: str,
+        conn: Connection,
+        event: Any = None,
+        program_title: str | None = None,
+        *,
+        stream: dict | None = None,
+        event_group_id: int | None = None,
+    ) -> ExceptionKeyword | None:
+        """Find the exception keyword a stream matches.
 
         ``event`` (the matched Event) does two things: its league scopes in
         that league's race feeds (#245) ahead of the global keywords — the
@@ -447,11 +472,11 @@ class ChannelLifecycleService(
         keyword match sources (#893): pinned streams, M3U group, event group.
 
         Returns:
-            Tuple of (matched_keyword, behavior) or (None, None)
+            The matched keyword (a race feed carries its ``feed_key``), or None.
         """
         from teamarr.database.channels import (
-            check_exception_keyword,
             event_identity_text,
+            find_exception_keyword,
             get_keywords_for_league,
         )
 
@@ -463,7 +488,7 @@ class ChannelLifecycleService(
                 memo[league] = get_keywords_for_league(conn, league, keywords)
             keywords = memo[league]
         stream = stream or {}
-        return check_exception_keyword(
+        return find_exception_keyword(
             stream_name,
             keywords,
             event_identity_text(event),
@@ -474,11 +499,40 @@ class ChannelLifecycleService(
             event_group_id=event_group_id,
         )
 
-    def _pinned_block_group(self, event) -> tuple[int | None, str | None] | None:
-        """Channel group carried by the event's pinned block, if any (#950).
+    def _feed_key_for(
+        self, event, keyword: str | None, matched: ExceptionKeyword | None = None
+    ) -> str | None:
+        """The race-feed key behind a matched exception keyword (#1018).
 
-        Returns ``(static_group_id, mode)`` when the block the event numbers
-        into names an output group, else None. One resolver per batch
+        The matched keyword object decides when the caller has it: a race feed
+        carries its key, a global keyword has none even if it shares a label
+        with a feed. With the label alone, reads the per-league keyword list
+        ``_match_exception_keyword`` memoized (race feeds first) and takes the
+        first label hit.
+        """
+        if matched is not None:
+            return matched.feed_key
+        if not keyword:
+            return None
+        league = getattr(event, "league", None)
+        for kw in self.__dict__.get("_league_keywords", {}).get(league, ()):
+            if kw.label == keyword:
+                return kw.feed_key
+        return None
+
+    def _pinned_block_group(
+        self,
+        event,
+        segment: str | None = None,
+        exception_keyword: str | None = None,
+        feed_key: str | None = None,
+    ) -> tuple[int | None, str | None] | None:
+        """Channel group carried by the channel's pinned block, if any (#950).
+
+        Returns ``(static_group_id, mode)`` when the block the channel numbers
+        into names an output group, else None. Resolved per channel, so a
+        session's main channel and its feed channels can sit in different
+        blocks with different groups (#1018). One resolver per batch
         (``_lane_resolver``, loaded where ``_league_configs`` is), and the same
         call on the create and sync paths — a channel must not flip groups
         between runs.
@@ -494,6 +548,9 @@ class ChannelLifecycleService(
             home.name if home else None,
             away.name if away else None,
             getattr(event, "season_type", None),
+            segment,
+            exception_keyword,
+            feed_key,
         )
         if block is None or not block.has_channel_group:
             return None

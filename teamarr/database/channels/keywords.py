@@ -114,7 +114,35 @@ def check_exception_keyword(
     m3u_group_name: str | None = None,
     event_group_id: int | None = None,
 ) -> tuple[str | None, str | None]:
-    """Check if stream name matches any exception keyword.
+    """Label and behavior of the matching keyword, or (None, None).
+
+    See :func:`find_exception_keyword` for the matching rules.
+    """
+    winner = find_exception_keyword(
+        stream_name,
+        keywords,
+        event_text,
+        program_title,
+        stream_id=stream_id,
+        m3u_group_id=m3u_group_id,
+        m3u_group_name=m3u_group_name,
+        event_group_id=event_group_id,
+    )
+    return (winner.label, winner.behavior) if winner else (None, None)
+
+
+def find_exception_keyword(
+    stream_name: str,
+    keywords: list[ExceptionKeyword],
+    event_text: str | None = None,
+    program_title: str | None = None,
+    *,
+    stream_id: int | None = None,
+    m3u_group_id: int | None = None,
+    m3u_group_name: str | None = None,
+    event_group_id: int | None = None,
+) -> ExceptionKeyword | None:
+    """Find the exception keyword a stream matches.
 
     Uses smart boundary matching to avoid false positives like "Eli" matching
     "Pelicans", while still supporting terms with special characters like "(ESP)"
@@ -166,19 +194,19 @@ def check_exception_keyword(
         event_group_id: The Teamarr event group the stream was matched in
 
     Returns:
-        Tuple of (label, behavior) or (None, None) if no match.
-        The label is the configured display name for the keyword, used for
-        channel naming and the {exception_keyword} template variable.
+        The matching keyword, or None. Its label is the configured display
+        name, used for channel naming and the {exception_keyword} template
+        variable; a race feed carries its ``feed_key``.
     """
     if stream_id is not None:
         for kw in keywords:
             if stream_id in kw.stream_id_set:
-                return (kw.label, kw.behavior)
+                return kw
 
     sources = (stream_name, event_text, program_title, m3u_group_id, m3u_group_name, event_group_id)
     winner = _first_keyword_match(keywords, *sources)
     if winner is None:
-        return (None, None)
+        return None
     if winner.behavior != "ignore":
         # An Ignore keyword outranks everything but a pin (#931). The first
         # match used to win outright, and "first" within one kind of evidence
@@ -190,7 +218,7 @@ def check_exception_keyword(
         )
         if ignored is not None:
             winner = ignored
-    return (winner.label, winner.behavior)
+    return winner
 
 
 def _first_keyword_match(
