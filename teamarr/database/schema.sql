@@ -467,8 +467,7 @@ CREATE TABLE IF NOT EXISTS settings (
 
     -- Source discovery (#997): scan M3U groups that are not sources for subscribed games.
     -- 'off' | 'suggest' (candidates wait for review). Runs on its own cron, never per generation.
-    source_discovery_mode TEXT DEFAULT 'off',
-    source_discovery_cron TEXT DEFAULT '0 11 * * *',
+    source_discovery_mode TEXT DEFAULT 'suggest',  -- 'off' | 'suggest'; the scan runs once a day (#1027)
     source_discovery_auto_max_streams INTEGER DEFAULT 1000,  -- a bigger group is suggested, never auto-added
 
     -- Stream Filtering (global defaults for event groups)

@@ -22,6 +22,11 @@ from teamarr.services import create_cache_service
 
 logger = logging.getLogger(__name__)
 
+# Source discovery runs once a day (#1027). The suggestion tiers read a 7-day
+# evidence window, so a second scan in a day finds nothing new; the user's only
+# control is the on/off switch (`source_discovery_mode`). Local time.
+SOURCE_DISCOVERY_CRON = "0 11 * * *"
+
 
 class SubTaskScheduler:
     """Lightweight scheduler that runs a single task on its own cron.
@@ -262,11 +267,16 @@ class CronScheduler:
         self._start_source_discovery(scheduler_settings)
 
     def _start_source_discovery(self, settings: Any) -> None:
-        """Start the source discovery sub-scheduler when the mode is not off (#997)."""
-        if settings.source_discovery_mode == "off" or not settings.source_discovery_cron:
+        """Start the source discovery sub-scheduler when the mode is not off (#997).
+
+        The scan runs once a day at a fixed hour (#1027): the suggestion tiers
+        read a 7-day evidence window, so scanning more often finds nothing new,
+        and the only user control is the on/off switch.
+        """
+        if settings.source_discovery_mode == "off":
             return
         sub = SubTaskScheduler(
-            "source-discovery", self._task_source_discovery, settings.source_discovery_cron
+            "source-discovery", self._task_source_discovery, SOURCE_DISCOVERY_CRON
         )
         if sub.start():
             self._sub_schedulers["source_discovery"] = sub

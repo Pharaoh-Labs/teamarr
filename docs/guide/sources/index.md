@@ -68,7 +68,7 @@ Providers add, rename and drop M3U groups through the year, so a hand-kept sourc
 
 **What a scan does.** It reads every M3U group that is not already a source, puts every stream in it through the same matching a generation run uses, and records which groups carried events in leagues you subscribe to. Nothing is created and nothing else is changed. A scan takes a few minutes on a large install; it waits for a generation run to finish and pauses if one starts.
 
-**When it runs.** Turn on **Scan on a schedule** and set a cron expression (default: once a day at 11:00), or press **Scan now**. It is off by default.
+**When it runs.** Once a day at 11:00 local time, while the **Scan daily** switch in the Suggested sources header is on (it is on by default; switch it off and nothing scans). Press **Scan now** to run one sooner. More often finds nothing new: the suggestions below read a week of evidence.
 
 **What gets suggested.** Evidence is kept for a week, because most groups are empty or placeholders between match days:
 
@@ -98,12 +98,12 @@ The list is flat and organized by the M3U account each group comes from. When tw
 
 ### Automatic mode
 
-Under **Subscriptions → Find sources automatically**, switch on a league or a whole sport (a sport covers every league under it, including leagues discovered later). The daily scan then adds qualifying groups as sources on its own instead of waiting for you:
+Under **Subscriptions → Find sources automatically**, switch on a league or a whole sport (a sport covers every league under it, including leagues discovered later). The daily scan then adds qualifying groups as sources on its own instead of waiting for you — so the **Scan daily** switch on the Sources page has to be on, and the card warns you when it is not. The size cap for automatic adding (**Auto-add groups up to**) lives on the same card:
 
 - the group has **Events found** or **Team streams** evidence — three matched streams, or one when its name names the league;
 - on **two different scan days** within the week, so a one-off listing never imports (a weekly league is added the week after it first appears);
 - **at least half** of its matched streams are in leagues you switched on — a mixed network group qualifies on the league that dominates it;
-- it has no more streams than the **Auto-add groups up to** cap on the Sources page (default 1,000). Bigger groups, the network catch-alls, stay your call and remain suggested.
+- it has no more streams than the **Auto-add groups up to** cap on the Find sources automatically card (default 1,000). Bigger groups, the network catch-alls, stay your call and remain suggested.
 
 Name-only groups, replay groups, dismissed groups and linear channels (EPG matching) are never added. Each suggestion in the list says why automatic mode is holding it. A source added this way carries an **Auto-added** badge with the date; otherwise it behaves exactly like a managed source you added by hand, including retirement and the rule that any hand edit makes it yours.
 
