@@ -262,6 +262,48 @@ def get_plugin_channel(conn: Connection, plugin_id: str, logical_key: str) -> Ma
     return ManagedChannel.from_row(dict(row)) if row else None
 
 
+def get_plugin_channels(conn: Connection, plugin_id: str) -> list[ManagedChannel]:
+    """List every active channel owned by one plugin (Packet 8C diff scope).
+
+    Core rows and other plugins' rows are structurally excluded: ownership is
+    part of the WHERE clause, not a post-filter.
+    """
+    rows = conn.execute(
+        """SELECT * FROM managed_channels
+           WHERE plugin_id = ? AND deleted_at IS NULL
+           ORDER BY id""",
+        (plugin_id,),
+    ).fetchall()
+    return [ManagedChannel.from_row(dict(row)) for row in rows]
+
+
+def get_active_tvg_id_owners(
+    conn: Connection,
+    tvg_ids: set[str],
+    exclude_channel_ids: set[int] | frozenset[int] = frozenset(),
+) -> dict[str, str]:
+    """Map each active tvg_id to its owner (``"core"`` or the owning plugin id).
+
+    Used by plan validation to reject XMLTV channel ids that would collide with
+    a channel the plan does not own. Excluded ids (typically the plugin's own
+    matched channels keeping their current id) never count as conflicts.
+    """
+    if not tvg_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in tvg_ids)
+    rows = conn.execute(
+        f"""SELECT id, tvg_id, plugin_id FROM managed_channels
+            WHERE deleted_at IS NULL AND tvg_id IN ({placeholders})""",
+        tuple(sorted(tvg_ids)),
+    ).fetchall()
+    owners: dict[str, str] = {}
+    for row in rows:
+        if row["id"] in exclude_channel_ids:
+            continue
+        owners[row["tvg_id"]] = row["plugin_id"] if row["plugin_id"] else "core"
+    return owners
+
+
 def adopt_plugin_channel(
     conn: Connection,
     plugin_id: str,
