@@ -244,7 +244,7 @@ class ChannelSyncer(_LifecycleHost):
             # creation) back to the sport-duration one on every sync.
             duration_override = template_duration_override(template)
             expected_delete_time = self._timing_manager.calculate_delete_time(
-                event, duration_override
+                event, duration_override, segment
             )
             if expected_delete_time:
                 expected_delete_str = expected_delete_time.isoformat()
@@ -262,7 +262,9 @@ class ChannelSyncer(_LifecycleHost):
             # sync on the next cleanup run. Not gated on an override being
             # set — removing a custom duration must pull the estimate back.
             if event.start_time:
-                expected_end = self._timing_manager.get_event_end_time(event, duration_override)
+                expected_end = self._timing_manager.get_event_end_time(
+                    event, duration_override, segment
+                )
                 expected_end_str = expected_end.isoformat()
                 stored_end_str = getattr(existing, "event_end_estimate", None)
                 if stored_end_str:
