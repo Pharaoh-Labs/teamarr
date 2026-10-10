@@ -48,9 +48,18 @@ class EPGProgramIndex:
     by :meth:`lookup` (they cannot be windowed).
     """
 
-    def __init__(self, programs_by_tvg: dict[str, list[DispatcharrProgram]]):
+    def __init__(
+        self,
+        programs_by_tvg: dict[str, list[DispatcharrProgram]],
+        unavailable: str | None = None,
+    ):
         # Each tvg_id's list is pre-sorted by start time for cheap scans.
         self._by_tvg = programs_by_tvg
+        # Set when the guide could not be read at all this run (#1029): no
+        # Dispatcharr connection, the catalog fetch failed, or the build has no
+        # programme search. An empty index with no reason means the guide WAS
+        # read and held nothing for these streams — a different verdict.
+        self.unavailable = unavailable
 
     # ------------------------------------------------------------------ build
     @classmethod
@@ -94,7 +103,9 @@ class EPGProgramIndex:
                 "[EPG-INDEX] Program search unsupported on this Dispatcharr build; "
                 "EPG matching unavailable"
             )
-            return cls({})
+            return cls(
+                {}, unavailable="programme search is not supported on this Dispatcharr build"
+            )
 
         fetch_started = datetime.now(UTC)
         start_iso = _iso_z(window_start)
@@ -128,9 +139,7 @@ class EPGProgramIndex:
         if streams_by_program:
             workers = min(FETCH_WORKERS, len(streams_by_program))
             with ThreadPoolExecutor(max_workers=workers) as executor:
-                for program_tvg, programs in executor.map(
-                    fetch, streams_by_program.keys()
-                ):
+                for program_tvg, programs in executor.map(fetch, streams_by_program.keys()):
                     if not programs:
                         continue
                     # Key the result by the stream tvg_id(s) for matcher lookup.

@@ -149,8 +149,11 @@ class StreamMatching:
         # ONLY when this group opted in (group.epg_match_enabled). Default off →
         # epg_index is None → matcher behaves exactly as before.
         epg_index = self._build_epg_index(
-            group, streams, target_date,
-            match_days_ahead, xtream_fallback,
+            group,
+            streams,
+            target_date,
+            match_days_ahead,
+            xtream_fallback,
             xtream_cache_hours,
         )
 
@@ -160,9 +163,7 @@ class StreamMatching:
         # to only include events from subscribed leagues.
         # Union league_cache with subscription to guarantee subscribed leagues
         # are always searched even if cache hasn't been refreshed yet.
-        include_leagues = (
-            resolved_leagues if resolved_leagues else group.leagues
-        )
+        include_leagues = resolved_leagues if resolved_leagues else group.leagues
         search_leagues = list(set(self._get_all_known_leagues()) | set(include_leagues))
 
         matcher = StreamMatcher(
@@ -228,7 +229,13 @@ class StreamMatching:
     ):
         """Build a scoped EPGProgramIndex for EPG matching, or None if disabled.
 
-        Gated on: per-group opt-in + a connected Dispatcharr.
+        Gated on the per-group opt-in. For an opted-in group the result is never
+        None (#1029): an index that could not be built carries ``unavailable``
+        (no Dispatcharr connection, catalog fetch failed) so every linear stream
+        is recorded as "guide could not be read" instead of falling back to the
+        name path's skip; an index that was built and holds nothing is returned
+        empty so each stream gets ``no_epg_channel`` (#877) as it would if any
+        other stream had programmes.
 
         A raw M3U stream's tvg_id is usually a different namespace from EPG
         program tvg_ids, so we resolve each candidate stream to its EPG-source
@@ -240,15 +247,18 @@ class StreamMatching:
         """
         if not group.epg_match_enabled:
             return None
+
+        from teamarr.consumers.matching.epg_index import EPGProgramIndex
+
         if not self._dispatcharr_client:
-            return None
+            return EPGProgramIndex({}, unavailable="no Dispatcharr connection")
 
         if not any(s.get("tvg_id") for s in streams):
-            return None
+            # Nothing to look a guide up by: each stream is marked no_epg_channel.
+            return EPGProgramIndex({})
 
         from datetime import datetime, time
 
-        from teamarr.consumers.matching.epg_index import EPGProgramIndex
         from teamarr.consumers.matching.epg_resolver import resolve_program_tvg_ids
 
         # Resolve stream tvg_ids -> EPG-source tvg_ids. Needs the EPGData catalog
@@ -257,7 +267,9 @@ class StreamMatching:
         # group (#734).
         inputs = self._epg_resolution_inputs()
         if inputs is None:
-            return None
+            return EPGProgramIndex(
+                {}, unavailable="the Dispatcharr guide catalog could not be read"
+            )
 
         resolution, _stats = resolve_program_tvg_ids(
             streams,
@@ -290,7 +302,7 @@ class StreamMatching:
             )
         except Exception as e:
             logger.warning("[EPG-MATCH] Failed to build EPG index for group %s: %s", group.id, e)
-            index = EPGProgramIndex({})
+            index = EPGProgramIndex({}, unavailable=f"guide fetch failed: {e}")
 
         # Cascade layer 4 (epic crs): for streams the curated DP guide produced
         # NO programs for (unresolved, or resolved to an empty mirror channel),
@@ -304,10 +316,12 @@ class StreamMatching:
 
         if not index:
             logger.info("[EPG-MATCH] group=%s no programs indexed (DP guide + xtream)", group.id)
-            return None
+            return index
         logger.info(
             "[EPG-MATCH] group=%s indexed %d programs across %d tvg_ids",
-            group.id, index.program_count(), len(index.tvg_ids()),
+            group.id,
+            index.program_count(),
+            len(index.tvg_ids()),
         )
         return index
 
@@ -457,7 +471,11 @@ class StreamMatching:
             logger.info(
                 "[XTREAM-EPG] group=%s account=%s filled %d tvg_ids (%d programs) "
                 "from provider xmltv for %d DP-unmatched streams",
-                group.id, account_id, len(programs), added, len(wanted),
+                group.id,
+                account_id,
+                len(programs),
+                added,
+                len(wanted),
             )
 
     def _load_sport_durations_cached(self) -> dict[str, float]:
@@ -894,9 +912,7 @@ class StreamMatching:
         return None
 
     @staticmethod
-    def _detect_team_in_stream_name(
-        stream_name_lower: str, home_team, away_team
-    ):
+    def _detect_team_in_stream_name(stream_name_lower: str, home_team, away_team):
         """Detect team-specific feed by looking for feed indicator patterns.
 
         Only matches when a team name appears in a feed-specific context:
@@ -949,7 +965,7 @@ class StreamMatching:
 
                 for pattern in patterns:
                     for match in re.finditer(pattern, stream_name_lower):
-                        remainder = stream_name_lower[match.end():]
+                        remainder = stream_name_lower[match.end() :]
 
                         # Skip when the opposing team is named *after* the feed
                         # keyword — that's a shared matchup feed ("4K FEED A B"),
@@ -1038,9 +1054,7 @@ class StreamMatching:
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 for key, refreshed in zip(
                     unique_events.keys(),
-                    executor.map(
-                        self._service.refresh_event_status, unique_events.values()
-                    ),
+                    executor.map(self._service.refresh_event_status, unique_events.values()),
                     strict=True,
                 ):
                     old = unique_events[key]
