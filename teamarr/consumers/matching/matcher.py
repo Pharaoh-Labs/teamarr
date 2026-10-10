@@ -628,10 +628,10 @@ class StreamMatcher:
                     # A skipped stream is skipped on every path (#869): its
                     # guide programmes are not consulted either.
                     pass
-                elif self._epg_index is not None and getattr(self._epg_index, "unavailable", None):
+                elif guide_unavailable := getattr(self._epg_index, "unavailable", None):
                     # The guide could not be read this run (#1029) — say so,
                     # rather than leave the name path's skip on every stream.
-                    self._mark_epg_unavailable(match_results, self._epg_index.unavailable)
+                    self._mark_epg_unavailable(match_results, guide_unavailable)
                 elif self._epg_index is not None and tvg_id:
                     epg_results = self._match_via_epg(
                         stream_id=stream_id,
