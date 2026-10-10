@@ -102,6 +102,8 @@ Everything starts as **Ignore**, so out of the box no onboard or pit-lane stream
 
 The driver names, the forms providers write them in (`Charles Leclerc`, `Leclerc`, `C. Leclerc`, `LEC`) and the feed vocabulary come from the provider roster and refresh with the team cache, so a mid-season substitute appears after their first race. Only the behavior and on/off switch are yours; a refresh never changes them. A driver who leaves the grid keeps their row so your choice survives if they return.
 
+The checkbox in the **On** column is separate from the behavior. It controls whether Teamarr recognizes the feed at all. With it off, the row is left out of the keyword list, so that feed's streams are no longer matched to this row: they may fall to another feed row that also matches (such as the generic **Onboard** row), join the session's main channel, match a global exception keyword, or, when the name carries no Grand Prix and no other enabled feed names it, not match the race at all. **Ignore** keeps recognizing the feed and drops its streams, so use Ignore to get a driver's onboard out of your lineup.
+
 Because the rows are scoped to their league, a driver's surname never affects other sports — `Hamilton` fires on F1 streams and not on the Tiger-Cats.
 
 ## Feed Separation

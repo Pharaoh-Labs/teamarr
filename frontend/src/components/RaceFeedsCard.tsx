@@ -21,6 +21,12 @@ const BEHAVIOR_LABEL: Record<RaceFeedBehavior, string> = {
   ignore: "Ignore",
 }
 
+const ENABLED_HINT =
+  "Recognize this feed. When off, its streams are no longer matched to this row: they may fall " +
+  "to another feed row that also matches (such as Onboard), join the session's main channel, " +
+  "match a global exception keyword, or not match the race at all. To drop a feed's streams, " +
+  "set its behavior to Ignore instead."
+
 /**
  * Race Feeds (#245): per-league driver and feed-variant rows that ride the
  * exception-keyword engine. "Own channel" gives that driver's onboard (or the
@@ -140,6 +146,17 @@ export function RaceFeedsCard() {
           </div>
         ) : (
           <>
+            <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-xs">
+              <li>
+                <strong>Own channel:</strong> One channel per feed for each session, with every matching stream merged into it.
+              </li>
+              <li>
+                <strong>Separate:</strong> One channel for every matching stream.
+              </li>
+              <li>
+                <strong>On:</strong> {ENABLED_HINT}
+              </li>
+            </ul>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h4 className="text-sm font-medium">Drivers ({drivers.length})</h4>
               <div className="flex gap-2">
@@ -155,7 +172,9 @@ export function RaceFeedsCard() {
               <Table>
                 <TableHeader className="bg-muted">
                   <TableRow>
-                    <TableHead className="w-12">On</TableHead>
+                    <TableHead className="w-12" title={ENABLED_HINT}>
+                      On
+                    </TableHead>
                     <TableHead className="w-44">Driver</TableHead>
                     <TableHead>Matches</TableHead>
                     <TableHead className="w-40">Behavior</TableHead>
@@ -169,7 +188,9 @@ export function RaceFeedsCard() {
               <Table>
                 <TableHeader className="bg-muted">
                   <TableRow>
-                    <TableHead className="w-12">On</TableHead>
+                    <TableHead className="w-12" title={ENABLED_HINT}>
+                      On
+                    </TableHead>
                     <TableHead className="w-44">Feed</TableHead>
                     <TableHead>Matches</TableHead>
                     <TableHead className="w-40">Behavior</TableHead>
