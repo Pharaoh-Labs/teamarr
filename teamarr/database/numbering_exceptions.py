@@ -25,6 +25,10 @@ block ordered by the normal lineup sort, which is never what the user meant
 (they want Priority Teams, or a different start). :func:`add_numbering_exception`
 and :func:`update_numbering_exception` raise :class:`StartConflict` instead.
 
+A team pin on a racing team is refused (:class:`RacingTeamPin`, #1019): racing
+events carry a placeholder team named after the event, so a constructor name
+never matches a channel.
+
 The allocator in :mod:`teamarr.database.channel_numbers` runs the same
 placement code (compact / gap / strict) inside each lane. See
 ``docs/reference/architecture/channel-numbering.md``.
@@ -129,6 +133,31 @@ def _row_to_exception(row: sqlite3.Row) -> NumberingException:
 
 class StartConflict(ValueError):
     """A block start is already used by another block outside this group."""
+
+
+class RacingTeamPin(ValueError):
+    """A team pin was requested for a racing team, which can never match."""
+
+
+# Raw ``team_cache.sport`` values for racing teams: the canonical code on
+# channels, and the label ESPN gives F1 constructors.
+_RACING_SPORTS = frozenset({"racing", "motor sports"})
+
+
+def _is_racing_team(conn: Connection, cache_sport: str | None, league: str | None) -> bool:
+    """A racing team by its cached sport label, or by its league's sport.
+
+    The league check keeps a provider that labels its teams differently
+    ("open wheel") from slipping past the label set.
+    """
+    if (cache_sport or "").strip().lower() in _RACING_SPORTS:
+        return True
+    if not league:
+        return False
+    row = conn.execute(
+        "SELECT sport FROM leagues WHERE league_code = ?", (league.lower(),)
+    ).fetchone()
+    return bool(row) and (row["sport"] or "").strip().lower() == "racing"
 
 
 def _table_exists(conn: Connection) -> bool:
@@ -260,7 +289,7 @@ def add_numbering_exception(
 
     Returns the stored row, or ``None`` on validation / lookup failure.
     Raises :class:`StartConflict` when ``start`` is taken by a block outside
-    the group ``label``.
+    the group ``label``, and :class:`RacingTeamPin` for a racing team.
     """
     season_type = (season_type or "").strip().lower() or None
     err = _validate(scope, start, end, season_type)
@@ -276,7 +305,7 @@ def add_numbering_exception(
             return None
         lookup = conn.execute(
             """
-            SELECT team_name, sport FROM team_cache
+            SELECT team_name, sport, league FROM team_cache
             WHERE provider = ? AND provider_team_id = ?
               AND (league = ? OR ? IS NULL)
             LIMIT 1
@@ -289,6 +318,12 @@ def add_numbering_exception(
                 provider, provider_team_id, team_league,
             )
             return None
+        if _is_racing_team(conn, lookup["sport"], lookup["league"]):
+            raise RacingTeamPin(
+                f"{lookup['team_name']} is a racing team. Racing channels have no "
+                "team to match, so a team block would never hold a channel. "
+                "Use a league block instead."
+            )
         team_name = lookup["team_name"]
         sport = lookup["sport"]
         league_code = None
