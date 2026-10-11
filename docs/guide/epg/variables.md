@@ -652,8 +652,8 @@ F1, NASCAR, IndyCar, and MotoGP-specific variables for event templates. These ar
 
 | Variable | Description | Sample |
 |----------|-------------|--------|
-| `{session_name}` | This channel's session display name | `Practice 1`, `Qualifying`, `Race` |
-| `{session_type}` | This channel's session code | `fp1`, `qualifying`, `race` |
+| `{session_name}` | This channel's session display name (racing session, or a Test's day) | `Practice 1`, `Qualifying`, `Race`, `Day 3` |
+| `{session_type}` | This channel's session code | `fp1`, `qualifying`, `race`, `day3` |
 | `{next_session_name}` | Display name of the next session | `Qualifying` |
 | `{next_session_time}` | Start time of the next session | `9:00 AM` |
 

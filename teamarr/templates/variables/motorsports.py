@@ -57,7 +57,13 @@ SESSION_DISPLAY_NAMES: dict[str, str] = {
 }
 
 
-def _session_display_name(code: str) -> str:
+def _session_display_name(code: str, event=None) -> str:
+    """Display name for a session code; the event's own session name wins when
+    it carries one (a Test's 'Day 3', #944)."""
+    if event is not None:
+        for session in getattr(event, "sessions", None) or []:
+            if session.code == code and session.name:
+                return session.name
     return SESSION_DISPLAY_NAMES.get(code, code.replace("_", " ").title())
 
 
@@ -125,18 +131,18 @@ def extract_circuit_name(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     category=Category.MOTORSPORTS,
     scope=TemplateScope.EVENT_ONLY,
     suffix_rules=SuffixRules.BASE_ONLY,  # Session is specific to current channel
-    description="This channel's session display name (e.g., 'Practice 1', 'Race')",
+    description="This channel's session display name ('Practice 1', 'Race'; 'Day 3' of a Test)",
 )
 def extract_session_name(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    """Extract the display name of this channel's racing session."""
+    """Extract the display name of this channel's session (racing, or a Test's day)."""
     if not game_ctx or not game_ctx.event:
         return ""
 
     event = game_ctx.event
-    if event.sport != "racing" or not game_ctx.card_segment:
+    if not event.sessions or not game_ctx.card_segment:
         return ""
 
-    return _session_display_name(game_ctx.card_segment)
+    return _session_display_name(game_ctx.card_segment, event)
 
 
 @register_variable(
@@ -144,7 +150,7 @@ def extract_session_name(ctx: TemplateContext, game_ctx: GameContext | None) -> 
     category=Category.MOTORSPORTS,
     scope=TemplateScope.EVENT_ONLY,
     suffix_rules=SuffixRules.BASE_ONLY,  # Session is specific to current channel
-    description="This channel's session code (e.g., 'fp1', 'qualifying', 'race')",
+    description="This channel's session code ('fp1', 'qualifying', 'race'; 'day3' of a Test)",
 )
 def extract_session_type(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     """Extract the raw session code for this channel."""
@@ -152,7 +158,7 @@ def extract_session_type(ctx: TemplateContext, game_ctx: GameContext | None) -> 
         return ""
 
     event = game_ctx.event
-    if event.sport != "racing":
+    if not event.sessions:
         return ""
 
     return game_ctx.card_segment or ""

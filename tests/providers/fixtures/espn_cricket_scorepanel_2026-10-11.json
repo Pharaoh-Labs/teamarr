@@ -98,7 +98,8 @@
   "_league": {
    "id": "8050",
    "name": "Ranji Trophy"
-  }
+  },
+  "endDate": "2026-10-15T23:59Z"
  },
  {
   "id": "1554416",
@@ -233,7 +234,8 @@
   "_league": {
    "id": "19439",
    "name": "ICC Men's Cricket World Cup League 2"
-  }
+  },
+  "endDate": "2026-10-12T23:59Z"
  },
  {
   "id": "1554413",
@@ -334,7 +336,8 @@
   "_league": {
    "id": "19439",
    "name": "ICC Men's Cricket World Cup League 2"
-  }
+  },
+  "endDate": "2026-10-13T23:59Z"
  },
  {
   "id": "1555116",
@@ -435,7 +438,8 @@
   "_league": {
    "id": "24801",
    "name": "Bangladesh tour of United Arab Emirates 2026/27"
-  }
+  },
+  "endDate": "2026-10-14T23:59Z"
  },
  {
   "id": "1525659",
@@ -536,7 +540,8 @@
   "_league": {
    "id": "24203",
    "name": "Australia tour of South Africa 2026/27"
-  }
+  },
+  "endDate": "2026-10-14T23:59Z"
  },
  {
   "id": "1554123",
@@ -637,7 +642,8 @@
   "_league": {
    "id": "22562",
    "name": "CSA Women's Division Two T20"
-  }
+  },
+  "endDate": "2026-10-11T23:59Z"
  },
  {
   "id": "1529232",
@@ -772,7 +778,8 @@
   "_league": {
    "id": "24289",
    "name": "West Indies tour of India 2026/27"
-  }
+  },
+  "endDate": "2026-10-12T23:59Z"
  },
  {
   "id": "1554579",
@@ -871,6 +878,7 @@
   "_league": {
    "id": "1554555",
    "name": "ICC Men's T20 World Cup Sub Regional Asia Qualifier B"
-  }
+  },
+  "endDate": "2026-10-13T23:59Z"
  }
 ]

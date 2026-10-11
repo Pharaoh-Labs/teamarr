@@ -1663,11 +1663,15 @@ class TeamMatcher:
             # misread date can no longer zero out the whole group.
             stream_date_dist = 0
             if ctx.classified.normalized.extracted_date:
-                # The date in the stream name is in the provider's timezone
+                # The date in the stream name is in the provider's timezone.
+                # A multi-day event (a Test, a race weekend) is on time on any
+                # of its days, so the distance is to the nearest session (#944).
                 compare_tz = ctx.stream_tz or ctx.user_tz
-                event_date_in_stream_tz = _local_date(event.start_time, compare_tz)
-                stream_date_dist = abs(
-                    (ctx.classified.normalized.extracted_date - event_date_in_stream_tz).days
+                event_days = [_local_date(event.start_time, compare_tz)] + [
+                    _local_date(s.start_time, compare_tz) for s in (event.sessions or [])
+                ]
+                stream_date_dist = min(
+                    abs((ctx.classified.normalized.extracted_date - d).days) for d in event_days
                 )
 
             # Check for sport mismatch from stream (if detected)

@@ -17,6 +17,7 @@ from teamarr.core import (
     Event,
     EventStatus,
     LeagueMappingSource,
+    RacingSession,
     SportsProvider,
     Team,
     TeamStats,
@@ -258,6 +259,13 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             sport_league = self._get_sport_league_from_db(league)
         return sport_league[1] if sport_league else league
 
+    # A Test is one ESPN event whose ``date``/``endDate`` are five days apart
+    # with no per-day start times. It becomes one channel per day (maintainer,
+    # 2026-10-11): a session per calendar day on the racing sessions machinery,
+    # each day starting at the day-1 start time. ESPN pads ``endDate`` with a
+    # reserve day, so the span is capped at five.
+    CRICKET_TEST_MAX_DAYS = 5
+
     # Cricket format leagues (#944): ``provider_league_id`` is ``cricket/panel:<format>``
     # and the league is a filter over the day's score panel, because ESPN has
     # no standing cricket leagues — each tour or tournament is its own numbered
@@ -306,8 +314,36 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 seen.add(event_id)
                 event = self._parse_event(event_data, league)
                 if event:
+                    if format_key == "test":
+                        self._attach_test_days(event, event_data)
                     events.append(event)
         return events
+
+    def _attach_test_days(self, event: Event, event_data: dict) -> None:
+        """Give a Test one session per scheduled day (#944, bead 7cmb.8).
+
+        Days run from the event's ``date`` to its ``endDate`` (both present on
+        every panel event), each starting at the day-1 start time, capped at
+        five. A match already decided keeps only the days up to today, so a
+        Test won in four does not raise a day-5 channel.
+        """
+        end = self._parse_datetime(event_data.get("endDate") or "")
+        start = event.start_time
+        if end is None or end < start:
+            return
+        n_days = min((end.date() - start.date()).days + 1, self.CRICKET_TEST_MAX_DAYS)
+        if n_days < 2:
+            return
+        today = datetime.now(UTC).date()
+        sessions = []
+        for i in range(n_days):
+            day_start = start + timedelta(days=i)
+            if event.status.state == "final" and day_start.date() > today:
+                break
+            sessions.append(
+                RacingSession(code=f"day{i + 1}", name=f"Day {i + 1}", start_time=day_start)
+            )
+        event.sessions = sessions
 
     def get_events(self, league: str, target_date: date) -> list[Event]:
         # Get sport/league from database config

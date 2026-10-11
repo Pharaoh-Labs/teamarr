@@ -228,3 +228,132 @@ def test_the_real_client_memoises_a_days_panel_but_never_a_failure(monkeypatch):
         assert len(calls) == 2 and calls[0] == {"dates": "20261011"}
     finally:
         client.close()
+
+
+# ============================== Tests: one channel per day, as sessions (bead 7cmb.8)
+
+
+class _TestMappings(_Mappings):
+    ROWS = {**_Mappings.ROWS, "cricket-test": "cricket/panel:test"}
+
+
+def _test_provider(client=None):
+    return ESPNProvider(client=client or _PanelClient(), league_mapping_source=_TestMappings())
+
+
+def test_a_test_carries_one_session_per_day_capped_at_five():
+    from datetime import UTC, date, datetime, timedelta
+
+    events = {e.id: e for e in _test_provider().get_events("cricket-test", date(2026, 10, 11))}
+    assert sorted(events) == ["1525659", "1555116"]
+    aus = events["1525659"]  # date 2026-10-09T07:30Z, endDate 2026-10-14T23:59Z (reserve day)
+    assert [s.code for s in aus.sessions] == ["day1", "day2", "day3", "day4", "day5"]
+    assert [s.name for s in aus.sessions][:2] == ["Day 1", "Day 2"]
+    d1 = datetime(2026, 10, 9, 7, 30, tzinfo=UTC)
+    assert [s.start_time for s in aus.sessions] == [d1 + timedelta(days=i) for i in range(5)]
+    assert aus.status.state == "live" and aus.status.detail == "Stumps"
+
+
+def test_a_test_already_decided_keeps_no_future_days(monkeypatch):
+    from datetime import date
+
+    import teamarr.providers.espn.provider as prov
+
+    data = EVENTS["1525659"]
+    data = {
+        **data,
+        "status": {
+            **data["status"],
+            "type": {**data["status"]["type"], "state": "post", "description": "Result"},
+        },
+    }
+    data["competitions"] = [{**data["competitions"][0], "status": data["status"]}]
+    panel = {"scores": [{"leagues": [data["_league"]], "events": [data]}]}
+
+    class _Now(prov.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 12, 15, 0, tzinfo=tz)  # won inside day 4
+
+    monkeypatch.setattr(prov, "datetime", _Now)
+    (event,) = _test_provider(_PanelClient(panel)).get_events("cricket-test", date(2026, 10, 12))
+    assert event.status.state == "final"
+    assert [s.code for s in event.sessions] == ["day1", "day2", "day3", "day4"]
+
+
+def test_a_test_day_is_seven_hours_and_a_stream_naming_its_day_scopes_to_it():
+    from datetime import date
+
+    from teamarr.consumers.racing_segments import (
+        _session_duration_hours,
+        expand_racing_segments,
+        has_session_channels,
+    )
+
+    (test_event,) = [
+        e
+        for e in _test_provider().get_events("cricket-test", date(2026, 10, 11))
+        if e.id == "1525659"
+    ]
+    assert has_session_channels(test_event)
+    assert _session_duration_hours("day3", {"cricket": 4.0}) == 7.0
+
+    whole = {"stream": {"name": "South Africa v Australia - 1st Test"}, "event": test_event}
+    day3 = {"stream": {"name": "SA vs AUS 1st Test Day 3 [1080p]"}, "event": test_event}
+    day9 = {"stream": {"name": "SA vs AUS 1st Test Day 9"}, "event": test_event}
+    out = expand_racing_segments([whole, day3, day9], {"cricket": 4.0})
+    by_name = {}
+    for m in out:
+        by_name.setdefault(m["stream"]["name"], []).append(m["segment"])
+    # A feed with no day word covers the whole match: one channel per day.
+    assert by_name["South Africa v Australia - 1st Test"] == [
+        "day1",
+        "day2",
+        "day3",
+        "day4",
+        "day5",
+    ]
+    assert by_name["SA vs AUS 1st Test Day 3 [1080p]"] == ["day3"]
+    assert "SA vs AUS 1st Test Day 9" not in by_name  # names a day the Test has not got
+    d3 = next(m for m in out if m["segment"] == "day3" and "Day 3" in m["stream"]["name"])
+    assert (d3["segment_end"] - d3["segment_start"]).total_seconds() == 7 * 3600
+
+
+def test_racing_words_on_a_cricket_stream_do_not_scope():
+    from datetime import date
+
+    from teamarr.consumers.racing_segments import expand_racing_segments
+
+    (test_event,) = [
+        e
+        for e in _test_provider().get_events("cricket-test", date(2026, 10, 11))
+        if e.id == "1525659"
+    ]
+    out = expand_racing_segments(
+        [
+            {
+                "stream": {"name": "Australia v South Africa Test - Race for the Ashes"},
+                "event": test_event,
+            }
+        ],
+        {},
+    )
+    assert len(out) == 5
+
+
+def test_session_name_variable_reads_a_tests_day():
+    from datetime import date
+    from types import SimpleNamespace
+
+    from teamarr.templates.variables.motorsports import extract_session_name, extract_session_type
+
+    (test_event,) = [
+        e
+        for e in _test_provider().get_events("cricket-test", date(2026, 10, 11))
+        if e.id == "1525659"
+    ]
+    game_ctx = SimpleNamespace(event=test_event, card_segment="day3")
+    assert extract_session_name(None, game_ctx) == "Day 3"
+    assert extract_session_type(None, game_ctx) == "day3"
+    # No session on the channel: nothing, as for a race weekend's main row.
+    assert extract_session_name(None, SimpleNamespace(event=test_event, card_segment=None)) == ""

@@ -7,7 +7,7 @@ nav_order: 1
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 101 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 102 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 
@@ -66,7 +66,7 @@ baseball/mlb
 | Combat Sports | UFC, PFL, LFA | Event Card matching; ESPN files most other promotions (Cage Warriors, OKTAGON, RIZIN, ONE) under a catch-all `mma/other` bucket rather than their own slugs |
 | Motorsports | F1, IndyCar | Race weekend sessions |
 | Tennis | ATP, WTA | One event per match; grand slams split by draw type |
-| Cricket | ODIs, T20 Internationals | Format leagues over ESPN's daily score panel: ESPN has no standing cricket leagues, each tour or tournament is its own numbered league, so `cricket-odi` and `cricket-t20i` filter the day's panel by format. No teams endpoint. Tests follow with per-day sessions (#944) |
+| Cricket | ODIs, T20 Internationals, Test Matches | Format leagues over ESPN's daily score panel: ESPN has no standing cricket leagues, each tour or tournament is its own numbered league, so `cricket-odi`, `cricket-t20i` and `cricket-test` filter the day's panel by format. No teams endpoint. A Test is one channel per day, each day a session (#944) |
 | Lacrosse | NLL, PLL, NCAA M/W | |
 | Volleyball | NCAA M/W | |
 | Softball | NCAA Softball | |

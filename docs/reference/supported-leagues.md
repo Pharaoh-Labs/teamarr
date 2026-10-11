@@ -6,7 +6,7 @@ nav_order: 1
 
 # Supported Sports & Leagues
 
-Teamarr supports **178 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
+Teamarr supports **179 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -355,13 +355,14 @@ splitting and matching details.
 |--------|-----|----------|
 | One Day Internationals | `cricket-odi` | ESPN |
 | T20 Internationals | `cricket-t20i` | ESPN |
+| Test Matches | `cricket-test` | ESPN |
 | Indian Premier League | `ipl` | TSDB |
 | Big Bash League | `bbl` | TSDB |
 | SA20 | `sa20` | TSDB |
 | Major League Cricket | `mlc` | TSDB |
 
 {: .note }
-The two international leagues come from ESPN's daily cricket score panel: ESPN has no standing cricket leagues, so each is a filter over whatever tours and tournaments have a match that day, by format. They have no team list, so team channels and the team importer are not offered for them. Test matches are next (#944). The four franchise leagues are TSDB-sourced, so a [premium API key](providers/tsdb.md) is required.
+The three international leagues come from ESPN's daily cricket score panel: ESPN has no standing cricket leagues, so each is a filter over whatever tours and tournaments have a match that day, by format. They have no team list, so team channels and the team importer are not offered for them. A Test match is one channel per day: each day is a session with its own create and retire time, named by `{session_name}` ("Day 3"), and a stream whose name says "Day 3" feeds that day only while a plain "1st Test" feed feeds every day (#944). The four franchise leagues are TSDB-sourced, so a [premium API key](providers/tsdb.md) is required.
 
 ---
 
