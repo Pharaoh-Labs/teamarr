@@ -9,6 +9,7 @@ adoption contract).
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from sqlite3 import Connection
@@ -62,11 +63,17 @@ def compute_plan_diff(
     plan: PlanResult,
     *,
     plugin_id: str,
+    remote_stream_orders: Mapping[int, Sequence[int]] | None = None,
 ) -> PlanDiff:
     """Compare a complete plan with the plugin's channels, in plan order.
 
     Matching order per plan channel: exact logical key, then unambiguous
     adoption key, else create. Channels left unmatched are retire intentions.
+
+    ``remote_stream_orders`` (Dispatcharr channel id → its real stream array)
+    lets the diff see remote drift the local rows cannot (#712): array order
+    IS priority in Dispatcharr, and a channel can be reordered by hand there
+    while Teamarr's rows still match the plan.
     """
     if plan.plugin_id != plugin_id:
         return PlanDiff(
@@ -93,8 +100,25 @@ def compute_plan_diff(
     for wanted in plan.channels:
         existing = by_logical.get(wanted.logical_key)
         if existing is not None:
+            if existing.id in matched_channel_ids:
+                # An earlier plan item already claimed this row (via adoption);
+                # a second item resolving onto it would double-own the channel.
+                blocked.append(
+                    PlanDiagnostic(
+                        code="plan.logical_key_conflict",
+                        message=(
+                            f"logical key {wanted.logical_key!r} resolves to a "
+                            "channel another plan item already matched; "
+                            "refusing to give one row two owners"
+                        ),
+                        item_key=wanted.logical_key,
+                    )
+                )
+                continue
             matched_channel_ids.add(existing.id)
-            reasons = plan_field_reasons(conn, wanted, existing)
+            reasons = plan_field_reasons(
+                conn, wanted, existing, remote_stream_orders=remote_stream_orders
+            )
             if not reasons:
                 continue
             kind: IntentionKind = (
@@ -131,7 +155,9 @@ def compute_plan_diff(
                     existing=existing,
                     reasons=(
                         "adopted_by_adoption_key",
-                        *plan_field_reasons(conn, wanted, existing),
+                        *plan_field_reasons(
+                            conn, wanted, existing, remote_stream_orders=remote_stream_orders
+                        ),
                     ),
                 )
             )
@@ -154,8 +180,16 @@ def plan_field_reasons(
     conn: Connection,
     wanted: ChannelPlan,
     existing: ManagedChannel,
+    remote_stream_orders: Mapping[int, Sequence[int]] | None = None,
 ) -> tuple[str, ...]:
-    """Names of the host-visible fields where the plan differs from the row."""
+    """Names of the host-visible fields where the plan differs from the row.
+
+    Stream order fires on a difference against the local rows OR — when a
+    snapshot of Dispatcharr's real stream arrays is supplied — against that
+    snapshot: array order IS priority there (#712), and the remote channel can
+    drift while the local rows still match the plan. A channel missing from
+    the snapshot is unknown, not empty; no reason fires for it.
+    """
     reasons: list[str] = []
     if wanted.display_name != existing.channel_name:
         reasons.append("display_name")
@@ -163,7 +197,12 @@ def plan_field_reasons(
         reasons.append("xmltv_channel_id")
     if wanted.delete_at != load_host_time(existing.scheduled_delete_at):
         reasons.append("delete_at")
+    desired = list(wanted.ordered_stream_ids)
     current_streams = [s.dispatcharr_stream_id for s in get_channel_streams(conn, existing.id)]
-    if list(wanted.ordered_stream_ids) != current_streams:
+    if desired != current_streams:
         reasons.append("ordered_stream_ids")
+    elif remote_stream_orders is not None and existing.dispatcharr_channel_id is not None:
+        remote = remote_stream_orders.get(existing.dispatcharr_channel_id)
+        if remote is not None and desired != list(remote):
+            reasons.append("ordered_stream_ids")
     return tuple(reasons)

@@ -45,14 +45,24 @@ diagnostics is never applied.
 produces ordered intentions: `create`, `adopt` (matched by unambiguous
 adoption key), `update`, `stream_order`, and `retire` for active channels the
 complete plan no longer claims. An ambiguous adoption key blocks the entire
-diff — the host never chooses between candidates.
+diff — the host never chooses between candidates — as does a logical key that
+resolves onto a row another plan item already matched (one row can never gain
+two owners). Stream order fires on a difference against the local rows or
+against Dispatcharr's real per-channel stream arrays when the applier supplies
+them: array order IS priority there, and a channel reordered by hand in
+Dispatcharr drifts while Teamarr's rows still match the plan (#712).
 
 `applier.py` executes an unblocked diff through the existing repositories and
 channel manager: Dispatcharr create/rename/update/delete must succeed before
 any local row claims success, a failed local insert after a remote create is
 compensated by deleting the remote channel, retire keeps the row when the
 remote delete fails so it is retried, and per-intention failures are isolated.
-A `status="failed"` plan never runs the deletion diff. `dry_run=True` (or the
-global `DRY_RUN` flag) returns the validated diff summary with zero writes.
+One Dispatcharr channel snapshot per apply feeds both the external-occupied
+number set — plan-created channels never take a number a hand-made channel
+already uses (#146) — and the real stream arrays the diff compares order
+against. A delete that answers "not found" retires the local row (the channel
+is already gone), matching core orphan cleanup. A `status="failed"` plan never
+runs the deletion diff. `dry_run=True` (or the global `DRY_RUN` flag) returns
+the validated diff summary with zero writes.
 `PlanApplyOutcome.to_metrics()` produces the shape recorded under the parent
 run's `extra_metrics["plans"]` when planning enters the pipeline (Packet 8F).

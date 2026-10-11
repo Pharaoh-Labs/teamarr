@@ -19,7 +19,7 @@ from teamarr.database.channels import (
     get_plugin_channels,
 )
 from teamarr.database.connection import get_connection
-from teamarr.dispatcharr.types import OperationResult
+from teamarr.dispatcharr.types import DispatcharrChannel, OperationResult
 
 PLUGIN = "test.provider"
 START = datetime(2026, 10, 6, 18, tzinfo=UTC)
@@ -34,6 +34,14 @@ class FakeChannelManager:
         self.fail_create = False
         self.fail_update = False
         self.fail_delete = False
+        self.delete_not_found = False
+        # Dispatcharr's channels as get_channels() would return them: the
+        # snapshot the applier reads once per apply for external numbers (#146)
+        # and real stream arrays (#712).
+        self.remote_channels: list[DispatcharrChannel] = []
+
+    def get_channels(self, use_cache: bool = True) -> list[DispatcharrChannel]:
+        return list(self.remote_channels)
 
     def create_channel(self, **kwargs):
         self.created.append(kwargs)
@@ -51,6 +59,8 @@ class FakeChannelManager:
 
     def delete_channel(self, channel_id):
         self.deletes.append(channel_id)
+        if self.delete_not_found:
+            return OperationResult(success=False, error="Channel not found")
         if self.fail_delete:
             return OperationResult(success=False, error="delete boom")
         return OperationResult(success=True)
@@ -562,3 +572,162 @@ def test_metrics_shape_matches_run_recording_contract(db_path, db_factory):
         "retired": 0,
         "failures": [],
     }
+
+
+def test_create_avoids_numbers_owned_by_non_teamarr_channels(db_path, db_factory):
+    # A hand-made Dispatcharr channel already sits on 101, the first number
+    # of the default range; the plan's channel must take the next one (#146).
+    manager = FakeChannelManager()
+    manager.remote_channels = [
+        DispatcharrChannel(id=555, uuid="ext", name="Hand-made", channel_number="101")
+    ]
+
+    outcome = _applier(db_factory, manager).apply(
+        _plan(channels=[_channel()]), plugin_id=PLUGIN, plan_generation=1
+    )
+
+    assert outcome.ok
+    assert manager.created[0]["channel_number"] == 102
+    with get_connection(db_path) as conn:
+        channel = get_plugin_channel(conn, PLUGIN, "event:p:lg:1")
+        assert channel is not None and int(channel.channel_number) == 102
+
+
+def test_retire_treats_remote_not_found_as_already_retired(db_path, db_factory):
+    manager = FakeChannelManager()
+    manager.delete_not_found = True
+    with get_connection(db_path) as conn:
+        _seed_plugin_channel(
+            conn, logical_key="event:p:lg:1", adoption_key="slot:p:lg:1"
+        )
+
+    outcome = _applier(db_factory, manager).apply(_plan(), plugin_id=PLUGIN, plan_generation=2)
+
+    # The 404 from the delete is confirmation the channel is already gone
+    # (#1036); the local row retires instead of failing on every future plan.
+    assert outcome.ok and outcome.retired == ["event:p:lg:1"]
+    assert manager.deletes == [777]
+    with get_connection(db_path) as conn:
+        assert get_plugin_channel(conn, PLUGIN, "event:p:lg:1") is None
+
+
+def test_stream_order_follows_dispatcharr_when_local_rows_match(db_path, db_factory):
+    # Local rows already match the plan, but Dispatcharr's array is reversed:
+    # array order IS priority, so the apply must still push the plan order
+    # (#712, #1036).
+    manager = FakeChannelManager()
+    manager.remote_channels = [
+        DispatcharrChannel(
+            id=777, uuid="dp-uuid", name="Feature Event", channel_number="501",
+            streams=(12, 8),
+        )
+    ]
+    with get_connection(db_path) as conn:
+        _seed_plugin_channel(
+            conn,
+            logical_key="event:p:lg:1",
+            adoption_key="slot:p:lg:1",
+            tvg="plan:p:lg:1",
+            streams=(8, 12),
+            delete_at=STOP,
+        )
+
+    outcome = _applier(db_factory, manager).apply(
+        _plan(channels=[_channel()]), plugin_id=PLUGIN, plan_generation=3
+    )
+
+    assert outcome.ok and outcome.stream_ordered == ["event:p:lg:1"]
+    assert (777, {"streams": [8, 12]}) in manager.updates
+    with get_connection(db_path) as conn:
+        channel = get_plugin_channel(conn, PLUGIN, "event:p:lg:1")
+        assert channel is not None
+        streams = get_channel_streams(conn, channel.id)
+        assert [s.dispatcharr_stream_id for s in streams] == [8, 12]
+
+
+def test_no_stream_push_when_remote_order_already_matches(db_path, db_factory):
+    manager = FakeChannelManager()
+    manager.remote_channels = [
+        DispatcharrChannel(
+            id=777, uuid="dp-uuid", name="Feature Event", channel_number="501",
+            streams=(8, 12),
+        )
+    ]
+    with get_connection(db_path) as conn:
+        _seed_plugin_channel(
+            conn,
+            logical_key="event:p:lg:1",
+            adoption_key="slot:p:lg:1",
+            tvg="plan:p:lg:1",
+            streams=(8, 12),
+            delete_at=STOP,
+        )
+
+    outcome = _applier(db_factory, manager).apply(
+        _plan(channels=[_channel()]), plugin_id=PLUGIN, plan_generation=3
+    )
+
+    assert outcome.ok and outcome.stream_ordered == []
+    assert manager.updates == []  # nothing to push: local, plan and remote agree
+
+
+def test_diff_blocks_a_logical_key_resolved_twice(db_path):
+    with get_connection(db_path) as conn:
+        # One row: adoption key matches the canonical item, but it still
+        # carries the provisional logical key another plan item names.
+        _seed_plugin_channel(
+            conn,
+            logical_key="event:p:provisional",
+            adoption_key="slot:p:lg:1",
+            tvg="plan:p:lg:1",
+        )
+
+        diff = compute_plan_diff(
+            conn,
+            _plan(
+                channels=[
+                    _channel(logical_key="event:p:lg:1", xmltv_channel_id="plan:p:lg:1"),
+                    _channel(
+                        logical_key="event:p:provisional",
+                        adoption_key="slot:p:provisional",
+                        xmltv_channel_id="plan:p:provisional",
+                    ),
+                ]
+            ),
+            plugin_id=PLUGIN,
+        )
+
+    assert not diff.actionable
+    assert [d.code for d in diff.blocked] == ["plan.logical_key_conflict"]
+    assert diff.intentions == ()
+
+
+def test_adopt_refusal_surfaces_as_adoption_conflict_diagnostic(
+    db_path, db_factory, monkeypatch
+):
+    # The repository can refuse an adoption the diff could not see (the rows
+    # changed underneath it); that refusal must arrive as its own verdict,
+    # not a generic intention failure (#1036).
+    import teamarr.consumers.planning.applier as applier_module
+
+    def refuse(*args, **kwargs):
+        raise ValueError("plugin logical key already belongs to another channel")
+
+    monkeypatch.setattr(applier_module, "adopt_plugin_channel", refuse)
+    manager = FakeChannelManager()
+    with get_connection(db_path) as conn:
+        _seed_plugin_channel(
+            conn,
+            logical_key="event:p:provisional",
+            adoption_key="slot:p:lg:1",
+            name="Provisional",
+            tvg="plan:p:lg:1",
+        )
+
+    outcome = _applier(db_factory, manager).apply(
+        _plan(channels=[_channel()]), plugin_id=PLUGIN, plan_generation=4
+    )
+
+    assert not outcome.ok
+    assert outcome.failures[0].code == "plan.adoption_conflict"
+    assert "already belongs" in outcome.failures[0].message
