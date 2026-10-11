@@ -755,17 +755,24 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             article = data.get("article") or {}
             if article.get("type") == "Preview":
                 event.game_preview = self._preview_text(article)
-            from teamarr.providers.espn.preview import apply_generated_preview_fields, select_series
+            from teamarr.providers.espn.preview import (
+                apply_generated_preview_fields,
+                is_series_state,
+                select_series,
+            )
 
             # seasonseries is authoritative over any competition.series value
             # _parse_event filled above, and the explicit "" clears it when the
             # payload has no usable series. apply_generated_preview_fields
             # below re-derives the identical selection (same data + event.id),
-            # so the two cannot drift apart by construction.
+            # so the two cannot drift apart by construction. is_series_state
+            # mirrors _parse_event: the containing series can carry a not-yet-
+            # started note ("Series starts 10/11") or an empty summary (playoff
+            # Game 1) — neither is state, so neither renders (#teamarr-4sfj).
             series = data.get("seasonseries") or []
             chosen_series = select_series(series, event.id)
             summary_text = chosen_series.get("summary") if chosen_series else ""
-            event.series_summary = str(summary_text) if summary_text else ""
+            event.series_summary = str(summary_text) if is_series_state(summary_text) else ""
             # Structured preview (tvnk.15): recent-form W-L per team from
             # lastFiveGames — available days ahead, unlike preview prose.
             home_form, away_form = self._parse_last_five(
@@ -901,7 +908,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 from teamarr.providers.espn.preview import select_series
 
                 chosen_series = select_series(comp_series, event_id)
-                if chosen_series and chosen_series.get("summary"):
+                if chosen_series and is_series_state(chosen_series.get("summary")):
                     series_summary = str(chosen_series["summary"])
 
             return Event(

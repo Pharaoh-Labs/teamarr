@@ -97,6 +97,42 @@ def test_select_series_empty_and_invalid():
     assert select_series([{"type": "season", "summary": ""}]) is None
 
 
+def test_select_series_event_match_outranks_stateful_fallback():
+    # Live NLCS Game 1 shape (2026-10-11, event 401908030): the playoff entry
+    # contains tonight's game but its summary is '' until first pitch, while
+    # the completed regular-season head-to-head carries a stateful summary.
+    # The containing series must win — callers resolve its empty summary to
+    # no series data instead of borrowing "MIL wins series 4-3" (#teamarr-4sfj).
+    series_list = [
+        {"type": "preseason", "summary": "Series tied 1-1", "completed": True,
+         "events": ["401833127", "401833228"]},
+        {"type": "season", "summary": "MIL wins series 4-3", "completed": True,
+         "events": ["401815450", "401816515"]},
+        {"type": "playoff", "summary": "", "completed": False,
+         "events": ["401908030", "401908031", "401908032"]},
+    ]
+    chosen = select_series(series_list, event_id="401908030")
+    assert chosen is not None
+    assert chosen["type"] == "playoff"
+    assert chosen["summary"] == ""
+
+
+def test_select_series_event_match_with_start_note_does_not_leak():
+    # A containing entry whose summary is a schedule note ("Series starts")
+    # is the right entry but not a state; callers filter it, so make sure the
+    # stateful regular-season entry is not silently substituted here either.
+    series_list = [
+        {"type": "season", "summary": "MIL wins series 4-3", "completed": True,
+         "events": ["401815450"]},
+        {"type": "playoff", "summary": "Series starts 10/11", "completed": False,
+         "events": ["401908030"]},
+    ]
+    chosen = select_series(series_list, event_id="401908030")
+    assert chosen is not None
+    assert chosen["type"] == "playoff"
+    assert chosen["summary"] == "Series starts 10/11"
+
+
 def test_apply_generated_preview_fields_selects_playoff_series():
     event = Event(
         id="401918022",
@@ -246,3 +282,92 @@ def test_get_event_summary_selects_playoff_series():
     event = provider.get_event("401918022", "wnba")
     assert event is not None
     assert event.series_summary == "Series tied 1-1"
+
+
+def _nlcs_game1_summary_payload(playoff_summary=""):
+    """Live ESPN summary shape for NLCS Game 1 (2026-10-11, event 401908030)."""
+    return {
+        "header": {
+            "gameNote": "Los Angeles Dodgers at Milwaukee Brewers",
+            "competitions": [
+                {
+                    "id": "401908030",
+                    "date": "2026-10-12T00:00Z",
+                    "competitors": [
+                        {"id": "19", "homeAway": "home",
+                         "team": {"id": "19", "displayName": "Milwaukee Brewers",
+                                  "abbreviation": "MIL"}},
+                        {"id": "8", "homeAway": "away",
+                         "team": {"id": "8", "displayName": "Los Angeles Dodgers",
+                                  "abbreviation": "LAD"}},
+                    ],
+                    "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
+                }
+            ],
+            "season": {"year": 2026, "type": 3},
+        },
+        "seasonseries": [
+            {"type": "preseason", "summary": "Series tied 1-1", "completed": True,
+             "events": ["401833127", "401833228"]},
+            {"type": "season", "summary": "MIL wins series 4-3", "completed": True,
+             "events": ["401815450", "401816515", "401816530", "401816545", "401816560"]},
+            {"type": "playoff", "summary": playoff_summary, "completed": False,
+             "events": ["401908030", "401908031", "401908032", "401908033"]},
+        ],
+    }
+
+
+def test_get_event_playoff_game1_does_not_borrow_season_series():
+    # Regression (#teamarr-4sfj): the playoff entry containing this event has
+    # an empty summary (series 0-0), so the old candidate filter skipped it and
+    # the completed regular-season "MIL wins series 4-3" leaked into
+    # {series_summary}. The containing series now wins and renders empty.
+    provider = ESPNProvider(client=MagicMock())
+    provider._client.get_event = MagicMock(
+        return_value=_nlcs_game1_summary_payload(playoff_summary="")
+    )
+    event = provider.get_event("401908030", "mlb")
+    assert event is not None
+    assert event.series_summary == ""
+
+
+def test_get_event_playoff_start_note_does_not_leak():
+    # Same shape, but the containing series carries a "Series starts" note —
+    # a schedule note, not state; must not render either.
+    provider = ESPNProvider(client=MagicMock())
+    provider._client.get_event = MagicMock(
+        return_value=_nlcs_game1_summary_payload(playoff_summary="Series starts 10/11")
+    )
+    event = provider.get_event("401908030", "mlb")
+    assert event is not None
+    assert event.series_summary == ""
+
+
+def test_get_event_playoff_series_state_still_renders():
+    # After Game 1 the playoff entry carries real state; nothing else changes.
+    provider = ESPNProvider(client=MagicMock())
+    provider._client.get_event = MagicMock(
+        return_value=_nlcs_game1_summary_payload(playoff_summary="MIL leads series 1-0")
+    )
+    event = provider.get_event("401908030", "mlb")
+    assert event is not None
+    assert event.series_summary == "MIL leads series 1-0"
+
+
+def test_apply_generated_preview_fields_playoff_game1_leaves_summary_empty():
+    event = Event(
+        id="401908030",
+        provider="espn",
+        name="Los Angeles Dodgers at Milwaukee Brewers",
+        short_name="LAD @ MIL",
+        start_time=None,
+        home_team=MagicMock(),
+        away_team=MagicMock(),
+        status=MagicMock(),
+        league="mlb",
+        sport="baseball",
+        series_summary="",
+    )
+    apply_generated_preview_fields(_nlcs_game1_summary_payload(playoff_summary=""), event)
+    assert event.series_summary == ""
+
