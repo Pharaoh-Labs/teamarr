@@ -229,7 +229,7 @@ class ChannelCreator(_LifecycleHost):
                         event_template = self._resolve_event_template(conn, event, template)
                         duration_override = template_duration_override(event_template)
                         excluded_reason = self._timing_manager.categorize_event_timing(
-                            event, duration_override
+                            event, duration_override, segment
                         )
                         if excluded_reason:
                             if excluded_reason.value == "event_postponed":
@@ -330,6 +330,7 @@ class ChannelCreator(_LifecycleHost):
                             stream_exists=True,
                             segment_start=segment_start,
                             duration_override=duration_override,
+                            segment=segment,
                         )
 
                         if not decision.should_act:
@@ -1066,12 +1067,12 @@ class ChannelCreator(_LifecycleHost):
         # duration (#946) participates: an 11h template on a 10h endurance
         # race must produce an 11h estimate, not the league sprint fallback.
         duration_override = template_duration_override(template)
-        delete_time = self._timing_manager.calculate_delete_time(event, duration_override)
+        delete_time = self._timing_manager.calculate_delete_time(event, duration_override, segment)
         # No start time → the end is genuinely unknown, so leave the column
         # NULL rather than inventing one. The recalc treats NULL as "derive it
         # the old way", and its loop already skips channels with no event_date.
         event_end_estimate = (
-            self._timing_manager.get_event_end_time(event, duration_override)
+            self._timing_manager.get_event_end_time(event, duration_override, segment)
             if event.start_time
             else None
         )
