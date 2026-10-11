@@ -25,14 +25,14 @@ Leagues have different levels of support:
 
 | Provider | Description |
 |----------|-------------|
-| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. |
+| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. International cricket (ODIs, T20Is, Tests) comes from its daily score panel. |
 | **Bell Media** | CFL plus CHL, OHL, WHL, QMJHL, AHL, and PWHL via TSN's public sports widget API. |
 | **NASCAR** | NASCAR Cup, O'Reilly (Xfinity), and Truck series via the official cf.nascar.com schedule API. Full race-weekend sessions, no API key required. See [provider docs](providers/nascar). |
 | **MLB Stats API** | Minor League Baseball (MiLB) — Triple-A, Double-A, High-A, Single-A, Rookie |
 | **Squiggle** | AFL (Australian Football League). Free, no API key required. See [provider docs](providers/squiggle). |
 | **HockeyTech** | Canadian and US junior/minor hockey leagues (ECHL, USHL, Junior A) |
 | **Supabase** | Supabase-backed leagues such as the Canadian Baseball League (CBL). No API key required. See [provider docs](providers/supabase). |
-| **TheSportsDB** | Rugby, cricket, boxing, Scandinavian leagues, and more. Requires a [premium API key](providers/tsdb.md). |
+| **TheSportsDB** | Rugby, franchise cricket (IPL, BBL, SA20, MLC), boxing, Scandinavian leagues, and more. Requires a [premium API key](providers/tsdb.md). |
 
 ### TSDB Key Requirement
 
