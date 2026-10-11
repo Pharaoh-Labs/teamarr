@@ -11,6 +11,11 @@ Packet 8C application rules:
 * Closed-loop writes: a Dispatcharr create/update/rename/delete must succeed
   before the local row claims success. A failed local insert after a remote
   create is compensated by deleting the just-created remote channel.
+* Numbering avoids channels Teamarr does not own: one Dispatcharr channel
+  snapshot per apply feeds both the external-occupied number set (#146) and
+  the real per-channel stream arrays the diff compares order against (#712).
+* A remote delete that answers 404 retires the local row — the channel is
+  already gone; only a real failure keeps the row for retry (#1036).
 * ``dry_run=True`` (or the global ``DRY_RUN`` flag) returns the validated diff
   summary with zero writes.
 * Per-intention failures are isolated and reported; the outcome carries
@@ -25,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from teamarr.config.runtime import dry_run as runtime_dry_run
+from teamarr.consumers.lifecycle import compute_external_occupied
 from teamarr.consumers.planning.contracts import ChannelPlan, PlanDiagnostic, PlanResult
 from teamarr.consumers.planning.diffing import PlanIntention, compute_plan_diff, plan_field_reasons
 from teamarr.consumers.planning.validation import validate_plan
@@ -118,6 +124,21 @@ class PlanApplier:
             )
             return outcome
 
+        # One Dispatcharr snapshot per apply, before any connection is opened:
+        # the real stream arrays let the diff see remote drift (#712), and the
+        # external channel numbers keep plan-created channels off numbers
+        # hand-made channels already use (#146, #1036). ``None`` — not an
+        # empty dict — when there is no manager or the fetch fails, so an
+        # unreadable snapshot never reads as "Dispatcharr confirmed empty".
+        snapshot = self._channel_snapshot()
+        remote_orders: dict[int, list[int]] | None = None
+        external_occupied: set[int] | None = None
+        if snapshot is not None:
+            remote_orders = {channel.id: list(channel.streams) for channel in snapshot}
+            external_occupied = compute_external_occupied(
+                self._db_factory, self._channel_manager
+            )
+
         with self._db_factory() as conn:
             diagnostics = validate_plan(
                 plan,
@@ -131,7 +152,9 @@ class PlanApplier:
                 outcome.failures.extend(diagnostics)
                 return outcome
 
-            diff = compute_plan_diff(conn, plan, plugin_id=plugin_id)
+            diff = compute_plan_diff(
+                conn, plan, plugin_id=plugin_id, remote_stream_orders=remote_orders
+            )
             if not diff.actionable:
                 outcome.failures.extend(diff.blocked)
                 return outcome
@@ -143,8 +166,29 @@ class PlanApplier:
             for kind in ("create", "adopt", "update", "stream_order", "retire"):
                 for intention in diff.intentions:
                     if intention.kind == kind:
-                        self._execute(conn, intention, outcome)
+                        self._execute(
+                            conn,
+                            intention,
+                            outcome,
+                            remote_orders=remote_orders,
+                            external_occupied=external_occupied,
+                        )
         return outcome
+
+    def _channel_snapshot(self) -> list[Any] | None:
+        """Dispatcharr's channels once per apply, or ``None`` when unreadable."""
+        if self._channel_manager is None:
+            return None
+        try:
+            return list(self._channel_manager.get_channels())
+        except Exception:
+            logger.warning(
+                "[PLAN] Dispatcharr channel snapshot failed; stream order falls "
+                "back to local-only comparison and numbering to Teamarr-managed "
+                "channels",
+                exc_info=True,
+            )
+            return None
 
     # -- intention dispatch -------------------------------------------------
 
@@ -168,15 +212,23 @@ class PlanApplier:
             elif intention.kind == "stream_order":
                 outcome.stream_ordered.append(intention.channel.logical_key)
 
-    def _execute(self, conn: Any, intention: PlanIntention, outcome: PlanApplyOutcome) -> None:
+    def _execute(
+        self,
+        conn: Any,
+        intention: PlanIntention,
+        outcome: PlanApplyOutcome,
+        *,
+        remote_orders: dict[int, list[int]] | None = None,
+        external_occupied: set[int] | None = None,
+    ) -> None:
         channel, existing = intention.channel, intention.existing
         try:
             if intention.kind == "create":
                 assert channel is not None
-                self._create(conn, channel, outcome)
+                self._create(conn, channel, outcome, external_occupied=external_occupied)
             elif intention.kind == "adopt":
                 assert channel is not None and existing is not None
-                self._adopt(conn, channel, existing, outcome)
+                self._adopt(conn, channel, existing, outcome, remote_orders=remote_orders)
             elif intention.kind == "update":
                 assert channel is not None and existing is not None
                 self._update(conn, channel, existing, intention.reasons, outcome)
@@ -213,8 +265,18 @@ class PlanApplier:
 
     # -- intention executors ------------------------------------------------
 
-    def _create(self, conn: Any, wanted: ChannelPlan, outcome: PlanApplyOutcome) -> None:
-        number = get_next_channel_number(conn)
+    def _create(
+        self,
+        conn: Any,
+        wanted: ChannelPlan,
+        outcome: PlanApplyOutcome,
+        *,
+        external_occupied: set[int] | None = None,
+    ) -> None:
+        # External occupancy keeps plan-created channels off numbers that
+        # hand-made Dispatcharr channels already use (#146, #1036) — the same
+        # set the core creator numbers from.
+        number = get_next_channel_number(conn, external_occupied=external_occupied)
         if number is None:
             outcome.failures.append(
                 PlanDiagnostic(
@@ -293,17 +355,32 @@ class PlanApplier:
         wanted: ChannelPlan,
         existing: Any,
         outcome: PlanApplyOutcome,
+        *,
+        remote_orders: dict[int, list[int]] | None = None,
     ) -> None:
-        adopted = adopt_plugin_channel(
-            conn,
-            outcome.plugin_id,
-            wanted.logical_key,
-            wanted.adoption_key,
-            wanted.display_name,
-            wanted.xmltv_channel_id,
-            rename_dispatcharr=self._rename_dispatcharr,
-            plan_generation=outcome.plan_generation,
-        )
+        try:
+            adopted = adopt_plugin_channel(
+                conn,
+                outcome.plugin_id,
+                wanted.logical_key,
+                wanted.adoption_key,
+                wanted.display_name,
+                wanted.xmltv_channel_id,
+                rename_dispatcharr=self._rename_dispatcharr,
+                plan_generation=outcome.plan_generation,
+            )
+        except ValueError as exc:
+            # The repository refuses to stamp a logical key another active row
+            # already owns (or an ambiguous key); that refusal is its own
+            # verdict, not a generic intention failure (#1036).
+            outcome.failures.append(
+                PlanDiagnostic(
+                    code="plan.adoption_conflict",
+                    message=str(exc),
+                    item_key=wanted.logical_key,
+                )
+            )
+            return
         if adopted is None:
             outcome.failures.append(
                 PlanDiagnostic(
@@ -328,7 +405,9 @@ class PlanApplier:
         )
         conn.commit()
         outcome.adopted.append(wanted.logical_key)
-        reasons = plan_field_reasons(conn, wanted, adopted)
+        reasons = plan_field_reasons(
+            conn, wanted, adopted, remote_stream_orders=remote_orders
+        )
         if "delete_at" in reasons:
             update_managed_channel(
                 conn, adopted.id, {"scheduled_delete_at": wanted.delete_at.isoformat()}
@@ -458,16 +537,23 @@ class PlanApplier:
                 return
             result = self._channel_manager.delete_channel(existing.dispatcharr_channel_id)
             if not result.success:
-                # Keep the row so the retire is retried on the next plan; do
-                # not orphan the remote channel by deleting the row locally.
-                outcome.failures.append(
-                    PlanDiagnostic(
-                        code="plan.dispatcharr_delete_failed",
-                        message=result.error or "Dispatcharr channel delete failed",
-                        item_key=existing.plugin_logical_key,
+                # A delete that answers "not found" IS the confirmation that
+                # the remote channel is gone (deleted by hand): retire the
+                # local row instead of failing the same way on every future
+                # plan — the same rule core orphan cleanup applies (#1036).
+                already_gone = "not found" in str(result.error or "").lower()
+                if not already_gone:
+                    # Keep the row so the retire is retried on the next plan;
+                    # do not orphan the remote channel by deleting the row
+                    # locally.
+                    outcome.failures.append(
+                        PlanDiagnostic(
+                            code="plan.dispatcharr_delete_failed",
+                            message=result.error or "Dispatcharr channel delete failed",
+                            item_key=existing.plugin_logical_key,
+                        )
                     )
-                )
-                return
+                    return
         mark_channel_deleted(conn, existing.id, reason="plugin_plan_retire")
         log_channel_history(
             conn,
