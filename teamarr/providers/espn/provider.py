@@ -488,6 +488,19 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         sport = self._get_sport(league)
         if sport in TOURNAMENT_SPORTS:
             return None
+        if cricket_format := self._cricket_panel_format(self._get_sport_league_from_db(league)):
+            # Internationals play most days somewhere: the last few days'
+            # panels hold a finished match far more often than not (#944).
+            for back in range(0, 4):
+                day = date.today() - timedelta(days=back)
+                finals = [
+                    e
+                    for e in self._get_cricket_panel_events(league, day, cricket_format)
+                    if is_event_final(e)
+                ]
+                if finals:
+                    return max(finals, key=lambda e: e.start_time)
+            return None
         if self._is_mma(league, sport):
             # Cards are ~weekly; the longest dark stretches (holidays) are a
             # few weeks, so one 35-day window nearly always hits. Finished-
@@ -797,6 +810,10 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
 
         # Get sport/league from database config
         sport_league = self._get_sport_league_from_db(league)
+        if self._cricket_panel_format(sport_league):
+            # No summary endpoint behind a format league (#944); the day's
+            # panel already carries everything the event has.
+            return None
 
         data = self._client.get_event(league, event_id, sport_league)
         if not data:

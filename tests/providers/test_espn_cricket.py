@@ -357,3 +357,30 @@ def test_session_name_variable_reads_a_tests_day():
     assert extract_session_type(None, game_ctx) == "day3"
     # No session on the channel: nothing, as for a race weekend's main row.
     assert extract_session_name(None, SimpleNamespace(event=test_event, card_segment=None)) == ""
+
+
+# ============================== no team, schedule or summary endpoint (bead 7cmb.2)
+
+
+def test_a_panel_league_never_asks_for_a_summary_or_a_scoreboard(monkeypatch):
+
+    client = _PanelClient()
+    for name in ("get_event", "get_scoreboard", "get_teams", "get_team_schedule", "get_team"):
+        setattr(client, name, lambda *a, _n=name, **k: (_ for _ in ()).throw(AssertionError(_n)))
+    provider = _panel_provider(client)
+    assert provider.get_event("1529232", "cricket-t20i") is None
+    assert provider.get_league_teams("cricket-t20i") == []
+    assert provider.get_team_schedule("6", "cricket-t20i") == []
+
+    import teamarr.providers.espn.provider as prov
+
+    class _Today(prov.date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 10, 11)
+
+    monkeypatch.setattr(prov, "date", _Today)
+    recent = provider.get_recent_final("cricket-t20i")
+    assert recent is not None and recent.id == "1529232" and recent.status.state == "final"
+    assert client.calls and set(client.calls) <= {"20261011", "20261010", "20261009", "20261008"}
+    assert len(provider.get_sample_candidates("cricket-odi")) == 2
