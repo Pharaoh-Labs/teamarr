@@ -306,6 +306,24 @@ class SourceDiscovery:
         evidence.streams_read = len(kept)
         if not kept:
             return evidence
+        # A two-sided match is evidence only on a stream the created source's
+        # run would keep (#1034). The probe runs with team matching on, which
+        # skips the global event-pattern filter so one-team streams reach the
+        # matcher — and so do streams that carry no event shape at all. A
+        # source accepted on games evidence has team matching OFF, so its run
+        # drops those same streams before matching: three auto-added F1
+        # onboard groups (per-driver streams with no Grand Prix name) matched
+        # 16 a day in the scan and nothing in any run, idled out, and were
+        # rediscovered. Judge the games tier with the filter the run applies.
+        run_probe = EventEPGGroup(
+            id=0,
+            name=group.name,
+            name_match_enabled=True,
+            team_streams_enabled=False,
+            epg_match_enabled=False,
+        )
+        run_kept, _ = self._processor._filter_streams(streams, run_probe)
+        run_keeps = {s["id"] for s in run_kept}
         result = self._processor._match_streams(
             kept,
             probe,
@@ -320,6 +338,10 @@ class SourceDiscovery:
                 continue
             if r.category == StreamCategory.TEAM_ONLY:
                 team_only.setdefault(r.stream_id, r.league or "")
+            elif r.stream_id not in run_keeps:
+                # Matched only because the probe bypassed the run's filter:
+                # a source made from this evidence would never see the stream.
+                continue
             else:
                 games.setdefault(r.stream_id, r.league or "")
                 event = getattr(r, "event", None)

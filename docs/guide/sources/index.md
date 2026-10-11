@@ -66,7 +66,7 @@ From there:
 
 Providers add, rename and drop M3U groups through the year, so a hand-kept source list drifts. Teamarr can look for sources itself. Open **Suggested sources** at the top of the Sources page.
 
-**What a scan does.** It reads every M3U group that is not already a source, puts every stream in it through the same matching a generation run uses, and records which groups carried events in leagues you subscribe to. Nothing is created and nothing else is changed. A scan takes a few minutes on a large install; it waits for a generation run to finish and pauses if one starts.
+**What a scan does.** It reads every M3U group that is not already a source, puts every stream in it through the same filtering and matching a generation run uses, and records which groups carried events in leagues you subscribe to. A stream that only matches because team matching was assumed is not counted as a game, so a group that would match nothing as a plain source is never suggested on that basis. Nothing is created and nothing else is changed. A scan takes a few minutes on a large install; it waits for a generation run to finish and pauses if one starts.
 
 **When it runs.** Once a day at 11:00 local time, while the **Scan daily** switch in the Suggested sources header is on (it is on by default; switch it off and nothing scans). Press **Scan now** to run one sooner. More often finds nothing new: the suggestions below read a week of evidence.
 
