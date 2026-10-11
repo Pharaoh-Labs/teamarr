@@ -1,0 +1,876 @@
+[
+ {
+  "id": "1546541",
+  "date": "2026-10-11T02:45Z",
+  "name": "Sikkim v Meghalaya",
+  "shortName": "SIKM v MEGHA",
+  "season": {
+   "year": 2026,
+   "type": 8050
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 2,
+   "session": "Day 1",
+   "summary": "Meghalaya trail by 243 runs",
+   "type": {
+    "id": "112",
+    "description": "Stumps",
+    "detail": "Live",
+    "shortDetail": "Live",
+    "state": "in"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1546541",
+    "date": "2026-10-11T02:45Z",
+    "description": "Plate Group",
+    "class": {
+     "internationalClassId": "0",
+     "generalClassId": "4",
+     "generalClassCard": "First-class",
+     "name": "First-class matches",
+     "eventType": "Test"
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 2,
+     "session": "Day 1",
+     "featuredAthletes": [],
+     "summary": "Meghalaya trail by 243 runs",
+     "type": {
+      "id": "112",
+      "description": "Stumps",
+      "detail": "Live",
+      "shortDetail": "Live",
+      "state": "in"
+     }
+    },
+    "venue": {
+     "id": "1346886",
+     "fullName": "SICA ground, Rangpo",
+     "address": {
+      "city": "Rangpo",
+      "state": "",
+      "country": "India",
+      "summary": ""
+     },
+     "capacity": 0,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "2085",
+      "homeAway": "home",
+      "winner": "false",
+      "score": "245",
+      "team": {
+       "id": "2085",
+       "displayName": "Sikkim",
+       "name": "Sikkim",
+       "shortDisplayName": "SIKM",
+       "abbreviation": "SIKM",
+       "location": "India",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/2085.png"
+      }
+     },
+     {
+      "id": "1156783",
+      "homeAway": "away",
+      "winner": "false",
+      "score": "2/0 (1 ov)",
+      "team": {
+       "id": "1156783",
+       "displayName": "Meghalaya",
+       "name": "Meghalaya",
+       "shortDisplayName": "MEGHA",
+       "abbreviation": "MEGHA",
+       "location": "India",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/1156783.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "8050",
+   "name": "Ranji Trophy"
+  }
+ },
+ {
+  "id": "1554416",
+  "date": "2026-10-11T05:30Z",
+  "name": "Canada v Nepal",
+  "shortName": "CAN v NEP",
+  "season": {
+   "year": 2024,
+   "type": 19439
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 2,
+   "summary": "Nepal won by 24 runs",
+   "type": {
+    "id": "1",
+    "description": "Result",
+    "detail": "Final",
+    "shortDetail": "Final",
+    "state": "post"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1554416",
+    "date": "2026-10-11T05:30Z",
+    "description": "132nd Match",
+    "class": {
+     "internationalClassId": "2",
+     "generalClassId": "5",
+     "generalClassCard": "ODI",
+     "name": "One-Day Internationals",
+     "eventType": "ODI"
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 2,
+     "featuredAthletes": [
+      {
+       "abbreviation": "POTM",
+       "athlete": {
+        "id": "1072488",
+        "name": "Rohit Paudel",
+        "shortName": "Paudel",
+        "fullName": "Rohit Kumar Paudel",
+        "displayName": "Rohit Paudel",
+        "position": "BTA",
+        "headshot": "https://a.espncdn.com/i/headshots/cricket/players/full/1072488.png",
+        "team": {
+         "id": "33"
+        },
+        "links": [
+         {
+          "rel": [
+           "playercard",
+           "desktop"
+          ],
+          "href": "https://www.cricinfo.com/ci/content/player/1072488.html"
+         }
+        ]
+       },
+       "displayName": "Player Of The Match",
+       "linescores": {
+        "$ref": "http://new.core.espnuk.org/v2/sports/cricket/leagues/19439/events/1554416/competitions/1554416/competitors/33/roster/1072488/linescores"
+       },
+       "name": "playerOfTheMatch",
+       "playerId": 1072488,
+       "shortDisplayName": "POTM",
+       "team": {
+        "id": "33"
+       },
+       "statistics": []
+      }
+     ],
+     "summary": "Nepal won by 24 runs",
+     "type": {
+      "id": "1",
+      "description": "Result",
+      "detail": "Final",
+      "shortDetail": "Final",
+      "state": "post"
+     }
+    },
+    "venue": {
+     "id": "1095893",
+     "fullName": "Al Amerat Cricket Ground Oman Cricket (Ministry Turf 1)",
+     "address": {
+      "city": "Al Amarat",
+      "state": "",
+      "country": "Oman",
+      "summary": ""
+     },
+     "capacity": 0,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "17",
+      "homeAway": "home",
+      "winner": "false",
+      "score": "211 (48.4/50 ov, target 236)",
+      "team": {
+       "id": "17",
+       "displayName": "Canada",
+       "name": "Canada",
+       "shortDisplayName": "CAN",
+       "abbreviation": "CAN",
+       "location": "Canada",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/17.png"
+      }
+     },
+     {
+      "id": "33",
+      "homeAway": "away",
+      "winner": "true",
+      "score": "235",
+      "team": {
+       "id": "33",
+       "displayName": "Nepal",
+       "name": "Nepal",
+       "shortDisplayName": "NEP",
+       "abbreviation": "NEP",
+       "location": "Nepal",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/33.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "19439",
+   "name": "ICC Men's Cricket World Cup League 2"
+  }
+ },
+ {
+  "id": "1554413",
+  "date": "2026-10-11T15:00Z",
+  "name": "United States of America v United Arab Emirates",
+  "shortName": "USA v UAE",
+  "season": {
+   "year": 2024,
+   "type": 19439
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 2,
+   "session": "",
+   "summary": "U.S.A. require 145 runs",
+   "type": {
+    "id": "0",
+    "description": "Live",
+    "detail": "Live",
+    "shortDetail": "Live",
+    "state": "in"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1554413",
+    "date": "2026-10-11T15:00Z",
+    "description": "133rd Match",
+    "class": {
+     "internationalClassId": "2",
+     "generalClassId": "5",
+     "generalClassCard": "ODI",
+     "name": "One-Day Internationals",
+     "eventType": "ODI"
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 2,
+     "session": "",
+     "featuredAthletes": [],
+     "summary": "U.S.A. require 145 runs",
+     "type": {
+      "id": "0",
+      "description": "Live",
+      "detail": "Live",
+      "shortDetail": "Live",
+      "state": "in"
+     }
+    },
+    "venue": {
+     "id": "1381196",
+     "fullName": "Grand Prairie Stadium, Dallas",
+     "address": {
+      "city": "Dallas",
+      "state": "",
+      "country": "United States of America",
+      "summary": "1600 Lone Star Pkwy Grand Prairie, TX 75050"
+     },
+     "capacity": 7000,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "11",
+      "homeAway": "home",
+      "winner": "false",
+      "score": "69/1 (14.4/50 ov, target 214)",
+      "team": {
+       "id": "11",
+       "displayName": "United States of America",
+       "name": "United States of America",
+       "shortDisplayName": "USA",
+       "abbreviation": "USA",
+       "location": "United States of America",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/11.png"
+      }
+     },
+     {
+      "id": "27",
+      "homeAway": "away",
+      "winner": "false",
+      "score": "213",
+      "team": {
+       "id": "27",
+       "displayName": "United Arab Emirates",
+       "name": "United Arab Emirates",
+       "shortDisplayName": "UAE",
+       "abbreviation": "UAE",
+       "location": "United Arab Emirates",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/27.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "19439",
+   "name": "ICC Men's Cricket World Cup League 2"
+  }
+ },
+ {
+  "id": "1555116",
+  "date": "2026-10-09T06:00Z",
+  "name": "Afghanistan v Bangladesh",
+  "shortName": "AFG v BAN",
+  "season": {
+   "year": 2026,
+   "type": 24801
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 3,
+   "session": "Day 3",
+   "summary": "Bangladesh lead by 329 runs",
+   "type": {
+    "id": "112",
+    "description": "Stumps",
+    "detail": "Live",
+    "shortDetail": "Live",
+    "state": "in"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1555116",
+    "date": "2026-10-09T06:00Z",
+    "description": "Only Test",
+    "class": {
+     "internationalClassId": "1",
+     "generalClassId": "4",
+     "generalClassCard": "Test",
+     "name": "Test matches",
+     "eventType": "Test"
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 3,
+     "session": "Day 3",
+     "featuredAthletes": [],
+     "summary": "Bangladesh lead by 329 runs",
+     "type": {
+      "id": "112",
+      "description": "Stumps",
+      "detail": "Live",
+      "shortDetail": "Live",
+      "state": "in"
+     }
+    },
+    "venue": {
+     "id": "59396",
+     "fullName": "Zayed Cricket Stadium, Abu Dhabi",
+     "address": {
+      "city": "Abu Dhabi",
+      "state": "",
+      "country": "United Arab Emirates",
+      "summary": ""
+     },
+     "capacity": 20000,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "40",
+      "homeAway": "home",
+      "winner": "false",
+      "score": "240",
+      "team": {
+       "id": "40",
+       "displayName": "Afghanistan",
+       "name": "Afghanistan",
+       "shortDisplayName": "AFG",
+       "abbreviation": "AFG",
+       "location": "Afghanistan",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/40.png"
+      }
+     },
+     {
+      "id": "25",
+      "homeAway": "away",
+      "winner": "false",
+      "score": "346 & 223/6 (72 ov)",
+      "team": {
+       "id": "25",
+       "displayName": "Bangladesh",
+       "name": "Bangladesh",
+       "shortDisplayName": "BAN",
+       "abbreviation": "BAN",
+       "location": "Bangladesh",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/25.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "24801",
+   "name": "Bangladesh tour of United Arab Emirates 2026/27"
+  }
+ },
+ {
+  "id": "1525659",
+  "date": "2026-10-09T07:30Z",
+  "name": "South Africa v Australia",
+  "shortName": "SA v AUS",
+  "season": {
+   "year": 2026,
+   "type": 24203
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 3,
+   "session": "Day 3",
+   "summary": "Australia lead by 139 runs",
+   "type": {
+    "id": "112",
+    "description": "Stumps",
+    "detail": "Live",
+    "shortDetail": "Live",
+    "state": "in"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1525659",
+    "date": "2026-10-09T07:30Z",
+    "description": "1st Test",
+    "class": {
+     "internationalClassId": "1",
+     "generalClassId": "4",
+     "generalClassCard": "Test",
+     "name": "Test matches",
+     "eventType": "Test"
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 3,
+     "session": "Day 3",
+     "featuredAthletes": [],
+     "summary": "Australia lead by 139 runs",
+     "type": {
+      "id": "112",
+      "description": "Stumps",
+      "detail": "Live",
+      "shortDetail": "Live",
+      "state": "in"
+     }
+    },
+    "venue": {
+     "id": "59089",
+     "fullName": "Kingsmead, Durban",
+     "address": {
+      "city": "Durban",
+      "state": "",
+      "country": "South Africa",
+      "summary": ""
+     },
+     "capacity": 25000,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "3",
+      "homeAway": "home",
+      "winner": "false",
+      "score": "284",
+      "team": {
+       "id": "3",
+       "displayName": "South Africa",
+       "name": "South Africa",
+       "shortDisplayName": "SA",
+       "abbreviation": "SA",
+       "location": "South Africa",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/3.png"
+      }
+     },
+     {
+      "id": "2",
+      "homeAway": "away",
+      "winner": "false",
+      "score": "390 & 33/0 (5.4 ov)",
+      "team": {
+       "id": "2",
+       "displayName": "Australia",
+       "name": "Australia",
+       "shortDisplayName": "AUS",
+       "abbreviation": "AUS",
+       "location": "Australia",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/2.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "24203",
+   "name": "Australia tour of South Africa 2026/27"
+  }
+ },
+ {
+  "id": "1554123",
+  "date": "2026-10-11T08:00Z",
+  "name": "Easterns Women v North West Women",
+  "shortName": "EstWm v NW-W",
+  "season": {
+   "year": 2026,
+   "type": 22562
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 0,
+   "session": "",
+   "summary": "Starts at 10:00 local time",
+   "type": {
+    "id": "0",
+    "description": "Live",
+    "detail": "Live",
+    "shortDetail": "Live",
+    "state": "in"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1554123",
+    "date": "2026-10-11T08:00Z",
+    "description": "Inland Pool",
+    "class": {
+     "internationalClassId": "0",
+     "generalClassId": "17",
+     "generalClassCard": "Women's T20",
+     "name": "",
+     "eventType": ""
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 0,
+     "session": "",
+     "featuredAthletes": [],
+     "summary": "Starts at 10:00 local time",
+     "type": {
+      "id": "0",
+      "description": "Live",
+      "detail": "Live",
+      "shortDetail": "Live",
+      "state": "in"
+     }
+    },
+    "venue": {
+     "id": "59039",
+     "fullName": "Willowmoore Park, Benoni",
+     "address": {
+      "city": "Benoni",
+      "state": "",
+      "country": "South Africa",
+      "summary": ""
+     },
+     "capacity": 20000,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "386876",
+      "homeAway": "home",
+      "winner": "false",
+      "score": "",
+      "team": {
+       "id": "386876",
+       "displayName": "Easterns Women",
+       "name": "Easterns Women",
+       "shortDisplayName": "EstWm",
+       "abbreviation": "EstWm",
+       "location": "South Africa",
+       "logo": ""
+      }
+     },
+     {
+      "id": "3281",
+      "homeAway": "away",
+      "winner": "false",
+      "score": "",
+      "team": {
+       "id": "3281",
+       "displayName": "North West Women",
+       "name": "North West Women",
+       "shortDisplayName": "NW-W",
+       "abbreviation": "NW-W",
+       "location": "South Africa",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/3281.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "22562",
+   "name": "CSA Women's Division Two T20"
+  }
+ },
+ {
+  "id": "1529232",
+  "date": "2026-10-11T13:30Z",
+  "name": "India v West Indies",
+  "shortName": "IND v WI",
+  "season": {
+   "year": 2026,
+   "type": 24289
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 2,
+   "summary": "India won by 14 runs",
+   "type": {
+    "id": "1",
+    "description": "Result",
+    "detail": "Final",
+    "shortDetail": "Final",
+    "state": "post"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1529232",
+    "date": "2026-10-11T13:30Z",
+    "description": "3rd T20I",
+    "class": {
+     "internationalClassId": "3",
+     "generalClassId": "6",
+     "generalClassCard": "T20I",
+     "name": "Twenty20 Internationals",
+     "eventType": "T20"
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 2,
+     "featuredAthletes": [
+      {
+       "abbreviation": "POTM",
+       "athlete": {
+        "id": "1125976",
+        "name": "Arshdeep Singh",
+        "shortName": "Arshdeep",
+        "fullName": "Arshdeep Singh",
+        "displayName": "Arshdeep Singh",
+        "position": "BL",
+        "headshot": "https://a.espncdn.com/i/headshots/cricket/players/full/1125976.png",
+        "team": {
+         "id": "6"
+        },
+        "links": [
+         {
+          "rel": [
+           "playercard",
+           "desktop"
+          ],
+          "href": "https://www.cricinfo.com/ci/content/player/1125976.html"
+         }
+        ]
+       },
+       "displayName": "Player Of The Match",
+       "linescores": {
+        "$ref": "http://new.core.espnuk.org/v2/sports/cricket/leagues/24289/events/1529232/competitions/1529232/competitors/6/roster/1125976/linescores"
+       },
+       "name": "playerOfTheMatch",
+       "playerId": 1125976,
+       "shortDisplayName": "POTM",
+       "team": {
+        "id": "6"
+       },
+       "statistics": []
+      }
+     ],
+     "summary": "India won by 14 runs",
+     "type": {
+      "id": "1",
+      "description": "Result",
+      "detail": "Final",
+      "shortDetail": "Final",
+      "state": "post"
+     }
+    },
+    "venue": {
+     "id": "58150",
+     "fullName": "Holkar Cricket Stadium, Indore",
+     "address": {
+      "city": "Indore",
+      "state": "",
+      "country": "India",
+      "summary": ""
+     },
+     "capacity": 0,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "6",
+      "homeAway": "home",
+      "winner": "true",
+      "score": "223",
+      "team": {
+       "id": "6",
+       "displayName": "India",
+       "name": "India",
+       "shortDisplayName": "IND",
+       "abbreviation": "IND",
+       "location": "India",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/6.png"
+      }
+     },
+     {
+      "id": "4",
+      "homeAway": "away",
+      "winner": "false",
+      "score": "209/7 (20 ov, target 224)",
+      "team": {
+       "id": "4",
+       "displayName": "West Indies",
+       "name": "West Indies",
+       "shortDisplayName": "WI",
+       "abbreviation": "WI",
+       "location": "West Indies",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/4.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "24289",
+   "name": "West Indies tour of India 2026/27"
+  }
+ },
+ {
+  "id": "1554579",
+  "date": "2026-10-12T01:15Z",
+  "name": "China v Saudi Arabia",
+  "shortName": "CHN v KSA",
+  "season": {
+   "year": 2026,
+   "type": 1554555
+  },
+  "status": {
+   "clock": 0,
+   "displayClock": "0'",
+   "period": 0,
+   "summary": "Starts at 09:15 local time",
+   "type": {
+    "id": "0",
+    "description": "Scheduled",
+    "detail": "Scheduled",
+    "shortDetail": "Scheduled",
+    "state": "pre"
+   }
+  },
+  "competitions": [
+   {
+    "id": "1554579",
+    "date": "2026-10-12T01:15Z",
+    "description": "12th Match",
+    "class": {
+     "internationalClassId": "3",
+     "generalClassId": "6",
+     "generalClassCard": "T20I",
+     "name": "Twenty20 Internationals",
+     "eventType": "T20"
+    },
+    "status": {
+     "clock": 0,
+     "displayClock": "0'",
+     "period": 0,
+     "featuredAthletes": [],
+     "summary": "Starts at 09:15 local time",
+     "type": {
+      "id": "0",
+      "description": "Scheduled",
+      "detail": "Scheduled",
+      "shortDetail": "Scheduled",
+      "state": "pre"
+     }
+    },
+    "venue": {
+     "id": "58671",
+     "fullName": "Selangor Turf Club, Kuala Lumpur",
+     "address": {
+      "city": "Kuala Lumpur",
+      "state": "",
+      "country": "Malaysia",
+      "summary": ""
+     },
+     "capacity": 0,
+     "indoor": false
+    },
+    "competitors": [
+     {
+      "id": "70",
+      "homeAway": "home",
+      "winner": "false",
+      "score": "",
+      "team": {
+       "id": "70",
+       "displayName": "China",
+       "name": "China",
+       "shortDisplayName": "CHN",
+       "abbreviation": "CHN",
+       "location": "China",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/70.png"
+      }
+     },
+     {
+      "id": "103",
+      "homeAway": "away",
+      "winner": "false",
+      "score": "",
+      "team": {
+       "id": "103",
+       "displayName": "Saudi Arabia",
+       "name": "Saudi Arabia",
+       "shortDisplayName": "KSA",
+       "abbreviation": "KSA",
+       "location": "Saudi Arabia",
+       "logo": "https://a.espncdn.com/i/teamlogos/cricket/500/103.png"
+      }
+     }
+    ]
+   }
+  ],
+  "_league": {
+   "id": "1554555",
+   "name": "ICC Men's T20 World Cup Sub Regional Asia Qualifier B"
+  }
+ }
+]
