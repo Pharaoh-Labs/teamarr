@@ -450,6 +450,10 @@ def _stated_start_gap_hours(ctx: "MatchContext", event) -> float:
     normalized = ctx.classified.normalized
     if not (normalized.extracted_date and normalized.extracted_time and ctx.stream_tz):
         return 0.0
+    # An unannounced start (#995) is a day, not a time: there is no start to
+    # be far from, and the date gate above has already compared the days.
+    if getattr(event, "time_tbd", False):
+        return 0.0
     stated = datetime.combine(
         normalized.extracted_date, normalized.extracted_time, tzinfo=ctx.stream_tz
     )

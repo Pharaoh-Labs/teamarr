@@ -24,7 +24,7 @@ A global lock prevents concurrent runs. The workflow progresses through these ph
 | (channel reassignment) | 94% | Global channel number rebalancing (`_sync_global_channels`) |
 | `saving` | 95% | Merge team + group XMLTV output |
 | `dispatcharr` | 96-97% | EPG refresh, channel association, stream audit |
-| `channelsdvr`/`emby`/`jellyfin` | 97% | Parallel media-server EPG refreshes (`_run_media_server_refreshes`) |
+| `channelsdvr`/`emby`/`jellyfin`/`plex` | 97% | Parallel media-server EPG refreshes (`_run_media_server_refreshes`) |
 | `lifecycle` | 98% | Channel lifecycle sync |
 | `reconciliation` | 99% | Detect/fix channel drift |
 | `cleanup` | 99% | Scheduled deletions, orphan sweeps |

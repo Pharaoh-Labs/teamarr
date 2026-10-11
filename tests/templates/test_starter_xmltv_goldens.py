@@ -175,8 +175,10 @@ def _college_event(**kw):
 
 
 COLLEGE_STATS = {
-    "1": TeamStats(record="20-7", rank=20, conference="Southeastern Conference"),
-    "2": TeamStats(record="19-8", rank=15, conference="Southeastern Conference"),
+    "1": TeamStats(record="20-7", rank=20, conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
+    "2": TeamStats(record="19-8", rank=15, conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
 }
 
 
@@ -420,8 +422,10 @@ def _case_college_team(conn):
                      "basketball", "4", short="Wildcats")
     stats = dict(COLLEGE_STATS)
     stats.update({
-        "3": TeamStats(record="15-12", conference="Southeastern Conference"),
-        "4": TeamStats(record="21-6", rank=8, conference="Southeastern Conference"),
+        "3": TeamStats(record="15-12", conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
+        "4": TeamStats(record="21-6", rank=8, conference="Southeastern Conference",
+                   conference_abbrev="SEC", conference_id="8"),
     })
     return _render_team_starter(
         conn, "College Team (Starter)",
@@ -483,3 +487,75 @@ def test_starter_xmltv_matches_golden(name, db_conn):
 def test_every_starter_has_a_golden_case():
     """Adding/renaming a starter must add/rename its golden case too."""
     assert set(CASES) == {spec["name"] for spec in DEFAULT_TEMPLATE_SET}
+
+
+# --- #981: idle description before a team's first game ------------------------
+
+
+def _idle_descs(xml):
+    import re
+
+    return set(re.findall(r"<desc[^>]*>(Next (?:game|match):[^<]*)</desc>", xml))
+
+
+def test_default_team_idle_with_no_previous_game_names_the_next_one(db_conn):
+    """No last game → neither idle row fires and the base description shows:
+    the full next-game line, of which the subtitle is the short form."""
+    current = _nba_event()
+    bulls = _team("Chicago Bulls", "CHI", "nba", "basketball", "3", short="Bulls")
+    stats = dict(NBA_STATS)
+    stats["3"] = TeamStats(record="6-6")
+    nxt = _event(
+        current.home_team, bulls, "nba", "basketball",
+        id_="e2", start=EVENT_START + timedelta(days=2),
+    )
+    xml = _render_team_starter(
+        db_conn, "Default Team (Starter)", schedule=[nxt], stats=stats,
+        league="nba", team_name="Boston Celtics", team_abbrev="BOS",
+    )
+    assert _idle_descs(xml) == {
+        "Next game: vs the Chicago Bulls, Sunday, Jul 12 at 3:00 PM EDT."
+    }
+    assert "<sub-title lang=\"en\">Next: vs the Chicago Bulls, Sun Jul 12, 3:00 PM EDT<" in xml
+
+
+def test_soccer_team_idle_with_no_previous_match_names_the_next_one(db_conn):
+    current = _soccer_event()
+    liverpool = _team("Liverpool", "LIV", "eng.1", "soccer", "4")
+    stats = dict(SOCCER_STATS)
+    stats["4"] = TeamStats(record="13-2-2")
+    nxt = _event(
+        current.home_team, liverpool, "eng.1", "soccer",
+        id_="e2", start=EVENT_START + timedelta(days=2),
+    )
+    xml = _render_team_starter(
+        db_conn, "Soccer Team (Starter)", schedule=[nxt], stats=stats,
+        league="eng.1", team_name="Chelsea", team_abbrev="CHE",
+    )
+    assert _idle_descs(xml) == {"Next match: vs Liverpool, Sunday, Jul 12 at 3:00 PM EDT."}
+
+
+def test_team_idle_after_a_final_reports_the_result_then_the_next_game(db_conn):
+    """Winner's score first whoever won, a short past date, then the same
+    next-game line (#991)."""
+    current = _nba_event()
+    bulls = _team("Chicago Bulls", "CHI", "nba", "basketball", "3", short="Bulls")
+    knicks = _team("New York Knicks", "NYK", "nba", "basketball", "4", short="Knicks")
+    stats = dict(NBA_STATS)
+    stats.update({"3": TeamStats(record="6-6"), "4": TeamStats(record="7-5")})
+    last = _event(
+        current.home_team, knicks, "nba", "basketball", id_="e0", state="final",
+        start=EVENT_START - timedelta(days=2), home_score=104, away_score=112,
+    )
+    nxt = _event(
+        current.home_team, bulls, "nba", "basketball",
+        id_="e2", start=EVENT_START + timedelta(days=2),
+    )
+    xml = _render_team_starter(
+        db_conn, "Default Team (Starter)", schedule=[last, nxt], stats=stats,
+        league="nba", team_name="Boston Celtics", team_abbrev="BOS",
+    )
+    assert (
+        "The Boston Celtics lost to the New York Knicks, 112-104 on Jul 8. "
+        "Next game: vs the Chicago Bulls, Sunday, Jul 12 at 3:00 PM EDT."
+    ) in xml

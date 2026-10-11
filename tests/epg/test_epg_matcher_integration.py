@@ -106,11 +106,12 @@ def test_match_via_epg_dedupes_same_event_keeping_nearest(monkeypatch):
     # window anchors to the live slot, not the lead-in (bead t5e).
     ev_start = datetime(2026, 6, 1, 18, tzinfo=UTC)
     pregame = _prog(sub="Cubs at Cardinals", start=ev_start - timedelta(hours=1))  # Δ=60m
-    live = _prog(sub="Cubs at Cardinals", start=ev_start)                          # Δ=0
+    live = _prog(sub="Cubs at Cardinals", start=ev_start)  # Δ=0
     index = EPGProgramIndex({"espn": [pregame, live]})
     m = _bare_matcher(index)
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: [_matched_outcome(event_id="game1", start=ev_start)],
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
@@ -159,9 +160,9 @@ def test_match_via_epg_carries_each_program_slot(monkeypatch):
     # Each matched program carries its own broadcast slot (start/end) for the
     # lifecycle attach/detach window. Clipping was removed (bead 6qx), so
     # back-to-back programs are independent — no neighbour boundaries involved.
-    p0 = _prog(sub="A at B", start=BASE - timedelta(hours=2))            # 16:00-19:00
-    p1 = _prog(sub="Chicago Cubs at St. Louis Cardinals", start=BASE)    # 18:00-21:00
-    p2 = _prog(sub="C at D", start=BASE + timedelta(hours=4))            # 22:00-01:00
+    p0 = _prog(sub="A at B", start=BASE - timedelta(hours=2))  # 16:00-19:00
+    p1 = _prog(sub="Chicago Cubs at St. Louis Cardinals", start=BASE)  # 18:00-21:00
+    p2 = _prog(sub="C at D", start=BASE + timedelta(hours=4))  # 22:00-01:00
     index = EPGProgramIndex({"espn": [p0, p1, p2]})
     m = _bare_matcher(index)
     monkeypatch.setattr(m, "_route_to_outcomes", _route_one)
@@ -177,7 +178,8 @@ def test_match_via_epg_drops_unmatched_outcomes(monkeypatch):
     index = EPGProgramIndex({"espn": [_prog()]})
     m = _bare_matcher(index)
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],  # not matched
     )
     assert m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1)) == []
@@ -187,14 +189,15 @@ def test_match_via_epg_drops_unmatched_outcomes(monkeypatch):
 
 
 def _result(matched, method=MatchMethod.FUZZY):
-    return MatchedStreamResult(
-        stream_name="x", stream_id=1, matched=matched, match_method=method
-    )
+    return MatchedStreamResult(stream_name="x", stream_id=1, matched=matched, match_method=method)
 
 
 def _epg_result():
     return MatchedStreamResult(
-        stream_name="x", stream_id=1, matched=True, match_method=MatchMethod.EPG,
+        stream_name="x",
+        stream_id=1,
+        matched=True,
+        match_method=MatchMethod.EPG,
         epg_program_start=BASE,
     )
 
@@ -262,10 +265,14 @@ def test_epg_racing_fallback_nascar_at_city(monkeypatch):
     m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("nascar-cup",))
     # Simulate a mixed group: dominant type is "team_vs_team" (NASCAR is a minority)
     monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
-    monkeypatch.setattr(m, "_route_to_outcomes",
-        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
-    monkeypatch.setattr(m, "_match_racing_event",
-        lambda classified, sid, td, anchor_dt=None: _racing_matched_outcome())
+    monkeypatch.setattr(
+        m, "_route_to_outcomes", lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)]
+    )
+    monkeypatch.setattr(
+        m,
+        "_match_racing_event",
+        lambda classified, sid, td, anchor_dt=None: _racing_matched_outcome(),
+    )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
 
     out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
@@ -286,8 +293,9 @@ def test_epg_racing_fallback_f1_team_only(monkeypatch):
     m = _bare_matcher(index, team_streams_enabled=False, racing_leagues=("f1",))
     monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
     routed = []
-    monkeypatch.setattr(m, "_route_to_outcomes",
-        lambda c, sid, td, anchor_dt=None: routed.append(1) or [])
+    monkeypatch.setattr(
+        m, "_route_to_outcomes", lambda c, sid, td, anchor_dt=None: routed.append(1) or []
+    )
     race_ev = SimpleNamespace(league="f1", id="monaco_gp", start_time=BASE, short_name="Monaco GP")
     monkeypatch.setattr(
         m,
@@ -315,10 +323,10 @@ def test_epg_racing_fallback_not_triggered_for_team_sport_title(monkeypatch):
     index = EPGProgramIndex({"espn": [prog]})
     m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("nascar-cup",))
     monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
-    monkeypatch.setattr(m, "_route_to_outcomes",
-        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
-    monkeypatch.setattr(m, "_match_racing_event",
-        lambda *a, **kw: MatchOutcome.failed(None))
+    monkeypatch.setattr(
+        m, "_route_to_outcomes", lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)]
+    )
+    monkeypatch.setattr(m, "_match_racing_event", lambda *a, **kw: MatchOutcome.failed(None))
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
 
     out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
@@ -333,11 +341,15 @@ def test_epg_racing_fallback_not_triggered_without_racing_leagues(monkeypatch):
     index = EPGProgramIndex({"espn": [prog]})
     m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=())
     monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
-    monkeypatch.setattr(m, "_route_to_outcomes",
-        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
+    monkeypatch.setattr(
+        m, "_route_to_outcomes", lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)]
+    )
     racing_called = []
-    monkeypatch.setattr(m, "_match_racing_event",
-        lambda *a, **kw: racing_called.append(1) or MatchOutcome.failed(None))
+    monkeypatch.setattr(
+        m,
+        "_match_racing_event",
+        lambda *a, **kw: racing_called.append(1) or MatchOutcome.failed(None),
+    )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
 
     out = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
@@ -354,17 +366,23 @@ def test_epg_racing_fallback_uses_racing_classification_in_result(monkeypatch):
     index = EPGProgramIndex({"espn": [prog]})
     m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("nascar-cup",))
     monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
-    monkeypatch.setattr(m, "_route_to_outcomes",
-        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
-    monkeypatch.setattr(m, "_match_racing_event",
-        lambda classified, sid, td, anchor_dt=None: _racing_matched_outcome())
+    monkeypatch.setattr(
+        m, "_route_to_outcomes", lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)]
+    )
+    monkeypatch.setattr(
+        m,
+        "_match_racing_event",
+        lambda classified, sid, td, anchor_dt=None: _racing_matched_outcome(),
+    )
     captured = {}
+
     def capture_result(outcome, *, stream_id, stream_name, classified):
         captured["category"] = classified.category
         outcome.match_method = MatchMethod.EPG
         outcome.epg_program_start = BASE
         outcome.epg_program_end = BASE + timedelta(hours=3)
         return outcome
+
     monkeypatch.setattr(m, "_outcome_to_result", capture_result)
 
     m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
@@ -383,12 +401,17 @@ def test_epg_racing_fallback_requires_text_evidence(monkeypatch):
     index = EPGProgramIndex({"espn": [prog]})
     m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("f1",))
     monkeypatch.setattr(m, "_get_dominant_event_type", lambda: "team_vs_team")
-    monkeypatch.setattr(m, "_route_to_outcomes",
-        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)])
+    monkeypatch.setattr(
+        m, "_route_to_outcomes", lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)]
+    )
     racing_called = []
-    monkeypatch.setattr(m, "_match_racing_event",
+    monkeypatch.setattr(
+        m,
+        "_match_racing_event",
         lambda classified, sid, td, anchor_dt=None: (
-            racing_called.append(1) or _racing_matched_outcome()))
+            racing_called.append(1) or _racing_matched_outcome()
+        ),
+    )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
 
     out = m._match_via_epg(100, "US: Smithsonian Channel", "espn", date(2026, 6, 1))
@@ -412,9 +435,11 @@ def test_epg_primary_racing_requires_text_evidence_in_racing_only_group(monkeypa
     m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("wec",))
     racing_called = []
     monkeypatch.setattr(
-        m, "_match_racing_event",
-        lambda classified, sid, td, anchor_dt=None: racing_called.append(1)
-        or _racing_matched_outcome(),
+        m,
+        "_match_racing_event",
+        lambda classified, sid, td, anchor_dt=None: (
+            racing_called.append(1) or _racing_matched_outcome()
+        ),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
 
@@ -431,7 +456,8 @@ def test_epg_primary_racing_matches_wec_title_with_series_name(monkeypatch):
     index = EPGProgramIndex({"wec-chan": [prog]})
     m = _bare_matcher(index, team_streams_enabled=True, racing_leagues=("wec",))
     monkeypatch.setattr(
-        m, "_match_racing_event",
+        m,
+        "_match_racing_event",
         lambda classified, sid, td, anchor_dt=None: _racing_matched_outcome(),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
@@ -607,7 +633,8 @@ def test_epg_no_match_records_programme_summary(monkeypatch):
     index = EPGProgramIndex({"espn": progs})
     m = _bare_matcher(index)
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
     )
     assert m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1)) == []
@@ -623,7 +650,8 @@ def test_reconcile_unmatched_linear_carries_no_epg_program_match(monkeypatch):
     index = EPGProgramIndex({"espn": [_prog(), _prog(start=BASE + timedelta(hours=4))]})
     m = _bare_matcher(index)
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
     )
     epg = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
@@ -682,7 +710,7 @@ def _skipped(exclusion="team_streams_disabled"):
 
 
 def test_unresolved_tvg_id_reports_no_epg_channel_not_the_name_skip():
-    """"ITV1 HD RT" in an EPG-only group persisted as
+    """ "ITV1 HD RT" in an EPG-only group persisted as
     skipped:team_streams_disabled — the name path's leftover, pointing at a
     setting that has nothing to do with a linear channel finding no guide."""
     m = _bare_matcher(EPGProgramIndex({}), team_streams_enabled=False)
@@ -719,7 +747,8 @@ def test_a_guide_that_was_read_keeps_no_epg_program_match(monkeypatch):
     index = EPGProgramIndex({"espn": [_prog(), _prog(start=BASE + timedelta(hours=4))]})
     m = _bare_matcher(index)
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
     )
     epg = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
@@ -750,3 +779,47 @@ def test_match_all_leaves_non_epg_groups_alone(monkeypatch, db_factory):
     result = m.match_all([{"id": 945, "name": "ITV1 HD RT"}], date(2026, 6, 1))
     assert result.results[0].failed_reason is None
     assert result.results[0].exclusion_reason == "team_streams_disabled"
+
+
+# ============================== #1029: a guide that could not be read is its own verdict
+
+
+def test_match_all_marks_every_stream_when_the_guide_could_not_be_read(monkeypatch, db_factory):
+    """No Dispatcharr, failed catalog fetch, no programme search: the index
+    carries a reason and every linear stream says so, instead of the name
+    path's "no matchup" skip on a whole source at once."""
+    matcher = _bare_matcher(
+        EPGProgramIndex({}, unavailable="no Dispatcharr connection"), team_streams_enabled=False
+    )
+    m = _runnable(matcher, monkeypatch, db_factory)
+    result = m.match_all(
+        [{"id": 945, "name": "ITV1 HD RT", "tvg_id": "itv1"}, {"id": 946, "name": "ESPN2"}],
+        date(2026, 6, 1),
+    )
+    assert [r.failed_reason for r in result.results] == [FailedReason.EPG_UNAVAILABLE] * 2
+    assert "no Dispatcharr connection" in result.results[0].detail
+    assert "team_streams_disabled" in result.results[0].detail  # name-path skip kept for triage
+
+
+def test_epg_unavailable_never_replaces_a_real_verdict():
+    failed = MatchedStreamResult(
+        stream_name="x",
+        stream_id=1,
+        matched=False,
+        failed_reason=FailedReason.NO_EVENT_FOUND,
+        detail="best=...",
+    )
+    matched = _result(matched=True)
+    StreamMatcher._mark_epg_unavailable([failed, matched], "down")
+    assert failed.failed_reason == FailedReason.NO_EVENT_FOUND
+    assert failed.detail == "best=..."
+    assert matched.failed_reason is None
+
+
+def test_a_guide_that_was_read_and_held_nothing_is_not_unavailable(monkeypatch, db_factory):
+    """An empty index with no reason means the guide WAS read: #877's verdict."""
+    m = _runnable(
+        _bare_matcher(EPGProgramIndex({}), team_streams_enabled=False), monkeypatch, db_factory
+    )
+    result = m.match_all([{"id": 945, "name": "ITV1 HD RT", "tvg_id": "itv1"}], date(2026, 6, 1))
+    assert result.results[0].failed_reason == FailedReason.NO_EPG_CHANNEL

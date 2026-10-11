@@ -22,10 +22,11 @@ from typing import Any
 from teamarr.consumers.team_epg import TeamEPGGenerator, TeamEPGOptions
 from teamarr.core import Programme
 from teamarr.services import SportsDataService, create_default_service
-from teamarr.templates.resolver import TemplateResolver
+from teamarr.services.team_channel_templates import (
+    resolve_team_channel_logo,
+    resolve_team_channel_name,
+)
 from teamarr.utilities.art_url import (
-    apply_art_base_url,
-    is_relative_art_path,
     read_art_base_url,
 )
 from teamarr.utilities.tz import now_utc
@@ -426,7 +427,7 @@ class TeamProcessor:
                 channel_id=team.channel_id,
                 team_name=team.team_name,
                 team_abbrev=team.team_abbrev,
-                logo_url=self._resolve_channel_logo(options, team),
+                logo_url=self._resolve_channel_logo(conn, options, team),
                 options=options,
                 provider=team.provider,
                 sport=team.sport,
@@ -449,8 +450,8 @@ class TeamProcessor:
             if programmes:
                 channel_dict = {
                     "id": team.channel_id,
-                    "name": self._resolve_channel_name(options, team),
-                    "icon": self._resolve_channel_logo(options, team),
+                    "name": self._resolve_channel_name(conn, options, team),
+                    "icon": self._resolve_channel_logo(conn, options, team),
                 }
                 from teamarr.database.settings import get_epg_settings
 
@@ -481,7 +482,6 @@ class TeamProcessor:
         in the EPG generator, which is critical for thread-safety during
         parallel processing.
         """
-        from teamarr.database.leagues import get_league_display
         from teamarr.database.settings import get_all_settings
         from teamarr.database.templates import (
             get_template,
@@ -521,7 +521,6 @@ class TeamProcessor:
             sport_durations=sport_durations,
             epg_timezone=all_settings.epg.epg_timezone,
             art_base_url=all_settings.epg.art_base_url,
-            league_display_name=get_league_display(conn, team.primary_league),
             midnight_crossover_mode=all_settings.epg.midnight_crossover_mode,
             template_id=team.template_id,
             template=template_config,  # Pre-loaded template
@@ -533,48 +532,31 @@ class TeamProcessor:
         )
 
     @staticmethod
-    def _resolve_channel_name(options: TeamEPGOptions, team: TeamConfig) -> str:
+    def _resolve_channel_name(conn: Connection, options: TeamEPGOptions, team: TeamConfig) -> str:
         template = options.template
-        name = template.team_channel_name if template else None
-        if name:
-            return TemplateResolver(options.art_base_url).resolve_with_map(
-                name,
-                {
-                    "league": options.league_display_name or team.primary_league.upper(),
-                    "league_id": team.primary_league,
-                    "league_code": team.primary_league,
-                    "team_name": team.team_name,
-                },
-            )
-        return team.team_name
+        return resolve_team_channel_name(
+            conn, team, template.team_channel_name if template else None
+        )
 
     @staticmethod
-    def _resolve_channel_logo(options: TeamEPGOptions, team: TeamConfig) -> str | None:
+    def _resolve_channel_logo(
+        conn: Connection, options: TeamEPGOptions, team: TeamConfig
+    ) -> str | None:
         """Return the team-template channel logo, falling back to provider artwork.
 
         Teamarr-managed channels deliberately do not read the per-team
-        ``channel_logo_url`` override. A template value without variables can
-        be resolved before schedule generation; variable-backed logos are
-        resolved with the team schedule in the managed-channel lifecycle.
+        ``channel_logo_url`` override. A game-thumbs path with no base URL
+        configured is not a URL a guide client can fetch, so the provider
+        artwork stands in for it (#826).
         """
         template = options.template
-        logo = template.team_channel_logo_url if template else None
-        if logo:
-            resolved = TemplateResolver(options.art_base_url).resolve_with_map(
-                logo,
-                {
-                    "league": options.league_display_name or team.primary_league.upper(),
-                    "league_id": team.primary_league,
-                    "league_code": team.primary_league,
-                    "team_name": team.team_name,
-                },
-            )
-            resolved = apply_art_base_url(resolved, options.art_base_url)
-            # A game-thumbs path with no base URL configured is not a URL a
-            # guide client can fetch; keep the provider artwork instead (#826).
-            if not is_relative_art_path(resolved):
-                return resolved
-        return team.team_logo_url
+        resolved = resolve_team_channel_logo(
+            conn,
+            team,
+            template.team_channel_logo_url if template else None,
+            options.art_base_url,
+        )
+        return resolved or team.team_logo_url
 
     def _get_team(self, conn: Connection, team_id: int) -> TeamConfig | None:
         """Get team by ID."""

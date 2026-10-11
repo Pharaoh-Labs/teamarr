@@ -35,7 +35,7 @@ from teamarr.providers.espn.editorial_canary import EditorialDriftCanary
 from teamarr.providers.espn.mma import MMAParserMixin
 from teamarr.providers.espn.tennis import TennisParserMixin
 from teamarr.providers.espn.tournament import TournamentParserMixin
-from teamarr.utilities.event_status import is_event_final
+from teamarr.utilities.event_status import is_event_final, unannounced_day_start
 
 logger = logging.getLogger(__name__)
 
@@ -740,6 +740,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         event_data = {
             "id": event_id,
             "name": header.get("gameNote", ""),
+            # header-level on the summary endpoint; _parse_event reads either
+            "timeValid": header.get("timeValid"),
             "shortName": self._build_short_name(competition),
             "date": competition.get("date"),
             "competitions": [competition],
@@ -752,7 +754,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             # competition), so attach it here. Raw passthrough, empty when absent.
             article = data.get("article") or {}
             if article.get("type") == "Preview":
-                event.game_preview = self._editorial_text(article)
+                event.game_preview = self._preview_text(article)
             from teamarr.providers.espn.preview import apply_generated_preview_fields, select_series
 
             # seasonseries is authoritative over any competition.series value
@@ -866,6 +868,13 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             game_event_note = (notes[0].get("headline") if notes else "") or ""
             soccer_match_note = competition.get("altGameNote") or ""
             neutral_site = bool(competition.get("neutralSite"))
+            # ESPN states an unannounced start time outright, on the competition
+            # (scoreboard, schedule) or the event wrapper; the timestamp it sends
+            # alongside is midnight Eastern, not a kickoff (#995). Only its date
+            # means anything, so the event is anchored to the start of that day.
+            time_tbd = competition.get("timeValid") is False or data.get("timeValid") is False
+            if time_tbd:
+                start_time = unannounced_day_start(start_time)
             self._editorial_canary.record(
                 competition,
                 sport=sport,
@@ -884,7 +893,10 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             comp_series = competition.get("series")
             series_summary = ""
             if isinstance(comp_series, dict):
-                series_summary = str(comp_series.get("summary") or "")
+                from teamarr.providers.espn.preview import is_series_state
+
+                raw_summary = comp_series.get("summary")
+                series_summary = str(raw_summary) if is_series_state(raw_summary) else ""
             elif isinstance(comp_series, list):
                 from teamarr.providers.espn.preview import select_series
 
@@ -915,6 +927,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 game_event_note=game_event_note,
                 soccer_match_note=soccer_match_note,
                 neutral_site=neutral_site,
+                time_tbd=time_tbd,
                 broadcast_markets=broadcast_markets,
             )
         except Exception as e:
@@ -938,6 +951,30 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             return short
         desc = obj.get("description") or ""
         return re.sub(r"^\s*[—–-]\s+", "", desc).strip()
+
+    # ESPN's machine-generated previews. Their headline is generic ("Arizona
+    # State hosts Hawaii") while the description carries the records, so the
+    # description stays the text for these.
+    _GENERATED_PREVIEW_SOURCES = frozenset({"data skrive"})
+
+    @classmethod
+    def _preview_text(cls, article: dict) -> str:
+        """Preview copy from an ESPN summary article (#979).
+
+        Preview articles carry no `shortLinkText` (0 of 57 sampled), so
+        `_editorial_text` alone always lands on `description`. For a written
+        preview (AP) that is the story's opening anecdote, and the `headline`
+        is the line that summarises the game ('Panthers defense looks to slow
+        down Jared Goff and the Lions while missing both starting
+        cornerbacks'). Machine-generated previews are the reverse, so they
+        keep the description.
+        """
+        source = (article.get("source") or "").strip().lower()
+        if source in cls._GENERATED_PREVIEW_SOURCES:
+            return cls._editorial_text(article)
+        short = (article.get("shortLinkText") or "").strip()
+        headline = (article.get("headline") or "").strip()
+        return short or headline or cls._editorial_text(article)
 
     @classmethod
     def _headline_of_type(cls, competition: dict, want_type: str) -> str:
@@ -1331,8 +1368,17 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         streak_str = self._format_streak(streak_count)
 
         # Get conference/division
-        groups = team_data.get("groups", {})
-        conference, conference_abbrev, division = self._parse_groups(groups)
+        # Group ids identify the conference and division; ESPN sends no names
+        # with them. The standing line names the team's own group ("12th in
+        # Big Ten", "3rd in NFC North") — the conference for a college team,
+        # the division for a pro one. SportsDataService fills fuller names
+        # from the cached group tree where the league has one (#996).
+        groups = team_data.get("groups") or {}
+        conference_id, division_id = self._parse_groups(groups)
+        standing_group = self._standing_group_name(team_data.get("standingSummary"))
+        own_group_is_conference = bool(groups.get("isConference"))
+        conference = standing_group if own_group_is_conference else None
+        division = None if own_group_is_conference else standing_group
 
         return TeamStats(
             record=record_str,
@@ -1349,8 +1395,10 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             playoff_seed=int(stats.get("playoffSeed", 0)) or None,
             games_back=float(stats.get("gamesBehind", 0)) or None,
             conference=conference,
-            conference_abbrev=conference_abbrev,
+            conference_abbrev=conference,
             division=division,
+            conference_id=conference_id,
+            division_id=division_id,
             ppg=float(stats.get("avgPointsFor", 0)) or None,
             papg=float(stats.get("avgPointsAgainst", 0)) or None,
         )
@@ -1473,31 +1521,35 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             return f"L{abs(streak_count)}"
         return ""
 
-    def _parse_groups(self, groups: dict) -> tuple[str | None, str | None, str | None]:
-        """Parse conference/division from groups structure.
+    def _parse_groups(self, groups: dict) -> tuple[str | None, str | None]:
+        """(conference_id, division_id) from a team's groups structure.
 
-        Returns (conference_name, conference_abbrev, division_name).
-        Note: Full conference/division names require additional API calls
-        to the Core API. For now, we return IDs as placeholders.
+        ESPN's shape varies:
+        - isConference=true (college): groups.id is the conference, its
+          parent the division (FBS, NCAA Division I)
+        - otherwise (pro): groups.id is the division, its parent the conference
+
+        Ids only. These used to be returned dressed as names ("Conference 5"),
+        which the guide then printed (#996).
         """
         if not groups:
-            return None, None, None
+            return None, None
 
-        # ESPN structure varies:
-        # - Pro leagues: groups.id = division, groups.parent.id = conference
-        # - College: groups.id = subdivision, groups.parent.id = conference
-        # - isConference=true: groups.id is the conference itself
+        def key(value) -> str | None:
+            return str(value) if value not in (None, "") else None
 
-        is_conference = groups.get("isConference", False)
-        group_id = groups.get("id")
-        parent_id = groups.get("parent", {}).get("id")
+        group_id = key(groups.get("id"))
+        parent_id = key((groups.get("parent") or {}).get("id"))
+        if groups.get("isConference", False):
+            return group_id, parent_id
+        return parent_id, group_id
 
-        if is_conference:
-            # groups.id is the conference
-            return f"Conference {group_id}", None, None
+    _STANDING_GROUP = re.compile(
+        r"^\s*(?:T-?|Tied\s+(?:for\s+)?)?\d+(?:st|nd|rd|th)\s+in\s+(.+?)\s*$"
+    )
 
-        # groups.id is division/subdivision, parent is conference
-        conference = f"Conference {parent_id}" if parent_id else None
-        division = f"Division {group_id}" if group_id else None
-
-        return conference, None, division
+    @classmethod
+    def _standing_group_name(cls, standing_summary: str | None) -> str | None:
+        """The group named in a standing line: '12th in Big Ten' -> 'Big Ten'."""
+        match = cls._STANDING_GROUP.match(standing_summary or "")
+        return match.group(1) if match else None

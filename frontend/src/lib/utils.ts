@@ -104,6 +104,7 @@ export function getFailedReasonLabel(reason: string): string {
     tennis_matchup_unknown: "Tennis matchup not known",
     no_epg_program_match: "No guide programme matched",
     no_epg_channel: "No guide found for this stream",
+    epg_unavailable: "Guide could not be read",
     date_mismatch: "Date mismatch",
     candidates_gated: "No candidate in window",
     event_beyond_window: "Event beyond match window",
@@ -113,7 +114,9 @@ export function getFailedReasonLabel(reason: string): string {
     "filtered:include_regex": "Excluded by include pattern",
     "filtered:exclude_regex": "Excluded by exclude pattern",
     "filtered:stale": "Stale stream",
-    "skipped:unclassifiable": "Linear channel (no matchup)",
+    // Says what the classifier saw, not what the stream probably is (#1029):
+    // two team names glued with no "vs"/"@" land here too.
+    "skipped:unclassifiable": "No matchup separator in name",
     "skipped:name_match_disabled": "Stream Name matching off",
     "skipped:team_streams_disabled": "Team matching off",
   }

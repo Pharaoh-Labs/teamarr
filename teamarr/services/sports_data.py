@@ -916,11 +916,40 @@ class SportsDataService:
                         rank = self.get_rankings(league).get(team_id)
                         if rank:
                             stats = replace(stats, rank=rank)
+                    stats = self._with_group_names(stats, league)
                     # Serialize to dict before caching
                     self._cache.set(cache_key, stats_to_dict(stats), CACHE_TTL_TEAM_STATS)
                     return stats
         self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)
         return None
+
+    @staticmethod
+    def _with_group_names(stats: TeamStats, league: str) -> TeamStats:
+        """Fill conference names from the league's cached group tree (#996).
+
+        The provider knows the conference by id and, at best, by the short
+        form in the team's standing line. The cached tree has the full name
+        and abbreviation ("Big Ten Conference" / "Big Ten") for the leagues
+        that have one; for the rest the provider's own value stands.
+        """
+        if not stats.conference_id:
+            return stats
+        try:
+            from teamarr.database.provider_groups import get_group_names
+
+            with get_db() as conn:
+                group = get_group_names(conn, league, stats.conference_id)
+        except Exception as e:  # a naming nicety must not cost the stats
+            logger.debug("[SPORTS_DATA] Conference name lookup failed for %s: %s", league, e)
+            return stats
+        if not group:
+            return stats
+        return replace(
+            stats,
+            conference=group["name"] or stats.conference,
+            conference_abbrev=group["abbrev"] or stats.conference_abbrev,
+            division=stats.division or group["division"],
+        )
 
     def get_rankings(self, league: str) -> dict[str, int]:
         """Get the league's poll rankings as {team_id: rank}.

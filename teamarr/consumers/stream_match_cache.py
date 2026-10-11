@@ -725,6 +725,50 @@ class StreamMatchCache:
             return cursor.fetchone()[0]
 
 
+class NullStreamMatchCache(StreamMatchCache):
+    """A match cache that remembers nothing, for matching with no side effects.
+
+    Source discovery (#997) runs the real matcher over M3U groups that are not
+    sources. Those streams belong to no source, so nothing about them may be
+    read from or written to the cache: every lookup misses and every write is
+    dropped. The one call that still reaches the real table is
+    ``clear_failed`` — the matcher clears cached failures when the schedule
+    teaches it a new team (#912), and that invalidation is owed to the real
+    cache no matter which matcher instance did the learning.
+    """
+
+    @contextmanager
+    def session(self):
+        yield
+
+    def get(self, *args, **kwargs) -> StreamCacheEntry | None:
+        return None
+
+    def is_user_corrected(self, *args, **kwargs) -> bool:
+        return False
+
+    def is_failed_cached(self, *args, **kwargs) -> bool:
+        return False
+
+    def set(self, *args, **kwargs) -> bool:
+        return False
+
+    def set_failed(self, *args, **kwargs) -> bool:
+        return False
+
+    def touch(self, *args, **kwargs) -> bool:
+        return False
+
+    def purge_stale(self, current_generation: int) -> int:
+        return 0
+
+    def delete(self, *args, **kwargs) -> bool:
+        return False
+
+    def user_skipped_fingerprints(self, group_id: int) -> "set[str]":
+        return set()
+
+
 def clear_group_match_data(get_db: Callable, group_id: int) -> tuple[int, int]:
     """Clear both the stream match cache and cached stream stats for one group.
 

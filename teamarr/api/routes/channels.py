@@ -43,8 +43,6 @@ from teamarr.dispatcharr import (
 from teamarr.services import create_channel_service, create_default_service
 from teamarr.services.stream_ordering import GameContext, StreamOrderingService
 from teamarr.services.team_channel_status import find_next_live_window
-from teamarr.templates.resolver import TemplateResolver
-from teamarr.utilities.art_url import apply_art_base_url, is_relative_art_path
 from teamarr.utilities.tz import parse_db_timestamp
 
 logger = logging.getLogger(__name__)
@@ -263,28 +261,18 @@ class ChannelStreamsResponse(BaseModel):
 
 def _effective_team_channel_logo(conn, team_channel: dict) -> str | None:
     """Match Team EPG artwork resolution, excluding the deprecated team override."""
-    from teamarr.database.leagues import get_league_display
     from teamarr.database.templates import get_template
+    from teamarr.services.team_channel_templates import resolve_team_channel_logo
 
     template_id = team_channel.get("template_id")
-    if template_id:
-        template = get_template(conn, template_id)
-        logo = template.team_channel_logo_url if template else None
-        if logo:
-            art_base_url = get_epg_settings(conn).art_base_url
-            resolved = TemplateResolver(art_base_url).resolve_with_map(
-                logo,
-                {
-                    "league": get_league_display(conn, team_channel["primary_league"]),
-                    "league_id": team_channel["primary_league"],
-                    "league_code": team_channel["primary_league"],
-                    "team_name": team_channel["team_name"],
-                },
-            )
-            resolved = apply_art_base_url(resolved, art_base_url)
-            if not is_relative_art_path(resolved):
-                return resolved
-    return team_channel["team_logo_url"]
+    template = get_template(conn, template_id) if template_id else None
+    logo = template.team_channel_logo_url if template else None
+    if not logo:
+        return team_channel["team_logo_url"]
+    resolved = resolve_team_channel_logo(
+        conn, team_channel, logo, get_epg_settings(conn).art_base_url
+    )
+    return resolved or team_channel["team_logo_url"]
 
 
 # =============================================================================

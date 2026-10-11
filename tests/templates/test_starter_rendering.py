@@ -117,7 +117,8 @@ def _national_ctx(**kw):
     return _ctx(ev)
 
 
-def _college_ctx(*, home_rank=None, away_rank=None, conference=None, **kw):
+def _college_ctx(*, home_rank=None, away_rank=None, conference=None,
+                 conference_abbrev=None, conference_id=None, **kw):
     home = _team("Arkansas Razorbacks", "ARK", "mens-college-basketball", "basketball", "1")
     away = _team("Texas A&M Aggies", "TAMU", "mens-college-basketball", "basketball", "2")
     ev = _event(home, away, "mens-college-basketball", "basketball",
@@ -125,8 +126,11 @@ def _college_ctx(*, home_rank=None, away_rank=None, conference=None, **kw):
                 home_last_five="4-1", away_last_five="3-2", **kw)
     return _ctx(
         ev,
-        team_stats=TeamStats(record="20-7", rank=home_rank, conference=conference),
-        opponent_stats=TeamStats(record="19-8", rank=away_rank, conference=conference),
+        team_stats=TeamStats(record="20-7", rank=home_rank, conference=conference,
+                             conference_abbrev=conference_abbrev, conference_id=conference_id),
+        opponent_stats=TeamStats(record="19-8", rank=away_rank, conference=conference,
+                                 conference_abbrev=conference_abbrev,
+                                 conference_id=conference_id),
     )
 
 
@@ -254,15 +258,15 @@ def test_starter_renders_every_surface_clean(name, resolver):
 # --- family registers ------------------------------------------------------
 
 
-def test_us_pro_register_travel_line(resolver):
-    """US pro convention: articled franchises, records, travel line, venue."""
+def test_us_pro_register_host_line(resolver):
+    """US pro convention (#991): articled franchises, the home side hosting,
+    records in brackets, venue."""
     spec = SPECS["Default Event (Starter)"]
     out = resolver.resolve_conditional(spec["conditional_descriptions"], _nba_ctx())
     assert out == (
-        "The 8-4 Detroit Pistons travel to Auburn Hills, MI to play the "
-        "10-2 Boston Celtics at The Palace. the Detroit Pistons have won 2 of "
-        "their last five; the Boston Celtics have won 4 of their last five. "
-        "Series tied 1-1"
+        "The Boston Celtics (10-2) host the Detroit Pistons (8-4) at The Palace. "
+        "The Boston Celtics have won 4 of their last five; the Detroit Pistons "
+        "have won 2 of their last five. Series tied 1-1."
     )
 
 
@@ -271,7 +275,7 @@ def test_soccer_club_register_articleless_face(resolver):
     'face' match register."""
     spec = SPECS["Soccer Club Event (Starter)"]
     out = resolver.resolve_conditional(spec["conditional_descriptions"], _soccer_club_ctx())
-    assert out.startswith("Arsenal face Chelsea at Stamford Bridge.")
+    assert out.startswith("Chelsea face Arsenal at Stamford Bridge.")
     assert "the Arsenal" not in out and "the Chelsea" not in out
 
 
@@ -280,7 +284,7 @@ def test_national_register_bare_names_and_year_title(resolver):
     spec = SPECS["International Event (Starter)"]
     ctx = _national_ctx()
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
-    assert out.startswith("Belgium face Spain at MetLife Stadium.")
+    assert out.startswith("Spain face Belgium at MetLife Stadium.")
     assert "the Belgium" not in out and "the Spain" not in out
     title = resolver.resolve(spec["title_format"], ctx)
     assert title == "FIFA World Cup 2026"
@@ -315,9 +319,20 @@ def test_college_one_ranked_team_shows_only_that_rank(resolver):
 
 def test_college_conference_game_names_the_conference(resolver):
     spec = SPECS["College Team (Starter)"]
-    ctx = _college_ctx(conference="Southeastern Conference")
+    ctx = _college_ctx(conference="Southeastern Conference", conference_abbrev="SEC",
+                       conference_id="8")
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
-    assert "in Southeastern Conference play" in out
+    assert "in SEC conference play at" in out
+
+
+def test_college_conference_game_reads_without_a_conference_name(resolver):
+    """#996: the row fires on the shared conference id; with no display name
+    known it says "in conference play", never an id or a gap."""
+    spec = SPECS["College Team (Starter)"]
+    ctx = _college_ctx(conference_id="62")
+    out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
+    assert "in conference play at" in out
+    assert "Conference 62" not in out
 
 
 def test_marquee_note_leads_us_pro_description(resolver):
@@ -329,8 +344,8 @@ def test_marquee_note_leads_us_pro_description(resolver):
     ctx = _nba_ctx(game_event_note="NBA Finals - Game 5")
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert out == (
-        "NBA Finals - Game 5. The 8-4 Detroit Pistons and the "
-        "10-2 Boston Celtics meet at The Palace."
+        "NBA Finals - Game 5. The Detroit Pistons (8-4) and the "
+        "Boston Celtics (10-2) meet at The Palace."
     )
 
 
@@ -362,7 +377,7 @@ def test_neutral_site_description_drops_host_framing(resolver):
     ctx = _nba_ctx(neutral_site=True)
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert out.startswith(
-        "The 8-4 Detroit Pistons and the 10-2 Boston Celtics meet at The Palace."
+        "The Detroit Pistons (8-4) and the Boston Celtics (10-2) meet at The Palace."
     )
     assert "travel to" not in out and "host" not in out
 
@@ -382,7 +397,7 @@ def test_match_note_leads_soccer_description(resolver):
     spec = SPECS["International Event (Starter)"]
     ctx = _national_ctx(soccer_match_note="FIFA World Cup, Group C")
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
-    assert out == "FIFA World Cup, Group C. Belgium face Spain at MetLife Stadium."
+    assert out == "FIFA World Cup, Group C. Spain face Belgium at MetLife Stadium."
 
 
 def test_provider_preview_still_beats_marquee_note(resolver):
@@ -430,7 +445,7 @@ def test_tennis_year_prefixed_tournament_title(resolver):
     assert title == "2026 Wimbledon"
     # player1 mirrors fighter1 = the away slot (first in ESPN's event title)
     sub = resolver.resolve(spec["subtitle_template"], ctx)
-    assert sub == "Final - Jannik Sinner vs Carlos Alcaraz"
+    assert sub == "Final - Jannik Sinner vs. Carlos Alcaraz"
 
 
 def test_racing_series_title_and_session_surfaces(resolver):
@@ -446,7 +461,7 @@ def test_racing_series_title_and_session_surfaces(resolver):
     channel = resolver.resolve(spec["event_channel_name"], ctx)
     assert channel == "NASCAR Cup | Practice 1"
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
-    assert out == "Navy 250 Practice 1 at Nashville Superspeedway."
+    assert out == "Navy 250 Practice 1 from Nashville Superspeedway."
     # Racing home/away are the same placeholder team — no surface may use
     # matchup vars, or it renders "Navy 250 at Navy 250".
     for label, template in _text_surfaces(spec):

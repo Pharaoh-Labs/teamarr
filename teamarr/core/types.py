@@ -171,6 +171,9 @@ class Event:
     # tournament rounds, showcase games. Flips matchup framing to 'vs.' and
     # drops host framing (Gracenote convention, #355 item 3).
     neutral_site: bool = False
+    # The provider has a date but no announced start time (ESPN timeValid=false);
+    # start_time then holds the provider's placeholder, not a real kickoff (#995).
+    time_tbd: bool = False
 
     # Broadcast name → market ('national'/'home'/'away') from ESPN
     # broadcasts[] — data-driven feed discrimination for team-branded and
@@ -190,7 +193,7 @@ class Event:
     soccer_match_note: str = ""  # altGameNote, e.g. "FIFA World Cup, Group J"
     # Per-event tier — from the summary endpoint (overlaid by refresh_event_status,
     # which already fetches it, so zero extra calls).
-    game_preview: str = ""  # summary article[type=Preview].description (pregame)
+    game_preview: str = ""  # summary article[type=Preview] headline or description (#979)
     # Active-series state via select_series (#920) — active playoff series
     # outranks a completed regular-season one; also populated from scoreboard
     # competition.series for paths that never hit the summary endpoint.
@@ -315,10 +318,14 @@ class TeamStats:
     playoff_seed: int | None = None
     games_back: float | None = None
 
-    # Conference/division
+    # Conference/division. The ids are the provider's group keys and are what
+    # two teams are compared on; the names are for display and may be empty
+    # when the provider's group tree is not cached for the league (#996).
     conference: str | None = None  # Full name
     conference_abbrev: str | None = None
     division: str | None = None
+    conference_id: str | None = None
+    division_id: str | None = None
 
     # Scoring stats
     ppg: float | None = None  # Points per game

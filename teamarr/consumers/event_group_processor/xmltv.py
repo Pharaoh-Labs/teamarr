@@ -21,6 +21,7 @@ from teamarr.database.subscription import (
     get_subscription_template_for_event,
     get_subscription_templates,
 )
+from teamarr.utilities.event_status import event_end_time
 from teamarr.utilities.sports import template_duration_override
 from teamarr.utilities.xmltv import programmes_to_xmltv
 
@@ -318,8 +319,12 @@ class XmltvRenderer:
         # Get configured timezone
         tz = get_user_timezone()
 
-        # Build filler options - lookback allows preceding EPG content
-        now = datetime.now(tz)
+        # Build filler options - lookback allows preceding EPG content.
+        # The window hangs off the run's one clock reading, not this source's
+        # own: sources are processed seconds apart, and a channel they share
+        # otherwise gets one near-duplicate edge programme per source (#988).
+        run_now = getattr(self, "_run_now", None)
+        now = run_now.astimezone(tz) if run_now else datetime.now(tz)
         epg_start = now - timedelta(hours=lookback_hours)
         options = EventFillerOptions(
             epg_start=epg_start,
@@ -384,7 +389,7 @@ class XmltvRenderer:
                 use_event = event
                 use_options = replace(
                     options,
-                    event_end_override=event.start_time + timedelta(hours=duration_override),
+                    event_end_override=event_end_time(event, duration_override),
                 )
             else:
                 use_event = event

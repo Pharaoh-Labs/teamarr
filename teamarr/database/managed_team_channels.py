@@ -69,6 +69,7 @@ def list_owned_enabled_managed_team_channels(conn: Connection) -> list[dict]:
         """
         SELECT t.id AS team_id, t.channel_id, t.team_name, t.team_logo_url,
                t.channel_logo_url, t.primary_league, t.sport,
+               t.provider, t.provider_team_id, t.team_abbrev, t.template_id,
                mtc.dispatcharr_channel_id, mtc.dispatcharr_uuid,
                mtc.channel_number, mtc.sync_status, mtc.created_at, mtc.updated_at
         FROM managed_team_channels mtc

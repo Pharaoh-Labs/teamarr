@@ -131,6 +131,18 @@ def _leader_blocks(data: dict, competition: dict) -> list[dict]:
     return blocks
 
 
+def is_series_state(summary: object) -> bool:
+    """Whether a series summary states where the series stands.
+
+    ESPN fills the field for a series that has not begun with its start date
+    ("Series starts 12/16") — a schedule note, and for a regular-season game
+    months before that date, noise in the guide. Only real state counts
+    ("Series tied 1-1", "BOS leads series 3-2").
+    """
+    text = str(summary or "").strip()
+    return bool(text) and not text.lower().startswith("series starts")
+
+
 def select_series(series_list: list[dict], event_id: str | None = None) -> dict | None:
     """Select the active/relevant series entry from a seasonseries list.
 
@@ -146,7 +158,9 @@ def select_series(series_list: list[dict], event_id: str | None = None) -> dict 
     candidates = [
         item
         for item in series_list
-        if isinstance(item, dict) and item.get("type") != "preseason" and item.get("summary")
+        if isinstance(item, dict)
+        and item.get("type") != "preseason"
+        and is_series_state(item.get("summary"))
     ]
     if not candidates:
         return None

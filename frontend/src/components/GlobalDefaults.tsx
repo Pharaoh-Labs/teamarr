@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { LeaguePicker } from "@/components/LeaguePicker"
+import { AutoSourceToggles } from "@/components/AutoSourceToggles"
 import { SelectedBadges } from "@/components/ui/selected-badges"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
 import { TeamPicker } from "@/components/TeamPicker"
@@ -293,6 +294,7 @@ export function GlobalDefaults({
           </div>
         </Card>
       )}
+      {activeTile === "sportleague" && <AutoSourceToggles />}
 
       {/* ── Tile: Soccer ── */}
       {activeTile === "soccer" && (

@@ -9,10 +9,11 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.config import get_user_timezone
 from teamarr.consumers.channel_lifecycle import (
     StreamProcessResult,
     create_lifecycle_service,
@@ -114,6 +115,11 @@ class EventGroupProcessor(
         # This avoids redundant API/cache lookups when multiple groups search the same leagues
         # while ensuring groups that need fresh API data can still get it
         self._shared_events: dict[str, tuple[list[Event], bool]] = {}
+
+        # One clock reading for the whole run (#988). Every source builds its
+        # filler window from it, so a channel shared by several sources gets
+        # identical edge programmes that the XMLTV merge can de-duplicate.
+        self._run_now: datetime | None = None
 
         # Per-run consolidation state (this processor lives for one run):
         # one lifecycle service shared by all groups, and once-per-run flags for
@@ -300,6 +306,7 @@ class EventGroupProcessor(
         self._generation = generation  # Store for use in _do_matching
 
         # Clear caches at start of new generation run
+        self._run_now = datetime.now(get_user_timezone())
         self._shared_events.clear()
         self.clear_epg_resolution_cache()
         if hasattr(self, "_subscription_leagues_cache"):

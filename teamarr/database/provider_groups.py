@@ -8,6 +8,7 @@ the tables later.
 """
 
 import logging
+import re
 from sqlite3 import Connection
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,41 @@ def save_provider_groups(
         )
     conn.commit()
     return len(groups)
+
+
+_PLACEHOLDER_GROUP_NAME = re.compile(r"(Conference|Division) \d+")
+
+
+def is_placeholder_group_name(name: str | None) -> bool:
+    """A stand-in written where a group's real name was unknown ("Conference 5").
+
+    Such a value must never reach a guide: it is an id wearing a label."""
+    return bool(name) and _PLACEHOLDER_GROUP_NAME.fullmatch(name.strip()) is not None
+
+
+def get_group_names(conn: Connection, league: str, group_key: str) -> dict | None:
+    """Display names for one group of a league's cached tree, by provider key.
+
+    Returns ``{"name", "abbrev", "division"}`` (``division`` is the parent
+    group's name — 'FBS', 'NCAA Division I') or None when the league's tree is
+    not cached or the group is not in it. A placeholder name reads as missing.
+    """
+    row = conn.execute(
+        """SELECT group_name, group_abbrev, parent_name
+           FROM provider_group_cache
+           WHERE league = ? AND group_key = ?""",
+        (league, str(group_key)),
+    ).fetchone()
+    if row is None:
+        return None
+
+    def real(value: str | None) -> str | None:
+        return None if not value or is_placeholder_group_name(value) else value
+
+    name, abbrev = real(row["group_name"]), real(row["group_abbrev"])
+    if not name and not abbrev:
+        return None
+    return {"name": name or abbrev, "abbrev": abbrev or name, "division": real(row["parent_name"])}
 
 
 def get_league_groups(conn: Connection, league: str) -> list[dict]:

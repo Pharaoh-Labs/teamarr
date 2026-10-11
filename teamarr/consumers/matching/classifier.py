@@ -1417,7 +1417,12 @@ _RACING_SERIES_SIGNATURES: "tuple[tuple[Pattern[str], tuple[str, ...]], ...]" = 
         ("nascar-cup", "nascar-xfinity", "nascar-truck"),
     ),
     (re.compile(r"\b(?:indycar|indy\s*(?:500|nxt))\b", re.IGNORECASE), ("indycar",)),
-    (re.compile(r"\b(?:motogp|moto\s*[23])\b", re.IGNORECASE), ("motogp",)),
+    (re.compile(r"\bmotogp\b", re.IGNORECASE), ("motogp",)),
+    # Moto2/Moto3 run on MotoGP weekends at the same circuit but are their own
+    # TSDB leagues (4436/4437), not configured — the F2/F3 shape again (#604).
+    # Blocked the same way, so a Moto2 stream never lands on the MotoGP
+    # weekend event it shares a venue and date with.
+    (re.compile(r"\bmoto\s*[23]\b", re.IGNORECASE), ("moto-feeder",)),
     (re.compile(r"\bimsa\b", re.IGNORECASE), ("imsa",)),
     (re.compile(r"\b(?:wec|world\s+endurance)\b", re.IGNORECASE), ("wec",)),
     (re.compile(r"\b(?:supercross|motocross)\b", re.IGNORECASE), ("supercross",)),

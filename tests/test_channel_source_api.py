@@ -157,3 +157,73 @@ def test_channel_source_channels_lists_selected_groups_without_teamarr_channels(
         (100, "ESPN", "US Sports"),
         (101, "FS1", "US Sports"),
     ]
+
+
+# --- #986: the rows follow the saved selection, without waiting for a run ---
+
+
+@pytest.fixture()
+def empty_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    init_db()
+    monkeypatch.setattr(
+        "teamarr.api.routes.settings.epg._channel_source_group_names",
+        lambda: {470: "NFL Local"},
+    )
+
+
+def _save_selection(enabled, groups):
+    body = client.get("/api/v1/settings/epg").json()
+    body["epg_channel_source_enabled"] = enabled
+    body["epg_channel_source_groups"] = groups
+    resp = client.put("/api/v1/settings/epg", json=body)
+    assert resp.status_code == 200, resp.text
+
+
+def _source_rows():
+    return {
+        g["dispatcharr_channel_group_id"]: g
+        for g in _listed().values()
+        if g["is_channel_source"]
+    }
+
+
+def test_saving_a_selection_creates_its_rows(empty_db):
+    assert _source_rows() == {}
+    _save_selection(True, [470, 1222])
+    rows = _source_rows()
+    assert set(rows) == {470, 1222}
+    assert rows[470]["display_name"] == "Dispatcharr: NFL Local"
+    assert rows[470]["enabled"] is True
+
+
+def test_deselecting_a_group_delists_its_row(empty_db):
+    _save_selection(True, [470, 1222])
+    _save_selection(True, [470])
+    assert set(_source_rows()) == {470}
+
+
+def test_turning_the_source_off_delists_every_row(empty_db):
+    _save_selection(True, [470])
+    _save_selection(False, [470])
+    assert _source_rows() == {}
+
+
+def test_an_unrelated_save_does_not_touch_the_rows(empty_db, monkeypatch):
+    _save_selection(True, [470])
+    calls = []
+    monkeypatch.setattr(
+        "teamarr.database.groups.ensure_channel_source_group",
+        lambda *a, **k: calls.append(1),
+    )
+    _save_selection(True, [470])
+    assert calls == []
+
+
+def test_dispatcharr_being_down_does_not_fail_the_save(empty_db, monkeypatch):
+    def boom():
+        raise RuntimeError("down")
+
+    monkeypatch.setattr("teamarr.api.routes.settings.epg._channel_source_group_names", boom)
+    _save_selection(True, [470])
+    assert client.get("/api/v1/settings/epg").json()["epg_channel_source_groups"] == [470]

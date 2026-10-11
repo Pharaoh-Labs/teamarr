@@ -117,13 +117,22 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
         update_scheduler_settings,
     )
 
+    if (
+        update.source_discovery_auto_max_streams is not None
+        and update.source_discovery_auto_max_streams < 1
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="source_discovery_auto_max_streams must be at least 1",
+        )
+
     if update.interval_minutes is not None and update.interval_minutes < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="interval_minutes must be at least 1",
         )
 
-    # Validate cron expression if provided
+    # Validate the cron expression if provided
     if update.channel_reset_cron:
         try:
             croniter(update.channel_reset_cron)
@@ -140,6 +149,8 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
             interval_minutes=update.interval_minutes,
             channel_reset_enabled=update.channel_reset_enabled,
             channel_reset_cron=update.channel_reset_cron,
+            source_discovery_mode=update.source_discovery_mode,
+            source_discovery_auto_max_streams=update.source_discovery_auto_max_streams,
         )
 
     # Apply scheduler state change immediately if enabled was updated
@@ -152,6 +163,9 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
     if update.channel_reset_enabled is not None or update.channel_reset_cron is not None:
 
         restart_scheduler_sub_task("channel_reset")
+
+    if update.source_discovery_mode is not None:
+        restart_scheduler_sub_task("source_discovery")
 
     with get_db() as conn:
         settings = get_scheduler_settings(conn)

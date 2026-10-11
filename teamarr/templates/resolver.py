@@ -89,7 +89,7 @@ class TemplateResolver:
     def build_variables(self, context: TemplateContext) -> dict[str, str]:
         """Materialize the full variable map for a context.
 
-        Every ``resolve()`` runs all 252 registered extractors (plus their
+        Every ``resolve()`` runs every registered extractor (plus their
         ``.next``/``.last`` suffixes) from scratch, but one programme resolves
         five to eight fields — title, subtitle, description, art, each
         category — against a context that does not change between them. Callers
@@ -259,6 +259,7 @@ class TemplateResolver:
         Removes:
         - Empty parentheses/brackets: () []
         - Multiple consecutive spaces
+        - A full stop stranded by an empty sentence-final variable
         - Leading/trailing whitespace
         """
         # Collapse runs of spaces first so wrapper removal sees at most one
@@ -273,6 +274,12 @@ class TemplateResolver:
         # Wrapper removal can leave one double space behind ("a () b" -> "a  b")
         text = re.sub(r" {2,}", " ", text)
 
+        # A variable that closes a sentence and resolves empty strands its
+        # full stop: "…at Ford Field. {series_summary}." -> "…Ford Field. ."
+        # and "…, 32-26 {overtime_text}." -> "…, 32-26 ." Pull it back in.
+        text = re.sub(r"\. \.(?= |$)", ".", text)
+        text = re.sub(r" \.(?= |$)", ".", text)
+
         text = text.strip()
 
         # Article-aware vars ({team_name_the}, {tournament_name_the}) emit a
@@ -280,6 +287,9 @@ class TemplateResolver:
         # the rendered text (Gracenote: "The Washington Mystics play…").
         if text.startswith("the "):
             text = f"T{text[1:]}"
+        # …and when it opens a later sentence ("…Game 5. the Pistons and…").
+        # "vs. the Senators" is a connector, not a sentence end.
+        text = re.sub(r"(?<!vs)\. the ", ". The ", text)
 
         return text
 

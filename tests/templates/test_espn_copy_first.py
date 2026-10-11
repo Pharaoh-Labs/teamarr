@@ -164,7 +164,7 @@ def test_postgame_rows_carry_fallback_description():
     config = _postgame_config()
     ctx, _ = _ctx(_event())  # status=post → is_final row wins
     selected = gen._select_register_template(
-        base=config.postgame_template, rows=config.postgame_rows, context=ctx, refresh=True
+        base=config.postgame_template, rows=config.postgame_rows, context=ctx
     )
     assert selected.description == "{game_recap}"
     assert selected.description_fallbacks == [config.postgame_template.description]
@@ -176,7 +176,7 @@ def test_filler_render_uses_recap_when_present():
     ctx, _ = _ctx(event)
     config = _postgame_config()
     template = gen._select_register_template(
-        base=config.postgame_template, rows=config.postgame_rows, context=ctx, refresh=True
+        base=config.postgame_template, rows=config.postgame_rows, context=ctx
     )
     programmes = gen._generate_filler(
         start_dt=datetime(2026, 6, 17, 22, 0, tzinfo=UTC),
@@ -199,7 +199,7 @@ def test_filler_render_falls_through_to_constructed_when_no_recap():
     ctx, _ = _ctx(event)
     config = _postgame_config()
     template = gen._select_register_template(
-        base=config.postgame_template, rows=config.postgame_rows, context=ctx, refresh=True
+        base=config.postgame_template, rows=config.postgame_rows, context=ctx
     )
     programmes = gen._generate_filler(
         start_dt=datetime(2026, 6, 17, 22, 0, tzinfo=UTC),
@@ -278,3 +278,36 @@ def test_starter_set_does_not_opt_in_to_generated_preview():
         assert all("{generated_preview" not in row.get("template", "") for row in rows), spec[
             "name"
         ]
+
+
+def test_event_postgame_row_is_rendered_from_the_refreshed_event():
+    """#987, event-channel side: the postgame row chosen on refreshed status
+    must be rendered from that same refreshed event."""
+    from unittest.mock import MagicMock
+
+    stale = _event(status=EventStatus(state="in"))
+    fresh = _event(game_recap="Heat top Aces for the title")
+    service = MagicMock()
+    service.refresh_event_status.return_value = fresh
+    gen = EventFillerGenerator(service=service)
+    ctx, _ = _ctx(stale)
+    config = _postgame_config()
+
+    ctx = gen._with_fresh_event(ctx, config.postgame_rows)
+    template = gen._select_register_template(
+        base=config.postgame_template, rows=config.postgame_rows, context=ctx
+    )
+    programmes = gen._generate_filler(
+        start_dt=datetime(2026, 6, 17, 22, 0, tzinfo=UTC),
+        end_dt=datetime(2026, 6, 18, 2, 0, tzinfo=UTC),
+        template=template,
+        context=ctx,
+        channel_id="ch1",
+        config=EventFillerConfig(),
+        logo_url=None,
+        filler_type="postgame",
+        event=fresh,
+    )
+    assert programmes
+    assert all(p.description == "Heat top Aces for the title" for p in programmes)
+    service.refresh_event_status.assert_called_once()

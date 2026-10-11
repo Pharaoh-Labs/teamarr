@@ -103,6 +103,10 @@ class SchedulerSettings:
     # Scheduled channel reset (for Jellyfin logo cache issues)
     channel_reset_enabled: bool = False
     channel_reset_cron: str | None = None
+    # Source discovery (#997): 'off' | 'suggest'. The scan runs once a day at a
+    # fixed hour (SOURCE_DISCOVERY_CRON, #1027); the switch is the only control.
+    source_discovery_mode: str = "suggest"
+    source_discovery_auto_max_streams: int = 1000
 
 
 @dataclass
@@ -427,6 +431,39 @@ class ChannelsDVRSettings:
 
 
 @dataclass
+class PlexServer:
+    """One Plex Media Server target for post-generation Live TV refresh.
+
+    `dvr_id`/`device_key` identify the matched DVR + HDHomeRun device
+    (Settings → Plex discovers these from `GET /livetv/dvrs`); both must
+    be set before a refresh runs for this server.
+
+    `channel_profile_id` scopes which of Teamarr's managed channels get
+    pushed to this device — needed when the device's HDHomeRun URI is
+    itself scoped to one Dispatcharr channel profile (see `profile_hint`
+    on `PlexDevice`); `None` means unscoped (every managed channel).
+    """
+
+    name: str = ""
+    url: str | None = None
+    token: str | None = None
+    dvr_id: str | None = None
+    device_key: str | None = None
+    channel_profile_id: int | str | None = None
+
+
+@dataclass
+class PlexSettings:
+    """Plex integration settings for Live TV guide + channel-map refresh.
+
+    Multi-server: refresh fans out over every entry in `servers`.
+    """
+
+    enabled: bool = False
+    servers: list[PlexServer] = field(default_factory=list)
+
+
+@dataclass
 class AllSettings:
     """Complete application settings."""
 
@@ -451,6 +488,7 @@ class AllSettings:
     emby: EmbySettings = field(default_factory=EmbySettings)
     jellyfin: JellyfinSettings = field(default_factory=JellyfinSettings)
     channelsdvr: ChannelsDVRSettings = field(default_factory=ChannelsDVRSettings)
+    plex: PlexSettings = field(default_factory=PlexSettings)
     proxy: ProxySettings = field(default_factory=ProxySettings)
     epg_generation_counter: int = 0
     schema_version: int = 52

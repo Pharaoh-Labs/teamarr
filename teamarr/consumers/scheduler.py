@@ -22,6 +22,11 @@ from teamarr.services import create_cache_service
 
 logger = logging.getLogger(__name__)
 
+# Source discovery runs once a day (#1027). The suggestion tiers read a 7-day
+# evidence window, so a second scan in a day finds nothing new; the user's only
+# control is the on/off switch (`source_discovery_mode`). Local time.
+SOURCE_DISCOVERY_CRON = "0 11 * * *"
+
 
 class SubTaskScheduler:
     """Lightweight scheduler that runs a single task on its own cron.
@@ -259,6 +264,23 @@ class CronScheduler:
             if sub.start():
                 self._sub_schedulers["channel_reset"] = sub
 
+        self._start_source_discovery(scheduler_settings)
+
+    def _start_source_discovery(self, settings: Any) -> None:
+        """Start the source discovery sub-scheduler when the mode is not off (#997).
+
+        The scan runs once a day at a fixed hour (#1027): the suggestion tiers
+        read a 7-day evidence window, so scanning more often finds nothing new,
+        and the only user control is the on/off switch.
+        """
+        if settings.source_discovery_mode == "off":
+            return
+        sub = SubTaskScheduler(
+            "source-discovery", self._task_source_discovery, SOURCE_DISCOVERY_CRON
+        )
+        if sub.start():
+            self._sub_schedulers["source_discovery"] = sub
+
     def restart_sub_task(self, task_name: str) -> None:
         """Restart a sub-scheduler after settings change."""
         # Stop existing if running
@@ -286,6 +308,12 @@ class CronScheduler:
                 )
                 if sub.start():
                     self._sub_schedulers["channel_reset"] = sub
+        elif task_name == "source_discovery":
+            from teamarr.database.settings import get_scheduler_settings
+
+            with self._db_factory() as conn:
+                settings = get_scheduler_settings(conn)
+            self._start_source_discovery(settings)
 
     def run_once(self) -> dict:
         """Run all scheduled tasks once (for testing/manual trigger).
@@ -374,6 +402,16 @@ class CronScheduler:
 
         results["completed_at"] = datetime.now().isoformat()
         return results
+
+    def _task_source_discovery(self) -> dict:
+        """Scan M3U groups that are not sources for subscribed games (#997).
+
+        Called by its own sub-scheduler. Reads Dispatcharr and writes only
+        the discovery evidence tables.
+        """
+        from teamarr.consumers.source_discovery import run_discovery_scan
+
+        return run_discovery_scan(self._db_factory)
 
     def _task_channel_reset(self) -> dict:
         """Reset all Teamarr channels.

@@ -157,6 +157,20 @@ CREATE INDEX IF NOT EXISTS idx_teams_sport ON teams(sport);
 -- Persistent Dispatcharr ownership records for opt-in Team EPG channels.
 -- ``teams.channel_id`` stays the XMLTV identity; this table is the sole
 -- authority for Teamarr ownership and must never be inferred from a tvg_id.
+-- Channels Teamarr last pushed to a Plex DVR device, per scope.
+-- Scope is (server, device, channel profile) so two Teamarr server entries
+-- pointing at one root-profile device never clobber each other's set.
+-- Used ONLY to remove Teamarr's own stale channels; a channel absent here is
+-- never disabled. channel_profile_id '' means "unscoped".
+CREATE TABLE IF NOT EXISTS plex_pushed_channels (
+    server_url         TEXT NOT NULL,
+    device_key         TEXT NOT NULL,
+    channel_profile_id TEXT NOT NULL DEFAULT '',
+    channel_keys       TEXT NOT NULL,          -- JSON array of device-channel strings
+    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (server_url, device_key, channel_profile_id)
+);
+
 CREATE TABLE IF NOT EXISTS managed_team_channels (
     team_id INTEGER PRIMARY KEY,
     dispatcharr_channel_id INTEGER,
@@ -451,6 +465,11 @@ CREATE TABLE IF NOT EXISTS settings (
     channel_reset_enabled BOOLEAN DEFAULT 0,
     channel_reset_cron TEXT DEFAULT NULL,
 
+    -- Source discovery (#997): scan M3U groups that are not sources for subscribed games.
+    -- 'off' | 'suggest' (candidates wait for review). Runs on its own cron, never per generation.
+    source_discovery_mode TEXT DEFAULT 'suggest',  -- 'off' | 'suggest'; the scan runs once a day (#1027)
+    source_discovery_auto_max_streams INTEGER DEFAULT 1000,  -- a bigger group is suggested, never auto-added
+
     -- Stream Filtering (global defaults for event groups)
     -- Require event pattern: only match streams that look like events (have vs/@/at/date patterns)
     stream_filter_require_event_pattern BOOLEAN DEFAULT 1,
@@ -594,6 +613,14 @@ CREATE TABLE IF NOT EXISTS settings (
     -- may linger in upgraded databases; they are unread.
     channelsdvr_enabled BOOLEAN DEFAULT 0,
     channelsdvr_servers JSON,
+
+    -- Plex Integration (Live TV Guide + Channel-Map Refresh)
+    -- plex_servers is a JSON list of {name, url, token, dvr_id, device_key}
+    -- entries. dvr_id/device_key are the matched Plex DVR + HDHomeRun device
+    -- (from GET /livetv/dvrs), discovered and picked in the Settings UI;
+    -- a server missing either is skipped at refresh time.
+    plex_enabled BOOLEAN DEFAULT 0,
+    plex_servers JSON,
 
     -- Schema Version
     schema_version INTEGER DEFAULT 99
@@ -743,6 +770,9 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     name_match_enabled BOOLEAN DEFAULT 1,        -- (ahow) Match streams whose name identifies a specific event (TEAM_VS_TEAM/EVENT_CARD/RACING) — the default matching type. DEFAULT 1 backfills existing sources on upgrade. One of three declared matching types alongside team_streams_enabled (Team) and epg_match_enabled (EPG).
     team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
     epg_match_enabled BOOLEAN DEFAULT 0,         -- (183.6) Use Dispatcharr EPG program data to match static-named linear streams (ESPN, NBA1) and time-window them. Requires a Dispatcharr build with /api/epg/programs/search/ (0.24.0+). No global switch — per-source opt-in (3lp1).
+    auto_added_at TIMESTAMP,                     -- (#997) Set when source discovery added it on its own (a toggled league); NULL = the user pressed Add
+    managed BOOLEAN DEFAULT 0,                   -- (#997) Created by source discovery. Only a managed source is ever disabled or removed on its own; a hand edit clears the flag.
+    last_matched_at TIMESTAMP,                   -- (#997) Last generation run in which this source matched a stream
     is_channel_source BOOLEAN DEFAULT 0,         -- (183.9) System-managed source group whose candidate streams come from curated Dispatcharr channels (their assigned streams + each channel's own EPG) instead of an M3U group. Auto-created/toggled by settings.epg_channel_source_enabled; hidden from the Event Groups UI.
     dispatcharr_channel_group_id INTEGER,        -- (#542) The Dispatcharr channel group a channel-source row reads. One row per selected group; NULL = the catch-all row used when no groups are selected (every group).
 
@@ -812,6 +842,10 @@ CREATE TABLE IF NOT EXISTS sports_subscription (
     soccer_mode TEXT DEFAULT NULL
         CHECK(soccer_mode IS NULL OR soccer_mode IN ('all', 'teams', 'manual')),
     soccer_followed_teams JSON DEFAULT NULL,
+    -- (#997) Source discovery adds sources on its own for these leagues / every
+    -- league of these sports. Empty = suggest only.
+    auto_source_leagues JSON NOT NULL DEFAULT '[]',
+    auto_source_sports JSON NOT NULL DEFAULT '[]',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -1461,9 +1495,11 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nascar-xfinity',  'nascar', '2', NULL, 'NASCAR O''Reilly Auto Parts Series',   'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR ORAP',  'nascar-xfinity',  'event', NULL, NULL, NULL, NULL, 1),
     ('nascar-truck',    'nascar', '3', NULL, 'NASCAR Craftsman Truck Series',         'racing', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-NASCAR.png', NULL, 0, 'NASCAR Trucks','nascar-truck',    'event', NULL, NULL, NULL, NULL, 1),
     ('indycar', 'espn', 'racing/irl', NULL, 'IndyCar Series', 'racing', 'https://a.espncdn.com/combiner/i?img=/i/espn/teamlogos/500/indycar_series.png', NULL, 0, 'IndyCar', 'indycar', 'event', 'IndyCar Racing', NULL, NULL, NULL, 1),
-    -- Disabled: ESPN's racing/motogp scoreboard endpoint returns HTTP 400 (no usable schedule/logo data).
-    -- Re-enable once migrated to TSDB (idLeague 4407) - planned v2 feature alongside IMSA/WEC session grouping.
-    ('motogp', 'espn', 'racing/motogp', NULL, 'MotoGP', 'racing', 'https://a.espncdn.com/i/teamlogos/leagues/500/motogp.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'MotoGP Racing', NULL, NULL, NULL, 0),
+    -- MotoGP via TSDB (#604): ESPN's racing/motogp endpoint returns HTTP 400. Premium key, like IMSA/WEC;
+    -- race weekends are grouped from TSDB's per-session events (Free Practice 1, Practice, Sprint Race,
+    -- Qualifying 1/2, Free Practice 2, GP) by parse_racing_events. Moto2/Moto3 are separate TSDB leagues
+    -- (4436/4437) and are not configured.
+    ('motogp', 'tsdb', '4407', 'MotoGP', 'MotoGP World Championship', 'racing', 'https://r2.thesportsdb.com/images/media/league/badge/gg3c201768486075.png', NULL, 0, 'MotoGP', 'motogp', 'event', 'MotoGP Racing', NULL, NULL, NULL, 1),
 
     -- Motorsports (TSDB) - session schedules grouped from TheSportsDB's flat
     -- per-event-per-session season data (teamarr/providers/tsdb/racing.py).
@@ -1926,6 +1962,42 @@ CREATE TABLE IF NOT EXISTS race_feeds (
     UNIQUE(league, feed_key)
 );
 CREATE INDEX IF NOT EXISTS idx_race_feeds_league ON race_feeds(league, enabled);
+
+-- =============================================================================
+-- SOURCE DISCOVERY (#997)
+-- M3U groups that are not sources, and what each scan found in them. A group
+-- qualifies as a suggested source on evidence gathered over days, not one scan:
+-- most real sources are empty or placeholders between match days.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS source_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    m3u_group_id INTEGER NOT NULL UNIQUE,     -- Dispatcharr channel-group id of the M3U group
+    m3u_group_name TEXT NOT NULL,
+    m3u_account_ids TEXT NOT NULL DEFAULT '[]',  -- JSON list of M3U account ids carrying the group
+    stream_count INTEGER DEFAULT 0,           -- streams in the group at the last scan
+    name_leagues TEXT NOT NULL DEFAULT '[]',  -- JSON: subscribed leagues the group NAME mentions
+    status TEXT NOT NULL DEFAULT 'new'
+        CHECK(status IN ('new', 'accepted', 'dismissed')),
+    source_group_id INTEGER,                  -- event_epg_groups.id created when accepted (NULL while accepted = approved, source since removed)
+    replay BOOLEAN DEFAULT 0,                 -- group name or most stream names say "replay": never suggested
+    last_seen_at TIMESTAMP,                   -- last scan that still listed the group
+    last_matched_at TIMESTAMP                 -- last scan with a two-sided game match
+);
+
+CREATE TABLE IF NOT EXISTS source_candidate_scans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id INTEGER NOT NULL,
+    scanned_at TIMESTAMP NOT NULL,
+    streams_read INTEGER NOT NULL DEFAULT 0,       -- sampled, non-stale streams put to the matcher
+    game_matches INTEGER NOT NULL DEFAULT 0,       -- distinct streams matched as a two-sided game
+    team_only_matches INTEGER NOT NULL DEFAULT 0,  -- distinct streams matched by one team name alone
+    leagues TEXT NOT NULL DEFAULT '{}',            -- JSON {league: game matches}
+    team_leagues TEXT NOT NULL DEFAULT '{}',       -- JSON {league: streams matched by one team name}
+    event_ids TEXT NOT NULL DEFAULT '[]',          -- JSON list of "provider:event_id" the game matches landed on
+    FOREIGN KEY (candidate_id) REFERENCES source_candidates(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_source_candidate_scans ON source_candidate_scans(candidate_id, scanned_at);
 
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_enabled ON consolidation_exception_keywords(enabled);
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_behavior ON consolidation_exception_keywords(behavior);

@@ -36,6 +36,7 @@ from teamarr.database.groups import (
     update_group,
 )
 from teamarr.database.settings import get_display_settings
+from teamarr.database.source_candidates import dismiss_candidate_for_source
 from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
 from teamarr.services import create_group_service
 from teamarr.services.stream_filter import (
@@ -315,6 +316,8 @@ class GroupResponse(BaseModel):
     # (None = every group). Created and enabled from Matching → Dispatcharr
     # as a Stream Source; only its scope is editable here.
     is_channel_source: bool = False
+    managed: bool = False  # created by source discovery (#997)
+    auto_added_at: str | None = None  # discovery added it on its own (#997)
     dispatcharr_channel_group_id: int | None = None
 
 
@@ -746,6 +749,8 @@ def list_groups(
                 overlap_handling=g.overlap_handling,
                 enabled=g.enabled,
                 is_channel_source=g.is_channel_source,
+                managed=g.managed,
+                auto_added_at=g.auto_added_at,
                 dispatcharr_channel_group_id=g.dispatcharr_channel_group_id,
                 subscription_leagues=g.subscription_leagues,
                 subscription_soccer_mode=g.subscription_soccer_mode,
@@ -934,6 +939,8 @@ def create_group(request: GroupCreate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        managed=group.managed,
+        auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
@@ -1487,6 +1494,8 @@ def get_group_by_id(group_id: int):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        managed=group.managed,
+        auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
@@ -1733,6 +1742,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        managed=group.managed,
+        auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
         subscription_leagues=group.subscription_leagues,
         subscription_soccer_mode=group.subscription_soccer_mode,
@@ -1765,6 +1776,10 @@ def delete_group_by_id(group_id: int) -> dict:
         _reject_channel_source(group, "delete")
         channel_count = get_group_channel_count(conn, group_id)
         delete_group(conn, group_id)
+        # Deleting a source that came from a suggestion is the user's "no":
+        # source discovery must not offer or re-add it (#997).
+        dismiss_candidate_for_source(conn, group_id)
+        conn.commit()
 
     logger.info(
         "[DELETED] Event group id=%d name=%s channels=%d", group_id, group.name, channel_count

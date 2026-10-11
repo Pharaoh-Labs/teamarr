@@ -26,6 +26,7 @@ from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context import GameContext, TeamChannelContext, TemplateContext
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
+from teamarr.utilities.event_status import event_end_time, event_programme_start
 from teamarr.utilities.sports import get_sport_duration, get_sport_from_league
 from teamarr.utilities.time_blocks import create_filler_chunks, crosses_midnight
 from teamarr.utilities.tz import now_user, to_user_tz
@@ -291,8 +292,9 @@ class FillerGenerator:
             first_game = day_events[0]
             pregame_start = skip_pregame_until
             # End filler when game programme starts (event - buffer)
-            buffer = timedelta(minutes=options.pregame_buffer_minutes)
-            pregame_end_utc = first_game.start_time - buffer
+            pregame_end_utc = event_programme_start(
+                first_game, options.pregame_buffer_minutes
+            )
             pregame_end = pregame_end_utc.astimezone(tz)
 
             if pregame_start < pregame_end:
@@ -458,6 +460,10 @@ class FillerGenerator:
         if not chunks:
             return []
 
+        # One refreshed copy of the reference game serves both the row
+        # selection below and the text rendered from it (#987).
+        context = self._with_fresh_reference_game(filler_type, config, context)
+
         # Get template for this filler type (condition rows evaluated here)
         template = self._select_register_template(
             filler_type=filler_type,
@@ -537,6 +543,34 @@ class FillerGenerator:
 
         return programmes
 
+    def _with_fresh_reference_game(
+        self,
+        filler_type: FillerType,
+        config: FillerConfig,
+        context: TemplateContext,
+    ) -> TemplateContext:
+        """The context with fresh provider state overlaid on its last game.
+
+        Postgame and idle rows ask whether the last game is final, so they
+        need refreshed status. The refresh used to land on a copy that only
+        the row selection saw: "Final" was chosen on fresh data and then
+        rendered from the schedule-cache game, which had no score yet —
+        "The Red Wings the Jets on Sunday" (#987). Returning the context
+        makes selection and rendering read the same game.
+
+        Pregame's reference is the upcoming game — never final, not worth a
+        summary call per filler run. A register with no rows keeps its
+        schedule copy, as before.
+        """
+        if filler_type == FillerType.PREGAME:
+            return context
+        rows = config.postgame_rows if filler_type == FillerType.POSTGAME else config.idle_rows
+        last_game = context.last_game
+        if not rows or not last_game or not last_game.event:
+            return context
+        fresh = self._service.refresh_event_status(last_game.event)
+        return dc_replace(context, last_game=dc_replace(last_game, event=fresh))
+
     def _select_register_template(
         self,
         filler_type: FillerType,
@@ -552,6 +586,9 @@ class FillerGenerator:
         matching row sets fall to the base register. The description keeps
         its cascade-on-empty (tvnk.14, #329): winning row → other matching
         rows by priority → base register text.
+
+        Finality rows need refreshed status: the caller passes a context that
+        has been through ``_with_fresh_reference_game``.
         """
         if filler_type == FillerType.PREGAME:
             base, rows, game_ctx = config.pregame_template, config.pregame_rows, context.next_game
@@ -588,15 +625,6 @@ class FillerGenerator:
 
         if not rows:
             return base
-
-        # Finality must use refreshed status: postgame/idle overlay a fresh
-        # provider fetch onto the reference game before evaluation (matches
-        # the legacy _check_event_final behavior). Pregame's reference is the
-        # upcoming game — never final, not worth a summary call per filler run.
-        if filler_type != FillerType.PREGAME and game_ctx and game_ctx.event:
-            game_ctx = dc_replace(
-                game_ctx, event=self._service.refresh_event_status(game_ctx.event)
-            )
 
         fields, runner_up_descriptions, _ = get_condition_selector().select_filler_fields(
             rows, context, game_ctx
@@ -671,7 +699,7 @@ class FillerGenerator:
         durations = self._options.sport_durations if self._options else {}
         default = self._options.default_duration if self._options else 3.0
         duration_hours = get_sport_duration(event.sport, durations, default)
-        return event.start_time + timedelta(hours=duration_hours)
+        return event_end_time(event, duration_hours)
 
     def _calculate_epg_start(
         self,

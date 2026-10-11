@@ -59,13 +59,16 @@ export interface SampleLeaguesResponse {
   count: number
   leagues: CachedLeague[]
   subscribed_slugs: string[]
+  // League the given template's preview should open on (null = no opinion).
+  default_slug?: string | null
 }
 
 // Leagues for the template preview selector: all enabled leagues, plus which
 // slugs the user is subscribed to. The picker defaults to the subscribed subset
 // but can search the full list.
-export async function fetchSampleLeagues(): Promise<SampleLeaguesResponse> {
-  return api.get<SampleLeaguesResponse>("/variables/sample-leagues")
+export async function fetchSampleLeagues(templateId?: number): Promise<SampleLeaguesResponse> {
+  const query = templateId != null ? `?template_id=${templateId}` : ""
+  return api.get<SampleLeaguesResponse>(`/variables/sample-leagues${query}`)
 }
 
 export async function fetchSamples(

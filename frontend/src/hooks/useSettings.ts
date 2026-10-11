@@ -52,6 +52,10 @@ import {
   testChannelsDVRConnection,
   getChannelsDVRSources,
   getChannelsDVRLineups,
+  getPlexSettings,
+  updatePlexSettings,
+  testPlexConnection,
+  getPlexDvrs,
   getProxyProviders,
   getProxySettings,
   updateProxySettings,
@@ -132,7 +136,12 @@ export const useUpdateSchedulerSettings = settingsMutationHook(updateSchedulerSe
 ])
 
 export const useEPGSettings = settingsQueryHook("epg", getEPGSettings)
-export const useUpdateEPGSettings = settingsMutationHook(updateEPGSettings, [["settings", "epg"]])
+// Also refetches the sources list: saving the Dispatcharr-as-a-Stream-Source
+// selection creates or disables source rows on the server (#986).
+export const useUpdateEPGSettings = settingsMutationHook(updateEPGSettings, [
+  ["settings", "epg"],
+  ["groups"],
+])
 
 export const useDurationSettings = settingsQueryHook("durations", getDurationSettings)
 export const useUpdateDurationSettings = settingsMutationHook(updateDurationSettings, [
@@ -245,6 +254,12 @@ export const useUpdateChannelsDVRSettings = settingsMutationHook(updateChannelsD
   ["channelsdvr", "lineups"],
 ])
 
+export const usePlexSettings = settingsQueryHook("plex", getPlexSettings)
+export const useUpdatePlexSettings = settingsMutationHook(updatePlexSettings, [
+  ["settings", "plex"],
+  ["plex", "dvrs"],
+])
+
 export const useProxySettings = settingsQueryHook("proxy", getProxySettings)
 export const useUpdateProxySettings = settingsMutationHook(updateProxySettings, [
   ["settings", "proxy"],
@@ -269,6 +284,10 @@ export function useTestJellyfinConnection() {
 
 export function useTestChannelsDVRConnection() {
   return useMutation({ mutationFn: testChannelsDVRConnection })
+}
+
+export function useTestPlexConnection() {
+  return useMutation({ mutationFn: testPlexConnection })
 }
 
 // ---------------------------------------------------------------------------
@@ -315,6 +334,16 @@ export function useChannelsDVRLineups(url: string | null | undefined) {
     queryKey: ["channelsdvr", "lineups", url ?? ""],
     queryFn: () => getChannelsDVRLineups(url ?? undefined),
     enabled: !!url,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
+export function usePlexDvrs(url: string | null | undefined, token: string | null | undefined) {
+  return useQuery({
+    queryKey: ["plex", "dvrs", url ?? "", token ?? ""],
+    queryFn: () => getPlexDvrs(url ?? undefined, token ?? undefined),
+    enabled: !!url && !!token,
     retry: false,
     staleTime: 30_000,
   })

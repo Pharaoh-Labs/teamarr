@@ -42,6 +42,9 @@ class SubscriptionResponse(BaseModel):
     leagues: list[str] = []
     soccer_mode: str | None = None
     soccer_followed_teams: list[dict] | None = None
+    # (#997) source discovery adds sources on its own for these
+    auto_source_leagues: list[str] = []
+    auto_source_sports: list[str] = []
     updated_at: str | None = None
 
 
@@ -51,6 +54,8 @@ class SubscriptionUpdate(BaseModel):
     leagues: list[str] | None = None
     soccer_mode: str | None = None
     soccer_followed_teams: list[dict] | None = None
+    auto_source_leagues: list[str] | None = None
+    auto_source_sports: list[str] | None = None
 
 
 class TemplateAssignmentResponse(BaseModel):
@@ -159,6 +164,8 @@ def get_subscription():
         leagues=sub.leagues,
         soccer_mode=sub.soccer_mode,
         soccer_followed_teams=sub.soccer_followed_teams,
+        auto_source_leagues=sub.auto_source_leagues,
+        auto_source_sports=sub.auto_source_sports,
         updated_at=sub.updated_at,
     )
 
@@ -177,6 +184,10 @@ def update_subscription(request: SubscriptionUpdate):
         kwargs["soccer_mode"] = request.soccer_mode
     if request.soccer_followed_teams is not ...:
         kwargs["soccer_followed_teams"] = request.soccer_followed_teams
+    if request.auto_source_leagues is not None:
+        kwargs["auto_source_leagues"] = request.auto_source_leagues
+    if request.auto_source_sports is not None:
+        kwargs["auto_source_sports"] = request.auto_source_sports
 
     with get_db() as conn:
         sub = db_update_subscription(conn, **kwargs)
@@ -186,6 +197,8 @@ def update_subscription(request: SubscriptionUpdate):
         leagues=sub.leagues,
         soccer_mode=sub.soccer_mode,
         soccer_followed_teams=sub.soccer_followed_teams,
+        auto_source_leagues=sub.auto_source_leagues,
+        auto_source_sports=sub.auto_source_sports,
         updated_at=sub.updated_at,
     )
 

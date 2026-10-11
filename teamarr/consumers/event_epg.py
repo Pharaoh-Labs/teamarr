@@ -24,6 +24,7 @@ from teamarr.services import SportsDataService
 from teamarr.templates.conditions import get_condition_selector
 from teamarr.templates.context_builder import ContextBuilder
 from teamarr.templates.resolver import TemplateResolver
+from teamarr.utilities.event_status import event_end_time, event_programme_start
 from teamarr.utilities.sports import (
     get_effective_duration,
     template_duration_override,
@@ -269,14 +270,14 @@ class EventEPGGenerator:
             # duration configuration applies here just as it does on team
             # channels (#946): custom mode wins, then the default/sport
             # cascade.
-            start = event.start_time - timedelta(minutes=options.pregame_minutes)
+            start = event_programme_start(event, options.pregame_minutes)
             duration = get_effective_duration(
                 event.sport,
                 options.sport_durations,
                 options.default_duration_hours,
                 template,
             )
-            stop = event.start_time + timedelta(hours=duration)
+            stop = event_end_time(event, duration)
 
         # One variable map for the whole programme: every field below resolves
         # against this same, unchanging context, and building the map is the

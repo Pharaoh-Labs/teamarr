@@ -10,7 +10,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 269 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 271 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
 
 ## Team vs Event Templates
 
@@ -67,6 +67,8 @@ Three template fields hold image URLs and accept the same variables as any other
 | **Team Channel Logo URL** (`team_channel_logo_url`, team templates) | logo for an opt-in managed Team EPG channel |
 | **Team Channel Name** (`team_channel_name`, team templates) | XMLTV and managed Dispatcharr channel name |
 | **Filler Art URL** (pregame/postgame/idle `art_url`) | artwork on filler programmes |
+
+The two team-channel fields describe the channel, not a game, so they are resolved from the team alone: team and league variables work (`{team_name}`, `{team_short}`, `{team_abbrev}`, `{league}`, `{league_abbrev}`, `{sport}`, …), while game and record variables (`{opponent}`, `{game_time}`, `{team_record}`) resolve empty. In these two fields `{league_id}` is the league code, as it always has been.
 
 ### Game-Thumbs base URL
 
@@ -193,9 +195,9 @@ Game scheduling information.
 | `{game_date_short}` | Short game date | base, .next, .last | `Dec 22` |
 | `{game_day}` | Day of week | base, .next, .last | `Sunday` |
 | `{game_day_short}` | Short day of week | base, .next, .last | `Sun` |
-| `{game_time}` | Game time formatted per user settings | base, .next, .last | `1:00 PM EST` |
+| `{game_time}` | Game time formatted per user settings. Reads `TBD` when the provider has not announced a start time; until it does, the game is shown as an all-day programme on its date, and moves to its real slot once the time is published | base, .next, .last | `1:00 PM EST` |
 | `{days_until}` | Days until game | base, .next, .last | `0` |
-| `{today_tonight}` | 'today' or 'tonight' (5pm cutoff) when the game is today; 'tomorrow', the weekday, or the date when it is further out | base, .next, .last | `today` |
+| `{today_tonight}` | 'today' or 'tonight' (5pm cutoff) when the game is today; 'tomorrow', the weekday (capitalised: `Sunday`), or the date when it is further out | base, .next, .last | `today` |
 | `{today_tonight_title}` | Title-case form of `{today_tonight}` | base, .next, .last | `Today` |
 | `{relative_day}` | Relative day: 'today', 'tonight', 'tomorrow', day of week, or date | base, .next | `tomorrow` |
 | `{relative_day_title}` | Relative day (title case) | base, .next | `Tomorrow` |
@@ -341,12 +343,14 @@ Game scores and results. Empty for future games.
 | `{opponent_score}` | Opponent's score (empty if game not started) | base, .next, .last | `24` |
 | `{score}` | Score, home team first. Empty if not started. | base, .next, .last | `31-24` |
 | `{final_score}` | Score with team perspective (team score first) | base, .next, .last | `31-24` |
+| `{result_score}` | Final score with the winner's score first, whichever side won. Empty if not final. | base, .next, .last | `32-26` |
 | `{home_team_score}` | Home team's score | base, .next, .last | `31` |
 | `{away_team_score}` | Away team's score | base, .next, .last | `24` |
 | `{score_diff}` | Score differential (+7 = won by 7, -7 = lost by 7) | base, .next, .last | `+7` |
 | `{score_differential}` | Score differential as absolute value | base, .next, .last | `7` |
 | `{score_differential_text}` | Score differential as text | base, .next, .last | `by 7` |
 | `{event_result}` | Full event result, home team first. Empty if not final. | base, .next, .last | `Detroit Lions 31 - Chicago Bears 24` |
+| `{event_result_text}` | Result as a sentence, winner first; a draw reads "Arsenal and Chelsea drew, 1-1." Empty if not final. | base, .next, .last | `The Carolina Panthers beat the Detroit Lions, 32-26.` |
 | `{event_result_abbrev}` | Abbreviated event result. Empty if not final. | base, .next, .last | `DET 31 - CHI 24` |
 | `{winner}` | Winning team name. Empty if not final or tie. | base, .next, .last | `Detroit Lions` |
 | `{winner_abbrev}` | Winning team abbreviation. Empty if not final or tie. | base, .next, .last | `DET` |
@@ -455,7 +459,7 @@ Provider editorial/context copy for a game, passed through raw. These are **spar
 | Variable | Description | Suffixes | Sample |
 |----------|-------------|----------|--------|
 | `{game_recap}` | Postgame recap headline — short, self-contained, carries the result. Empty until a game is final | base, .next, .last | `Brunson scores 45, and New York tops Spurs for title` |
-| `{game_preview}` | Pregame preview blurb. Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Toronto Blue Jays (35-38) vs. Boston Red Sox` |
+| `{game_preview}` | Pregame preview: the headline of a written preview, or the matchup line of an auto-generated one (`Southern Miss (1-3) at Troy (2-2), Oct. 6 at 8 p.m. EDT.`). Empty once a game is final (use `{game_recap}` then) | base, .next, .last | `Flyers take 3-game losing streak into matchup with the Lightning` |
 | `{generated_preview}` | Opt-in sport-specific preview for baseball, football, and basketball, with a generic matchup sentence for other sports; composed from public fields and never betting information | base, .next, .last | `The Packers visit the Broncos at Empower Field...` |
 | `{week}` | Provider-reported football week number | base, .next, .last | `3` |
 | `{home_total_yards_per_game}` / `{away_total_yards_per_game}` | Football team total yards per game | base, .next, .last | `360` |

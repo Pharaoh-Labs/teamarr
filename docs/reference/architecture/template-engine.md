@@ -7,13 +7,13 @@ nav_order: 6
 
 # Template Engine
 
-The template engine resolves `{variable}` placeholders in EPG titles, descriptions, and filler content. It supports 269 variables across 20 categories (plus chainable `|filter` value transforms), 33 condition evaluators, suffix rules for multi-game context, and template-type scoping for the variable picker.
+The template engine resolves `{variable}` placeholders in EPG titles, descriptions, and filler content. It supports 271 variables across 20 categories (plus chainable `|filter` value transforms), 33 condition evaluators, suffix rules for multi-game context, and template-type scoping for the variable picker.
 
 ## Architecture
 
 ```
 TemplateResolver
-  ├── VariableRegistry (269 variables, 20 categories)
+  ├── VariableRegistry (271 variables, 20 categories)
   ├── ConditionEvaluator (33 evaluators)
   └── ContextBuilder (Event + Team → TemplateContext)
 ```
@@ -79,7 +79,7 @@ Declare scope on the decorator:
 | **Conference** | 20 | college_conference, pro_division, division_abbrev |
 | **Records** | 18 | team_record, opponent_record, team_wins, team_losses |
 | **Streaks** | 18 | win_streak, loss_streak, streak_detail, streak_emoji |
-| **Scores** | 15 | team_score, opponent_score, final_score, score_differential |
+| **Scores** | 17 | team_score, opponent_score, final_score, result_score, event_result_text |
 | **DateTime** | 13 | game_date, game_time, days_until, hours_until |
 | **Rankings** | 11 | team_rank, opponent_rank, is_ranked, rank_text |
 | **Tennis** | 10 | tournament_name, tennis_round, player1, player2 |

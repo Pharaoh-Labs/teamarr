@@ -386,6 +386,7 @@ class StreamMatcher:
         team_streams_enabled: bool = False,
         tennis_majors_only: bool = False,
         epg_index: "EPGProgramIndex | None" = None,
+        cache: StreamMatchCache | None = None,
     ):
         """Initialize the matcher.
 
@@ -489,7 +490,7 @@ class StreamMatcher:
         self._team_streams_enabled = team_streams_enabled
 
         # Initialize cache
-        self._cache = StreamMatchCache(db_factory)
+        self._cache = cache or StreamMatchCache(db_factory)
         # Use provided generation or fetch current
         self._generation = generation or get_generation_counter(db_factory)
         self._generation_provided = generation is not None
@@ -627,6 +628,10 @@ class StreamMatcher:
                     # A skipped stream is skipped on every path (#869): its
                     # guide programmes are not consulted either.
                     pass
+                elif guide_unavailable := getattr(self._epg_index, "unavailable", None):
+                    # The guide could not be read this run (#1029) — say so,
+                    # rather than leave the name path's skip on every stream.
+                    self._mark_epg_unavailable(match_results, guide_unavailable)
                 elif self._epg_index is not None and tvg_id:
                     epg_results = self._match_via_epg(
                         stream_id=stream_id,
@@ -1450,6 +1455,26 @@ class StreamMatcher:
             self._epg_tennis_unknown.setdefault(tvg_id, []).append(f"{epg_input[:48]}: {detail}")
             logger.debug("[EPG_MATCH] tennis matchup not known: %s — %s", epg_input[:60], detail)
         return matched
+
+    @staticmethod
+    def _mark_epg_unavailable(results: list[MatchedStreamResult], why: str) -> None:
+        """Say that the guide could not be read at all this run (#1029).
+
+        An EPG-enabled group whose index could not be built (no Dispatcharr
+        connection, catalog fetch failed, no programme search on this build)
+        used to leave every linear stream with the name path's skip, so a whole
+        source reading "no matchup in name" at once was indistinguishable from
+        a provider that really writes no matchups. Same replacement rule as
+        ``_mark_no_epg_channel``: only a name-path skip is replaced; a real
+        failure or filter verdict stays, and the skip is kept in ``detail``.
+        """
+        for r in results:
+            if r.matched or r.failed_reason is not None or r.filtered_reason is not None:
+                continue
+            r.failed_reason = FailedReason.EPG_UNAVAILABLE
+            r.detail = f"EPG: guide could not be read this run ({why})" + (
+                f" (name path: {r.exclusion_reason})" if r.exclusion_reason else ""
+            )
 
     @staticmethod
     def _mark_no_epg_channel(results: list[MatchedStreamResult], tvg_id: str | None) -> None:

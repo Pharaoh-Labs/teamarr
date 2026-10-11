@@ -203,15 +203,15 @@ def test_last_five_vars_and_summary():
     assert extract_home_last_five(ctx, gc) == "4-1"
     assert extract_away_last_five(ctx, gc) == "2-3"
     assert extract_last_five_summary(ctx, gc) == (
-        "the Tampa Bay Rays have won 2 of their last five; "
-        "the Boston Red Sox have won 4 of their last five."
+        "The Boston Red Sox have won 4 of their last five; "
+        "the Tampa Bay Rays have won 2 of their last five."
     )
 
 
 def test_last_five_summary_partial_and_empty():
     ctx, gc = _ctx(_event(home_last_five="4-1"))
     assert extract_last_five_summary(ctx, gc) == (
-        "the Boston Red Sox have won 4 of their last five."
+        "The Boston Red Sox have won 4 of their last five."
     )
     ctx, gc = _ctx(_event())
     assert extract_last_five_summary(ctx, gc) == ""

@@ -114,6 +114,8 @@ class TeamLeagueCache:
         with self._db() as conn:
             cursor = conn.cursor()
 
+            # TODO: PRUNE? — configured_only lost its last caller with #993 (the
+            # sample picker now lists discovered leagues too); verify with user.
             if configured_only:
                 # Sample picker: enabled configured leagues only (keeps
                 # event-only leagues, drops discovered ones).

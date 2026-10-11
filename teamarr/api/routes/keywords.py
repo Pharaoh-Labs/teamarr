@@ -4,7 +4,7 @@ Provides REST API for managing consolidation exception keywords.
 These keywords control how duplicate streams are handled during event matching.
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
@@ -101,6 +101,17 @@ def _dump_refs(refs: list[SourceRef] | None) -> list[dict] | None:
     return None if refs is None else [r.model_dump() for r in refs]
 
 
+# The value the database layer reads as "clear this source" (#1010); it
+# reads None as "not provided", so an explicit null must become one of these.
+_SOURCE_EMPTY: dict[str, str | list] = {
+    "m3u_group_pattern": "",
+    "m3u_groups": [],
+    "stream_pattern": "",
+    "streams": [],
+    "event_group_ids": [],
+}
+
+
 class ExceptionKeywordCreate(_MatchSources):
     """Create exception keyword request."""
 
@@ -123,7 +134,9 @@ class ExceptionKeywordCreate(_MatchSources):
 class ExceptionKeywordUpdate(_MatchSources):
     """Update exception keyword request.
 
-    Omitted fields are left alone; an empty string/list clears a source.
+    Omitted fields are left alone. A match source sent as null or as an
+    empty string/list is cleared (#1010): the editor sends null for an
+    emptied field, and before this that read as "not provided".
     """
 
     label: str | None = Field(None, min_length=1)
@@ -314,12 +327,23 @@ def update_keyword(keyword_id: int, request: ExceptionKeywordUpdate):
                 )
 
             sources = request.source_kwargs()
+            # A source the request names as null is a clear, not an omission
+            # (#1010). Only fields the body actually carried count as named.
+            provided = request.model_fields_set
+            for name, empty in _SOURCE_EMPTY.items():
+                if name in provided and sources[name] is None:
+                    sources[name] = empty
+
+            def after(name: str, current: Any) -> Any:
+                """The source's value once this update lands."""
+                return sources[name] if name in provided else current
+
             merged = _MatchSources(
-                m3u_group_pattern=_pick(request.m3u_group_pattern, keyword.m3u_group_pattern),
-                m3u_groups=_pick(request.m3u_groups, _refs(keyword.m3u_groups) or None),
-                stream_pattern=_pick(request.stream_pattern, keyword.stream_pattern),
-                streams=_pick(request.streams, _refs(keyword.streams) or None),
-                event_group_ids=_pick(request.event_group_ids, keyword.event_group_ids or None),
+                m3u_group_pattern=after("m3u_group_pattern", keyword.m3u_group_pattern),
+                m3u_groups=after("m3u_groups", _refs(keyword.m3u_groups) or None),
+                stream_pattern=after("stream_pattern", keyword.stream_pattern),
+                streams=after("streams", _refs(keyword.streams) or None),
+                event_group_ids=after("event_group_ids", keyword.event_group_ids or None),
             )
             _require_source(_pick(request.match_terms, keyword.match_terms) or "", merged)
 

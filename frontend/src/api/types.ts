@@ -94,6 +94,11 @@ export interface EventGroup {
   // (null = every group). Only its league scope and team filter are editable.
   is_channel_source?: boolean
   dispatcharr_channel_group_id?: number | null
+  // (#997) Created by source discovery; retired on its own when it goes quiet.
+  // Any hand edit clears it.
+  managed?: boolean
+  // (#997) Set when source discovery added it on its own (a league set to automatic).
+  auto_added_at?: string | null
 }
 
 export interface EventGroupCreate {

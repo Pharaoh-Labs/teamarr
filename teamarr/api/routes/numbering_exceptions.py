@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from teamarr.database import get_db
 from teamarr.database.numbering_exceptions import (
+    RacingTeamPin,
     StartConflict,
     add_numbering_exception,
     delete_numbering_exception,
@@ -203,7 +204,7 @@ def create_numbering_exception(data: NumberingExceptionCreate):
                 channel_group_id=data.channel_group_id,
                 channel_group_mode=data.channel_group_mode,
             )
-        except StartConflict as e:
+        except (StartConflict, RacingTeamPin) as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
         if created is None:
             raise HTTPException(

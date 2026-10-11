@@ -255,8 +255,14 @@ class ConditionEvaluator:
         if not ctx.team_stats or not game_ctx.opponent_stats:
             return False
 
-        our_conf = ctx.team_stats.conference or ""
-        opp_conf = game_ctx.opponent_stats.conference or ""
+        ours, theirs = ctx.team_stats, game_ctx.opponent_stats
+        # The provider's group id is the identity; a display name may be
+        # missing or spelled two ways (#996).
+        if ours.conference_id and theirs.conference_id:
+            return ours.conference_id == theirs.conference_id
+
+        our_conf = ours.conference or ""
+        opp_conf = theirs.conference or ""
 
         if not our_conf or not opp_conf:
             return False

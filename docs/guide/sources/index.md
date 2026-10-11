@@ -62,6 +62,61 @@ From there:
 - **Single import** (+ icon) opens the full source editor for that group.
 - **Import N Groups** imports your selection in bulk, via a modal that sets the shared settings up front: Stream Timezone, Enabled, and the three matching types (Stream name matching, Team stream source, EPG program matching).
 
+## Suggested Sources
+
+Providers add, rename and drop M3U groups through the year, so a hand-kept source list drifts. Teamarr can look for sources itself. Open **Suggested sources** at the top of the Sources page.
+
+**What a scan does.** It reads every M3U group that is not already a source, puts every stream in it through the same matching a generation run uses, and records which groups carried events in leagues you subscribe to. Nothing is created and nothing else is changed. A scan takes a few minutes on a large install; it waits for a generation run to finish and pauses if one starts.
+
+**When it runs.** Once a day at 11:00 local time, while the **Scan daily** switch in the Suggested sources header is on (it is on by default; switch it off and nothing scans). Press **Scan now** to run one sooner. More often finds nothing new: the suggestions below read a week of evidence.
+
+**What gets suggested.** Evidence is kept for a week, because most groups are empty or placeholders between match days:
+
+| Badge | Meaning |
+|-------|---------|
+| **Events found** | A scan matched streams in the group to real events. Three matched streams are enough; one is enough when the group's name also names a subscribed league. |
+| **Team streams** | The group's name names a subscribed league and its streams are that league's teams ("NFL | Dallas Cowboys"). Added as a team-stream source. |
+| **Name only** | The group's name names a subscribed league, but no scan has matched anything in it yet — usually a group waiting for match day. It drops off the list by itself if it has had streams every day for a week and still matched nothing. |
+
+Discovery reads stream names only. **It does not use EPG matching**: reading the guide for hundreds of linear channels on every scan would cost far more than it finds. A group of linear channels ("ESPN", "TSN1", "Sky Sports Main Event") therefore produces no evidence and is never suggested or added automatically. Add it yourself as an EPG-matching source, or select its channel group under *Matching → Dispatcharr as a Stream Source*.
+
+Three kinds of group are never suggested:
+
+- **Replay groups.** A group whose name says "replay", or whose streams mostly do ("NBA Replay 9"), is left out entirely.
+- **News and regional channels.** A stream that only names one team counts as evidence only in a league the group's own name names, so a channel that happens to contain a country name does not qualify its group.
+- **Groups you dismissed.**
+
+The list is flat and organized by the M3U account each group comes from. When two suggested groups carry the same events — the same feeds listed under several groups or providers — the weaker one says *same events as …*. Each can still be added on its own.
+
+**Add** creates the source. **✕** dismisses the group. Tick several rows (or a whole account) to add or dismiss them together.
+
+**Decisions are remembered.** You rule on a group once:
+
+- A dismissed group is not suggested or scanned again unless you restore it from *Show dismissed groups* — also when the provider renames it and it comes back as a new group with the same name.
+- Deleting a source you added from a suggestion counts as dismissing its group.
+- A source you added is never offered again. If it is later removed because its group disappeared, it is added back when the group returns.
+
+### Automatic mode
+
+Under **Subscriptions → Find sources automatically**, switch on a league or a whole sport (a sport covers every league under it, including leagues discovered later). The daily scan then adds qualifying groups as sources on its own instead of waiting for you — so the **Scan daily** switch on the Sources page has to be on, and the card warns you when it is not. The size cap for automatic adding (**Auto-add groups up to**) lives on the same card:
+
+- the group has **Events found** or **Team streams** evidence — three matched streams, or one when its name names the league;
+- on **two different scan days** within the week, so a one-off listing never imports (a weekly league is added the week after it first appears);
+- **at least half** of its matched streams are in leagues you switched on — a mixed network group qualifies on the league that dominates it;
+- it has no more streams than the **Auto-add groups up to** cap on the Find sources automatically card (default 1,000). Bigger groups, the network catch-alls, stay your call and remain suggested.
+
+Name-only groups, replay groups, dismissed groups and linear channels (EPG matching) are never added. Each suggestion in the list says why automatic mode is holding it. A source added this way carries an **Auto-added** badge with the date; otherwise it behaves exactly like a managed source you added by hand, including retirement and the rule that any hand edit makes it yours.
+
+### Managed sources
+
+A source added from the suggestions is marked **Managed**:
+
+- It is switched off when it has matched nothing for two weeks (three when its name still names a subscribed league). Its settings are kept.
+- It is switched back on when a scan sees events in its group again.
+- It is removed only after it has been switched off and its group has been gone from Dispatcharr for two weeks.
+
+Editing, enabling or disabling a managed source by hand makes it an ordinary source. **A source you added or edited yourself is never switched off or removed automatically.**
+
 ## Binding by Name Pattern
 
 Some IPTV providers rotate group names — `EPL (MW1)` becomes `EPL (MW2)`, dated tournament groups come and go. Dispatcharr matches M3U groups by exact name, so a provider rename always creates a **new** group and a source pinned to the old one silently stops finding streams.
