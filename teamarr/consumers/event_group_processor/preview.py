@@ -147,9 +147,7 @@ class PreviewBuilder:
                     away_team=r.event.away_team.name if r.event else None,
                     league=r.league,
                     start_time=(
-                        r.event.start_time.isoformat()
-                        if r.event and r.event.start_time
-                        else None
+                        r.event.start_time.isoformat() if r.event and r.event.start_time else None
                     ),
                     from_cache=r.from_cache,
                     exclusion_reason=r.exclusion_reason,
@@ -161,6 +159,7 @@ class PreviewBuilder:
                     extracted_date=r.extracted_date,
                     extracted_time=r.extracted_time,
                     extracted_tz=r.extracted_tz,
+                    epg_programmes=list(getattr(r, "epg_programmes", None) or []),
                 )
                 result.streams.append(preview_stream)
 

@@ -258,6 +258,9 @@ class PreviewStream:
     extracted_date: str | None = None
     extracted_time: str | None = None
     extracted_tz: str | None = None
+    # Guide programmes that looked like games and bound nothing, with a reason
+    # each (#1026): title, start, reason, detail.
+    epg_programmes: list[dict] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {

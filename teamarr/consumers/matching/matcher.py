@@ -146,6 +146,12 @@ def _extraction_fields(classified: ClassifiedStream) -> _ExtractionFields:
     }
 
 
+# How many attempted-but-unbound guide programmes a preview row keeps per
+# channel (#1026). The full guide is thousands of entries and mostly noise;
+# these are only the ones that looked like a game and bound nothing.
+EPG_UNBOUND_PROGRAMMES_MAX = 25
+
+
 @dataclass
 class MatchedStreamResult:
     """Result of matching a single stream.
@@ -205,6 +211,9 @@ class MatchedStreamResult:
     filtered_reason: FilteredReason | None = None
     excluded_reason: ExcludedReason | None = None
     detail: str | None = None  # Additional context from matching
+    # Guide programmes that looked like games and bound nothing, each with its
+    # own reason (#1026). Preview only; never persisted.
+    epg_programmes: list[dict] | None = None
 
     @property
     def is_exception(self) -> bool:
@@ -519,6 +528,9 @@ class StreamMatcher:
         # Keyed (not popped): mirrors of one linear channel share the tvg_id
         # and every one of them should carry the same diagnosis.
         self._epg_no_match: dict[str, str] = {}
+        # Per tvg_id: the attempted programmes that bound nothing, with the
+        # reason each one failed, capped (#1026).
+        self._epg_unbound: dict[str, list[dict]] = {}
 
         # League event types + sports cache
         self._league_event_types: dict[str, str] = {}
@@ -1215,6 +1227,19 @@ class StreamMatcher:
 
             epg_input = build_match_input(program)
             attempted_titles.append(epg_input)
+
+            def note(reason: str, detail: str | None = None, _title=epg_input, _program=program):
+                unbound = self._epg_unbound.setdefault(tvg_id, [])
+                if len(unbound) < EPG_UNBOUND_PROGRAMMES_MAX:
+                    unbound.append(
+                        {
+                            "title": _title,
+                            "start": _program.start_dt.isoformat() if _program.start_dt else None,
+                            "reason": reason,
+                            "detail": detail,
+                        }
+                    )
+
             # NOTE: event_league_sport is deliberately NOT passed here. One
             # guide programme ("Wimbledon, Day 7") covers MANY concurrent
             # matches, so routing programme titles through the tennis
@@ -1233,6 +1258,7 @@ class StreamMatcher:
                 self._feed_away_terms,
             )
             if classified.category == StreamCategory.PLACEHOLDER:
+                note("skipped:unclassifiable")
                 continue
             # A programme with no tennis token of its own ("US Open 2026 |
             # Men's First Round: Shelton/Griekspoor") still takes the tennis
@@ -1260,6 +1286,8 @@ class StreamMatcher:
                     if prev is None or skew_s < prev[0]:
                         best_by_event[ev_id] = (skew_s, outcome, classified)
                 if is_tennis or tennis_outcomes:
+                    if not tennis_outcomes:
+                        note(FailedReason.TENNIS_MATCHUP_UNKNOWN.value)
                     continue
 
             # Same text-evidence gate as the racing fallback, applied to the
@@ -1279,6 +1307,7 @@ class StreamMatcher:
                     "[EPG_MATCH] racing programme skipped, no series name in text: %s",
                     epg_input[:60],
                 )
+                note("skipped:no_series_name")
                 continue
 
             # TEAM_ONLY gate: skip team routing when disabled, but fall
@@ -1332,6 +1361,29 @@ class StreamMatcher:
                 desc_outcome = self._try_description_match(program, classified, stream_id)
                 if desc_outcome is not None:
                     matched_pairs.append((desc_outcome, classified))
+
+            if not matched_pairs:
+                # Keep what the pass saw for this programme, with the reason it
+                # bound nothing, so the preview can list it under the channel
+                # row instead of a count and three truncated titles (#1026).
+                failed = next((o for o in primary_outcomes if o.failed_reason is not None), None)
+                failed_reason = failed.failed_reason if failed is not None else None
+                if (
+                    classified.category == StreamCategory.TEAM_ONLY
+                    and not self._team_streams_enabled
+                ):
+                    # A lone proper-noun title ("ACC Huddle Special", "This is
+                    # TNT Sports Ultimate") classifies TEAM_ONLY. In a source
+                    # with team matching off it is a studio show as far as the
+                    # run is concerned: count it with the non-event programmes
+                    # rather than list it — measured on a real channel source
+                    # these were 3,081 of 5,103 entries and filled the cap
+                    # before any game.
+                    skipped_non_event += 1
+                elif failed is not None and failed_reason is not None:
+                    note(failed_reason.value, getattr(failed, "detail", None))
+                else:
+                    note(FailedReason.NO_EVENT_FOUND.value)
 
             for outcome, eff_classified in matched_pairs:
                 # Tag as EPG and attach the program's broadcast window (183.5).
@@ -1544,10 +1596,24 @@ class StreamMatcher:
             ):
                 self._mark_no_epg_channel(name_results, tvg_id)
         if self._epg_index is not None and self._epg_index.is_linear(tvg_id):
-            return epg_matched if epg_matched else name_results
+            return self._with_unbound(epg_matched if epg_matched else name_results, tvg_id)
         if not name_matched and epg_matched:
-            return epg_matched
-        return name_results
+            return self._with_unbound(epg_matched, tvg_id)
+        return self._with_unbound(name_results, tvg_id)
+
+    def _with_unbound(
+        self, results: list[MatchedStreamResult], tvg_id: str
+    ) -> list[MatchedStreamResult]:
+        """Hang the channel's attempted-but-unbound programmes on its first row (#1026).
+
+        One list per channel, on one row — a linear channel fans out into a
+        row per matched event, and repeating the list on each would read as
+        N times the programmes.
+        """
+        unbound = self._epg_unbound.get(tvg_id)
+        if results and unbound:
+            results[0].epg_programmes = list(unbound)
+        return results
 
     def _try_description_match(
         self,

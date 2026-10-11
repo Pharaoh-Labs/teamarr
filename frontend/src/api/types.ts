@@ -356,6 +356,15 @@ export interface PreviewStream {
   extracted_date?: string | null
   extracted_time?: string | null
   extracted_tz?: string | null
+  // Guide programmes that looked like games and bound nothing (#1026)
+  epg_programmes?: PreviewProgramme[]
+}
+
+export interface PreviewProgramme {
+  title: string
+  start: string | null
+  reason: string
+  detail?: string | null
 }
 
 export interface PreviewGroupResponse {

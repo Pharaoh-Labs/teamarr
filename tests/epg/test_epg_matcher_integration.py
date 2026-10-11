@@ -823,3 +823,63 @@ def test_a_guide_that_was_read_and_held_nothing_is_not_unavailable(monkeypatch, 
     )
     result = m.match_all([{"id": 945, "name": "ITV1 HD RT", "tvg_id": "itv1"}], date(2026, 6, 1))
     assert result.results[0].failed_reason == FailedReason.NO_EPG_CHANNEL
+
+
+# ============================== #1026: unbound programmes are listed with a reason
+
+
+def test_attempted_programmes_that_bound_nothing_are_kept_with_their_reason(monkeypatch):
+    """The preview used to collapse them into a count and three truncated
+    titles; a channel-source user was guessing why each one failed."""
+    index = EPGProgramIndex(
+        {
+            "espn": [
+                _prog(sub="Chicago Cubs at St. Louis Cardinals"),
+                _prog(sub="Boston Red Sox at New York Yankees", start=BASE + timedelta(hours=4)),
+            ]
+        }
+    )
+    m = _bare_matcher(index)
+    monkeypatch.setattr(
+        m,
+        "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [
+            MatchOutcome.failed(FailedReason.NO_EVENT_FOUND, detail="best=41 vs floor 60")
+        ],
+    )
+    epg = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+    out = m._reconcile_epg([_skipped()], epg, "espn")
+
+    assert out[0].failed_reason == FailedReason.NO_EPG_PROGRAM_MATCH
+    progs = out[0].epg_programmes
+    assert [p["reason"] for p in progs] == ["no_event_found", "no_event_found"]
+    assert progs[0]["title"].startswith("MLB Baseball")
+    assert progs[0]["start"] == BASE.isoformat()
+    assert progs[0]["detail"] == "best=41 vs floor 60"
+
+
+def test_unbound_programmes_hang_on_one_row_only_and_are_capped(monkeypatch):
+    from teamarr.consumers.matching.matcher import EPG_UNBOUND_PROGRAMMES_MAX
+
+    progs = [_prog(start=BASE + timedelta(hours=i)) for i in range(EPG_UNBOUND_PROGRAMMES_MAX + 5)]
+    m = _bare_matcher(EPGProgramIndex({"espn": progs}))
+    monkeypatch.setattr(
+        m,
+        "_route_to_outcomes",
+        lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(FailedReason.NO_EVENT_FOUND)],
+    )
+    epg = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+    out = m._reconcile_epg([_skipped(), _skipped()], epg, "espn")
+    assert len(out[0].epg_programmes) == EPG_UNBOUND_PROGRAMMES_MAX
+    assert out[1].epg_programmes is None
+
+
+def test_a_programme_with_no_matchup_shape_says_so(monkeypatch):
+    m = _bare_matcher(EPGProgramIndex({"espn": [_prog(title="SportsCenter", sub="")]}))
+    monkeypatch.setattr(m, "_route_to_outcomes", lambda *a, **k: [])
+    epg = m._match_via_epg(100, "ESPN", "espn", date(2026, 6, 1))
+    out = m._reconcile_epg([_skipped()], epg, "espn")
+    reasons = [p["reason"] for p in (out[0].epg_programmes or [])]
+    # Either never attempted (non-event) or attempted and unclassifiable — never a
+    # diagnosis of what the programme "is".
+    assert all(r in ("skipped:unclassifiable", "no_event_found") for r in reasons)
