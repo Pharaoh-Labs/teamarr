@@ -1144,6 +1144,25 @@ export function EventGroups() {
                                   {formatDateTime(stream.start_time)}
                                 </div>
                               )}
+                              {stream.epg_programmes && stream.epg_programmes.length > 0 && (
+                                <details className="mt-1 text-xs text-muted-foreground">
+                                  <summary className="cursor-pointer">
+                                    {stream.epg_programmes.length} other guide programme
+                                    {stream.epg_programmes.length === 1 ? "" : "s"} looked like a
+                                    game and matched nothing
+                                  </summary>
+                                  <ul className="mt-1 space-y-0.5 pl-3 border-l border-border">
+                                    {stream.epg_programmes.map((p, i) => (
+                                      <li key={i} className="break-words">
+                                        {p.title}
+                                        {p.start && ` · ${formatDateTime(p.start)}`}
+                                        {" — "}
+                                        {getFailedReasonLabel(p.reason)}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </details>
+                              )}
                             </div>
                           ) : (
                             <div className="text-xs text-muted-foreground">
@@ -1156,6 +1175,32 @@ export function EventGroups() {
                                 <div className="text-muted-foreground/70 mt-0.5 break-words">
                                   {stream.detail}
                                 </div>
+                              )}
+                              {stream.epg_programmes && stream.epg_programmes.length > 0 && (
+                                <details className="mt-1">
+                                  <summary className="cursor-pointer text-foreground/80">
+                                    {stream.epg_programmes.length} guide programme
+                                    {stream.epg_programmes.length === 1 ? "" : "s"} looked like a
+                                    game and matched nothing
+                                  </summary>
+                                  <ul className="mt-1 space-y-0.5 pl-3 border-l border-border">
+                                    {stream.epg_programmes.map((p, i) => (
+                                      <li key={i} className="break-words">
+                                        <span className="text-foreground/80">{p.title}</span>
+                                        {p.start && (
+                                          <span className="text-muted-foreground/70">
+                                            {" · "}
+                                            {formatDateTime(p.start)}
+                                          </span>
+                                        )}
+                                        <span className="text-muted-foreground/70">
+                                          {" — "}
+                                          {getFailedReasonLabel(p.reason)}
+                                        </span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </details>
                               )}
                             </div>
                           )}

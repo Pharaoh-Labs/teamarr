@@ -117,6 +117,7 @@ export function getFailedReasonLabel(reason: string): string {
     // Says what the classifier saw, not what the stream probably is (#1029):
     // two team names glued with no "vs"/"@" land here too.
     "skipped:unclassifiable": "No matchup separator in name",
+    "skipped:no_series_name": "No series name in title",
     "skipped:name_match_disabled": "Stream Name matching off",
     "skipped:team_streams_disabled": "Team matching off",
   }

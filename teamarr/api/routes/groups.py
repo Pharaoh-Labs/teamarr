@@ -595,10 +595,7 @@ def require_matching_type(name: bool, team: bool, epg: bool) -> None:
     if not (name or team or epg):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "At least one matching type must be enabled "
-                "(Stream Name, Team, or EPG)."
-            ),
+            detail=("At least one matching type must be enabled (Stream Name, Team, or EPG)."),
         )
 
 
@@ -1192,8 +1189,8 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
                     subscription_leagues=request.subscription_leagues,
                     subscription_soccer_mode=request.subscription_soccer_mode,
                     subscription_soccer_followed_teams=(
-                [t.model_dump() for t in request.subscription_soccer_followed_teams]
-            )
+                        [t.model_dump() for t in request.subscription_soccer_followed_teams]
+                    )
                     if request.subscription_soccer_followed_teams
                     else None,
                     clear_subscription_leagues=request.clear_subscription_leagues,
@@ -1319,9 +1316,7 @@ def list_stale_rebind_suggestions() -> list[dict]:
     # distinct stale-source account. Failed fetches stay absent from the map
     # (those sources then get no suggestion rather than a cross-account one).
     account_group_ids: dict[int, set[int]] = {}
-    for account_id in {
-        aid for row in stale if (aid := row.get("m3u_account_id")) is not None
-    }:
+    for account_id in {aid for row in stale if (aid := row.get("m3u_account_id")) is not None}:
         try:
             counts = conn_dc.m3u.get_account_group_counts(account_id)
         except Exception as e:
@@ -1643,8 +1638,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 subscription_leagues=request.subscription_leagues,
                 subscription_soccer_mode=request.subscription_soccer_mode,
                 subscription_soccer_followed_teams=(
-                [t.model_dump() for t in request.subscription_soccer_followed_teams]
-            )
+                    [t.model_dump() for t in request.subscription_soccer_followed_teams]
+                )
                 if request.subscription_soccer_followed_teams
                 else None,
                 clear_subscription_leagues=request.clear_subscription_leagues,
@@ -1659,7 +1654,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
 
         # Clean up XMLTV content when group is disabled
         if request.enabled is False:
-
             delete_group_xmltv(conn, group_id)
 
         group = get_group(conn, group_id)
@@ -1869,7 +1863,10 @@ def clear_group_match_cache(group_id: int):
 
     logger.info(
         "[CACHE_CLEAR] group_id=%d name=%s entries=%d stats_cleared=%d",
-        group_id, group.name, entries_cleared, stats_cleared,
+        group_id,
+        group.name,
+        entries_cleared,
+        stats_cleared,
     )
 
     return ClearCacheResponse(
@@ -1892,9 +1889,7 @@ def clear_groups_match_cache(request: ClearCacheRequest):
     total_stats_cleared = 0
 
     with get_db() as conn:
-        valid_group_ids = [
-            group_id for group_id in request.group_ids if get_group(conn, group_id)
-        ]
+        valid_group_ids = [group_id for group_id in request.group_ids if get_group(conn, group_id)]
 
     for group_id in valid_group_ids:
         cleared, stats_cleared = clear_group_match_data(get_db, group_id)
@@ -1904,7 +1899,9 @@ def clear_groups_match_cache(request: ClearCacheRequest):
 
     logger.info(
         "[CACHE_CLEAR_BULK] groups=%d total_cleared=%d total_stats_cleared=%d",
-        len(results), total_cleared, total_stats_cleared,
+        len(results),
+        total_cleared,
+        total_stats_cleared,
     )
 
     return ClearCacheResponse(
@@ -2049,6 +2046,15 @@ def preview_group_name_pattern(request: GroupPatternPreviewRequest) -> dict:
 # =============================================================================
 
 
+class PreviewProgrammeModel(BaseModel):
+    """A guide programme that looked like a game and bound nothing (#1026)."""
+
+    title: str
+    start: str | None = None
+    reason: str
+    detail: str | None = None
+
+
 class PreviewStreamModel(BaseModel):
     """Individual stream preview result."""
 
@@ -2071,6 +2077,7 @@ class PreviewStreamModel(BaseModel):
     extracted_date: str | None = None
     extracted_time: str | None = None
     extracted_tz: str | None = None
+    epg_programmes: list[PreviewProgrammeModel] = []
 
 
 class PreviewGroupResponse(BaseModel):
@@ -2100,7 +2107,6 @@ def preview_group(group_id: int):
     but does NOT create channels or generate EPG.
     """
     from datetime import date
-
 
     with get_db() as conn:
         group = get_group(conn, group_id)
@@ -2146,6 +2152,7 @@ def preview_group(group_id: int):
                 exclusion_reason=s.exclusion_reason,
                 failed_reason=s.failed_reason,
                 detail=s.detail,
+                epg_programmes=[PreviewProgrammeModel(**p) for p in (s.epg_programmes or [])],
                 parsed_team1=s.parsed_team1,
                 parsed_team2=s.parsed_team2,
                 detected_league=s.detected_league,
