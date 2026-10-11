@@ -11,6 +11,7 @@ Configuration via environment variables:
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 
 from teamarr.providers.base_client import BaseHTTPClient
@@ -24,6 +25,13 @@ ESPN_TIMEOUT = float(os.environ.get("ESPN_TIMEOUT", 10.0))
 ESPN_RETRY_COUNT = int(os.environ.get("ESPN_RETRY_COUNT", 3))
 
 ESPN_BASE_URL = "https://site.api.espn.com/apis/site/v2/sports"
+# Cricket has no standing leagues on ESPN: each tour or tournament is its own
+# numbered league that comes and goes. The score panel lists every series with a
+# match on a day, on a different host from the scoreboard (#944).
+ESPN_CRICKET_PANEL_URL = "https://site.web.api.espn.com/apis/site/v2/sports/cricket/scorepanel"
+# A day's panel is fetched once per format league per generation; memoise it
+# briefly so the ODI and T20I leagues share one request per day.
+_CRICKET_PANEL_TTL_SECONDS = 300
 ESPN_CORE_URL = "http://sports.core.api.espn.com/v2/sports"
 ESPN_USER_AGENT = "curl/8.7.1"
 
@@ -125,6 +133,7 @@ def scoreboard_groups_for_divisions(league: str, divisions: list[str] | None) ->
     dropped = {d.group for d in optional} - keep
     return tuple(g for g in groups if g not in dropped)
 
+
 # ESPN publishes poll rankings only for college leagues — /rankings 404s for
 # every pro league (verified 2026-09-04: nfl, usa.1, college-baseball all 404).
 # Confirmed to carry polls: college-football (AP / AFCA coaches / FCS coaches /
@@ -177,6 +186,8 @@ class ESPNClient(BaseHTTPClient):
         )
         self._base_url = ESPN_BASE_URL
         self._core_url = ESPN_CORE_URL
+        # date_str -> (monotonic stamp, panel). A failed fetch is never memoised.
+        self._cricket_panel_cache: dict[str, tuple[float, dict]] = {}
         self._ufc_athlete_url = ESPN_UFC_ATHLETE_URL
 
     def _request(self, url: str, params: dict | None = None) -> dict | None:
@@ -413,6 +424,25 @@ class ESPNClient(BaseHTTPClient):
         sport, espn_league = self.get_sport_league(league, sport_league)
         url = f"{self._base_url}/{sport}/{espn_league}/summary"
         return self._request(url, {"event": event_id})
+
+    def get_cricket_panel(self, date_str: str) -> dict | None:
+        """The cricket score panel for one day: every series with a match that day (#944).
+
+        ``dates=YYYYMMDD`` is honoured (a range 404s). A multi-day match is
+        listed on every day it runs, with its original start date, so callers
+        dedupe by event id. Empty days are common (52 of 171 sampled days) and
+        come back as an empty ``scores`` list, which is memoised like any other
+        answer; a failed request is not, so one blip cannot blank a day for
+        five minutes.
+        """
+        now = time.monotonic()
+        hit = self._cricket_panel_cache.get(date_str)
+        if hit is not None and now - hit[0] < _CRICKET_PANEL_TTL_SECONDS:
+            return hit[1]
+        data = self._request(ESPN_CRICKET_PANEL_URL, {"dates": date_str})
+        if data is not None:
+            self._cricket_panel_cache[date_str] = (now, data)
+        return data
 
     def get_teams(self, league: str, sport_league: tuple[str, str] | None = None) -> dict | None:
         """Fetch all teams for a league.
