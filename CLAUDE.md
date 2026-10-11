@@ -66,7 +66,13 @@ bd doctor                             # Check beads health (sync issues, hooks)
 on origin (set up 2026-08-29). `bd dolt pull` at session start, `bd dolt push` at
 session end — **every machine, every session**, including co-devs. `.beads/*.jsonl`
 is a passive export: never `bd import` it as a sync step, and its presence in a
-PR does not carry beads across machines. A fresh clone gets beads with
+PR does not carry beads across machines. **The embedded database is named `beads`
+(`dolt_database` in `.beads/metadata.json`, bd's own default) on every machine —
+never edit that file or `config.yaml`.** The name selects a LOCAL directory, so a
+machine whose directory is called anything else silently gets a stale copy built
+from the JSONL export on its next `bd` call (2026-09-23 and 2026-10-11, both
+directions); the fix is to rename `.beads/embeddeddolt/<old>` to `beads`, never
+to commit a different name. A fresh clone gets beads with
 `bd bootstrap`. A machine whose Dolt history has diverged (push says "no common
 ancestor") must `bd export -o mine.jsonl` → `bd bootstrap` → `bd import -i
 mine.jsonl` → `bd dolt push` — never `--force` from a non-maintainer machine.
