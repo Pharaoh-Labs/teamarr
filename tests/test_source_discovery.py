@@ -139,6 +139,52 @@ def test_a_group_with_games_is_recorded_with_its_leagues(db):
     assert summary.groups_with_games == 1
 
 
+class RunFilterProcessor(FakeProcessor):
+    """The run's filter as a source built from games evidence applies it:
+    with team matching off, the global event pattern drops a stream that has
+    no 'A vs B' shape. The probe's team mode skips that filter."""
+
+    def _filter_streams(self, streams, group):
+        if group.team_streams_enabled:
+            return streams, None
+        return [s for s in streams if " vs " in s["name"]], None
+
+    def _match_streams(self, streams, group, today, resolved_leagues=None, cache=None):
+        # A per-driver onboard with no event shape still matches through the
+        # GP-less racing path once it reaches the matcher (bead hjzo.7).
+        results = []
+        for s in streams:
+            league, _, rest = s["name"].partition(": ")
+            results.append(
+                SimpleNamespace(
+                    matched=True,
+                    stream_id=s["id"],
+                    league=league,
+                    category=StreamCategory.RACING_EVENT,
+                    event=SimpleNamespace(provider="espn", id="gp"),
+                )
+            )
+        return SimpleNamespace(results=results)
+
+
+def test_a_match_the_run_would_filter_out_is_not_game_evidence(db):
+    """#1034: three auto-added F1 onboard groups matched 16 streams a day in
+    the scan and nothing in any run, because only the scan's probe let the
+    GP-less onboard names past the event-pattern filter."""
+    streams = {
+        7: [_stream(1, "nba: VER - VERSTAPPEN ONBOARD"), _stream(2, "nba: LEC - LECLERC ONBOARD")],
+        8: [_stream(3, "nba: A vs B"), _stream(4, "nba: C vs D"), _stream(5, "nba: E - F")],
+    }
+    m3u = FakeM3U([_group(7, "LIVE | NBA Onboards"), _group(8, "LIVE | NBA Games")], streams)
+    SourceDiscovery(get_db, SimpleNamespace(m3u=m3u), RunFilterProcessor()).scan(now=NOW)
+    cands = _by_name()
+    onboards, games = cands["LIVE | NBA Onboards"], cands["LIVE | NBA Games"]
+    assert onboards.best_game_matches == 0
+    assert suggestion_tier(onboards) == TIER_NAME_ONLY  # the name still says NBA
+    assert games.best_game_matches == 2  # "E - F" needed the bypass; "vs" rows did not
+    assert suggestion_tier(games) == TIER_GAMES
+
+
 def test_team_only_matches_are_counted_apart_and_never_as_games(db):
     streams = {7: [_stream(1, "team: Scotland"), _stream(2, "team: Wales")]}
     _scan([_group(7, "UK | Regional")], streams)
