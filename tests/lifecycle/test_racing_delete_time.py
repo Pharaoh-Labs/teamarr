@@ -21,6 +21,7 @@ from teamarr.database.templates import EventTemplateConfig
 from tests.fakes import FakeManagedChannel
 
 # Sprint weekend on three days. Durations: 1h sessions, 3h race.
+FP1_START = datetime(2026, 8, 21, 11, 30, tzinfo=UTC)  # Fri morning
 SPRINT_QUALI_START = datetime(2026, 8, 21, 15, 30, tzinfo=UTC)  # Fri
 SPRINT_START = datetime(2026, 8, 22, 11, 0, tzinfo=UTC)  # Sat
 QUALIFYING_START = datetime(2026, 8, 22, 15, 0, tzinfo=UTC)  # Sat
@@ -29,12 +30,19 @@ RACE_START = datetime(2026, 8, 23, 15, 0, tzinfo=UTC)  # Sun
 POST_BUFFER = timedelta(minutes=30)
 
 SESSION_STARTS = {
+    "fp1": FP1_START,
     "sprint_qualifying": SPRINT_QUALI_START,
     "sprint": SPRINT_START,
     "qualifying": QUALIFYING_START,
     "race": RACE_START,
 }
-SESSION_HOURS = {"sprint_qualifying": 1.0, "sprint": 1.0, "qualifying": 1.0, "race": 3.0}
+SESSION_HOURS = {
+    "fp1": 1.0,
+    "sprint_qualifying": 1.0,
+    "sprint": 1.0,
+    "qualifying": 1.0,
+    "race": 3.0,
+}
 
 
 def _sprint_weekend() -> Event:
@@ -52,13 +60,14 @@ def _sprint_weekend() -> Event:
         provider="espn",
         name="Grand Prix",
         short_name="GP",
-        start_time=SPRINT_QUALI_START,  # provider anchors to first session
+        start_time=FP1_START,  # provider anchors to first session
         home_team=team,
         away_team=team,
         status=EventStatus(state="scheduled"),
         league="f1",
         sport="racing",
         sessions=[
+            RacingSession(code="fp1", name="Practice 1", start_time=FP1_START),
             RacingSession(
                 code="sprint_qualifying", name="Sprint Qualifying", start_time=SPRINT_QUALI_START
             ),
@@ -116,7 +125,7 @@ def test_no_segment_keeps_last_session_behavior():
     assert manager.calculate_delete_time(event) == RACE_START + timedelta(hours=3.0) + POST_BUFFER
 
 
-@pytest.mark.parametrize("segment", ["fp1", "prelims", "main_card", ""])
+@pytest.mark.parametrize("segment", ["fp3", "prelims", "main_card", ""])
 def test_unknown_segment_falls_back_to_last_session(segment):
     """A code with no matching session (including a UFC card segment) is a no-op."""
     manager = _manager()
@@ -135,9 +144,7 @@ def test_mma_segment_on_sessionless_event_is_unchanged():
     object.__setattr__(event, "sessions", [])
     object.__setattr__(event, "sport", "mma")
 
-    assert manager.get_event_end_time(event, segment="prelims") == manager.get_event_end_time(
-        event
-    )
+    assert manager.get_event_end_time(event, segment="prelims") == manager.get_event_end_time(event)
 
 
 def test_duration_override_applies_to_race_only():
@@ -232,6 +239,40 @@ def test_categorize_treats_finished_sprint_as_past_while_race_upcoming(monkeypat
     assert manager.categorize_event_timing(event, segment="sprint") is ExcludedReason.EVENT_PAST
     assert manager.categorize_event_timing(event, segment="race") is None
     assert manager.categorize_event_timing(event) is None
+
+
+def test_practice_channel_is_past_the_morning_after_its_session(monkeypatch):
+    """The reported bug (#1016, #1033): a Friday practice channel outliving
+    its session because it carried Sunday's delete time."""
+    from teamarr.consumers.matching.result import ExcludedReason
+
+    manager = _manager(create_timing="same_day", include_final_events=True)
+    event = _sprint_weekend()
+    _freeze_now(monkeypatch, datetime(2026, 8, 22, 8, 0, tzinfo=UTC))  # Saturday morning
+
+    assert manager.categorize_event_timing(event, segment="fp1") is ExcludedReason.EVENT_PAST
+    assert manager.categorize_event_timing(event, segment="sprint") is None
+    assert manager.categorize_event_timing(event, segment="race") is None
+
+
+def test_create_guard_refuses_a_finished_session_but_not_the_race(monkeypatch):
+    """should_create_channel's past-delete guard anchors to the session too, so
+    a caller that skips categorize_event_timing cannot create a channel for a
+    finished qualifying session and have cleanup delete it minutes later."""
+    manager = _manager(create_timing="same_day")
+    event = _sprint_weekend()
+    _freeze_now(monkeypatch, datetime(2026, 8, 22, 20, 0, tzinfo=UTC))  # Saturday evening
+
+    sprint = manager.should_create_channel(
+        event, stream_exists=True, segment_start=SPRINT_START, segment="sprint"
+    )
+    assert not sprint.should_act
+    assert sprint.reason.startswith("Past delete threshold")
+
+    race = manager.should_create_channel(
+        event, stream_exists=True, segment_start=RACE_START, segment="race"
+    )
+    assert "Past delete threshold" not in race.reason
 
 
 def _service(db_factory):

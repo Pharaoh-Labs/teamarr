@@ -198,6 +198,7 @@ class ChannelLifecycleManager:
         stream_exists: bool = False,
         segment_start: datetime | None = None,
         duration_override: float | None = None,
+        segment: str | None = None,
     ) -> LifecycleDecision:
         """Determine if a channel should be created for this event.
 
@@ -210,6 +211,9 @@ class ChannelLifecycleManager:
                 which for racing points at the weekend's FIRST session.
             duration_override: Event template's custom duration (#946),
                 used for the past-delete-threshold guard.
+            segment: Session code for a racing session channel (#1016), so the
+                past-delete guard anchors to that session's own end rather
+                than the weekend's last one.
 
         Returns:
             LifecycleDecision with should_act and reason
@@ -219,7 +223,7 @@ class ChannelLifecycleManager:
         now = now_user()
 
         # Check if we're past delete threshold (prevents create-then-delete)
-        delete_threshold = self._calculate_delete_threshold(event, duration_override)
+        delete_threshold = self._calculate_delete_threshold(event, duration_override, segment)
         if delete_threshold and now >= delete_threshold:
             logger.debug(
                 "[SKIP CREATE] event=%s: past delete threshold (%s)",
