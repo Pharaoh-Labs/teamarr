@@ -258,10 +258,65 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             sport_league = self._get_sport_league_from_db(league)
         return sport_league[1] if sport_league else league
 
+    # Cricket format leagues (#944): ``provider_league_id`` is ``cricket/panel:<format>``
+    # and the league is a filter over the day's score panel, because ESPN has
+    # no standing cricket leagues — each tour or tournament is its own numbered
+    # league that comes and goes. The format is ``competitions[0].class
+    # .generalClassCard``; codes seen over three sampled days: First-class,
+    # T20I, Other match, List A, Twenty20, Other OD, ODI, Test, Women's T20,
+    # Women T20 (both spellings), Other T20, Youth Test, Women's ODI. Only the
+    # men's international codes are exposed; Tests take their per-day sessions
+    # in a later bead.
+    CRICKET_PANEL_PREFIX = "panel:"
+    CRICKET_PANEL_FORMATS: dict[str, frozenset[str]] = {
+        "odi": frozenset({"ODI"}),
+        "t20i": frozenset({"T20I"}),
+        "test": frozenset({"Test"}),
+    }
+
+    def _cricket_panel_format(self, sport_league: tuple[str, str] | None) -> str | None:
+        """The format key of a cricket panel league, or None for any other league."""
+        if not sport_league or sport_league[0] != "cricket":
+            return None
+        espn_league = sport_league[1]
+        if not espn_league.startswith(self.CRICKET_PANEL_PREFIX):
+            return None
+        key = espn_league[len(self.CRICKET_PANEL_PREFIX) :].lower()
+        return key if key in self.CRICKET_PANEL_FORMATS else None
+
+    def _get_cricket_panel_events(
+        self, league: str, target_date: date, format_key: str
+    ) -> list[Event]:
+        """Every match of one format on the day's score panel, deduped by event id."""
+        data = self._client.get_cricket_panel(target_date.strftime("%Y%m%d"))
+        if not data:
+            return []
+        wanted = self.CRICKET_PANEL_FORMATS[format_key]
+        events: list[Event] = []
+        seen: set[str] = set()
+        for block in data.get("scores") or []:
+            for event_data in block.get("events") or []:
+                competition = (event_data.get("competitions") or [{}])[0]
+                card = str((competition.get("class") or {}).get("generalClassCard") or "").strip()
+                if card not in wanted:
+                    continue
+                event_id = str(event_data.get("id") or "")
+                if not event_id or event_id in seen:
+                    continue
+                seen.add(event_id)
+                event = self._parse_event(event_data, league)
+                if event:
+                    events.append(event)
+        return events
+
     def get_events(self, league: str, target_date: date) -> list[Event]:
         # Get sport/league from database config
         sport_league = self._get_sport_league_from_db(league)
         sport = self._get_sport(league)
+
+        cricket_format = self._cricket_panel_format(sport_league)
+        if cricket_format:
+            return self._get_cricket_panel_events(league, target_date, cricket_format)
 
         # MMA promotions use a different API endpoint
         if self._is_mma(league, sport):
@@ -358,7 +413,9 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             )
             data = self._client.get_mma_scoreboard(self._espn_mma_slug(league), window)
             return self._parse_mma_events(data, league) if data else []
-        if sport in TOURNAMENT_SPORTS:
+        if sport in TOURNAMENT_SPORTS or self._cricket_panel_format(
+            self._get_sport_league_from_db(league)
+        ):
             # Special endpoints — reuse the per-date path over a few days.
             by_event_id: dict[str, Event] = {}
             for d in (date.today(), date.today() - timedelta(days=1)):
@@ -445,6 +502,9 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
     ) -> list[Event]:
         """Fetch team schedule using hybrid approach.
 
+        A cricket format league has no team schedule endpoint (#944); it
+        returns nothing until team channels are designed for it.
+
         Uses two sources for comprehensive coverage:
         1. Schedule endpoint: Gets ALL past games (efficient, single call)
            - Needed for .last template variables
@@ -456,6 +516,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         This hybrid approach ensures .last variables work even during long breaks
         (bye weeks, all-star break, offseason) while still capturing playoffs.
         """
+        if self._cricket_panel_format(self._get_sport_league_from_db(league)):
+            return []
         # Apply team ID correction for known ESPN mismatches
         corrected_id = ESPN_TEAM_ID_CORRECTIONS.get((league, team_id))
         if corrected_id:
@@ -1296,6 +1358,11 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
 
         # Get sport/league from database (source of truth)
         sport_league = self._get_sport_league_from_db(league)
+        if self._cricket_panel_format(sport_league):
+            # A format league is a filter over changing series ids; there is
+            # no teams endpoint behind it (#944). The schedule teaches the
+            # identity index (#912) from the matches themselves.
+            return []
         data = self._client.get_teams(league, sport_league)
         if not data:
             return []

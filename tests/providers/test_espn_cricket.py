@@ -110,3 +110,121 @@ def test_an_undecided_side_with_a_positive_id_is_a_placeholder(name):
         sport="cricket",
     )
     assert _is_placeholder_team(team)
+
+
+# ============================== series discovery: format leagues over the day's panel
+
+
+class _PanelClient:
+    """A client whose cricket panel is the fixture, grouped back into series."""
+
+    def __init__(self, panel=None):
+        self.calls = []
+        if panel is None:
+            blocks = {}
+            for e in EVENTS.values():
+                lg = e["_league"]
+                blocks.setdefault(lg["id"], {"leagues": [lg], "events": []})["events"].append(e)
+            panel = {"scores": list(blocks.values())}
+        self.panel = panel
+
+    def get_cricket_panel(self, date_str):
+        self.calls.append(date_str)
+        return self.panel
+
+
+class _Mapping:
+    def __init__(self, provider_league_id):
+        self.provider_league_id = provider_league_id
+        self.sport = "Cricket"
+
+
+class _Mappings:
+    ROWS = {"cricket-odi": "cricket/panel:odi", "cricket-t20i": "cricket/panel:t20i"}
+
+    def get_mapping(self, league, provider):
+        pid = self.ROWS.get(league)
+        return _Mapping(pid) if pid else None
+
+    def get_league_sport(self, league):
+        return "cricket" if league in self.ROWS else None
+
+    def supports_league(self, league, provider):
+        return league in self.ROWS
+
+    def get_mapping_by_league(self, league):
+        return self.get_mapping(league, "espn")
+
+
+def _panel_provider(client=None):
+    return ESPNProvider(client=client or _PanelClient(), league_mapping_source=_Mappings())
+
+
+def test_a_format_league_is_a_filter_over_the_days_panel():
+    from datetime import date
+
+    provider = _panel_provider()
+    t20 = provider.get_events("cricket-t20i", date(2026, 10, 11))
+    odi = provider.get_events("cricket-odi", date(2026, 10, 11))
+    assert sorted(e.id for e in t20) == ["1529232", "1554579"]
+    assert sorted(e.id for e in odi) == ["1554413", "1554416"]
+    # Tests, first-class and women's T20 are on the panel and in neither league.
+    assert all(e.league == "cricket-t20i" and e.sport == "cricket" for e in t20)
+    assert t20[0].game_event_note in ("3rd T20I", "12th Match")
+
+
+def test_the_two_leagues_share_one_panel_request_per_day():
+    from datetime import date
+
+    client = _PanelClient()
+    provider = _panel_provider(client)
+    provider.get_events("cricket-t20i", date(2026, 10, 11))
+    provider.get_events("cricket-odi", date(2026, 10, 11))
+    # The fake has no memo; the real client memoises per day. Here we only
+    # pin that both leagues ask for the same day string.
+    assert client.calls == ["20261011", "20261011"]
+
+
+def test_a_multi_day_match_listed_twice_is_one_event():
+    from datetime import date
+
+    panel = _PanelClient().panel
+    dup = {"leagues": [{"id": "x", "name": "dup"}], "events": [EVENTS["1529232"]]}
+    panel["scores"].append(dup)
+    assert [
+        e.id
+        for e in _panel_provider(_PanelClient(panel)).get_events("cricket-t20i", date(2026, 10, 11))
+    ].count("1529232") == 1
+
+
+def test_an_empty_day_is_no_events_not_an_error():
+    from datetime import date
+
+    provider = _panel_provider(_PanelClient({"scores": []}))
+    assert provider.get_events("cricket-odi", date(2026, 10, 11)) == []
+
+
+def test_a_format_league_has_no_teams_endpoint_and_no_team_schedule():
+    client = _PanelClient()
+    client.get_teams = lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not be called"))
+    provider = _panel_provider(client)
+    assert provider.get_league_teams("cricket-odi") == []
+    assert provider.get_team_schedule("2", "cricket-odi") == []
+
+
+def test_the_real_client_memoises_a_days_panel_but_never_a_failure(monkeypatch):
+    from teamarr.providers.espn.client import ESPNClient
+
+    client = ESPNClient()
+    try:
+        answers = iter([None, {"scores": []}, {"scores": [{"x": 1}]}])
+        calls = []
+        monkeypatch.setattr(
+            client, "_request", lambda url, params=None: (calls.append(params), next(answers))[1]
+        )
+        assert client.get_cricket_panel("20261011") is None  # failure: not memoised
+        assert client.get_cricket_panel("20261011") == {"scores": []}  # fetched again, memoised
+        assert client.get_cricket_panel("20261011") == {"scores": []}  # served from the memo
+        assert len(calls) == 2 and calls[0] == {"dates": "20261011"}
+    finally:
+        client.close()

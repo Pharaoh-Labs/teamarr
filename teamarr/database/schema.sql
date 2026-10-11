@@ -1442,6 +1442,11 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('nll', 'espn', 'lacrosse/nll', NULL, 'National Lacrosse League', 'lacrosse', 'https://a.espncdn.com/guid/5f77fe12-e54f-41a1-904e-77135452f348/logos/default.png', NULL, 1, 'NLL', 'nll', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('pll', 'espn', 'lacrosse/pll', NULL, 'Premier Lacrosse League', 'lacrosse', 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/leagues/500/pll.png', NULL, 1, 'PLL', 'pll', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
+    -- Cricket internationals (ESPN, #944): a format league is a filter over the day's
+    -- score panel (provider_league_id 'cricket/panel:<format>'), because ESPN has no
+    -- standing cricket leagues. No teams endpoint (import_enabled 0).
+    ('cricket-odi', 'espn', 'cricket/panel:odi', NULL, 'One Day Internationals', 'cricket', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-cricket.png', NULL, 0, 'ODI', 'odi', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('cricket-t20i', 'espn', 'cricket/panel:t20i', NULL, 'T20 Internationals', 'cricket', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-cricket.png', NULL, 0, 'T20I', 't20i', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     -- Cricket (TSDB) - Premium tier, requires TSDB premium key for full event coverage
     ('ipl', 'tsdb', '4460', 'Indian Premier League', 'Indian Premier League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/gaiti11741709844.png', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('bbl', 'tsdb', '4461', 'Australian Big Bash League', 'Big Bash League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/yko7ny1546635346.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
