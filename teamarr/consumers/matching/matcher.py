@@ -1372,7 +1372,14 @@ class StreamMatcher:
                     classified.category == StreamCategory.TEAM_ONLY
                     and not self._team_streams_enabled
                 ):
-                    note("skipped:team_streams_disabled")
+                    # A lone proper-noun title ("ACC Huddle Special", "This is
+                    # TNT Sports Ultimate") classifies TEAM_ONLY. In a source
+                    # with team matching off it is a studio show as far as the
+                    # run is concerned: count it with the non-event programmes
+                    # rather than list it — measured on a real channel source
+                    # these were 3,081 of 5,103 entries and filled the cap
+                    # before any game.
+                    skipped_non_event += 1
                 elif failed is not None and failed_reason is not None:
                     note(failed_reason.value, getattr(failed, "detail", None))
                 else:
