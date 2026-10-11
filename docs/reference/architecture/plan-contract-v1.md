@@ -1,4 +1,4 @@
-# In-process plan contract v1 (Packet 8A)
+# In-process plan contract v1 (Packets 8A–8C)
 
 This is a **shadow-mode proof**, not a plugin runtime or an applied channel
 plan. The models live in `teamarr/consumers/planning/contracts.py`; a caller
@@ -30,3 +30,29 @@ lifecycle/ordering policy. Packet 8B owns channel identity storage and
 adoption, 8C owns validation against host state and application, and 8D owns
 last-good persistence and outage behavior. No external protocol or plugin
 execution is introduced here.
+
+## Packet 8C: validation, diff, and application
+
+`teamarr/consumers/planning/validation.py` adds host-state checks on top of
+the record contracts: the plan must belong to the plugin it is submitted for,
+programmes must fit their channel's programme window, XMLTV channel ids must
+not collide with any channel the plan will not own (core or other plugins),
+and stream/group/profile hints are checked against host-supplied catalog
+resolvers when available. Validation returns diagnostics; a plan with
+diagnostics is never applied.
+
+`diffing.py` compares a complete plan with only that plugin's active rows and
+produces ordered intentions: `create`, `adopt` (matched by unambiguous
+adoption key), `update`, `stream_order`, and `retire` for active channels the
+complete plan no longer claims. An ambiguous adoption key blocks the entire
+diff — the host never chooses between candidates.
+
+`applier.py` executes an unblocked diff through the existing repositories and
+channel manager: Dispatcharr create/rename/update/delete must succeed before
+any local row claims success, a failed local insert after a remote create is
+compensated by deleting the remote channel, retire keeps the row when the
+remote delete fails so it is retried, and per-intention failures are isolated.
+A `status="failed"` plan never runs the deletion diff. `dry_run=True` (or the
+global `DRY_RUN` flag) returns the validated diff summary with zero writes.
+`PlanApplyOutcome.to_metrics()` produces the shape recorded under the parent
+run's `extra_metrics["plans"]` when planning enters the pipeline (Packet 8F).
