@@ -147,7 +147,12 @@ def select_series(series_list: list[dict], event_id: str | None = None) -> dict 
     """Select the active/relevant series entry from a seasonseries list.
 
     Prioritizes:
-    1. Series whose events explicitly contain event_id
+    1. Non-preseason series whose events explicitly contain event_id — the
+       series this game belongs to, even when its summary is not yet a state
+       (playoff Game 1 before first pitch carries summary ''). Callers treat
+       a non-state summary as no series data; returning the containing entry
+       stops the fallback from borrowing an unrelated series (e.g. the
+       completed regular-season head-to-head during a playoff series).
     2. Active playoff series (type in ('playoff', 'postseason') and not completed)
     3. Any playoff series (type in ('playoff', 'postseason'))
     4. Series with type == 'current'
@@ -155,15 +160,11 @@ def select_series(series_list: list[dict], event_id: str | None = None) -> dict 
     6. Series with type == 'season'
     7. First candidate with a non-empty summary
     """
-    candidates = [
+    non_preseason = [
         item
         for item in series_list
-        if isinstance(item, dict)
-        and item.get("type") != "preseason"
-        and is_series_state(item.get("summary"))
+        if isinstance(item, dict) and item.get("type") != "preseason"
     ]
-    if not candidates:
-        return None
 
     if event_id:
 
@@ -175,9 +176,23 @@ def select_series(series_list: list[dict], event_id: str | None = None) -> dict 
                     return True
             return False
 
-        matched = next((item for item in candidates if _has_event(item)), None)
+        containing = [item for item in non_preseason if _has_event(item)]
+        matched = next(
+            (item for item in containing if is_series_state(item.get("summary"))), None
+        )
         if matched:
             return matched
+        if containing:
+            # This event belongs to a series with no state yet (empty summary
+            # or a "Series starts ..." note). The entry itself is the answer;
+            # callers resolve its non-state summary to empty (#teamarr-4sfj).
+            return containing[0]
+
+    candidates = [
+        item for item in non_preseason if is_series_state(item.get("summary"))
+    ]
+    if not candidates:
+        return None
 
     matched = next(
         (
@@ -270,7 +285,7 @@ def apply_generated_preview_fields(data: dict[str, Any], event: Event) -> None:
                 setattr(event, f"{side}_{suffix}", stats[espn_name])
 
     series = select_series(data.get("seasonseries") or [], getattr(event, "id", None))
-    if series and series.get("summary"):
+    if series and is_series_state(series.get("summary")):
         # Raw provider text — {series_summary} is a public variable and public
         # variables are never rewritten by our code (#613). The prose builder
         # expands team codes for readability on its own copy.
