@@ -135,6 +135,25 @@ def _parse_duration_from_name(name: str | None) -> float | None:
     return float(token)
 
 
+# A day of Test cricket: two sessions of play either side of lunch and tea,
+# about six hours of play plus the breaks (#944).
+CRICKET_TEST_DAY_HOURS = 7.0
+_TEST_DAY_RE = re.compile(r"\bday\s*(\d)\b", re.IGNORECASE)
+
+
+def _test_day_from_stream_name(stream_name: str) -> str | None:
+    """'Australia v South Africa 1st Test Day 3' names one day's session."""
+    m = _TEST_DAY_RE.search(strip_stream_metadata(stream_name))
+    return f"day{m.group(1)}" if m else None
+
+
+def has_session_channels(event: Event | None) -> bool:
+    """An event whose channels are one per session: a race weekend, or a Test."""
+    if not event or not event.sessions:
+        return False
+    return event.sport in ("racing", "cricket")
+
+
 def _session_duration_hours(
     session_code: str,
     sport_durations: dict[str, float] | None,
@@ -154,6 +173,8 @@ def _session_duration_hours(
         if league and league in LEAGUE_RACE_DURATION_HOURS:
             return LEAGUE_RACE_DURATION_HOURS[league]
         return (sport_durations or {}).get("racing", 3.0)
+    if session_code.startswith("day"):
+        return CRICKET_TEST_DAY_HOURS
     return SESSION_DURATION_HOURS.get(session_code, 1.0)
 
 
@@ -518,11 +539,11 @@ def expand_racing_segments(
     for match in matched_streams:
         event = match.get("event")
 
-        if not is_racing_event(event):
+        if not has_session_channels(event):
             result.append(match)
             continue
 
-        # is_racing_event returned True, so event is a non-None racing Event.
+        # has_session_channels returned True, so event is a non-None Event with sessions.
         assert event is not None
 
         expanded_streams += 1
@@ -536,7 +557,24 @@ def expand_racing_segments(
         # fan-out, unchanged from before — EXCEPT practice sessions, which
         # are dropped from that fan-out rather than kept (see below).
         stream_name = match.get("stream", {}).get("name") or ""
-        if category := _session_category_from_stream_name(stream_name):
+        is_cricket = event.sport == "cricket"
+        # A Test feed names its day, never a racing session; racing words on a
+        # cricket stream mean nothing and a day word on a racing stream nothing.
+        day = _test_day_from_stream_name(stream_name) if is_cricket else None
+        category = None if is_cricket else _session_category_from_stream_name(stream_name)
+        if day:
+            # A Test feed that names its day is that day's source only (#944).
+            scoped = [s for s in sessions if s.code == day]
+            if not scoped:
+                logger.debug(
+                    "[RACING_SEGMENTS] Dropping '%s': names %s but '%s' has no such day",
+                    stream_name[:60],
+                    day,
+                    event.name,
+                )
+                continue
+            sessions = scoped
+        elif category:
             scoped = [s for s in sessions if _session_in_category(s.code, category)]
             # No session of the named category: providers list sessions the
             # data source doesn't (ESPN's IndyCar events often carry only
@@ -621,7 +659,7 @@ def expand_racing_segments(
 
     if expanded_streams:
         logger.info(
-            "[RACING_SEGMENTS] Expanded %d racing stream(s) into %d session channels",
+            "[RACING_SEGMENTS] Expanded %d stream(s) into %d session channels",
             expanded_streams,
             session_entries,
         )
