@@ -226,6 +226,92 @@ def test_parse_event_extracts_scoreboard_series_summary():
     assert parsed.series_summary == "Series tied 1-1"
 
 
+def test_parse_event_series_list_uses_containment_match():
+    # competition.series arrives as a LIST on the summary endpoint's header
+    # competitions. Covers the branch where the event-id containment match
+    # runs and the chosen entry's summary must pass is_series_state.
+    provider = ESPNProvider(client=MagicMock())
+    raw_event = {
+        "id": "401908030",
+        "name": "Los Angeles Dodgers at Milwaukee Brewers",
+        "shortName": "LAD @ MIL",
+        "date": "2026-10-12T00:00Z",
+        "competitions": [
+            {
+                "id": "401908030",
+                "date": "2026-10-12T00:00Z",
+                "competitors": [
+                    {
+                        "id": "19",
+                        "homeAway": "home",
+                        "team": {"id": "19", "displayName": "Milwaukee Brewers",
+                                 "abbreviation": "MIL"},
+                    },
+                    {
+                        "id": "8",
+                        "homeAway": "away",
+                        "team": {"id": "8", "displayName": "Los Angeles Dodgers",
+                                 "abbreviation": "LAD"},
+                    },
+                ],
+                "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
+                "series": [
+                    {"type": "season", "summary": "MIL wins series 4-3",
+                     "completed": True, "events": ["401815450"]},
+                    {"type": "playoff", "summary": "MIL leads series 2-1",
+                     "completed": False,
+                     "events": ["401908030", "401908031", "401908032"]},
+                ],
+            }
+        ],
+    }
+    parsed = provider._parse_event(raw_event, "mlb")
+    assert parsed is not None
+    assert parsed.series_summary == "MIL leads series 2-1"
+
+
+def test_parse_event_series_list_game1_renders_empty():
+    # Same list shape but the containing playoff entry has no state yet —
+    # must render empty, not the season entry's "MIL wins series 4-3".
+    provider = ESPNProvider(client=MagicMock())
+    raw_event = {
+        "id": "401908030",
+        "name": "Los Angeles Dodgers at Milwaukee Brewers",
+        "shortName": "LAD @ MIL",
+        "date": "2026-10-12T00:00Z",
+        "competitions": [
+            {
+                "id": "401908030",
+                "date": "2026-10-12T00:00Z",
+                "competitors": [
+                    {
+                        "id": "19",
+                        "homeAway": "home",
+                        "team": {"id": "19", "displayName": "Milwaukee Brewers",
+                                 "abbreviation": "MIL"},
+                    },
+                    {
+                        "id": "8",
+                        "homeAway": "away",
+                        "team": {"id": "8", "displayName": "Los Angeles Dodgers",
+                                 "abbreviation": "LAD"},
+                    },
+                ],
+                "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
+                "series": [
+                    {"type": "season", "summary": "MIL wins series 4-3",
+                     "completed": True, "events": ["401815450"]},
+                    {"type": "playoff", "summary": "", "completed": False,
+                     "events": ["401908030"]},
+                ],
+            }
+        ],
+    }
+    parsed = provider._parse_event(raw_event, "mlb")
+    assert parsed is not None
+    assert parsed.series_summary == ""
+
+
 def test_get_event_summary_selects_playoff_series():
     provider = ESPNProvider(client=MagicMock())
     summary_data = {

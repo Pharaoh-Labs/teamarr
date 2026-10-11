@@ -899,14 +899,14 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
 
             comp_series = competition.get("series")
             series_summary = ""
-            if isinstance(comp_series, dict):
-                from teamarr.providers.espn.preview import is_series_state
+            # Imported here, not at module level, to keep the provider→preview
+            # edge lazy; both branches need it, so bind before branching.
+            from teamarr.providers.espn.preview import is_series_state, select_series
 
+            if isinstance(comp_series, dict):
                 raw_summary = comp_series.get("summary")
                 series_summary = str(raw_summary) if is_series_state(raw_summary) else ""
             elif isinstance(comp_series, list):
-                from teamarr.providers.espn.preview import select_series
-
                 chosen_series = select_series(comp_series, event_id)
                 if chosen_series and is_series_state(chosen_series.get("summary")):
                     series_summary = str(chosen_series["summary"])
