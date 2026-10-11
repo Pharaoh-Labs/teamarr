@@ -88,9 +88,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
     def name(self) -> str:
         return "espn"
 
-    def set_cached_events_fn(
-        self, fn: Callable[[str, date], list[Event]] | None
-    ) -> None:
+    def set_cached_events_fn(self, fn: Callable[[str, date], list[Event]] | None) -> None:
         """Inject a cached league-wide events fetcher (SportsDataService.get_events).
 
         Used by the future-day team scan so all teams in a league share one
@@ -249,9 +247,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             sport = self._get_sport(league)
         return sport == "mma" or league in self.MMA_LEAGUES
 
-    def _espn_mma_slug(
-        self, league: str, sport_league: tuple[str, str] | None = None
-    ) -> str:
+    def _espn_mma_slug(self, league: str, sport_league: tuple[str, str] | None = None) -> str:
         """ESPN's MMA league slug for a Teamarr league code.
 
         Reads the second half of ``provider_league_id`` ('mma/pfl' → 'pfl')
@@ -775,9 +771,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             event.series_summary = str(summary_text) if is_series_state(summary_text) else ""
             # Structured preview (tvnk.15): recent-form W-L per team from
             # lastFiveGames — available days ahead, unlike preview prose.
-            home_form, away_form = self._parse_last_five(
-                data.get("lastFiveGames") or [], event
-            )
+            home_form, away_form = self._parse_last_five(data.get("lastFiveGames") or [], event)
             event.home_last_five = home_form
             event.away_last_five = away_form
             # Typed provider facts used by public variables and the optional
@@ -792,9 +786,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         forms = {"home": "", "away": ""}
         for entry in last_five:
             team_id = str((entry.get("team") or {}).get("id") or "")
-            results = [
-                (e.get("gameResult") or "").upper() for e in entry.get("events") or []
-            ]
+            results = [(e.get("gameResult") or "").upper() for e in entry.get("events") or []]
             if not team_id or not results:
                 continue
             wins = results.count("W")
@@ -863,7 +855,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             if not start_time:
                 return None
 
-            status = self._parse_status(competition.get("status", {}))
+            status_data = competition.get("status") or data.get("status") or {}
+            status = self._parse_status(status_data)
             venue = self._parse_venue(competition.get("venue"))
             broadcasts = self._parse_broadcasts(competition.get("broadcasts", []))
             broadcast_markets = self._parse_broadcast_markets(competition.get("broadcasts", []))
@@ -891,6 +884,27 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
 
             home_score = self._parse_score(home_data.get("score"))
             away_score = self._parse_score(away_data.get("score"))
+
+            if sport == "cricket":
+                # Cricket scores are innings text ('161/5 (18/20 ov)',
+                # '346 & 223/6 (72 ov)'); a bare '235' is one side's total and
+                # would pair with None on the other, so neither parses (#944).
+                home_score = away_score = None
+                # The competition description is the match label ('3rd ODI',
+                # 'Only Test', '132nd Match'); the status summary is the
+                # result or state text ('India won by 14 runs', 'Australia
+                # lead by 139 runs'). Pre-match it says 'Starts at 09:15
+                # local time', which is not a result.
+                if not game_event_note:
+                    game_event_note = (competition.get("description") or "").strip()
+                summary = str(status_data.get("summary") or "").strip()
+                if (
+                    not game_recap
+                    and summary
+                    and status.state in ("final", "live")
+                    and not summary.lower().startswith("starts at")
+                ):
+                    game_recap = summary
 
             # Parse season type from ESPN data (slug-first, type-number fallback)
             season_data = data.get("season") or {}
@@ -1002,11 +1016,7 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         # `name` populated with the short form ("Rays", "Blue Jays"). Scoreboard
         # has both. Fall back to `name` so the field stays populated regardless
         # of which endpoint the team came from. (#201)
-        short_name = (
-            team_data.get("shortDisplayName")
-            or team_data.get("name")
-            or ""
-        )
+        short_name = team_data.get("shortDisplayName") or team_data.get("name") or ""
         return Team(
             id=team_data.get("id", competitor.get("id", "")),
             provider=self.name,
@@ -1023,8 +1033,11 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
     def _parse_status(self, status_data: dict) -> EventStatus:
         """Parse status data into EventStatus."""
         type_data = status_data.get("type", {})
-        espn_status = type_data.get("name", "STATUS_SCHEDULED")
-        state = STATUS_MAP.get(espn_status, "scheduled")
+        espn_status = type_data.get("name")
+        if espn_status:
+            state = STATUS_MAP.get(espn_status, "scheduled")
+        else:
+            state = self._state_without_type_name(type_data, status_data.get("summary"))
 
         return EventStatus(
             state=state,
@@ -1032,6 +1045,33 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             period=status_data.get("period"),
             clock=status_data.get("displayClock"),
         )
+
+    @staticmethod
+    def _state_without_type_name(type_data: dict, summary: object) -> str:
+        """State for a status that carries no ``type.name`` (#944).
+
+        ESPN cricket statuses have ``state`` (pre/in/post) and a free-text
+        ``description`` ('Scheduled', 'Live', 'Stumps', 'Result', 'No result',
+        'Abandoned') but no STATUS_* name, so every match used to parse as
+        scheduled. Sample over 1,569 matches: Result 977, Scheduled 546, No
+        result 17, Abandoned 11, Final 9, Live 4, Stumps 4, rain delay 1.
+        Stumps and a rain delay are a match in progress; 'No result' is a
+        finished match with no winner; a match ESPN marks ``in`` whose summary
+        still says 'Starts at 10:00 local time' has not begun (seen 2026-10-11).
+        """
+        raw_state = str(type_data.get("state") or "").lower()
+        desc = str(type_data.get("description") or type_data.get("detail") or "").lower()
+        if "abandon" in desc or "cancel" in desc:
+            return "cancelled"
+        if "postpone" in desc:
+            return "postponed"
+        if raw_state == "post":
+            return "final"
+        if raw_state == "in":
+            if str(summary or "").strip().lower().startswith("starts at"):
+                return "scheduled"
+            return "live"
+        return "scheduled"
 
     def _parse_venue(self, venue_data: dict | None) -> Venue | None:
         """Parse venue data into Venue."""

@@ -231,7 +231,11 @@ def reset_identity_index_cache() -> None:
 _taught_teams: set[tuple[str, str | None, str | None, str | None, str, str]] = set()
 _taught_teams_lock = threading.Lock()
 
-_PLACEHOLDER_TEAM_NAMES = frozenset({"tbd", "tba"})
+# ESPN cricket writes an undecided side as "TBA"/"TBC" with a positive id (#944),
+# so the name is the only tell.
+_PLACEHOLDER_TEAM_NAMES = frozenset(
+    {"tbd", "tba", "tbc", "to be announced", "to be confirmed", "to be decided"}
+)
 
 
 def _is_placeholder_team(team: Team) -> bool:
@@ -313,11 +317,7 @@ def _code_cased_tokens(raw_side: str | None) -> frozenset[str]:
     if not raw_side:
         return frozenset()
     tokens = raw_side.split()
-    coded = {
-        normalize_text(t)
-        for t in tokens
-        if t.isalpha() and t.isupper() and 2 <= len(t) <= 5
-    }
+    coded = {normalize_text(t) for t in tokens if t.isalpha() and t.isupper() and 2 <= len(t) <= 5}
     if len(tokens) == 1:
         coded.add(normalize_text(tokens[0]))
     coded.discard("")
@@ -874,9 +874,7 @@ class TeamMatcher:
 
         supplemental = self._reversed_fixture_schedule_candidates(ctx, result, all_events)
         if supplemental:
-            result = self._match_against_multi_league_events(
-                ctx, (*all_events, *supplemental)
-            )
+            result = self._match_against_multi_league_events(ctx, (*all_events, *supplemental))
 
         # If match failed with NO_EVENT_FOUND, try reverse alias resolution
         # This handles cases where classifier couldn't detect league but user has aliases
@@ -916,9 +914,7 @@ class TeamMatcher:
         ):
             return ()
 
-        known_ids = {
-            (league, candidate.provider, candidate.id) for league, candidate in candidates
-        }
+        known_ids = {(league, candidate.provider, candidate.id) for league, candidate in candidates}
         scheduled = self._service.get_team_schedule(
             event.home_team.id, event.league, days_ahead=self._days_ahead
         )
