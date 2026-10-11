@@ -588,10 +588,15 @@ SPORT_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\blacrosse\b", "Lacrosse"),
     (r"\bnll\b", "Lacrosse"),
     (r"\bpll\b", "Lacrosse"),
-    # Cricket
+    # Cricket. Internationals are named by format (#944): "3rd ODI", "2nd T20I",
+    # "1st Test" / "Only Test" / "Test match". Bare "test" is not a hint — it
+    # is a provider's test channel far more often than a Test match.
     (r"\bcricket\b", "Cricket"),
     (r"\bipl\b", "Cricket"),
-    (r"\bt20\b", "Cricket"),
+    (r"\bt20i?\b", "Cricket"),
+    (r"\bodis?\b", "Cricket"),
+    (r"\b(?:\d+(?:st|nd|rd|th)|only|first|second|third|fourth|fifth)\s+test\b", "Cricket"),
+    (r"\btest\s+(?:match|series)\b", "Cricket"),
     # Volleyball
     (r"\bvolleyball\b", "Volleyball"),
     # Swimming & Diving (not currently supported)
