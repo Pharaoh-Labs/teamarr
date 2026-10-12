@@ -2813,11 +2813,12 @@ def _migrate_v100_backfill_channel_segment(conn: sqlite3.Connection) -> None:
     """Fill managed_channels.segment on rows created before the column (#1018).
 
     A segment channel's event_id is ``<event>-<segment>``, so the code is the
-    suffix. Only known racing session and MMA card-segment codes are written;
-    any other suffix is part of a provider's own id and stays NULL.
+    suffix. Only known racing session and MMA card-segment codes are written,
+    and only on racing and mma channels; any other suffix, or any other sport,
+    is a provider's own id and stays NULL. Re-running changes nothing.
     """
     columns = {row[1] for row in conn.execute("PRAGMA table_info(managed_channels)")}
-    if not {"segment", "event_id"} <= columns:
+    if not {"segment", "event_id", "sport"} <= columns:
         return
     codes = (
         "fp1", "fp2", "fp3", "sprint_qualifying", "sprint", "qualifying", "race",
@@ -2829,7 +2830,8 @@ def _migrate_v100_backfill_channel_segment(conn: sqlite3.Connection) -> None:
     params = [value for code in codes for value in (code, code, code)]
     conn.execute(
         f"UPDATE managed_channels SET segment = CASE {whens} ELSE segment END "
-        "WHERE segment IS NULL AND event_id IS NOT NULL",
+        "WHERE segment IS NULL AND event_id IS NOT NULL "
+        "AND lower(sport) IN ('racing', 'mma')",
         params,
     )
 

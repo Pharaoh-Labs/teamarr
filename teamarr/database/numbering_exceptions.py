@@ -188,8 +188,8 @@ def _keyword_matches(condition: str, exception_keyword: str | None, feed_key: st
 
 
 def _keyword_specificity(condition: str | None) -> int:
-    """Precedence of a keyword condition, higher wins: one named feed or label,
-    then driver/variant, then any, then main, then no condition."""
+    """Precedence of a keyword condition, higher wins: one named feed, then one
+    named label, then driver/variant, then any, then main, then no condition."""
     if condition is None:
         return 0
     if condition == "main":
@@ -198,7 +198,9 @@ def _keyword_specificity(condition: str | None) -> int:
         return 2
     if condition in ("driver", "variant"):
         return 3
-    return 4
+    if condition.startswith("label:"):
+        return 4
+    return 5
 
 
 def _row_to_exception(row: sqlite3.Row) -> NumberingException:
@@ -318,22 +320,37 @@ def _validate(
     season_type: str | None = None,
     segments: list[str] | None = None,
     keyword: str | None = None,
+    sport: str | None = None,
 ) -> str | None:
     if scope not in SCOPES:
         return f"invalid scope '{scope}'"
     if season_type is not None and season_type not in SEASON_TYPES:
         return f"invalid season_type '{season_type}'"
     if segments:
-        known = {code for codes in known_segment_codes().values() for code in codes}
-        for code in segments:
-            if code not in known:
-                return f"unknown segment '{code}' (known: {', '.join(sorted(known))})"
+        err = _segments_error(segments, sport)
+        if err:
+            return err
     if keyword is not None and not _valid_keyword(keyword):
         return f"invalid keyword '{keyword}'"
     if start < 1:
         return "start must be >= 1"
     if end is not None and end < start:
         return "end must be >= start"
+    return None
+
+
+def _segments_error(segments: list[str], sport: str | None) -> str | None:
+    """Reject codes outside the block's sport. With no sport yet, accept any
+    known code (the sport-specific check runs once the sport is resolved)."""
+    by_sport = known_segment_codes()
+    if sport is None:
+        known = {code for codes in by_sport.values() for code in codes}
+    else:
+        known = set(by_sport.get((sport or "").lower(), ()))
+    for code in segments:
+        if code not in known:
+            where = f" for sport '{sport}'" if sport is not None else ""
+            return f"unknown segment '{code}'{where} (known: {', '.join(sorted(known)) or 'none'})"
     return None
 
 
@@ -478,6 +495,11 @@ def add_numbering_exception(
         league_code = provider = provider_team_id = None
 
     sport = (sport or "").lower()
+    if segment_codes:
+        err = _segments_error(segment_codes, sport)
+        if err:
+            logger.warning("[NUMBERING_EXC] %s", err)
+            return None
     cursor = conn.execute(
         """
         INSERT INTO numbering_exceptions
@@ -545,7 +567,10 @@ def update_numbering_exception(
         new_keyword = current.keyword
     else:
         new_keyword = normalize_keyword(keyword) if isinstance(keyword, str) else None
-    err = _validate(current.scope, new_start, new_end, new_season, new_segments, new_keyword)
+    err = _validate(
+        current.scope, new_start, new_end, new_season, new_segments, new_keyword,
+        sport=current.sport,
+    )
     if err:
         logger.warning("[NUMBERING_EXC] %s", err)
         return None

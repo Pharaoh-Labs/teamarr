@@ -80,20 +80,25 @@ Among the candidates, scope rank decides first. Inside one rank the winner is
 the first row by this fixed key, so the result never depends on insertion
 order or on how many conditions a row has:
 
-1. keyword specificity, highest first: one named feed or label, then
-   `driver` / `variant`, then `any`, then `main`, then no keyword
+1. keyword specificity, highest first: `feed:<feed_key>`, then
+   `label:<label>`, then `driver` / `variant`, then `any`, then `main`, then
+   no keyword
 2. rows with segments before rows without
 3. rows with a season before rows without
 4. `(sort_order, id)`
 
 A season-only row therefore resolves exactly as before. For example, a
 `keyword=main` block beats a `segments=[race]` block for the main race
-channel, and `feed:driver:charles-leclerc` beats `driver` for that driver.
+channel, and `feed:driver:charles-leclerc` beats `label:Charles Leclerc`, which beats
+`driver`, for that driver.
 
-Segment codes must come from the known set: `SESSION_ORDER` for racing (`fp1`,
-`fp2`, `fp3`, `sprint_qualifying`, `sprint`, `qualifying`, `race`) and the MMA
-card segments (`early_prelims`, `prelims`, `main_card`). The API rejects any
-other code, and `GET /numbering-exceptions/segment-codes` lists them by sport.
+Segment codes must come from the known set for the block's own sport:
+`SESSION_ORDER` for racing (`fp1`, `fp2`, `fp3`, `sprint_qualifying`, `sprint`,
+`qualifying`, `race`) and the card segments for MMA (`early_prelims`,
+`prelims`, `main_card`). `main_card` on an F1 block is rejected, and a sport with
+no segments rejects any code. A league block takes its sport from the leagues
+table, and a team block from the team's `team_cache` row.
+`GET /numbering-exceptions/segment-codes` lists the codes by sport.
 
 `keyword` values:
 
@@ -113,8 +118,8 @@ is not stored. `LaneResolver.load` reads `race_feeds` and maps
 `(league, feed label)` to `feed_key`, and a channel's `exception_keyword`
 equals its feed label, so the resolver derives the feed from the keyword. A
 roster refresh that adds a feed takes effect on the next re-grid. Migration v100
-backfills `segment` for existing rows from the `-<segment>` suffix of
-`event_id`, for known codes only.
+backfills `segment` for existing racing and mma rows from the `-<segment>`
+suffix of `event_id`, for known codes only. It is safe to re-run.
 
 A league block whose only condition is `keyword = main` also takes that
 league's team channels and any channel without a keyword. A racing event with

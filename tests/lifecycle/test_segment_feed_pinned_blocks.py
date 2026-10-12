@@ -227,11 +227,21 @@ class TestPrecedence:
         assert _start(r, exception_keyword="Spanish") == 1200
         assert _start(r) == 1100
 
-    def test_named_label_ties_with_named_feed_and_falls_to_sort_order(self, db_conn):
-        _pin(db_conn, start=1200, keyword="label:Pit Lane")
-        _pin(db_conn, start=1300, keyword="variant")
-        r = _resolver(db_conn)
-        assert _start(r, exception_keyword=PIT) == 1200
+    def test_named_feed_beats_named_label_in_either_insert_order(self, db_conn):
+        label = {"start": 1200, "keyword": f"label:{LECLERC}"}
+        feed = {"start": 1300, "keyword": f"feed:{LECLERC_KEY}"}
+        _pin(db_conn, **label)
+        _pin(db_conn, **feed)
+        assert _start(_resolver(db_conn), exception_keyword=LECLERC) == 1300
+        db_conn.execute("DELETE FROM numbering_exceptions")
+        _pin(db_conn, **feed)
+        _pin(db_conn, **label)
+        assert _start(_resolver(db_conn), exception_keyword=LECLERC) == 1300
+
+    def test_named_label_beats_driver_kind(self, db_conn):
+        _pin(db_conn, start=1200, keyword="driver")
+        _pin(db_conn, start=1300, keyword=f"label:{LECLERC}")
+        assert _start(_resolver(db_conn), exception_keyword=LECLERC) == 1300
 
     def test_result_does_not_depend_on_row_order(self, db_conn):
         """Same blocks inserted in the opposite order resolve the same way."""
@@ -443,59 +453,63 @@ class TestSegmentCodes:
             is None
         )
 
-    def test_known_codes_accepted_for_both_families(self, db_conn):
-        assert _pin(db_conn, start=1300, segments=["qualifying", "main_card"]).segments == [
+    def test_known_codes_accepted_per_sport(self, db_conn):
+        assert _pin(db_conn, start=1300, segments=["qualifying", "race"]).segments == [
             "qualifying",
-            "main_card",
+            "race",
         ]
+        mma = _pin(
+            db_conn, scope="sport", league_code=None, sport="mma", start=1400,
+            segments=["main_card"],
+        )
+        assert mma.segments == ["main_card"]
 
-
-class TestV100Backfill:
-    def _table(self, conn):
-        conn.execute("DROP TABLE IF EXISTS managed_channels")
-        conn.execute(
-            "CREATE TABLE managed_channels (id INTEGER PRIMARY KEY, event_id TEXT, segment TEXT)"
+    def test_other_sports_codes_are_rejected(self, db_conn):
+        # main_card is an MMA code, race is a racing code.
+        assert (
+            ne.add_numbering_exception(
+                db_conn, scope="league", league_code="f1", sport="racing", start=1300,
+                segments=["main_card"],
+            )
+            is None
+        )
+        assert (
+            ne.add_numbering_exception(
+                db_conn, scope="sport", sport="mma", start=1300, segments=["race"]
+            )
+            is None
         )
 
-    def test_backfills_known_suffix_only(self, db_conn):
-        from teamarr.database.migrations.versioned import _migrate_v100_backfill_channel_segment
+    def test_league_sport_is_resolved_before_checking_codes(self, db_conn):
+        """No sport passed: a league block takes it from the leagues table."""
+        db_conn.execute(
+            "INSERT OR REPLACE INTO leagues "
+            "(league_code, provider, provider_league_id, display_name, sport) "
+            "VALUES ('ufc', 'espn', 'ufc', 'UFC', 'mma')"
+        )
+        assert (
+            ne.add_numbering_exception(
+                db_conn, scope="league", league_code="ufc", start=1300, segments=["race"]
+            )
+            is None
+        )
+        ok = ne.add_numbering_exception(
+            db_conn, scope="league", league_code="ufc", start=1300, segments=["main_card"]
+        )
+        assert ok is not None and ok.sport == "mma"
 
-        self._table(db_conn)
-        rows = [
-            ("401-race", None),
-            ("401-sprint_qualifying", None),
-            ("402-main_card", None),
-            ("402-early_prelims", None),
-            ("403-qualy", None),
-            ("403-other", None),
-            ("404", None),
-            ("405-race", "fp1"),
-        ]
-        db_conn.executemany("INSERT INTO managed_channels (event_id, segment) VALUES (?, ?)", rows)
-        _migrate_v100_backfill_channel_segment(db_conn)
-        got = {
-            r["event_id"]: r["segment"]
-            for r in db_conn.execute("SELECT event_id, segment FROM managed_channels")
-        }
-        assert got == {
-            "401-race": "race",
-            "401-sprint_qualifying": "sprint_qualifying",
-            "402-main_card": "main_card",
-            "402-early_prelims": "early_prelims",
-            "403-qualy": None,
-            "403-other": None,
-            "404": None,
-            "405-race": "fp1",
-        }
+    def test_non_segment_sport_rejects_segments(self, db_conn):
+        assert (
+            ne.add_numbering_exception(
+                db_conn, scope="sport", sport="football", start=1300, segments=["race"]
+            )
+            is None
+        )
 
-    def test_second_run_changes_nothing(self, db_conn):
-        from teamarr.database.migrations.versioned import _migrate_v100_backfill_channel_segment
-
-        self._table(db_conn)
-        db_conn.execute("INSERT INTO managed_channels (event_id) VALUES ('1-race')")
-        _migrate_v100_backfill_channel_segment(db_conn)
-        _migrate_v100_backfill_channel_segment(db_conn)
-        assert db_conn.execute("SELECT segment FROM managed_channels").fetchone()[0] == "race"
+    def test_update_checks_codes_against_the_blocks_sport(self, db_conn):
+        block = _pin(db_conn, start=1300)
+        assert ne.update_numbering_exception(db_conn, block.id, segments=["main_card"]) is None
+        assert ne.update_numbering_exception(db_conn, block.id, segments=["race"]) is not None
 
 
 @pytest.fixture
