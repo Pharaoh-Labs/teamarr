@@ -154,7 +154,6 @@ class ChannelSyncer(_LifecycleHost):
                 event,
                 getattr(existing, "segment", None),
                 matched_keyword,
-                getattr(existing, "feed_key", None),
             )
             if block_group is not None:
                 if block_group[0] is not None:

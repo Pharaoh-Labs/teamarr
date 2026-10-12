@@ -623,7 +623,7 @@ CREATE TABLE IF NOT EXISTS settings (
     plex_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 99
+    schema_version INTEGER DEFAULT 100
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -967,14 +967,11 @@ CREATE TABLE IF NOT EXISTS managed_channels (
     -- the stored row on re-layout. NULL = unknown (pre-column rows, providers
     -- that do not report one) and matches no season condition.
     season_type TEXT,
-    -- Segment and race-feed identity (#1018): pinned blocks may be conditioned on
-    -- them and re-layout resolves from the stored row. segment is the lowercase
-    -- session/card code the channel was created for ('race', 'qualifying',
-    -- 'main_card'); feed_key is the race_feeds.feed_key ('driver:<slug>',
-    -- 'variant:<slug>') when the exception keyword came from a race feed. NULL =
-    -- none (or a row created before the columns) and matches no such condition.
+    -- Segment (#1018): the lowercase session/card code the channel was created
+    -- for ('race', 'qualifying', 'main_card'); pinned blocks may be conditioned
+    -- on it and re-layout resolves from the stored row. NULL = none, and
+    -- matches no segments condition.
     segment TEXT,
-    feed_key TEXT,
     has_local_broadcast BOOLEAN,             -- (#539) 1 = the listing carries a home/away-market broadcaster, 0 = national only, NULL = unknown. Read by 'Only when' stream-ordering rule conditions.
     league TEXT,
     sport TEXT,
@@ -1152,11 +1149,11 @@ CREATE TABLE IF NOT EXISTS numbering_exceptions (
     -- Season condition (#950): NULL = any. Set = the pin applies only to events
     -- of that season type and outranks an unconditioned pin of the same scope.
     season_type TEXT,                        -- 'preseason' | 'regular' | 'postseason' | 'offseason'
-    -- Segment and feed conditions (#1018): NULL = any. A pin with conditions is a
-    -- candidate only for channels that satisfy all of them, and the pin with the
-    -- most conditions wins within a scope.
+    -- Segment and keyword conditions (#1018): NULL = any. A pin with conditions is
+    -- a candidate only for channels that satisfy all of them; within a scope the
+    -- fixed precedence order in numbering_exceptions.py picks the winner.
     segments TEXT,                           -- comma-separated lowercase codes: 'race,qualifying'
-    feed TEXT,                               -- 'main' | 'any' | 'driver' | 'variant' | 'feed:<feed_key>' | 'keyword:<label>'
+    keyword TEXT,                            -- 'main' | 'any' | 'driver' | 'variant' | 'feed:<feed_key>' | 'label:<keyword label>'
     -- Output channel group for channels in this block (#950). Same shape as the
     -- global/per-league pair: a static id, or a pattern ("09 TEAMARR {league}")
     -- in channel_group_mode. Both NULL = the subscription's group applies.

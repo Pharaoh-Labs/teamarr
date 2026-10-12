@@ -257,7 +257,7 @@ class ChannelCreator(_LifecycleHost):
                             continue
 
                         # Check exception keyword
-                        matched_kw = self._match_exception_keyword(
+                        matched_keyword, keyword_behavior = self._check_exception_keyword(
                             stream_name,
                             conn,
                             event,
@@ -265,10 +265,6 @@ class ChannelCreator(_LifecycleHost):
                             stream=stream,
                             event_group_id=group_config.get("id"),
                         )
-
-                        matched_keyword = matched_kw.label if matched_kw else None
-                        keyword_behavior = matched_kw.behavior if matched_kw else None
-                        matched_feed_key = self._feed_key_for(event, matched_keyword, matched_kw)
 
                         # V1 Parity: If behavior is 'ignore', skip stream entirely
                         # This must happen BEFORE any channel lookup/creation
@@ -368,9 +364,7 @@ class ChannelCreator(_LifecycleHost):
                                 effective_group_mode = lc.channel_group_mode
                         # A pinned block's own group outranks both (#950), so the
                         # number range and the group stay in step.
-                        block_group = self._pinned_block_group(
-                            event, segment, matched_keyword, matched_feed_key
-                        )
+                        block_group = self._pinned_block_group(event, segment, matched_keyword)
                         if block_group is not None:
                             if block_group[0] is not None:
                                 effective_group_id = block_group[0]
@@ -402,7 +396,6 @@ class ChannelCreator(_LifecycleHost):
                             group_config=group_config,
                             template=event_template,
                             matched_keyword=matched_keyword,
-                            feed_key=matched_feed_key,
                             channel_group_id=resolved_channel_group_id,
                             channel_profile_ids=resolved_channel_profile_ids,
                             stream_profile_id=stream_profile_id,
@@ -982,7 +975,6 @@ class ChannelCreator(_LifecycleHost):
         matched_keyword: str | None,
         channel_group_id: int | None,
         channel_profile_ids: list[int] | None,
-        feed_key: str | None = None,
         stream_profile_id: int | None = None,
         segment: str | None = None,
         segment_display: str = "",
@@ -1062,7 +1054,6 @@ class ChannelCreator(_LifecycleHost):
             season_type=getattr(event, "season_type", None),
             segment=segment,
             exception_keyword=matched_keyword,
-            feed_key=feed_key,
         )
         if not channel_number:
             return ChannelCreationResult(
@@ -1210,7 +1201,6 @@ class ChannelCreator(_LifecycleHost):
                 event_name=event.name,
                 season_type=getattr(event, "season_type", None),
                 segment=segment.lower() if segment else None,
-                feed_key=feed_key,
                 has_local_broadcast=has_local_broadcast(event),
                 league=event.league,
                 sport=event.sport,
@@ -1293,7 +1283,6 @@ class ChannelCreator(_LifecycleHost):
         season_type: str | None = None,
         segment: str | None = None,
         exception_keyword: str | None = None,
-        feed_key: str | None = None,
     ) -> int | None:
         """Get next available channel number.
 
@@ -1305,7 +1294,7 @@ class ChannelCreator(_LifecycleHost):
             conn: Database connection
             event_league: League code for the event
             sport / home_team / away_team / season_type / segment /
-                exception_keyword / feed_key: lane resolution keys
+                exception_keyword: lane resolution keys
 
         Returns:
             Next available channel number as int, or None if range exhausted
@@ -1322,7 +1311,6 @@ class ChannelCreator(_LifecycleHost):
             season_type=season_type,
             segment=segment,
             exception_keyword=exception_keyword,
-            feed_key=feed_key,
         )
         if next_num is None:
             logger.warning(

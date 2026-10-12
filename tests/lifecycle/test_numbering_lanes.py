@@ -61,7 +61,7 @@ CREATE TABLE numbering_exceptions (
     start INTEGER NOT NULL, "end" INTEGER, label TEXT,
     sort_order INTEGER NOT NULL DEFAULT 0, enabled BOOLEAN DEFAULT 1,
     season_type TEXT, channel_group_id INTEGER, channel_group_mode TEXT,
-    segments TEXT, feed TEXT);
+    segments TEXT, keyword TEXT);
 INSERT INTO settings (id) VALUES (1);
 INSERT INTO leagues VALUES ('nfl','football','NFL'),('nba','basketball','NBA'),
   ('nhl','hockey','NHL'),('mlb','baseball','MLB'),('ncaaf','football','NCAA Football'),

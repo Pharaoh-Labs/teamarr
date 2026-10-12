@@ -1,10 +1,12 @@
-"""Segment and feed conditions on pinned blocks (#1018).
+"""Segment and keyword conditions on pinned blocks (#1018).
 
 A block may be limited to session / card-segment codes and to one kind of
 channel (main, any keyword channel, driver feeds, other race feeds, one feed,
 one keyword label). A row with an unsatisfied condition is not a candidate;
-among candidates scope rank comes first, then the most satisfied conditions,
-then (sort_order, id).
+among candidates scope rank comes first, then a fixed key (keyword
+specificity, has segments, has season), then (sort_order, id) for rows with
+identical conditions. A channel's race feed comes from race_feeds by
+(league, exception_keyword), not from a stored key.
 """
 
 from contextlib import contextmanager
@@ -16,18 +18,29 @@ from teamarr.consumers.lifecycle.service import ChannelLifecycleService
 from teamarr.database import channel_numbers as cn
 from teamarr.database import numbering_exceptions as ne
 from teamarr.database.channels import create_managed_channel, get_managed_channel
-from teamarr.database.exception_keywords import ExceptionKeyword
 from teamarr.database.groups import create_group
-from teamarr.database.race_feeds import (
-    RosterEntry,
-    list_race_feeds,
-    update_race_feed,
-    upsert_roster,
-)
+from teamarr.database.race_feeds import RosterEntry, upsert_roster
 from teamarr.dispatcharr.types import OperationResult
 from tests.fakes import FakeTeam, make_event
 
 DEFAULT = ne.Lane(id=None, start=1600)
+
+LECLERC = "Charles Leclerc"
+LECLERC_KEY = "driver:charles-leclerc"
+PIT = "Pit Lane"
+
+
+@pytest.fixture(autouse=True)
+def roster(db_conn):
+    """Race feeds for f1: two drivers plus the variant vocabulary."""
+    upsert_roster(
+        db_conn,
+        "f1",
+        [
+            RosterEntry(LECLERC, "C. Leclerc", "LEC"),
+            RosterEntry("Lando Norris", "L. Norris", "NOR"),
+        ],
+    )
 
 
 def _pin(conn, **kw):
@@ -52,7 +65,7 @@ class TestUnconditionedUnchanged:
         _pin(db_conn, start=1200)
         r = _resolver(db_conn)
         assert _start(r) == 1200
-        assert _start(r, segment="race", exception_keyword="Pit Lane", feed_key="variant:x") == 1200
+        assert _start(r, segment="race", exception_keyword=PIT) == 1200
 
     def test_season_only_tie_break_is_as_before(self, db_conn):
         _pin(db_conn, start=1100)
@@ -82,12 +95,12 @@ class TestSegments:
         assert ne.normalize_segments(None) is None
 
 
-class TestFeeds:
-    def _check(self, db_conn, feed, cases):
-        _pin(db_conn, start=1300, feed=feed)
+class TestKeyword:
+    def _check(self, db_conn, keyword, cases):
+        _pin(db_conn, start=1300, keyword=keyword)
         r = _resolver(db_conn)
         for kwargs, expected in cases:
-            assert _start(r, **kwargs) == (1300 if expected else 1600), (feed, kwargs)
+            assert _start(r, **kwargs) == (1300 if expected else 1600), (keyword, kwargs)
 
     def test_main(self, db_conn):
         self._check(
@@ -95,7 +108,7 @@ class TestFeeds:
             "main",
             [
                 ({}, True),
-                ({"exception_keyword": "Pit Lane", "feed_key": "variant:pit-lane"}, False),
+                ({"exception_keyword": PIT}, False),
             ],
         )
 
@@ -103,7 +116,7 @@ class TestFeeds:
         self._check(
             db_conn,
             "any",
-            [({}, False), ({"exception_keyword": "Pit Lane", "feed_key": "variant:pit-lane"}, True),
+            [({}, False), ({"exception_keyword": PIT}, True),
              ({"exception_keyword": "Spanish"}, True)],
         )
 
@@ -112,8 +125,8 @@ class TestFeeds:
             db_conn,
             "driver",
             [
-                ({"exception_keyword": "Leclerc", "feed_key": "driver:charles-leclerc"}, True),
-                ({"exception_keyword": "Pit Lane", "feed_key": "variant:pit-lane"}, False),
+                ({"exception_keyword": LECLERC}, True),
+                ({"exception_keyword": PIT}, False),
                 ({"exception_keyword": "Spanish"}, False),
                 ({}, False),
             ],
@@ -124,8 +137,8 @@ class TestFeeds:
             db_conn,
             "variant",
             [
-                ({"exception_keyword": "Pit Lane", "feed_key": "variant:pit-lane"}, True),
-                ({"exception_keyword": "Leclerc", "feed_key": "driver:charles-leclerc"}, False),
+                ({"exception_keyword": PIT}, True),
+                ({"exception_keyword": LECLERC}, False),
                 ({}, False),
             ],
         )
@@ -135,16 +148,16 @@ class TestFeeds:
             db_conn,
             "feed:driver:charles-leclerc",
             [
-                ({"exception_keyword": "Leclerc", "feed_key": "driver:charles-leclerc"}, True),
-                ({"exception_keyword": "Norris", "feed_key": "driver:lando-norris"}, False),
-                ({"exception_keyword": "Leclerc"}, False),
+                ({"exception_keyword": LECLERC}, True),
+                ({"exception_keyword": "Lando Norris"}, False),
+                ({"exception_keyword": "Leclerc"}, False),  # not a race-feed label
             ],
         )
 
     def test_keyword_label(self, db_conn):
         self._check(
             db_conn,
-            "keyword:Spanish",
+            "label:Spanish",
             [
                 ({"exception_keyword": "Spanish"}, True),
                 ({"exception_keyword": "spanish"}, True),
@@ -154,42 +167,116 @@ class TestFeeds:
         )
 
     def test_normalization(self):
-        assert ne.normalize_feed(" MAIN ") == "main"
-        assert ne.normalize_feed("Feed:Driver:Max-Verstappen") == "feed:driver:max-verstappen"
-        assert ne.normalize_feed("KEYWORD:Spanish") == "keyword:Spanish"
-        assert ne.normalize_feed("  ") is None
-        assert ne.normalize_feed(None) is None
+        assert ne.normalize_keyword(" MAIN ") == "main"
+        assert ne.normalize_keyword("Feed:Driver:Max-Verstappen") == "feed:driver:max-verstappen"
+        assert ne.normalize_keyword("LABEL:Spanish") == "label:Spanish"
+        assert ne.normalize_keyword("  ") is None
+        assert ne.normalize_keyword(None) is None
 
     @pytest.mark.parametrize(
-        "bad", ["bogus", "feed:nope", "feed:driver:", "keyword:", "feed:Driver x"]
+        "bad", ["bogus", "feed:nope", "feed:driver:", "label:", "keyword:Spanish", "feed:Driver x"]
     )
-    def test_invalid_feed_is_rejected(self, db_conn, bad):
+    def test_invalid_keyword_is_rejected(self, db_conn, bad):
         assert (
             ne.add_numbering_exception(
-                db_conn, scope="league", league_code="f1", sport="racing", start=1300, feed=bad
+                db_conn, scope="league", league_code="f1", sport="racing", start=1300, keyword=bad
             )
             is None
         )
 
+    def test_feed_resolves_from_race_feeds_without_a_stored_key(self, db_conn):
+        """A channel row carries only its keyword label; the resolver maps it."""
+        _pin(db_conn, start=1300, keyword="driver")
+        r = _resolver(db_conn)
+        assert _start(r, exception_keyword=LECLERC) == 1300
+        assert _start(r, exception_keyword=LECLERC.upper()) == 1300
+        # Same label in another league is not an f1 race feed.
+        assert r.resolve("racing", "indycar", exception_keyword=LECLERC) == DEFAULT
+
+    def test_feed_condition_follows_a_refreshed_roster(self, db_conn):
+        _pin(db_conn, start=1300, keyword="feed:driver:new-driver")
+        assert _start(_resolver(db_conn), exception_keyword="New Driver") == 1600
+        upsert_roster(db_conn, "f1", [RosterEntry("New Driver", "N. Driver", "DRI")])
+        assert _start(_resolver(db_conn), exception_keyword="New Driver") == 1300
+
 
 class TestPrecedence:
-    def test_two_conditions_beat_one_beat_none(self, db_conn):
+    """Fixed key inside a scope rank: keyword specificity, then segments, then
+    season, then (sort_order, id). Condition count is not part of the key."""
+
+    def test_segments_beat_nothing(self, db_conn):
         _pin(db_conn, start=1100)
         _pin(db_conn, start=1200, segments=["race"])
-        _pin(db_conn, start=1300, segments=["race"], feed="main")
         r = _resolver(db_conn)
-        assert _start(r, segment="race") == 1300
-        assert _start(r, segment="race", exception_keyword="Pit Lane") == 1200
-        assert _start(r, segment="practice") == 1100
+        assert _start(r, segment="race") == 1200
+        assert _start(r, segment="fp1") == 1100
+
+    def test_keyword_specificity_beats_segments(self, db_conn):
+        _pin(db_conn, start=1200, segments=["race"])
+        _pin(db_conn, start=1300, keyword="main")
+        assert _start(_resolver(db_conn), segment="race") == 1300
+
+    def test_named_feed_beats_driver_beats_any_beats_main(self, db_conn):
+        _pin(db_conn, start=1100, keyword="main")
+        _pin(db_conn, start=1200, keyword="any")
+        _pin(db_conn, start=1300, keyword="driver")
+        _pin(db_conn, start=1400, keyword=f"feed:{LECLERC_KEY}")
+        r = _resolver(db_conn)
+        assert _start(r, exception_keyword=LECLERC) == 1400
+        assert _start(r, exception_keyword="Lando Norris") == 1300
+        assert _start(r, exception_keyword="Spanish") == 1200
+        assert _start(r) == 1100
+
+    def test_named_label_ties_with_named_feed_and_falls_to_sort_order(self, db_conn):
+        _pin(db_conn, start=1200, keyword="label:Pit Lane")
+        _pin(db_conn, start=1300, keyword="variant")
+        r = _resolver(db_conn)
+        assert _start(r, exception_keyword=PIT) == 1200
+
+    def test_result_does_not_depend_on_row_order(self, db_conn):
+        """Same blocks inserted in the opposite order resolve the same way."""
+        specs = [
+            {"start": 1100},
+            {"start": 1200, "segments": ["race"]},
+            {"start": 1300, "keyword": "main"},
+            {"start": 1400, "keyword": "main", "segments": ["race"]},
+            {"start": 1500, "keyword": "driver"},
+        ]
+        for spec in specs:
+            _pin(db_conn, **spec)
+        forward = _resolver(db_conn)
+        db_conn.execute("DELETE FROM numbering_exceptions")
+        for spec in reversed(specs):
+            _pin(db_conn, **spec)
+        backward = _resolver(db_conn)
+        for kw in (
+            {"segment": "race"},
+            {"segment": "race", "exception_keyword": LECLERC},
+            {"segment": "fp1"},
+            {},
+        ):
+            assert _start(forward, **kw) == _start(backward, **kw), kw
+
+    def test_main_with_segments_beats_main_alone(self, db_conn):
+        _pin(db_conn, start=1300, keyword="main")
+        _pin(db_conn, start=1400, keyword="main", segments=["race"])
+        r = _resolver(db_conn)
+        assert _start(r, segment="race") == 1400
+        assert _start(r, segment="fp1") == 1300
+
+    def test_segments_beat_season_at_equal_keyword(self, db_conn):
+        _pin(db_conn, start=1100, season_type="postseason")
+        _pin(db_conn, start=1200, segments=["race"])
+        assert _start(_resolver(db_conn), season_type="postseason", segment="race") == 1200
 
     def test_tie_falls_to_sort_order_then_id(self, db_conn):
         _pin(db_conn, start=1200, segments=["race"])
-        _pin(db_conn, start=1300, feed="main")
+        _pin(db_conn, start=1300, segments=["race"])
         assert _start(_resolver(db_conn), segment="race") == 1200
 
     def test_scope_rank_dominates(self, db_conn):
         _pin(db_conn, start=1100)
-        _pin(db_conn, scope="sport", league_code=None, start=900, segments=["race"], feed="main")
+        _pin(db_conn, scope="sport", league_code=None, start=900, segments=["race"], keyword="main")
         assert _start(_resolver(db_conn), segment="race") == 1100
 
     def test_season_plus_segment(self, db_conn):
@@ -197,11 +284,11 @@ class TestPrecedence:
         _pin(db_conn, start=1200, season_type="postseason", segments=["race"])
         r = _resolver(db_conn)
         assert _start(r, season_type="postseason", segment="race") == 1200
-        assert _start(r, season_type="postseason", segment="practice") == 1100
+        assert _start(r, season_type="postseason", segment="fp1") == 1100
         assert _start(r, season_type="regular", segment="race") == 1600
 
 
-def _channel(conn, group, event_id, name, *, segment, kw=None, feed_key=None, when="10:00"):
+def _channel(conn, group, event_id, name, *, segment, kw=None, when="10:00"):
     return create_managed_channel(
         conn=conn,
         event_epg_group_id=group,
@@ -216,7 +303,6 @@ def _channel(conn, group, event_id, name, *, segment, kw=None, feed_key=None, wh
         event_date=f"2026-10-04T{when}:00+00:00",
         exception_keyword=kw,
         segment=segment,
-        feed_key=feed_key,
     )
 
 
@@ -226,10 +312,14 @@ def _number(conn, cid):
 
 class TestF1Layout:
     def test_layout_through_real_rows(self, db_conn):
-        _pin(db_conn, start=1200, segments=["race", "qualifying", "sprint_qualifying", "sprint"],
-             feed="main")
-        _pin(db_conn, start=1300, feed="driver")
-        _pin(db_conn, start=1400, feed="variant")
+        _pin(
+            db_conn,
+            start=1200,
+            segments=["race", "qualifying", "sprint_qualifying", "sprint"],
+            keyword="main",
+        )
+        _pin(db_conn, start=1300, keyword="driver")
+        _pin(db_conn, start=1400, keyword="variant")
         _pin(db_conn, start=1500)
         group = create_group(db_conn, name="F1", leagues=["f1"])
         main = {
@@ -237,12 +327,13 @@ class TestF1Layout:
             for seg in ("race", "qualifying", "sprint_qualifying", "sprint")
         }
         practice = _channel(db_conn, group, "e-fp1", "fp1", segment="fp1")
-        late = _channel(db_conn, group, "e-d2", "d late", segment="race", kw="Norris",
-                        feed_key="driver:lando-norris", when="14:00")
-        early = _channel(db_conn, group, "e-d1", "d early", segment="race", kw="Leclerc",
-                         feed_key="driver:charles-leclerc", when="12:00")
-        pit = _channel(db_conn, group, "e-pit", "pit", segment="race", kw="Pit Lane",
-                       feed_key="variant:pit-lane")
+        late = _channel(
+            db_conn, group, "e-d2", "d late", segment="race", kw="Lando Norris", when="14:00"
+        )
+        early = _channel(
+            db_conn, group, "e-d1", "d early", segment="race", kw=LECLERC, when="12:00"
+        )
+        pit = _channel(db_conn, group, "e-pit", "pit", segment="race", kw=PIT)
         db_conn.commit()
 
         cn.reassign_all_channels(db_conn)
@@ -257,26 +348,24 @@ class TestF1Layout:
         assert 1500 <= _number(db_conn, practice) <= 1599
 
     def test_null_rows_match_no_segment_or_race_feed_condition(self, db_conn):
-        """A pre-upgrade row has no segment and no feed key: it misses segments,
-        driver, variant and single-feed blocks but still meets ``main``."""
+        """A pre-upgrade row has no segment: it misses segment blocks but still
+        meets ``main``, which matches a keyword-less row."""
         _pin(db_conn, start=1200, segments=["race"])
-        _pin(db_conn, start=1300, feed="main")
+        _pin(db_conn, start=1300, keyword="main")
         _pin(db_conn, start=1500)
         group = create_group(db_conn, name="F1", leagues=["f1"])
         legacy = _channel(db_conn, group, "old", "legacy", segment=None)
         db_conn.commit()
         cn.reassign_all_channels(db_conn)
         db_conn.commit()
-        # feed=main matches a keyword-less row, so it is the only conditioned hit.
         assert 1300 <= _number(db_conn, legacy) <= 1399
 
     def test_main_and_feed_channels_of_one_event_split_lanes(self, db_conn):
-        _pin(db_conn, start=1200, feed="main")
-        _pin(db_conn, start=1300, feed="driver")
+        _pin(db_conn, start=1200, keyword="main")
+        _pin(db_conn, start=1300, keyword="driver")
         group = create_group(db_conn, name="F1", leagues=["f1"])
         main = _channel(db_conn, group, "same", "main", segment="race")
-        feed = _channel(db_conn, group, "same", "feed", segment="race", kw="Leclerc",
-                        feed_key="driver:charles-leclerc")
+        feed = _channel(db_conn, group, "same", "feed", segment="race", kw=LECLERC)
         db_conn.commit()
         cn.reassign_all_channels(db_conn)
         db_conn.commit()
@@ -286,13 +375,12 @@ class TestF1Layout:
     def test_counts_use_conditions(self, db_conn):
         from teamarr.api.routes.numbering_exceptions import _with_counts
 
-        race = _pin(db_conn, start=1200, label="F1", segments=["race"], feed="main")
-        drivers = _pin(db_conn, start=1300, label="F1", feed="driver")
+        race = _pin(db_conn, start=1200, label="F1", segments=["race"], keyword="main")
+        drivers = _pin(db_conn, start=1300, label="F1", keyword="driver")
         group = create_group(db_conn, name="F1", leagues=["f1"])
         _channel(db_conn, group, "e1", "a", segment="race")
         _channel(db_conn, group, "e2", "b", segment="fp1")
-        _channel(db_conn, group, "e1", "c", segment="race", kw="Leclerc",
-                 feed_key="driver:charles-leclerc")
+        _channel(db_conn, group, "e1", "c", segment="race", kw=LECLERC)
         db_conn.commit()
         counts = {m.id: m.channel_count for m in _with_counts(db_conn, [race, drivers])}
         assert counts == {race.id: 1, drivers.id: 1}
@@ -300,41 +388,114 @@ class TestF1Layout:
 
 class TestStorage:
     def test_keyword_label_with_colon_round_trips(self, db_conn):
-        block = _pin(db_conn, start=1200, feed="keyword:Live: English")
-        assert block.feed == "keyword:Live: English"
-        assert _start(
-            _resolver(db_conn), exception_keyword="live: english"
-        ) == 1200
+        block = _pin(db_conn, start=1200, keyword="label:Live: English")
+        assert block.keyword == "label:Live: English"
+        assert _start(_resolver(db_conn), exception_keyword="live: english") == 1200
 
-    def test_channel_row_keeps_segment_and_feed_key(self, db_conn):
+    def test_channel_row_keeps_segment_and_keyword(self, db_conn):
         group = create_group(db_conn, name="F1", leagues=["f1"])
-        cid = _channel(db_conn, group, "e1", "n", segment="race", kw="Leclerc",
-                       feed_key="driver:charles-leclerc")
+        cid = _channel(db_conn, group, "e1", "n", segment="race", kw=LECLERC)
         ch = get_managed_channel(db_conn, cid)
-        assert (ch.segment, ch.feed_key) == ("race", "driver:charles-leclerc")
+        assert (ch.segment, ch.exception_keyword) == ("race", LECLERC)
+        assert not hasattr(ch, "feed_key")
+
+    def test_managed_channels_has_no_feed_key_column(self, db_conn):
+        cols = {r["name"] for r in db_conn.execute("PRAGMA table_info(managed_channels)")}
+        assert "segment" in cols
+        assert "feed_key" not in cols
 
     def test_next_number_reads_new_inputs(self, db_conn):
-        _pin(db_conn, start=1300, feed="driver")
+        _pin(db_conn, start=1300, keyword="driver")
         assert (
             cn.get_next_channel_number(
-                db_conn, "f1", sport="racing", exception_keyword="Leclerc",
-                feed_key="driver:charles-leclerc",
+                db_conn, "f1", sport="racing", exception_keyword=LECLERC
             )
             == 1300
         )
         assert cn.get_next_channel_number(db_conn, "f1", sport="racing") != 1300
 
     def test_block_round_trip_and_clear(self, db_conn):
-        block = _pin(db_conn, start=1200, segments=["Race"], feed="Driver")
-        assert (block.segments, block.feed) == (["race"], "driver")
+        block = _pin(db_conn, start=1200, segments=["Race"], keyword="Driver")
+        assert (block.segments, block.keyword) == (["race"], "driver")
         kept = ne.update_numbering_exception(db_conn, block.id, start=1201)
-        assert (kept.segments, kept.feed) == (["race"], "driver")
-        cleared = ne.update_numbering_exception(db_conn, block.id, segments=None, feed=None)
-        assert (cleared.segments, cleared.feed) == (None, None)
+        assert (kept.segments, kept.keyword) == (["race"], "driver")
+        cleared = ne.update_numbering_exception(db_conn, block.id, segments=None, keyword=None)
+        assert (cleared.segments, cleared.keyword) == (None, None)
 
     def test_invalid_update_returns_none(self, db_conn):
         block = _pin(db_conn, start=1200)
-        assert ne.update_numbering_exception(db_conn, block.id, feed="bogus") is None
+        assert ne.update_numbering_exception(db_conn, block.id, keyword="bogus") is None
+
+
+class TestSegmentCodes:
+    def test_known_codes_cover_racing_and_mma(self):
+        codes = ne.known_segment_codes()
+        assert "race" in codes["racing"] and "sprint_qualifying" in codes["racing"]
+        assert codes["mma"] == ("early_prelims", "prelims", "main_card")
+
+    @pytest.mark.parametrize("seg", ["qualy", "practice", "bad code!"])
+    def test_unknown_segment_is_rejected(self, db_conn, seg):
+        assert (
+            ne.add_numbering_exception(
+                db_conn, scope="league", league_code="f1", sport="racing", start=1300,
+                segments=[seg],
+            )
+            is None
+        )
+
+    def test_known_codes_accepted_for_both_families(self, db_conn):
+        assert _pin(db_conn, start=1300, segments=["qualifying", "main_card"]).segments == [
+            "qualifying",
+            "main_card",
+        ]
+
+
+class TestV100Backfill:
+    def _table(self, conn):
+        conn.execute("DROP TABLE IF EXISTS managed_channels")
+        conn.execute(
+            "CREATE TABLE managed_channels (id INTEGER PRIMARY KEY, event_id TEXT, segment TEXT)"
+        )
+
+    def test_backfills_known_suffix_only(self, db_conn):
+        from teamarr.database.migrations.versioned import _migrate_v100_backfill_channel_segment
+
+        self._table(db_conn)
+        rows = [
+            ("401-race", None),
+            ("401-sprint_qualifying", None),
+            ("402-main_card", None),
+            ("402-early_prelims", None),
+            ("403-qualy", None),
+            ("403-other", None),
+            ("404", None),
+            ("405-race", "fp1"),
+        ]
+        db_conn.executemany("INSERT INTO managed_channels (event_id, segment) VALUES (?, ?)", rows)
+        _migrate_v100_backfill_channel_segment(db_conn)
+        got = {
+            r["event_id"]: r["segment"]
+            for r in db_conn.execute("SELECT event_id, segment FROM managed_channels")
+        }
+        assert got == {
+            "401-race": "race",
+            "401-sprint_qualifying": "sprint_qualifying",
+            "402-main_card": "main_card",
+            "402-early_prelims": "early_prelims",
+            "403-qualy": None,
+            "403-other": None,
+            "404": None,
+            "405-race": "fp1",
+        }
+
+    def test_second_run_changes_nothing(self, db_conn):
+        from teamarr.database.migrations.versioned import _migrate_v100_backfill_channel_segment
+
+        self._table(db_conn)
+        db_conn.execute("INSERT INTO managed_channels (event_id) VALUES ('1-race')")
+        _migrate_v100_backfill_channel_segment(db_conn)
+        _migrate_v100_backfill_channel_segment(db_conn)
+        assert db_conn.execute("SELECT segment FROM managed_channels").fetchone()[0] == "race"
 
 
 @pytest.fixture
@@ -357,47 +518,26 @@ def _f1_event():
     )
 
 
-class TestChannelGroupAndFeedKey:
+class TestChannelGroup:
     def test_group_resolves_per_channel(self, db_conn, lifecycle):
-        _pin(db_conn, start=1300, feed="driver", channel_group_mode="Drivers")
-        _pin(db_conn, start=1200, feed="main", channel_group_mode="Main")
+        _pin(db_conn, start=1300, keyword="driver", channel_group_mode="Drivers")
+        _pin(db_conn, start=1200, keyword="main", channel_group_mode="Main")
         lifecycle._lane_resolver = _resolver(db_conn)
         ev = _f1_event()
         assert lifecycle._pinned_block_group(ev, "race") == (None, "Main")
-        assert lifecycle._pinned_block_group(
-            ev, "race", "Leclerc", "driver:charles-leclerc"
-        ) == (None, "Drivers")
-        assert lifecycle._pinned_block_group(ev, "race", "Pit Lane", "variant:pit-lane") is None
-
-    def test_feed_key_for_maps_label_to_race_feed(self, lifecycle):
-        kws = [
-            ExceptionKeyword(id=1, label="Leclerc", match_terms="Leclerc", behavior="separate",
-                             feed_key="driver:charles-leclerc"),
-            ExceptionKeyword(id=2, label="Spanish", match_terms="Spanish", behavior="separate"),
-        ]
-        lifecycle.__dict__["_league_keywords"] = {"f1": kws}
-        ev = _f1_event()
-        assert lifecycle._feed_key_for(ev, "Leclerc") == "driver:charles-leclerc"
-        assert lifecycle._feed_key_for(ev, "Spanish") is None
-        assert lifecycle._feed_key_for(ev, None) is None
+        assert lifecycle._pinned_block_group(ev, "race", LECLERC) == (None, "Drivers")
+        assert lifecycle._pinned_block_group(ev, "race", PIT) is None
 
 
 class TestCreationPath:
-    """Real keyword match -> feed key -> _create_channel -> stored row."""
+    """_create_channel stores the segment and the keyword label, nothing else."""
 
-    def _create(self, db_conn, lifecycle, stream_name, segment, behavior="consolidate"):
-        upsert_roster(db_conn, "f1", [RosterEntry("Charles Leclerc", "C. Leclerc", "LEC")])
-        for feed in list_race_feeds(db_conn, "f1"):
-            update_race_feed(db_conn, feed.id, behavior=behavior)
+    def _create(self, db_conn, lifecycle, stream_name, segment, label):
         group = create_group(db_conn, name="F1", leagues=["f1"])
         db_conn.commit()
         lifecycle._channel_manager.create_channel.return_value = OperationResult(
             success=True, channel={"id": 100 + len(stream_name), "uuid": f"u-{stream_name}"}
         )
-        event = _f1_event()
-        kw = lifecycle._match_exception_keyword(stream_name, db_conn, event)
-        label = kw.label if kw else None
-        feed_key = lifecycle._feed_key_for(event, label, kw)
         with (
             patch.object(lifecycle, "_generate_channel_name", return_value=stream_name),
             patch.object(lifecycle, "_get_next_channel_number", return_value="1200"),
@@ -406,50 +546,29 @@ class TestCreationPath:
         ):
             result = lifecycle._create_channel(
                 conn=db_conn,
-                event=event,
+                event=_f1_event(),
                 stream={"id": len(stream_name), "name": stream_name},
                 group_config={"id": group},
                 template=None,
                 matched_keyword=label,
                 channel_group_id=None,
                 channel_profile_ids=[],
-                feed_key=feed_key,
                 segment=segment,
             )
         assert result.success
-        row = db_conn.execute(
-            "SELECT segment, feed_key, exception_keyword FROM managed_channels"
+        return db_conn.execute(
+            "SELECT segment, exception_keyword FROM managed_channels"
             " WHERE dispatcharr_channel_id = ?",
             (100 + len(stream_name),),
         ).fetchone()
-        return row
 
-    def test_consolidate_driver_feed_stores_key_and_keyword(self, db_conn, lifecycle):
-        row = self._create(db_conn, lifecycle, "F1 Onboard Charles Leclerc", "RACE")
-        assert (row["segment"], row["feed_key"], row["exception_keyword"]) == (
-            "race", "driver:charles-leclerc", "Charles Leclerc",
-        )
+    def test_driver_channel_stores_segment_and_keyword(self, db_conn, lifecycle):
+        row = self._create(db_conn, lifecycle, "F1 Onboard Charles Leclerc", "race", LECLERC)
+        assert (row["segment"], row["exception_keyword"]) == ("race", LECLERC)
 
-    def test_separate_driver_feed_stores_key(self, db_conn, lifecycle):
-        row = self._create(
-            db_conn, lifecycle, "F1 Onboard Charles Leclerc", "qualifying", "separate"
-        )
-        assert row["feed_key"] == "driver:charles-leclerc"
-
-    def test_main_channel_has_no_feed_key(self, db_conn, lifecycle):
-        row = self._create(db_conn, lifecycle, "F1 Race Live", "race")
-        assert (row["segment"], row["feed_key"], row["exception_keyword"]) == ("race", None, None)
-
-    def test_matched_object_beats_label_lookup(self, lifecycle):
-        """A global keyword sharing a feed's label must not inherit the feed key."""
-        feed = ExceptionKeyword(id=1, label="Pit Lane", match_terms="Pit Lane",
-                                behavior="separate", feed_key="variant:pit-lane")
-        glob = ExceptionKeyword(id=2, label="Pit Lane", match_terms="PL", behavior="separate")
-        lifecycle.__dict__["_league_keywords"] = {"f1": [feed, glob]}
-        ev = _f1_event()
-        assert lifecycle._feed_key_for(ev, "Pit Lane", glob) is None
-        assert lifecycle._feed_key_for(ev, "Pit Lane", feed) == "variant:pit-lane"
-        assert lifecycle._feed_key_for(ev, "Pit Lane") == "variant:pit-lane"
+    def test_main_channel_has_no_keyword(self, db_conn, lifecycle):
+        row = self._create(db_conn, lifecycle, "F1 Race Live", "race", None)
+        assert (row["segment"], row["exception_keyword"]) == ("race", None)
 
 
 class TestApi:
@@ -464,23 +583,23 @@ class TestApi:
             made = api.create_numbering_exception(
                 api.NumberingExceptionCreate(
                     scope="league", league_code="f1", sport="racing", start=1200,
-                    segments=["race", "sprint"], feed="driver",
+                    segments=["race", "sprint"], keyword="driver",
                 )
             )
-            assert (made.segments, made.feed) == (["race", "sprint"], "driver")
+            assert (made.segments, made.keyword) == (["race", "sprint"], "driver")
 
             same = api.update(made.id, api.NumberingExceptionUpdate(start=1201))
-            assert (same.segments, same.feed) == (["race", "sprint"], "driver")
+            assert (same.segments, same.keyword) == (["race", "sprint"], "driver")
 
             cleared = api.update(
                 made.id,
                 api.NumberingExceptionUpdate(
-                    segments=None, set_segments=True, feed=None, set_feed=True
+                    segments=None, set_segments=True, keyword=None, set_keyword=True
                 ),
             )
-            assert (cleared.segments, cleared.feed) == (None, None)
+            assert (cleared.segments, cleared.keyword) == (None, None)
 
-    def test_invalid_segment_is_rejected(self, db_conn):
+    def test_invalid_segment_create_is_400_and_update_is_422(self, db_conn):
         from fastapi import HTTPException
 
         from teamarr.api.routes import numbering_exceptions as api
@@ -490,7 +609,7 @@ class TestApi:
                 api.create_numbering_exception(
                     api.NumberingExceptionCreate(
                         scope="league", league_code="f1", sport="racing", start=1200,
-                        segments=["bad code!"],
+                        segments=["qualy"],
                     )
                 )
             assert err.value.status_code == 400
@@ -498,13 +617,30 @@ class TestApi:
             with pytest.raises(HTTPException) as err:
                 api.update(
                     block.id,
-                    api.NumberingExceptionUpdate(segments=["bad code!"], set_segments=True),
+                    api.NumberingExceptionUpdate(segments=["qualy"], set_segments=True),
                 )
+            assert err.value.status_code == 422
+
+    def test_update_missing_block_is_404(self, db_conn):
+        from fastapi import HTTPException
+
+        from teamarr.api.routes import numbering_exceptions as api
+
+        with patch.object(api, "get_db", lambda: self._db(db_conn)):
+            with pytest.raises(HTTPException) as err:
+                api.update(99999, api.NumberingExceptionUpdate(start=1201))
             assert err.value.status_code == 404
+
+    def test_segment_codes_endpoint(self):
+        from teamarr.api.routes import numbering_exceptions as api
+
+        codes = api.segment_codes()
+        assert "race" in codes["racing"]
+        assert "main_card" in codes["mma"]
 
     def test_member_label_names_conditions(self, db_conn):
         from teamarr.api.routes.numbering_exceptions import _member_label
 
-        block = _pin(db_conn, start=1200, label="F1", segments=["race"], feed="driver")
+        block = _pin(db_conn, start=1200, label="F1", segments=["race"], keyword="driver")
         label = _member_label(db_conn, block)
         assert "race" in label and "driver" in label

@@ -121,7 +121,6 @@ def create_managed_channel(
         "event_end_estimate",
         "season_type",
         "segment",
-        "feed_key",
         "has_local_broadcast",
         "scheduled_delete_at",
         "sync_status",

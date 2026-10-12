@@ -37,8 +37,8 @@ holds golden-equivalence tests that assert this for compact, gap and strict.
 
 ## Resolution: most specific wins
 
-`LaneResolver.resolve(sport, league, home_team, away_team, season_type,
-segment, exception_keyword, feed_key)` returns the lane for a channel. Precedence:
+`LaneResolver.resolve(sport, league, home_team, away_team, season_type, *,
+segment, exception_keyword)` returns the lane for a channel. Precedence:
 
 1. **Team** pin matching the home team
 2. **Team** pin matching the away team
@@ -72,39 +72,60 @@ The season is stored on the channel (`managed_channels.season_type`, written
 at creation and kept current by the settings sync), because re-layout
 resolves lanes from the stored row and has no event to ask.
 
-### Segment and feed conditions (#1018)
+### Segment and keyword conditions (#1018)
 
-A pin may also carry `segments` (a list of session / card-segment codes such
-as `race`, `qualifying`, `sprint_qualifying`, `prelims`) and a `feed`
-condition. A row with any unsatisfied condition is not a candidate. Among the
-candidates, scope rank decides first, then the number of satisfied conditions
-(season, segments, feed), then `(sort_order, id)`. A season-only row therefore
-resolves exactly as before.
+A pin may also carry `segments` (a list of session / card-segment codes) and a
+`keyword` condition. A row with any unsatisfied condition is not a candidate.
+Among the candidates, scope rank decides first. Inside one rank the winner is
+the first row by this fixed key, so the result never depends on insertion
+order or on how many conditions a row has:
 
-`feed` values:
+1. keyword specificity, highest first: one named feed or label, then
+   `driver` / `variant`, then `any`, then `main`, then no keyword
+2. rows with segments before rows without
+3. rows with a season before rows without
+4. `(sort_order, id)`
+
+A season-only row therefore resolves exactly as before. For example, a
+`keyword=main` block beats a `segments=[race]` block for the main race
+channel, and `feed:driver:charles-leclerc` beats `driver` for that driver.
+
+Segment codes must come from the known set: `SESSION_ORDER` for racing (`fp1`,
+`fp2`, `fp3`, `sprint_qualifying`, `sprint`, `qualifying`, `race`) and the MMA
+card segments (`early_prelims`, `prelims`, `main_card`). The API rejects any
+other code, and `GET /numbering-exceptions/segment-codes` lists them by sport.
+
+`keyword` values:
 
 | Value | Satisfied by |
 |---|---|
 | `main` | a channel with no exception keyword |
 | `any` | any exception-keyword channel |
-| `driver` / `variant` | a race feed whose `feed_key` starts `driver:` / `variant:` |
+| `driver` / `variant` | a race feed of that kind in the channel's league |
 | `feed:<feed_key>` | one race feed, e.g. `feed:driver:charles-leclerc` |
-| `keyword:<label>` | one exception keyword, matched case-insensitively |
+| `label:<label>` | one exception keyword, matched case-insensitively |
 
-A channel whose segment is `NULL` satisfies no segments condition, and a
-channel with no `feed_key` satisfies no `driver`, `variant` or `feed:` condition.
+A channel whose segment is `NULL` satisfies no segments condition.
 
-Both inputs are stored on the channel row (`managed_channels.segment`, the
-lowercase suffix of `event_id`; `managed_channels.feed_key`) because re-layout
-has no event. The creator takes the segment from the event and maps the
-matched keyword back to its race feed (`ChannelLifecycleService._feed_key_for`,
-via `RaceFeed.as_keyword()` carrying `feed_key`). Channels created before the upgrade have no segment and no feed key, so they match no segments, driver, variant or single-feed condition until recreated. They still match main, any-keyword and keyword conditions, so adding a feed-only block can move an existing channel on the next re-grid. A league block whose only condition is `feed = main` also takes that league's team channels and any channel without a keyword. A racing event with no session data carries no segment, so it matches no segments block.
+The segment is stored on the channel row (`managed_channels.segment`, the
+lowercase suffix of `event_id`) because re-layout has no event. The race feed
+is not stored. `LaneResolver.load` reads `race_feeds` and maps
+`(league, feed label)` to `feed_key`, and a channel's `exception_keyword`
+equals its feed label, so the resolver derives the feed from the keyword. A
+roster refresh that adds a feed takes effect on the next re-grid. Migration v100
+backfills `segment` for existing rows from the `-<segment>` suffix of
+`event_id`, for known codes only.
+
+A league block whose only condition is `keyword = main` also takes that
+league's team channels and any channel without a keyword. A racing event with
+no session data carries no segment, so it matches no segments block.
 
 Example, F1 with four blocks, each a league pin: main channel for `race`,
-`qualifying`, `sprint_qualifying`, `sprint` at 1200 (`feed=main`); driver feeds
-at 1300 (`feed=driver`); other race feeds at 1400 (`feed=variant`); an
+`qualifying`, `sprint_qualifying`, `sprint` at 1200 (`keyword=main`); driver feeds
+at 1300 (`keyword=driver`); other race feeds at 1400 (`keyword=variant`); an
 unconditioned pin at 1500 takes practice. Every row is a candidate at league
-rank, so a main race channel (two conditions) beats the unconditioned pin.
+rank, and the keyword rule picks the lane, so a main race channel lands at 1200
+rather than 1500.
 
 ### Channel group on a block (#950)
 
@@ -227,7 +248,7 @@ CREATE TABLE numbering_exceptions (
     enabled BOOLEAN DEFAULT 1,
     season_type TEXT,               -- NULL = any season (#950)
     segments TEXT,                  -- NULL = any; comma-joined segment codes (#1018)
-    feed TEXT,                      -- NULL = any; main|any|driver|variant|feed:<key>|keyword:<label>
+    keyword TEXT,                   -- NULL = any; main|any|driver|variant|feed:<key>|label:<label>
     channel_group_id INTEGER,       -- output group for the block's channels (#950)
     channel_group_mode TEXT,        -- ...or a pattern, e.g. '09 TEAMARR {league}'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

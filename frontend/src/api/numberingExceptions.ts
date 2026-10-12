@@ -10,10 +10,10 @@ export type NumberingScope = "team" | "league" | "sport"
 // Season condition on a block (#950): null = any season.
 export type NumberingSeason = "preseason" | "regular" | "postseason"
 
-// Feed condition on a block (#1018): null = any channel. "main" = no keyword,
+// Keyword condition on a block (#1018): null = any channel. "main" = no keyword,
 // "any" = any keyword channel, "driver" / "variant" = a race feed of that kind,
-// "feed:<feed_key>" = one race feed, "keyword:<label>" = one exception keyword.
-export type NumberingFeed = string
+// "feed:<feed_key>" = one race feed, "label:<label>" = one exception keyword.
+export type NumberingKeyword = string
 
 export interface NumberingException {
   id: number
@@ -30,7 +30,7 @@ export interface NumberingException {
   enabled: boolean
   season_type: string | null
   segments: string[] | null
-  feed: NumberingFeed | null
+  keyword: NumberingKeyword | null
   channel_group_id: number | null
   channel_group_mode: string | null
   display_name: string | null
@@ -49,7 +49,7 @@ export interface NumberingExceptionCreate {
   team_league?: string | null
   season_type?: string | null
   segments?: string[] | null
-  feed?: NumberingFeed | null
+  keyword?: NumberingKeyword | null
   channel_group_mode?: string | null
 }
 
@@ -65,8 +65,8 @@ export interface NumberingExceptionUpdate {
   set_season_type?: boolean
   segments?: string[] | null
   set_segments?: boolean
-  feed?: NumberingFeed | null
-  set_feed?: boolean
+  keyword?: NumberingKeyword | null
+  set_keyword?: boolean
   channel_group_id?: number | null
   channel_group_mode?: string | null
   set_channel_group?: boolean
@@ -106,4 +106,11 @@ export async function deleteNumberingException(id: number): Promise<{ success: b
 
 export async function getNumberingPreview(): Promise<LanePreview[]> {
   return api.get("/numbering-exceptions/preview")
+}
+
+// Known segment codes by sport, e.g. { racing: ["fp1", ...], mma: [...] }.
+export type SegmentCodes = Record<string, string[]>
+
+export async function getSegmentCodes(): Promise<SegmentCodes> {
+  return api.get("/numbering-exceptions/segment-codes")
 }
