@@ -48,6 +48,7 @@ class CandidateEvidence:
     source_group_id: int | None
     last_seen_at: str | None
     last_matched_at: str | None
+    managed_leagues: list[str] = field(default_factory=list)
     first_seen_at: str | None = None
     replay: bool = False
     scans: int = 0  # scans inside the window
@@ -142,6 +143,7 @@ def get_candidates(
             m3u_account_ids=json.loads(row["m3u_account_ids"] or "[]"),
             stream_count=row["stream_count"] or 0,
             name_leagues=json.loads(row["name_leagues"] or "[]"),
+            managed_leagues=json.loads(row["managed_leagues"] or "[]"),
             status=row["status"],
             source_group_id=row["source_group_id"],
             last_seen_at=row["last_seen_at"],

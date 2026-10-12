@@ -208,6 +208,16 @@ def test_event_fetch_failures_are_counted_for_health_observations():
     assert service.event_fetch_failures > 0
 
 
+def test_successful_events_are_tracked_independently_of_match_results():
+    event = _event("boxing-event", datetime(2026, 8, 23, 1, 0, tzinfo=UTC))
+    service = _service([event])
+
+    assert service.get_events("boxing", date(2026, 8, 22))
+    assert service.observed_event_dates == {"boxing": ["2026-08-23"]}
+    service.reset_event_activity()
+    assert service.observed_event_dates == {}
+
+
 def _resolved(service) -> dict:
     """The user-day layer of the cache (``events_v2``), without raw buckets."""
     return {k: v for k, v in service._cache.store.items() if k.startswith("events_v2:")}

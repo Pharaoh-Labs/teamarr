@@ -47,3 +47,35 @@ def clear_source_health_decision(conn: Connection, group_id: int) -> bool:
     )
     conn.commit()
     return cursor.rowcount > 0
+
+
+def record_league_event_activity(
+    conn: Connection,
+    league_codes: set[str],
+    *,
+    now: datetime | None = None,
+    reset_after_days: int = 21,
+) -> None:
+    """Record a positive-event activity streak independently of stream matches."""
+    if not league_codes:
+        return
+    now = now or now_utc()
+    stamp = to_db_utc(now)
+    gap_cutoff = to_db_utc(now - timedelta(days=reset_after_days))
+    for code in league_codes:
+        normalized = code.strip().lower()
+        if not normalized:
+            continue
+        conn.execute(
+            """INSERT INTO league_event_activity
+                   (league_code, activity_started_at, last_observed_at)
+               VALUES (?, ?, ?)
+               ON CONFLICT(league_code) DO UPDATE SET
+                   activity_started_at = CASE
+                       WHEN league_event_activity.last_observed_at < ?
+                       THEN excluded.activity_started_at
+                       ELSE league_event_activity.activity_started_at
+                   END,
+                   last_observed_at = excluded.last_observed_at""",
+            (normalized, stamp, stamp, gap_cutoff),
+        )

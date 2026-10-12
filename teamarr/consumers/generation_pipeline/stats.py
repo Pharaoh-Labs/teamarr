@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 from teamarr.utilities import call_metrics
@@ -108,6 +109,7 @@ def finalize_stats_run(
     group_result: Any,
     channels_deleted_count: int,
     db_factory: Callable[[], Any],
+    observed_event_dates: dict[str, list[str]] | None = None,
 ) -> None:
     """Populate stats run with generation results and save to database."""
     from teamarr.database.channels import get_all_managed_channels
@@ -132,6 +134,8 @@ def finalize_stats_run(
     stats_run.extra_metrics["groups_processed"] = result.groups_processed
     # Per-group breakdown (#645): replaces the old one-row-per-group sub-runs.
     stats_run.extra_metrics["groups"] = group_result.group_summaries()
+    if observed_event_dates:
+        stats_run.extra_metrics["observed_event_dates"] = observed_event_dates
     stats_run.extra_metrics["file_written"] = result.file_written
 
     # Post-processing enforcement outcomes (iua3.7): one record per step with
@@ -168,4 +172,24 @@ def finalize_stats_run(
     stats_run.complete(status="completed")
 
     with db_factory() as conn:
+        from teamarr.database.source_health import record_league_event_activity
+
+        completed_at = stats_run.completed_at
+        if completed_at is None:
+            from teamarr.utilities.tz import now_utc
+
+            completed_at = now_utc()
+        run_day = completed_at.date()
+        oldest_event_day = run_day - timedelta(days=21)
+        latest_event_day = run_day + timedelta(days=30)
+        observed_leagues = set()
+        for code, values in (observed_event_dates or {}).items():
+            for value in values:
+                try:
+                    event_day = date.fromisoformat(str(value))
+                except (TypeError, ValueError):
+                    continue
+                if oldest_event_day <= event_day <= latest_event_day:
+                    observed_leagues.add(code.lower())
+        record_league_event_activity(conn, observed_leagues, now=completed_at)
         save_run(conn, stats_run)

@@ -1984,6 +1984,7 @@ CREATE TABLE IF NOT EXISTS source_candidates (
     m3u_account_ids TEXT NOT NULL DEFAULT '[]',  -- JSON list of M3U account ids carrying the group
     stream_count INTEGER DEFAULT 0,           -- streams in the group at the last scan
     name_leagues TEXT NOT NULL DEFAULT '[]',  -- JSON: subscribed leagues the group NAME mentions
+    managed_leagues TEXT NOT NULL DEFAULT '[]', -- JSON: accepted league scope retained for managed-source lifecycle
     status TEXT NOT NULL DEFAULT 'new'
         CHECK(status IN ('new', 'accepted', 'dismissed')),
     source_group_id INTEGER,                  -- event_epg_groups.id created when accepted (NULL while accepted = approved, source since removed)
@@ -2019,6 +2020,15 @@ CREATE TABLE IF NOT EXISTS source_health_decisions (
     baseline_last_matched_at TIMESTAMP,
     snoozed_until TIMESTAMP,
     FOREIGN KEY (group_id) REFERENCES event_epg_groups(id) ON DELETE CASCADE
+);
+
+-- Positive provider event observations, independent of any source matching a
+-- stream. The streak start preserves the season-opening grace for leagues that
+-- do not have a built-in calendar window, even after run-history cleanup.
+CREATE TABLE IF NOT EXISTS league_event_activity (
+    league_code TEXT PRIMARY KEY,
+    activity_started_at TIMESTAMP NOT NULL,
+    last_observed_at TIMESTAMP NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_enabled ON consolidation_exception_keywords(enabled);

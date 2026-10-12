@@ -75,7 +75,7 @@ The `event_group_processor/` package handles the core matching and channel lifec
 
 ### Source Health Evidence
 
-Each full-generation run stores bounded per-source summaries in `processing_runs.extra_metrics.groups`: eligible/matched stream counts, matched-league codes, active matching types, and provider event-fetch failures. `services/source_health.py` uses completed, usable observations for advisory quiet/coverage recommendations; user keep/snooze decisions are persisted separately. League scope resolves from a source override or the inherited global subscription, plus observed matches and source-name hints. Calendar season windows are only a fallback for season boundaries—recent successful league matches are required before a recommendation or managed-source idle clock advances.
+Each full-generation run stores bounded per-source summaries in `processing_runs.extra_metrics.groups` and positive provider-returned event dates in `observed_event_dates`. Event dates are also retained as a compact activity streak in `league_event_activity`, independent of whether any stream matched; source-health evaluation ignores old dated events and provider-failure runs. League scope resolves from an explicit override, or from observed matches/name hints; the inherited global subscription is only a fallback when no source-specific evidence exists. NFL/NHL/MLB use broad calendar windows, while other leagues require recent positive dated event data. Managed-source retirement retains the accepted league scope and applies its 21-day opening grace to the persisted event-activity streak.
 
 ## Team Processor
 

@@ -27,6 +27,7 @@ group and under-counted the large ones badly (7 matches where a full read
 found 98); a full pass over 119,000 streams is a few minutes once a day.
 """
 
+import json
 import logging
 import re
 import threading
@@ -482,6 +483,22 @@ def accept_candidate(
     )
     set_group_managed(conn, source_id, True, auto_added_at=auto_added_at)
     set_candidate_status(conn, candidate.id, "accepted", source_group_id=source_id)
+    managed_leagues = sorted(
+        {
+            code.lower()
+            for code in [
+                *candidate.managed_leagues,
+                *candidate.leagues,
+                *candidate.team_leagues,
+                *candidate.name_leagues,
+            ]
+            if code
+        }
+    )
+    conn.execute(
+        "UPDATE source_candidates SET managed_leagues = ? WHERE id = ?",
+        (json.dumps(managed_leagues), candidate.id),
+    )
     logger.info(
         "[DISCOVERY] %s %r as managed source id=%d",
         "Added automatically" if auto_added_at else "Accepted",
@@ -591,20 +608,36 @@ def maintain_managed_sources(
     * disabled, its group shows games in this scan -> enabled again
     * disabled, its group gone for the gone window -> removed
 
-    The idle clock is season-aware and only advances when recent successful
-    event evidence exists for a known league in the source's scope.
+    The idle clock is season-aware and only advances when recent positive event
+    evidence exists for a league in the source's persisted scope.
     """
     from teamarr.services.source_health import (
+        league_activity_evidence,
         managed_source_idle_days,
-        recently_observed_leagues,
     )
 
-    accepted_candidates = get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted")
-    named = {c.m3u_group_id: bool(c.name_leagues) for c in accepted_candidates}
-    candidate_by_source = {
-        c.source_group_id: c for c in accepted_candidates if c.source_group_id is not None
-    }
-    recently_active = recently_observed_leagues(conn, now)
+    accepted_sources = conn.execute(
+        """SELECT m3u_group_id, source_group_id, name_leagues, managed_leagues
+           FROM source_candidates WHERE status = 'accepted'"""
+    ).fetchall()
+    named: dict[int, bool] = {}
+    candidate_by_source: dict[int, list[str]] = {}
+    for row in accepted_sources:
+        try:
+            name_leagues = json.loads(row["name_leagues"] or "[]")
+            managed_leagues = json.loads(row["managed_leagues"] or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            name_leagues, managed_leagues = [], []
+        named[row["m3u_group_id"]] = bool(name_leagues)
+        if row["source_group_id"] is not None:
+            candidate_by_source[row["source_group_id"]] = sorted(
+                {
+                    str(code).lower()
+                    for code in [*managed_leagues, *name_leagues]
+                    if code
+                }
+            )
+    recently_active, activity_starts = league_activity_evidence(conn, now)
     created = {
         row["id"]: row["created_at"]
         for row in conn.execute("SELECT id, created_at FROM event_epg_groups WHERE managed = 1")
@@ -622,15 +655,20 @@ def maintain_managed_sources(
         group_live = source.m3u_group_id in live_group_ids
         if source.enabled:
             candidate = candidate_by_source.get(source.id)
-            focus_leagues = source.last_matched_leagues
-            if not focus_leagues and candidate is not None:
-                focus_leagues = list(candidate.leagues) or candidate.name_leagues
+            focus_leagues = sorted(
+                {
+                    str(code).lower()
+                    for code in [*(source.last_matched_leagues or []), *(candidate or [])]
+                    if code
+                }
+            )
             idle = managed_source_idle_days(
                 source.last_matched_at,
                 created.get(source.id),
                 focus_leagues,
                 now,
                 recently_active,
+                activity_starts,
             )
             limit = (
                 MANAGED_IDLE_DAYS_WITH_NAME if named.get(source.m3u_group_id) else MANAGED_IDLE_DAYS

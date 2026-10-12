@@ -67,6 +67,10 @@ export function SourceHealthReview({
   const activeCount = recommendations.filter((item) => !item.decision).length
   const busy = keep.isPending || snooze.isPending || restore.isPending || toggleGroup.isPending
 
+  if (!isLoading && !error && recommendations.length === 0 && !data?.hidden_count) {
+    return null
+  }
+
   const row = (item: SourceHealthRecommendation) => {
     const hidden = item.decision !== null
     const matchingMethods = Object.entries(item.matching_types)

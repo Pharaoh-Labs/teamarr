@@ -131,6 +131,8 @@ def run_full_generation(
         logger.info("[GENERATION] Starting with cache generation %d", current_generation)
         call_metrics.reset()
         shared_service = create_default_service()
+        if callable(getattr(shared_service, "reset_event_activity", None)):
+            shared_service.reset_event_activity()
         with db_factory() as conn:
             settings = GenerationSettingsSnapshot(
                 epg=get_epg_settings(conn),
@@ -159,6 +161,7 @@ def run_full_generation(
             context.group_result,
             context.channels_deleted_count,
             db_factory,
+            getattr(shared_service, "observed_event_dates", {}),
         )
         if context.media_jobs and result.run_id is not None:
             _start_media_server_refresh(db_factory, result.run_id, context.media_jobs)
@@ -391,10 +394,17 @@ def _finalize_stats_run(
     group_result: Any,
     channels_deleted_count: int,
     db_factory: Callable[[], Any],
+    observed_event_dates: dict[str, list[str]] | None = None,
 ) -> None:
     """Compatibility wrapper for extracted processing-run finalization."""
     stats.finalize_stats_run(
-        stats_run, result, team_result, group_result, channels_deleted_count, db_factory
+        stats_run,
+        result,
+        team_result,
+        group_result,
+        channels_deleted_count,
+        db_factory,
+        observed_event_dates,
     )
 
 

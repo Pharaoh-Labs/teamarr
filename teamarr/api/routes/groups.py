@@ -1333,6 +1333,11 @@ def snooze_source_health_recommendation(group_id: int) -> dict[str, Any]:
 def restore_source_health_recommendation(group_id: int) -> dict[str, Any]:
     """Undo a keep/snooze decision and restore the recommendation."""
     with get_db() as conn:
+        if get_group(conn, group_id) is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Group {group_id} not found",
+            )
         restored = clear_source_health_decision(conn, group_id)
     return {"group_id": group_id, "restored": restored}
 

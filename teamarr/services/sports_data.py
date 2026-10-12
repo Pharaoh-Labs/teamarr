@@ -267,6 +267,8 @@ class SportsDataService:
         self._cache = _get_shared_cache()
         self._event_fetch_failures = 0
         self._event_fetch_failures_lock = threading.Lock()
+        self._event_activity_dates: dict[str, set[str]] = {}
+        self._event_activity_lock = threading.Lock()
         # Let providers that scan day-by-day (ESPN team schedules) reuse the
         # cached, league-wide get_events so a league's daily scoreboard is
         # fetched once per run instead of once per team. Providers that don't
@@ -289,6 +291,27 @@ class SportsDataService:
     def _record_event_fetch_failure(self) -> None:
         with self._event_fetch_failures_lock:
             self._event_fetch_failures += 1
+
+    @property
+    def observed_event_dates(self) -> dict[str, list[str]]:
+        """Return event dates successfully observed, grouped by league."""
+        with self._event_activity_lock:
+            return {
+                league: sorted(event_dates)
+                for league, event_dates in self._event_activity_dates.items()
+            }
+
+    def reset_event_activity(self) -> None:
+        """Start a fresh event-activity snapshot for the next generation run."""
+        with self._event_activity_lock:
+            self._event_activity_dates.clear()
+
+    def _record_event_activity(self, league: str, events: list[Event]) -> list[Event]:
+        if events:
+            with self._event_activity_lock:
+                event_dates = self._event_activity_dates.setdefault(league.lower(), set())
+                event_dates.update(event.start_time.date().isoformat() for event in events)
+        return events
 
     def get_events(self, league: str, target_date: date, cache_only: bool = False) -> list[Event]:
         """Get all events for a league on a given date.
@@ -333,7 +356,7 @@ class SportsDataService:
 
         hit = load_from_cache()
         if not isinstance(hit, _CacheMiss):
-            return hit
+            return self._record_event_activity(league, hit)
 
         # If cache_only, don't fetch from API
         if cache_only:
@@ -369,7 +392,9 @@ class SportsDataService:
                     # Cache ALL results including empty lists to avoid repeated API
                     # calls for leagues with no events on a given day
                     self._cache.set(cache_key, [event_to_dict(e) for e in events], ttl)
-                    return [_enrich_event_teams(e) for e in events]
+                    return self._record_event_activity(
+                        league, [_enrich_event_teams(e) for e in events]
+                    )
         return []
 
     def _fetch_provider_span(

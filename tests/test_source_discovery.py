@@ -700,16 +700,8 @@ def _maintain(live=(1,), evidence=None):
                 to_db_utc(now),
                 json.dumps(
                     {
-                        "groups": [
-                            {
-                                "id": 9999,
-                                "fetched": 1,
-                                "eligible": 1,
-                                "matched": 1,
-                                "matched_leagues": {"nhl": 1},
-                                "provider_fetch_failures": 0,
-                            }
-                        ]
+                        "groups": [],
+                        "observed_event_dates": {"nhl": [now.date().isoformat()]},
                     }
                 ),
             ),
@@ -727,6 +719,13 @@ def test_accepting_a_candidate_creates_a_managed_source(api):
         True,
         True,
     )
+    with get_db() as conn:
+        managed_leagues = json.loads(
+            conn.execute(
+                "SELECT managed_leagues FROM source_candidates WHERE id = ?", (cid,)
+            ).fetchone()[0]
+        )
+    assert managed_leagues == ["nhl"]
     listed = api.get("/api/v1/groups").json()["groups"]
     assert next(g for g in listed if g["id"] == source_id)["managed"] is True
     names = [
@@ -806,20 +805,12 @@ def test_managed_retirement_resumes_after_current_season_opportunity(api):
             (
                 to_db_utc(now),
                 to_db_utc(now),
-                json.dumps(
-                    {
-                        "groups": [
-                            {
-                                "id": 9999,
-                                "fetched": 1,
-                                "eligible": 1,
-                                "matched": 1,
-                                "matched_leagues": {"nhl": 1},
-                                "provider_fetch_failures": 0,
-                            }
-                        ]
-                    }
-                ),
+                    json.dumps(
+                        {
+                            "groups": [],
+                            "observed_event_dates": {"nhl": [now.date().isoformat()]},
+                        }
+                    ),
             ),
         )
         summary = ScanSummary()
@@ -830,6 +821,40 @@ def test_managed_retirement_resumes_after_current_season_opportunity(api):
             {},
             summary,
         )
+
+    assert summary.sources_disabled == 1
+    assert _source(source_id).enabled is False
+
+
+def test_managed_non_calendar_scope_survives_candidate_scan_expiry(api):
+    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+    from teamarr.utilities.tz import to_db_utc
+
+    cid, source_id = _accept_first(api)
+    now = datetime(2026, 10, 12, tzinfo=UTC)
+    with get_db() as conn:
+        # Simulate an accepted source whose scan rows have aged beyond the
+        # discovery evidence window and which has never matched a stream.
+        conn.execute(
+            "UPDATE event_epg_groups SET created_at = ?, last_matched_at = NULL, "
+            "last_matched_leagues = '[]' WHERE id = ?",
+            ("2026-09-01 00:00:00", source_id),
+        )
+        conn.execute(
+            "UPDATE source_candidates SET managed_leagues = ?, name_leagues = '[]' WHERE id = ?",
+            (json.dumps(["nba"]), cid),
+        )
+        conn.execute(
+            """INSERT INTO league_event_activity
+                   (league_code, activity_started_at, last_observed_at)
+               VALUES ('nba', ?, ?)""",
+            (
+                to_db_utc(datetime(2026, 9, 1, tzinfo=UTC)),
+                to_db_utc(now),
+            ),
+        )
+        summary = ScanSummary()
+        maintain_managed_sources(conn, now, {1}, {}, summary)
 
     assert summary.sources_disabled == 1
     assert _source(source_id).enabled is False

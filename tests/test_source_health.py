@@ -88,24 +88,20 @@ def _runs(
 
 
 def _record_league_activity(conn, now: datetime, league: str) -> None:
-    """A separate source proves the league has supplied events recently."""
-    summary = {
-        "id": 9999,
-        "name": "independent schedule evidence",
-        "fetched": 1,
-        "eligible": 1,
-        "matched": 1,
-        "unmatched": 0,
-        "matched_leagues": {league: 1},
-        "matching_types": {"name": True, "team": False, "epg": False},
-        "provider_fetch_failures": 0,
-    }
+    """Record successful event data without requiring any stream to match."""
     conn.execute(
         """INSERT INTO processing_runs
                (run_type, started_at, completed_at, status, extra_metrics)
-           VALUES ('full_epg', ?, ?, 'completed', ?)""",
-        (_stamp(now), _stamp(now), json.dumps({"groups": [summary]})),
+            VALUES ('full_epg', ?, ?, 'completed', ?)""",
+        (
+            _stamp(now),
+            _stamp(now),
+            json.dumps({"groups": [], "observed_event_dates": {league: [now.date().isoformat()]}}),
+        ),
     )
+    from teamarr.database.source_health import record_league_event_activity
+
+    record_league_event_activity(conn, {league}, now=now)
     conn.commit()
 
 
@@ -140,6 +136,41 @@ def test_managed_retirement_clock_pauses_offseason_and_resets_for_new_season():
     # the start of meaningful idle time (20 days by Oct 12).
     assert managed_source_idle_days(last_match, created, ["nhl"], in_season, {"nhl"}) == 20
     assert managed_source_idle_days(last_match, created, ["unknown"], in_season, {"nhl"}) is None
+
+
+def test_unknown_calendar_managed_scope_uses_persisted_event_streak_and_grace():
+    now = datetime(2026, 10, 12, tzinfo=UTC)
+    last_match = datetime(2026, 8, 1, tzinfo=UTC)
+    created = datetime(2026, 7, 1, tzinfo=UTC)
+
+    idle = managed_source_idle_days(
+        last_match,
+        created,
+        ["nba"],
+        now,
+        {"nba"},
+        {"nba": date(2026, 9, 1)},
+    )
+
+    assert idle == 20
+
+
+def test_provider_event_activity_streak_resets_after_a_long_gap(db_conn):
+    from teamarr.database.source_health import record_league_event_activity
+
+    first = datetime(2026, 8, 1, tzinfo=UTC)
+    record_league_event_activity(db_conn, {"nba"}, now=first)
+    record_league_event_activity(db_conn, {"nba"}, now=first + timedelta(days=10))
+    still_same = db_conn.execute(
+        "SELECT activity_started_at FROM league_event_activity WHERE league_code = 'nba'"
+    ).fetchone()[0]
+    record_league_event_activity(db_conn, {"nba"}, now=first + timedelta(days=32))
+    restarted = db_conn.execute(
+        "SELECT activity_started_at FROM league_event_activity WHERE league_code = 'nba'"
+    ).fetchone()[0]
+
+    assert still_same == _stamp(first)
+    assert restarted == _stamp(first + timedelta(days=32))
 
 
 def test_nfl_offseason_quiet_source_is_not_recommended(db_conn):
@@ -184,6 +215,7 @@ def test_recent_matched_event_overrides_calendar_offseason(db_conn):
         matched=1,
         matched_leagues={"nfl": 1},
     )
+    _record_league_activity(db_conn, now, "nfl")
 
     recommendation = _recommendations(db_conn, now)["recommendations"][0]
     assert recommendation["kind"] == "low_coverage"
@@ -210,8 +242,8 @@ def test_generic_source_uses_inherited_global_league_scope(db_conn):
     )
     db_conn.execute(
         "UPDATE event_epg_groups SET last_matched_at = ?, "
-        "last_matched_leagues = ? WHERE id = ?",
-        (_stamp(datetime(2026, 10, 1, tzinfo=UTC)), '["mlb"]', group_id),
+        "last_matched_leagues = '[]' WHERE id = ?",
+        (_stamp(datetime(2026, 10, 1, tzinfo=UTC)), group_id),
     )
     _runs(db_conn, group_id, now)
     _record_league_activity(db_conn, now, "nfl")
@@ -220,6 +252,33 @@ def test_generic_source_uses_inherited_global_league_scope(db_conn):
     assert recommendations[0]["group_id"] == group_id
     assert recommendations[0]["kind"] == "quiet"
     assert recommendations[0]["leagues"] == ["nfl"]
+
+
+def test_named_nfl_source_does_not_inherit_mlb_season_activity(db_conn):
+    now = datetime(2026, 7, 15, 12, tzinfo=UTC)
+    group_id = _source(db_conn, name="US | NFL Sunday Ticket")
+    db_conn.execute(
+        "UPDATE sports_subscription SET leagues = ? WHERE id = 1",
+        (json.dumps(["nfl", "mlb"]),),
+    )
+    _runs(db_conn, group_id, now)
+    _record_league_activity(db_conn, now, "mlb")
+
+    assert _recommendations(db_conn, now)["recommendations"] == []
+
+
+def test_single_nfl_source_can_be_reviewed_without_another_matching_source(db_conn):
+    now = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    group_id = _source(db_conn, name="NFL")
+    db_conn.execute(
+        "UPDATE event_epg_groups SET last_matched_at = ?, last_matched_leagues = ? WHERE id = ?",
+        (_stamp(datetime(2026, 2, 9, tzinfo=UTC)), '["nfl"]', group_id),
+    )
+    _runs(db_conn, group_id, now)
+
+    recommendation = _recommendations(db_conn, now)["recommendations"][0]
+    assert recommendation["group_id"] == group_id
+    assert recommendation["kind"] == "quiet"
 
 
 def test_low_coverage_requires_name_matching_and_minimum_sample(db_conn):
@@ -233,7 +292,7 @@ def test_low_coverage_requires_name_matching_and_minimum_sample(db_conn):
             "last_matched_leagues = ? WHERE id = ?",
             (_stamp(now - timedelta(days=20)), '["nfl"]', group_id),
         )
-    _runs(db_conn, name_group, now, eligible=5, matched=0)
+    _runs(db_conn, name_group, now, eligible=20, matched=1)
     _runs(db_conn, team_group, now, eligible=5, matched=0)
     _runs(db_conn, small_group, now, eligible=3, matched=0)
     _record_league_activity(db_conn, now, "nfl")
@@ -241,8 +300,62 @@ def test_low_coverage_requires_name_matching_and_minimum_sample(db_conn):
     recommendations = _recommendations(db_conn, now)["recommendations"]
     assert [item["group_id"] for item in recommendations] == [name_group]
     assert recommendations[0]["kind"] == "low_coverage"
-    assert recommendations[0]["coverage"] == 0
-    assert recommendations[0]["eligible_observations"] == 25
+    assert recommendations[0]["coverage"] == 0.05
+    assert recommendations[0]["eligible_observations"] == 100
+
+
+def test_zero_match_source_waits_for_quiet_threshold_not_low_coverage(db_conn):
+    now = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    group_id = _source(db_conn, name="NFL")
+    db_conn.execute(
+        "UPDATE event_epg_groups SET last_matched_at = ?, last_matched_leagues = ? WHERE id = ?",
+        (_stamp(now - timedelta(days=20)), '["nfl"]', group_id),
+    )
+    _runs(db_conn, group_id, now, eligible=20, matched=0)
+    _record_league_activity(db_conn, now, "nfl")
+
+    assert _recommendations(db_conn, now)["recommendations"] == []
+
+
+def test_unknown_calendar_league_can_reach_quiet_recommendation(db_conn):
+    now = datetime(2026, 10, 20, 12, tzinfo=UTC)
+    group_id = _source(db_conn, name="Basketball", leagues=["nba"])
+    db_conn.execute(
+        "UPDATE event_epg_groups SET last_matched_at = ?, last_matched_leagues = ? WHERE id = ?",
+        (_stamp(now - timedelta(days=60)), '["nba"]', group_id),
+    )
+    _runs(db_conn, group_id, now)
+    _record_league_activity(db_conn, now, "nba")
+
+    recommendation = _recommendations(db_conn, now)["recommendations"][0]
+    assert recommendation["group_id"] == group_id
+    assert recommendation["kind"] == "quiet"
+
+
+def test_global_subscription_scope_is_loaded_once_for_many_sources(db_conn, monkeypatch):
+    from teamarr.database import groups as groups_db
+    from teamarr.database import subscription as subscription_db
+
+    calls = {"subscription": 0, "soccer": 0}
+    original_subscription = subscription_db.get_subscription
+    original_soccer = groups_db.get_enabled_soccer_leagues
+
+    def counted_subscription(conn):
+        calls["subscription"] += 1
+        return original_subscription(conn)
+
+    def counted_soccer(conn):
+        calls["soccer"] += 1
+        return original_soccer(conn)
+
+    monkeypatch.setattr(subscription_db, "get_subscription", counted_subscription)
+    monkeypatch.setattr(groups_db, "get_enabled_soccer_leagues", counted_soccer)
+    for index in range(10):
+        _source(db_conn, name=f"Generic source {index}")
+
+    _recommendations(db_conn, datetime(2026, 10, 20, 12, tzinfo=UTC))
+
+    assert calls == {"subscription": 1, "soccer": 1}
 
 
 def test_empty_group_runs_do_not_count_as_health_evidence(db_conn):
@@ -337,6 +450,12 @@ def test_health_api_exposes_recommendations_and_decisions(client, db_conn):
     restored = client.delete(f"/api/v1/groups/{group_id}/health/decision")
     assert restored.status_code == 200
     assert restored.json() == {"group_id": group_id, "restored": True}
+
+
+def test_health_api_restore_returns_not_found_for_missing_group(client):
+    response = client.delete("/api/v1/groups/999999/health/decision")
+
+    assert response.status_code == 404
 
 
 def test_health_api_rejects_system_channel_sources(client, db_conn):
