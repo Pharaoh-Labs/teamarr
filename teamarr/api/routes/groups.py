@@ -37,8 +37,13 @@ from teamarr.database.groups import (
 )
 from teamarr.database.settings import get_display_settings
 from teamarr.database.source_candidates import dismiss_candidate_for_source
+from teamarr.database.source_health import (
+    clear_source_health_decision,
+    set_source_health_decision,
+)
 from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
 from teamarr.services import create_group_service
+from teamarr.services.source_health import get_source_health
 from teamarr.services.stream_filter import (
     UNSUPPORTED_SPORTS,
     detect_sport_hint,
@@ -1276,6 +1281,60 @@ def list_stale_groups() -> list[dict]:
 
     with get_db() as conn:
         return get_stale_groups(conn)
+
+
+@router.get("/health/recommendations")
+def list_source_health_recommendations(include_hidden: bool = False) -> dict[str, Any]:
+    """Return advisory quiet/low-coverage source recommendations (#1044).
+
+    Existing stale-source detection remains separate. Only completed runs with
+    usable per-source observations count, and a known offseason suppresses
+    inactivity recommendations.
+    """
+    with get_db() as conn:
+        return get_source_health(conn, include_hidden=include_hidden)
+
+
+def _record_source_health_decision(group_id: int, decision: str) -> dict[str, Any]:
+    with get_db() as conn:
+        group = get_group(conn, group_id)
+        if group is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Group {group_id} not found",
+            )
+        if group.is_channel_source:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="System-managed channel sources cannot be reviewed here",
+            )
+        set_source_health_decision(
+            conn,
+            group_id,
+            decision,
+            last_matched_at=group.last_matched_at,
+        )
+    return {"group_id": group_id, "decision": decision}
+
+
+@router.post("/{group_id}/health/keep")
+def keep_source_health_recommendation(group_id: int) -> dict[str, Any]:
+    """Hide a recommendation until this source matches again."""
+    return _record_source_health_decision(group_id, "keep")
+
+
+@router.post("/{group_id}/health/snooze")
+def snooze_source_health_recommendation(group_id: int) -> dict[str, Any]:
+    """Snooze a recommendation for 30 days without changing the source."""
+    return _record_source_health_decision(group_id, "snooze")
+
+
+@router.delete("/{group_id}/health/decision")
+def restore_source_health_recommendation(group_id: int) -> dict[str, Any]:
+    """Undo a keep/snooze decision and restore the recommendation."""
+    with get_db() as conn:
+        restored = clear_source_health_decision(conn, group_id)
+    return {"group_id": group_id, "restored": restored}
 
 
 @router.get("/stale/suggestions")

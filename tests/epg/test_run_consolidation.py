@@ -215,6 +215,10 @@ def test_batch_rollups_and_group_summaries():
     assert [s["name"] for s in summaries] == ["A", "B"]
     assert summaries[0]["error"] is None
     assert summaries[1]["error"] == "boom"
+    assert summaries[0]["eligible"] == 0
+    assert summaries[0]["provider_fetch_failures"] == 0
+    assert summaries[0]["matching_types"] == {"name": True, "team": False, "epg": False}
+    assert summaries[0]["matched_leagues"] == {}
 
 
 # ---------------------------------------------------------------------------

@@ -73,6 +73,10 @@ The `event_group_processor/` package handles the core matching and channel lifec
 - **Per-group override** — group can specify its own leagues
 - **Soccer modes:** `all` (expand all enabled), `teams` (discover from followed teams), `manual` (explicit selection)
 
+### Source Health Evidence
+
+Each full-generation run stores bounded per-source summaries in `processing_runs.extra_metrics.groups`: eligible/matched stream counts, matched-league codes, active matching types, and provider event-fetch failures. `services/source_health.py` uses completed, usable observations for advisory quiet/coverage recommendations; user keep/snooze decisions are persisted separately. League scope resolves from a source override or the inherited global subscription, plus observed matches and source-name hints. Calendar season windows are only a fallback for season boundaries—recent successful league matches are required before a recommendation or managed-source idle clock advances.
+
 ## Team Processor
 
 `team_processor.py` generates XMLTV programmes for each team's XMLTV channel (schedule tracking). For teams without managed channels, Dispatcharr association remains manual. Opted-in persistent Team EPG channels are maintained separately by `TeamChannelManager`.

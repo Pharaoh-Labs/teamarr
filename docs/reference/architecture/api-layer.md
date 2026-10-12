@@ -11,7 +11,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 
 ## Route Modules
 
-19 route modules with 205 total endpoints, registered in `app.py`:
+19 route modules with 209 total endpoints, registered in `app.py`:
 
 | Module | Endpoints | Description |
 |--------|-----------|-------------|
@@ -19,7 +19,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 | `teams.py` | 9 | Team CRUD, active/inactive toggling |
 | `templates.py` | 8 | Template CRUD, duplication, presets |
 | `presets.py` | 5 | Condition preset library |
-| `groups.py` | 26 | Event group CRUD, bulk ops, scheduling, soccer leagues |
+| `groups.py` | 30 | Event group CRUD, bulk ops, scheduling, soccer leagues, source-health recommendations and decisions |
 | `epg.py` | 14 | Team/event EPG generation, status tracking, preview, stats, cancellation |
 | `channels.py` | 12 | Channel management, numbering, search, reconciliation |
 | `dispatcharr.py` | 8 | Dispatcharr settings, connection test, sync status |

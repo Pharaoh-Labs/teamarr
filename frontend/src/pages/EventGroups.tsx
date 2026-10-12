@@ -69,6 +69,7 @@ import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
 import { BulkEditDialog } from "./event-groups/BulkEditDialog"
 import { SuggestedSources } from "@/components/SuggestedSources"
+import { SourceHealthReview } from "@/components/SourceHealthReview"
 import { getFailedReasonLabel, getLeagueDisplayName } from "@/lib/utils"
 
 // Helper to get display name (prefer display_name over name)
@@ -512,6 +513,10 @@ export function EventGroups() {
         </Alert>
       )}
 
+      <SourceHealthReview
+        leagueName={getLeagueDisplay}
+        onEdit={(groupId) => navigate(`/sources/${groupId}`)}
+      />
       <SuggestedSources leagueName={getLeagueDisplay} />
 
       {/* Fixed Batch Operations Bar */}

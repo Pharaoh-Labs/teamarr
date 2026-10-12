@@ -265,6 +265,8 @@ class SportsDataService:
     def __init__(self, providers: list[SportsProvider] | None = None):
         self._providers: list[SportsProvider] = providers or []
         self._cache = _get_shared_cache()
+        self._event_fetch_failures = 0
+        self._event_fetch_failures_lock = threading.Lock()
         # Let providers that scan day-by-day (ESPN team schedules) reuse the
         # cached, league-wide get_events so a league's daily scoreboard is
         # fetched once per run instead of once per team. Providers that don't
@@ -277,6 +279,16 @@ class SportsDataService:
     def add_provider(self, provider: SportsProvider) -> None:
         """Register a provider."""
         self._providers.append(provider)
+
+    @property
+    def event_fetch_failures(self) -> int:
+        """Count provider event-bucket fetches that raised during this service's life."""
+        with self._event_fetch_failures_lock:
+            return self._event_fetch_failures
+
+    def _record_event_fetch_failure(self) -> None:
+        with self._event_fetch_failures_lock:
+            self._event_fetch_failures += 1
 
     def get_events(self, league: str, target_date: date, cache_only: bool = False) -> list[Event]:
         """Get all events for a league on a given date.
@@ -384,6 +396,7 @@ class SportsDataService:
             try:
                 bucket = self._fetch_provider_day(provider, league, day)
             except Exception as e:  # noqa: BLE001 - one bad bucket ≠ lost day
+                self._record_event_fetch_failure()
                 logger.warning(
                     "[EVENTS] %s bucket %s for %s failed: %s",
                     type(provider).__name__,

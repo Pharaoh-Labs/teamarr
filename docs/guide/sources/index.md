@@ -50,6 +50,18 @@ Preview lists each unmatched stream with what the classifier actually read out o
 {: .note }
 > The percentage is **stream coverage**: distinct streams matched ÷ eligible streams (always 0–100%). The hover tooltip shows **matches produced** — the total number of stream→event matches. With [EPG matching](../matching/program-matching), one linear stream (ESPN, FS1…) is time-shared across many events, so matches produced can far exceed the stream count. These are tracked separately so coverage stays a true health signal.
 
+## Review Sources
+
+The **Review sources** panel sits above Suggested sources and is separate from the existing missing-group banner. It surfaces configured sources that may need attention; it never changes a source automatically. A missing M3U group still belongs to the stale-source and re-bind flow.
+
+Recommendations use recent, completed full-generation runs only. Failed source runs, empty/filtered groups, and runs with recorded provider event-fetch failures are excluded. Teamarr also requires a successful match in the source's league within the last 21 days before judging source health, so an unknown schedule or provider outage is not treated as evidence that a source is bad.
+
+- **Quiet in season:** no match for at least 45 days (60 days if the source has never matched), with at least five successful eligible runs spanning 14 days. The idle clock starts with the active season, not the prior season's last game.
+- **Low match coverage:** less than 10% pooled stream coverage across recent runs, with at least 20 eligible stream-run observations. This signal is limited to sources using Stream Name matching; Team and EPG matching intentionally do not get a name-coverage recommendation.
+- League scope comes from the source's subscription override, or the global subscription when it inherits one, plus its observed matches and recognizable league name. NFL, NHL and MLB use broad calendar windows (NFL August–February, NHL September–June, MLB mid-February–mid-November) that include preseason and postseason. Recent matched events can confirm activity outside those windows. For a mixed-league source, any configured league with recent event evidence keeps it in scope; an unknown league/schedule is handled conservatively.
+
+**Review** opens the source editor. **Keep** hides the recommendation until the source matches again; **Snooze 30d** hides it temporarily. Both can be undone from **Show kept/snoozed**. **Disable** always asks for confirmation; it stops processing but keeps the source settings and existing channels.
+
 ## Importing Sources
 
 Click **Add Stream Source** to open the import screen. It lists your Dispatcharr M3U accounts in a sidebar; selecting one shows its stream groups with stream counts.
@@ -112,6 +124,7 @@ Name-only groups, replay groups, dismissed groups and linear channels (EPG match
 A source added from the suggestions is marked **Managed**:
 
 - It is switched off when it has matched nothing for two weeks (three when its name still names a subscribed league). Its settings are kept.
+- Its inactivity clock pauses during the offseason and whenever recent event evidence is unavailable for its league. A new season gets a 21-day opening grace period before idle time counts. Unknown league scope or unavailable schedule evidence does not trigger retirement.
 - It is switched back on when a scan sees events in its group again.
 - It is removed only after it has been switched off and its group has been gone from Dispatcharr for two weeks.
 

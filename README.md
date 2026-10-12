@@ -35,6 +35,8 @@ docker compose up -d
 
 **Official Docs**: [pharaoh-labs.github.io/teamarr](https://pharaoh-labs.github.io/teamarr/) — User Guide, Technical Reference, Supported Leagues
 
+The Sources page includes **season-aware source health reviews** alongside Suggested sources, with evidence-based quiet/coverage recommendations and user-controlled actions.
+
 ## Contributing
 
 Bug reports, league requests, and pull requests are welcome. See the [Contributing Guide](CONTRIBUTING.md). PRs target `dev`.

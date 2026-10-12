@@ -773,6 +773,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     auto_added_at TIMESTAMP,                     -- (#997) Set when source discovery added it on its own (a toggled league); NULL = the user pressed Add
     managed BOOLEAN DEFAULT 0,                   -- (#997) Created by source discovery. Only a managed source is ever disabled or removed on its own; a hand edit clears the flag.
     last_matched_at TIMESTAMP,                   -- (#997) Last generation run in which this source matched a stream
+    last_matched_leagues JSON DEFAULT '[]',      -- League codes matched in that last matching run; retained for season-aware source health
     is_channel_source BOOLEAN DEFAULT 0,         -- (183.9) System-managed source group whose candidate streams come from curated Dispatcharr channels (their assigned streams + each channel's own EPG) instead of an M3U group. Auto-created/toggled by settings.epg_channel_source_enabled; hidden from the Event Groups UI.
     dispatcharr_channel_group_id INTEGER,        -- (#542) The Dispatcharr channel group a channel-source row reads. One row per selected group; NULL = the catch-all row used when no groups are selected (every group).
 
@@ -2004,6 +2005,21 @@ CREATE TABLE IF NOT EXISTS source_candidate_scans (
     FOREIGN KEY (candidate_id) REFERENCES source_candidates(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_source_candidate_scans ON source_candidate_scans(candidate_id, scanned_at);
+
+-- =============================================================================
+-- SOURCE HEALTH DECISIONS (#1044)
+-- User decisions on advisory source-health recommendations. A keep decision is
+-- tied to the last-match watermark; a new successful match makes it eligible
+-- for review again. Snoozes expire automatically.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS source_health_decisions (
+    group_id INTEGER PRIMARY KEY,
+    decision TEXT NOT NULL CHECK(decision IN ('keep', 'snooze')),
+    decided_at TIMESTAMP NOT NULL,
+    baseline_last_matched_at TIMESTAMP,
+    snoozed_until TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES event_epg_groups(id) ON DELETE CASCADE
+);
 
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_enabled ON consolidation_exception_keywords(enabled);
 CREATE INDEX IF NOT EXISTS idx_exception_keywords_behavior ON consolidation_exception_keywords(behavior);

@@ -622,7 +622,13 @@ class EventGroupProcessor(
             status_callback: Optional callback(status_message) for phase updates
             run_id: Parent full_epg run id for match-detail persistence (None = skip)
         """
-        result = ProcessingResult(group_id=group.id, group_name=group.name)
+        result = ProcessingResult(
+            group_id=group.id,
+            group_name=group.name,
+            name_match_enabled=group.name_match_enabled,
+            team_streams_enabled=group.team_streams_enabled,
+            epg_match_enabled=group.epg_match_enabled,
+        )
 
         # Template is required — check subscription templates
         sub_templates = get_subscription_templates(conn)
@@ -705,6 +711,7 @@ class EventGroupProcessor(
             effective_leagues = self._get_subscription_leagues(conn, group)
 
             # Step 3: Match streams to events (uses fingerprint cache)
+            provider_failures_before = getattr(self._service, "event_fetch_failures", 0)
             match_result = self._match_streams(
                 streams,
                 group,
@@ -713,6 +720,13 @@ class EventGroupProcessor(
                 status_callback=status_callback,
                 resolved_leagues=effective_leagues,
             )
+            provider_failures_after = getattr(self._service, "event_fetch_failures", 0)
+            if isinstance(provider_failures_before, int) and isinstance(
+                provider_failures_after, int
+            ):
+                result.provider_fetch_failures = max(
+                    0, provider_failures_after - provider_failures_before
+                )
             _mark("match")
             # Coverage = distinct streams; volume = total matched results (EPG/TEAM_ONLY
             # fan one stream out to many results, which is why the old result-count
@@ -721,6 +735,16 @@ class EventGroupProcessor(
             result.streams_unmatched = match_result.unmatched_stream_count
             result.match_result_count = match_result.matched_count
             result.streams_cached = match_result.cache_hits
+            matched_streams_by_league: dict[str, set[int]] = {}
+            for match in match_result.results:
+                if match.matched and match.league:
+                    matched_streams_by_league.setdefault(match.league.lower(), set()).add(
+                        match.stream_id
+                    )
+            result.matched_leagues = {
+                league: len(stream_ids)
+                for league, stream_ids in sorted(matched_streams_by_league.items())
+            }
 
             # Count matcher-level exclusions (matched but excluded by league/event_final)
             for r in match_result.results:
@@ -974,6 +998,7 @@ class EventGroupProcessor(
                 excluded_event_past=result.excluded_event_past,
                 excluded_before_window=result.excluded_before_window,
                 excluded_league_not_included=result.excluded_league_not_included,
+                matched_leagues=list(result.matched_leagues),
             )
 
         except Exception as e:

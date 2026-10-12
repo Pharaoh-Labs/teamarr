@@ -28,6 +28,11 @@ class ProcessingResult:
     streams_matched: int = 0  # Distinct streams that matched ≥1 event (coverage)
     streams_unmatched: int = 0  # Distinct streams with no match (coverage)
     match_result_count: int = 0  # Total matched results produced (volume; EPG fans out)
+    matched_leagues: dict[str, int] = field(default_factory=dict)  # Distinct streams by league
+    provider_fetch_failures: int = 0
+    name_match_enabled: bool = True
+    team_streams_enabled: bool = False
+    epg_match_enabled: bool = False
     streams_excluded: int = 0  # Matched but excluded by timing (past/final/early)
     streams_cached: int = 0  # Match results served from the fingerprint cache
 
@@ -69,8 +74,17 @@ class ProcessingResult:
             "id": self.group_id,
             "name": self.group_name,
             "fetched": self.streams_fetched,
+            "eligible": self.streams_after_filter,
             "matched": self.streams_matched,
             "unmatched": self.streams_unmatched,
+            "match_results": self.match_result_count,
+            "matched_leagues": self.matched_leagues,
+            "provider_fetch_failures": self.provider_fetch_failures,
+            "matching_types": {
+                "name": self.name_match_enabled,
+                "team": self.team_streams_enabled,
+                "epg": self.epg_match_enabled,
+            },
             "cached": self.streams_cached,
             "channels_created": self.channels_created,
             "programmes": self.programmes_generated,

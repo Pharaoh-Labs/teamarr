@@ -590,11 +590,21 @@ def maintain_managed_sources(
     * enabled, matched nothing for the idle window -> disabled (settings kept)
     * disabled, its group shows games in this scan -> enabled again
     * disabled, its group gone for the gone window -> removed
+
+    The idle clock is season-aware and only advances when recent successful
+    event evidence exists for a known league in the source's scope.
     """
-    named = {
-        c.m3u_group_id: bool(c.name_leagues)
-        for c in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted")
+    from teamarr.services.source_health import (
+        managed_source_idle_days,
+        recently_observed_leagues,
+    )
+
+    accepted_candidates = get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted")
+    named = {c.m3u_group_id: bool(c.name_leagues) for c in accepted_candidates}
+    candidate_by_source = {
+        c.source_group_id: c for c in accepted_candidates if c.source_group_id is not None
     }
+    recently_active = recently_observed_leagues(conn, now)
     created = {
         row["id"]: row["created_at"]
         for row in conn.execute("SELECT id, created_at FROM event_epg_groups WHERE managed = 1")
@@ -611,7 +621,17 @@ def maintain_managed_sources(
             continue
         group_live = source.m3u_group_id in live_group_ids
         if source.enabled:
-            idle = _age_days(source.last_matched_at or created.get(source.id), now)
+            candidate = candidate_by_source.get(source.id)
+            focus_leagues = source.last_matched_leagues
+            if not focus_leagues and candidate is not None:
+                focus_leagues = list(candidate.leagues) or candidate.name_leagues
+            idle = managed_source_idle_days(
+                source.last_matched_at,
+                created.get(source.id),
+                focus_leagues,
+                now,
+                recently_active,
+            )
             limit = (
                 MANAGED_IDLE_DAYS_WITH_NAME if named.get(source.m3u_group_id) else MANAGED_IDLE_DAYS
             )

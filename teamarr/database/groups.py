@@ -133,6 +133,7 @@ class EventEPGGroup:
     managed: bool = False
     auto_added_at: str | None = None  # Set when discovery added it on its own (#997)
     last_matched_at: str | None = None  # Last run in which it matched a stream
+    last_matched_leagues: list[str] = field(default_factory=list)
     # (#542) Dispatcharr channel group a channel-source row reads; None = all
     dispatcharr_channel_group_id: int | None = None
     # Per-group subscription overrides (NULL = inherit global)
@@ -292,6 +293,11 @@ def _row_to_group(row) -> EventEPGGroup:
         managed=bool(row["managed"]) if "managed" in row.keys() else False,
         auto_added_at=row["auto_added_at"] if "auto_added_at" in row.keys() else None,
         last_matched_at=row["last_matched_at"] if "last_matched_at" in row.keys() else None,
+        last_matched_leagues=(
+            json.loads(row["last_matched_leagues"] or "[]")
+            if "last_matched_leagues" in row.keys()
+            else []
+        ),
         dispatcharr_channel_group_id=(
             row["dispatcharr_channel_group_id"]
             if "dispatcharr_channel_group_id" in row.keys()
@@ -1009,6 +1015,7 @@ def update_group_stats(
     excluded_event_past: int = 0,
     excluded_before_window: int = 0,
     excluded_league_not_included: int = 0,
+    matched_leagues: list[str] | None = None,
 ) -> bool:
     """Update processing stats for a group after EPG generation.
 
@@ -1035,16 +1042,27 @@ def update_group_stats(
         excluded_event_past: EXCLUDED - Event already ended
         excluded_before_window: EXCLUDED - Too early to create channel
         excluded_league_not_included: EXCLUDED - League not in group
+        matched_leagues: League codes represented by matched results in this run
 
     Returns:
         True if updated
     """
     if matched_count > 0:
         # Source discovery retires a managed source by how long ago this was (#997).
-        conn.execute(
-            "UPDATE event_epg_groups SET last_matched_at = datetime('now') WHERE id = ?",
-            (group_id,),
-        )
+        if matched_leagues is None:
+            conn.execute(
+                "UPDATE event_epg_groups SET last_matched_at = datetime('now') WHERE id = ?",
+                (group_id,),
+            )
+        else:
+            conn.execute(
+                "UPDATE event_epg_groups SET last_matched_at = datetime('now'), "
+                "last_matched_leagues = ? WHERE id = ?",
+                (
+                    json.dumps(sorted({league.lower() for league in matched_leagues if league})),
+                    group_id,
+                ),
+            )
     if total_stream_count is not None:
         cursor = conn.execute(
             """UPDATE event_epg_groups
@@ -1510,5 +1528,4 @@ def delete_group_xmltv(conn: Connection, group_id: int) -> bool:
         logger.debug("[DELETED] XMLTV for group id=%d", group_id)
         return True
     return False
-
 

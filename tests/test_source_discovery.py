@@ -686,11 +686,35 @@ def _backdate(source_id, **cols):
 
 def _maintain(live=(1,), evidence=None):
     from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
-    from teamarr.utilities.tz import now_utc
+    from teamarr.utilities.tz import now_utc, to_db_utc
 
     summary = ScanSummary()
     with get_db() as conn:
-        maintain_managed_sources(conn, now_utc(), set(live), evidence or {}, summary)
+        now = now_utc()
+        conn.execute(
+            """INSERT INTO processing_runs
+                   (run_type, started_at, completed_at, status, extra_metrics)
+               VALUES ('full_epg', ?, ?, 'completed', ?)""",
+            (
+                to_db_utc(now),
+                to_db_utc(now),
+                json.dumps(
+                    {
+                        "groups": [
+                            {
+                                "id": 9999,
+                                "fetched": 1,
+                                "eligible": 1,
+                                "matched": 1,
+                                "matched_leagues": {"nhl": 1},
+                                "provider_fetch_failures": 0,
+                            }
+                        ]
+                    }
+                ),
+            ),
+        )
+        maintain_managed_sources(conn, now, set(live), evidence or {}, summary)
     return summary
 
 
@@ -739,6 +763,76 @@ def test_an_idle_managed_source_is_disabled_and_comes_back_with_games(api):
     assert _maintain(evidence={1: ScanEvidence(1, "USA: ESPN PLUS")}).sources_reenabled == 0
     again = _maintain(evidence={1: ScanEvidence(1, "USA: ESPN PLUS", game_matches=2)})
     assert again.sources_reenabled == 1 and _source(source_id).enabled is True
+
+
+def test_an_offseason_does_not_retire_a_managed_source(api):
+    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+
+    _, source_id = _accept_first(api)  # accepted candidate has observed NHL evidence
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE event_epg_groups SET created_at = ?, last_matched_at = ? WHERE id = ?",
+            ("2025-10-01 00:00:00", "2026-02-15 00:00:00", source_id),
+        )
+        summary = ScanSummary()
+        maintain_managed_sources(
+            conn,
+            datetime(2026, 7, 15, tzinfo=UTC),
+            {1},
+            {},
+            summary,
+        )
+
+    assert summary.sources_disabled == 0
+    assert _source(source_id).enabled is True
+
+
+def test_managed_retirement_resumes_after_current_season_opportunity(api):
+    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+
+    _, source_id = _accept_first(api)
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE event_epg_groups SET created_at = ?, last_matched_at = ? WHERE id = ?",
+            ("2025-10-01 00:00:00", "2026-02-15 00:00:00", source_id),
+        )
+        from teamarr.utilities.tz import to_db_utc
+
+        now = datetime(2026, 10, 12, tzinfo=UTC)
+        conn.execute(
+            """INSERT INTO processing_runs
+                   (run_type, started_at, completed_at, status, extra_metrics)
+               VALUES ('full_epg', ?, ?, 'completed', ?)""",
+            (
+                to_db_utc(now),
+                to_db_utc(now),
+                json.dumps(
+                    {
+                        "groups": [
+                            {
+                                "id": 9999,
+                                "fetched": 1,
+                                "eligible": 1,
+                                "matched": 1,
+                                "matched_leagues": {"nhl": 1},
+                                "provider_fetch_failures": 0,
+                            }
+                        ]
+                    }
+                ),
+            ),
+        )
+        summary = ScanSummary()
+        maintain_managed_sources(
+            conn,
+            now,
+            {1},
+            {},
+            summary,
+        )
+
+    assert summary.sources_disabled == 1
+    assert _source(source_id).enabled is False
 
 
 def test_a_recent_match_keeps_a_managed_source(api):
@@ -800,8 +894,16 @@ def test_a_run_that_matches_stamps_the_source(db):
         source_id = create_group(conn, name="S", leagues=[], m3u_group_id=5)
         update_group_stats(conn, source_id, stream_count=10, matched_count=0)
         assert get_group(conn, source_id).last_matched_at is None
-        update_group_stats(conn, source_id, stream_count=10, matched_count=4)
-        assert get_group(conn, source_id).last_matched_at is not None
+        update_group_stats(
+            conn,
+            source_id,
+            stream_count=10,
+            matched_count=4,
+            matched_leagues=["NFL", "nhl", "NFL"],
+        )
+        source = get_group(conn, source_id)
+        assert source.last_matched_at is not None
+        assert source.last_matched_leagues == ["nfl", "nhl"]
 
 
 def test_a_team_stream_group_becomes_a_team_stream_source(api):

@@ -194,6 +194,20 @@ def test_seam_filters_provider_superset_to_user_day():
     assert [e.id for e in service.get_events("boxing", date(2026, 8, 23))] == ["sun"]
 
 
+def test_event_fetch_failures_are_counted_for_health_observations():
+    class _BrokenProvider(_SupersetProvider):
+        def get_events(self, league, target_date):
+            raise RuntimeError("provider unavailable")
+
+    service = SportsDataService(providers=[])
+    service._cache = _FakeCache()
+    service.add_provider(_BrokenProvider([]))
+
+    assert service.event_fetch_failures == 0
+    assert service.get_events("boxing", date(2026, 8, 22)) == []
+    assert service.event_fetch_failures > 0
+
+
 def _resolved(service) -> dict:
     """The user-day layer of the cache (``events_v2``), without raw buckets."""
     return {k: v for k, v in service._cache.store.items() if k.startswith("events_v2:")}
