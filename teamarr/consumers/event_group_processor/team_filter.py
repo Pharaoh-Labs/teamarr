@@ -285,11 +285,53 @@ class TeamFiltering:
 
         return deleted_count
 
+    def _cleanup_untemplated_channels(
+        self,
+        group: EventEPGGroup,
+        conn: Connection,
+        all_matched_events: dict[str, Event],
+    ) -> int:
+        """Delete this group's channels for events that resolve no event template (#1061).
+
+        The subscription template assignments are what declare event channels
+        wanted, per league, sport or default. When an assignment is removed,
+        the events still match (matching feeds managed team channels too), so
+        the channels created under the old assignment would stay until their
+        own expiry. Only events matched this run are judged: a channel whose
+        event was not seen this run says nothing about its template.
+        """
+        from teamarr.database.channels import get_managed_channels_for_group
+        from teamarr.database.subscription import get_subscription_template_for_event
+
+        deleted_count = 0
+        verdicts: dict[tuple[str, str], bool] = {}
+        for channel in get_managed_channels_for_group(conn, group.id):
+            event = all_matched_events.get(channel.event_id)
+            if event is None:
+                continue
+            key = (getattr(event, "sport", None) or "", getattr(event, "league", None) or "")
+            if key not in verdicts:
+                verdicts[key] = get_subscription_template_for_event(conn, *key) is None
+            if not verdicts[key]:
+                continue
+            if self._delete_channel_for_team_filter(
+                conn, channel, reason="no_event_template", change_source="template_assignment"
+            ):
+                deleted_count += 1
+                logger.info(
+                    "[EVENT_EPG] Deleted channel '%s' (event_id=%s) - no event template for %s",
+                    channel.channel_name,
+                    channel.event_id,
+                    key[1] or key[0] or "its league",
+                )
+        return deleted_count
+
     def _delete_channel_for_team_filter(
         self,
         conn: Connection,
         channel,
         reason: str,
+        change_source: str = "team_filter",
     ) -> bool:
         """Delete a managed channel due to team filter.
 
@@ -315,7 +357,7 @@ class TeamFiltering:
                 conn=conn,
                 managed_channel_id=channel.id,
                 change_type="deleted",
-                change_source="team_filter",
+                change_source=change_source,
                 notes=f"Channel deleted: {reason}",
             )
 
