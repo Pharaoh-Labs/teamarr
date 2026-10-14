@@ -422,13 +422,16 @@ def create_app() -> FastAPI:
 
                 raise HTTPException(status_code=404, detail="Not found")
 
-            # Serve static files if they exist (favicon, etc.)
-            file_path = frontend_dist / path
-            if file_path.exists() and file_path.is_file():
-                return FileResponse(file_path)
+            # Serve static files if they exist (favicon, etc.). The path is
+            # the caller's: normalise it and only serve it from inside the
+            # dist directory (#1051); anything else is a SPA route.
+            dist_root = os.path.abspath(frontend_dist)
+            candidate = os.path.normpath(os.path.join(dist_root, path))
+            if candidate.startswith(dist_root + os.sep) and os.path.isfile(candidate):
+                return FileResponse(candidate)
 
             # Fall back to index.html for SPA routing
-            return FileResponse(frontend_dist / "index.html")
+            return FileResponse(os.path.join(dist_root, "index.html"))
 
         logger.info("[STARTUP] Serving React UI from %s", frontend_dist)
     else:

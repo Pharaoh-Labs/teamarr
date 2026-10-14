@@ -1,5 +1,7 @@
 """Dispatcharr settings and connection endpoints."""
 
+import logging
+
 from fastapi import APIRouter
 
 from teamarr.database import get_db
@@ -15,6 +17,7 @@ from .models import (
     unmask_or_skip,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -182,8 +185,11 @@ def get_dispatcharr_epg_sources() -> dict:
             ],
         }
     except Exception as e:
+        # The detail goes to the log; the response names the failure class
+        # only, so no exception text reaches the browser (#1051).
+        logger.warning("[DISPATCHARR] Failed to list EPG sources: %s", e)
         return {
             "success": False,
-            "error": str(e),
+            "error": f"Could not list EPG sources from Dispatcharr ({type(e).__name__})",
             "sources": [],
         }

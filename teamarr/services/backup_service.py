@@ -119,11 +119,14 @@ class BackupService:
             raise ValueError(f"Invalid backup filename: {filename!r}")
 
         # Normalise as a pure string operation (no filesystem access) and then
-        # confirm containment with commonpath. Both steps are recognised path
-        # sanitisers, so a hostile filename cannot escape the backup directory.
+        # confirm containment: the normalised path must start with the backup
+        # directory plus a separator. That is the normpath + startswith shape
+        # static analysis recognises as a path sanitiser (#1051); commonpath
+        # alone did the same job but was not recognised, which kept 12 alerts
+        # open against every use of the returned path.
         base = os.path.abspath(self._backup_path)
         candidate = os.path.normpath(os.path.join(base, filename))
-        if candidate == base or os.path.commonpath((base, candidate)) != base:
+        if not candidate.startswith(base + os.sep) or os.path.dirname(candidate) != base:
             raise ValueError(f"Backup filename escapes backup directory: {filename!r}")
         return Path(candidate)
 
