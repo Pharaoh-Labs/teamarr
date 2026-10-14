@@ -60,7 +60,6 @@ from teamarr.database.source_candidates import (
     record_scan,
     set_candidate_status,
 )
-from teamarr.services.group_pattern import resolve_group_name_pattern
 from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
 
 logger = logging.getLogger(__name__)
@@ -261,7 +260,7 @@ class SourceDiscovery:
         self._processor = processor
 
     def _source_group_ids(self, conn: Connection, live_groups: list) -> set[int]:
-        """M3U group ids some source already reads, by id or by name pattern."""
+        """M3U group ids some source already reads."""
         taken: set[int] = set()
         for source in get_all_groups(conn, include_disabled=True):
             # A managed source that was retired is scanned again: games in its
@@ -270,9 +269,6 @@ class SourceDiscovery:
                 continue
             if source.m3u_group_id:
                 taken.add(source.m3u_group_id)
-            if source.m3u_group_name_pattern_enabled and source.m3u_group_name_pattern:
-                matched = resolve_group_name_pattern(live_groups, source.m3u_group_name_pattern)
-                taken |= {g.id for g in matched}
         return taken
 
     def _scan_group(self, group: Any, leagues: list[str], today: date) -> ScanEvidence:

@@ -22,7 +22,6 @@ Channel numbering, channel groups, and channel profiles are *not* per-source set
 
 - **Group Name** — the M3U group this source is bound to (read-only; set at import).
 - **Display Name** *(optional)* — a friendlier name to show in Teamarr instead of the raw group name.
-- **Bind by name pattern** *(edit mode only)* — bind the source to a regex over live group names instead of the exact pinned name, with a live **"Matches N groups"** preview. Makes the source survive provider group renames — see [Binding by Name Pattern](index#binding-by-name-pattern).
 - **Enabled** — toggle the source on/off without deleting it. Disabled sources are skipped during generation.
 - **Matching types** — three independent toggles; at least one must be on (see [Matching Types](index#matching-types)):
   - **Stream name matching** — match streams whose names identify a specific event (`Bills vs Dolphins`).
