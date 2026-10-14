@@ -21,7 +21,7 @@ Optionally, enable **managed channels** for an individual team. Teamarr then cre
 1. Import teams from the league cache
 2. Assign a **team template** to each team
 3. Teamarr looks up each team's schedule and writes EPG programmes for that team's XMLTV channel
-4. For managed teams, Teamarr also evaluates streams from enabled Event Groups against the team's scheduled games and reconciles temporary stream memberships on the persistent channel
+4. For managed teams, Teamarr also evaluates streams from enabled Event Groups against the team's scheduled games and reconciles temporary stream memberships on the persistent channel This does not depend on an event template being assigned: with none, matching still runs and feeds the team channels, and no event channels are created.
 
 Each team's EPG includes:
 - **Pregame** programmes before the game starts

@@ -227,6 +227,29 @@ class ChannelCreator(_LifecycleHost):
                         # threshold, so without it an endurance race with an
                         # 11h template is judged "past" at the 2:45 mark.
                         event_template = self._resolve_event_template(conn, event, template)
+                        if event_template is None:
+                            # No event template covers this league or sport, so
+                            # event channels were not asked for here (#1061).
+                            # The match has already fed the managed team
+                            # channels upstream; nothing to build on this side.
+                            from teamarr.consumers.matching.result import (
+                                EXCLUDED_DISPLAY,
+                                ExcludedReason,
+                            )
+
+                            result.excluded.append(
+                                {
+                                    "stream": stream_name,
+                                    "stream_id": stream_id,
+                                    "event_id": event_id,
+                                    "event_name": event.short_name or event.name,
+                                    "reason": ExcludedReason.NO_EVENT_TEMPLATE.value,
+                                    "reason_display": EXCLUDED_DISPLAY[
+                                        ExcludedReason.NO_EVENT_TEMPLATE
+                                    ],
+                                }
+                            )
+                            continue
                         duration_override = template_duration_override(event_template)
                         excluded_reason = self._timing_manager.categorize_event_timing(
                             event, duration_override, segment
