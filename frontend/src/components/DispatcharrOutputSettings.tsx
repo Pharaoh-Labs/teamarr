@@ -362,7 +362,9 @@ export function DispatcharrOutputSettings() {
                 "{"{sport}"} | {"{league}"}" creates groups like "Hockey | NHL";{" "}
                 "{"{league}"} | {"{conference_abbrev}"}" buckets college football by "NCAAF | SEC"
                 instead of the full conference name. {"{exception_keyword}"} is the matched
-                exception keyword ("Spanish: Rugby").
+                exception keyword ("Spanish: Rugby"). Add |upper, |lower or |title to any
+                placeholder to change its case: "{"{sport|upper}"} | {"{league}"}" gives
+                "HOCKEY | NHL" and "BASEBALL | MLB" instead of mixing "Hockey" with "NHL".
               </p>
             </div>
           )}

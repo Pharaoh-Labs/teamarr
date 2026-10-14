@@ -90,7 +90,10 @@ export function ChannelProfileSelector({
     const allowed = allowKeywordWildcard
       ? ["{sport}", "{league}", "{exception_keyword}"]
       : ["{sport}", "{league}"]
-    if (!allowed.some((token) => customPattern.includes(token))) {
+    // A wildcard may carry a |filter chain (#1050): {sport|upper} still counts.
+    const names = allowKeywordWildcard ? "sport|league|exception_keyword" : "sport|league"
+    const wildcard = new RegExp(`\\{(${names})(\\|[A-Za-z_]+)*\\}`)
+    if (!wildcard.test(customPattern)) {
       toast.error(`Pattern must include ${allowed.join(" or ")}`)
       return
     }
@@ -385,6 +388,10 @@ export function ChannelProfileSelector({
             {allowKeywordWildcard && (
               <>, <code className="bg-muted px-1 rounded">{"{exception_keyword}"}</code></>
             )}
+            . Add <code className="bg-muted px-1 rounded">|upper</code>,{" "}
+            <code className="bg-muted px-1 rounded">|lower</code> or{" "}
+            <code className="bg-muted px-1 rounded">|title</code> to change the case:{" "}
+            <code className="bg-muted px-1 rounded">{"{sport|upper}"}</code> → HOCKEY.
           </div>
         </div>
       )}
