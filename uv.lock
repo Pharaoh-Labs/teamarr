@@ -673,7 +673,7 @@ wheels = [
 
 [[package]]
 name = "teamarr"
-version = "2.23.0"
+version = "2.23.1"
 source = { editable = "." }
 dependencies = [
     { name = "babel" },
