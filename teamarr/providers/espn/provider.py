@@ -814,6 +814,11 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
             # No summary endpoint behind a format league (#944); the day's
             # panel already carries everything the event has.
             return None
+        if sport_league and sport_league[0] == "racing":
+            # ESPN has no summary for racing: racing/f1 and racing/irl both
+            # answer 404, so the call only ever produced a warning per event
+            # per run on race weekends. The scoreboard carries the sessions.
+            return None
 
         data = self._client.get_event(league, event_id, sport_league)
         if not data:
