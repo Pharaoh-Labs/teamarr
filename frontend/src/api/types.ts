@@ -94,6 +94,8 @@ export interface EventGroup {
   // (null = every group). Only its league scope and team filter are editable.
   is_channel_source?: boolean
   dispatcharr_channel_group_id?: number | null
+  // (#1046) The Dispatcharr group behind a channel source no longer exists.
+  source_missing?: boolean
   // (#997) Created by source discovery; retired on its own when it goes quiet.
   // Any hand edit clears it.
   managed?: boolean

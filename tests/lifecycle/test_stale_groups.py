@@ -189,3 +189,68 @@ def test_stale_account_id_auto_healed(monkeypatch):
     ).fetchone()
     assert row["m3u_account_id"] == 7
 
+
+# ---------------------------------------------------------------------------
+# Channel-source rows (#1046)
+# ---------------------------------------------------------------------------
+
+
+def _add_channel_source(conn, name, dp_group_id, *, enabled=1):
+    conn.execute(
+        "INSERT INTO event_epg_groups "
+        "(name, leagues, enabled, is_channel_source, dispatcharr_channel_group_id) "
+        "VALUES (?, '[]', ?, 1, ?)",
+        (name, enabled, dp_group_id),
+    )
+    conn.commit()
+
+
+def _missing(conn, name):
+    return conn.execute(
+        "SELECT source_missing FROM event_epg_groups WHERE name = ?", (name,)
+    ).fetchone()[0]
+
+
+def test_channel_source_whose_group_is_gone_is_flagged_but_never_stale(monkeypatch):
+    conn = _db()
+    _add_channel_source(conn, "Dispatcharr Channels: 10 SPORTS", 470)
+    _add_channel_source(conn, "Dispatcharr Channels: NBA Direct", 4331)
+    _patch_dispatcharr(monkeypatch, [470, 1222])  # 4331 was deleted in Dispatcharr
+
+    stale = detect_stale_groups(_factory(conn))
+
+    # The stale list is the M3U rebind/delete flow; channel-source rows stay out.
+    assert stale == []
+    assert _missing(conn, "Dispatcharr Channels: 10 SPORTS") == 0
+    assert _missing(conn, "Dispatcharr Channels: NBA Direct") == 1
+
+
+def test_channel_source_flag_clears_when_the_group_is_back(monkeypatch):
+    conn = _db()
+    _add_channel_source(conn, "Dispatcharr Channels: NBA Direct", 4331)
+    conn.execute("UPDATE event_epg_groups SET source_missing = 1")
+    _patch_dispatcharr(monkeypatch, [4331])
+
+    detect_stale_groups(_factory(conn))
+
+    assert _missing(conn, "Dispatcharr Channels: NBA Direct") == 0
+
+
+def test_catch_all_channel_source_is_always_present(monkeypatch):
+    conn = _db()
+    _add_channel_source(conn, "Dispatcharr Channels", None)
+    _patch_dispatcharr(monkeypatch, [1])
+
+    detect_stale_groups(_factory(conn))
+
+    assert _missing(conn, "Dispatcharr Channels") == 0
+
+
+def test_channel_source_is_not_flagged_on_a_dispatcharr_blip(monkeypatch):
+    conn = _db()
+    _add_channel_source(conn, "Dispatcharr Channels: NBA Direct", 4331)
+    _patch_dispatcharr(monkeypatch, [])
+
+    detect_stale_groups(_factory(conn))
+
+    assert _missing(conn, "Dispatcharr Channels: NBA Direct") == 0

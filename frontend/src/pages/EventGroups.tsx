@@ -722,6 +722,15 @@ export function EventGroups() {
                                 Dispatcharr group
                               </Badge>
                             )}
+                            {group.is_channel_source && group.source_missing && (
+                              <Badge
+                                variant="destructive"
+                                className="text-xs"
+                                title="This Dispatcharr channel group no longer exists. Untick it under Matching → Dispatcharr as a Stream Source to remove this source."
+                              >
+                                Group missing
+                              </Badge>
+                            )}
                             {group.managed && (
                               <Badge
                                 variant="info"

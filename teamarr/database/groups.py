@@ -133,6 +133,9 @@ class EventEPGGroup:
     managed: bool = False
     auto_added_at: str | None = None  # Set when discovery added it on its own (#997)
     last_matched_at: str | None = None  # Last run in which it matched a stream
+    # The Dispatcharr group behind this source is gone (#1046 for channel-source
+    # rows; M3U rows use the same column through the stale-groups flow).
+    source_missing: bool = False
     # (#542) Dispatcharr channel group a channel-source row reads; None = all
     dispatcharr_channel_group_id: int | None = None
     # Per-group subscription overrides (NULL = inherit global)
@@ -292,6 +295,7 @@ def _row_to_group(row) -> EventEPGGroup:
         managed=bool(row["managed"]) if "managed" in row.keys() else False,
         auto_added_at=row["auto_added_at"] if "auto_added_at" in row.keys() else None,
         last_matched_at=row["last_matched_at"] if "last_matched_at" in row.keys() else None,
+        source_missing=bool(row["source_missing"]) if "source_missing" in row.keys() else False,
         dispatcharr_channel_group_id=(
             row["dispatcharr_channel_group_id"]
             if "dispatcharr_channel_group_id" in row.keys()
@@ -391,7 +395,10 @@ CHANNEL_SOURCE_NAME = "Dispatcharr Channels"
 def _channel_source_names(dp_group_id: int | None, group_names: dict[int, str]) -> tuple[str, str]:
     """(name, display_name) for a channel-source row."""
     if dp_group_id is None:
-        return CHANNEL_SOURCE_NAME, f"{CHANNEL_SOURCE_NAME} (EPG source)"
+        # The catch-all row exists because no groups are selected and reads
+        # every group; say so, or it looks like a group the user just
+        # deselected is still there (#1046).
+        return CHANNEL_SOURCE_NAME, f"{CHANNEL_SOURCE_NAME} (all groups)"
     label = group_names.get(dp_group_id) or f"group {dp_group_id}"
     return f"{CHANNEL_SOURCE_NAME}: {label}", f"Dispatcharr: {label}"
 

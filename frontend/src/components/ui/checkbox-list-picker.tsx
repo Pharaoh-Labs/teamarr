@@ -50,6 +50,8 @@ interface CheckboxListPickerProps {
   maxBadges?: number
   /** Label for the picker (optional, rendered by parent) */
   label?: string
+  /** Hide "Select All" — for pickers where an empty selection already means all */
+  hideSelectAll?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +66,7 @@ export function CheckboxListPicker({
   searchPlaceholder = "Search...",
   maxHeight = "max-h-48",
   maxBadges = 10,
+  hideSelectAll = false,
 }: CheckboxListPickerProps) {
   const [search, setSearch] = useState("")
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -168,9 +171,11 @@ export function CheckboxListPicker({
           {selected.length} of {totalCount} selected
         </span>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={selectAll}>
-            Select All
-          </Button>
+          {!hideSelectAll && (
+            <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={selectAll}>
+              Select All
+            </Button>
+          )}
           {selected.length > 0 && (
             <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={clearAll}>
               Clear
