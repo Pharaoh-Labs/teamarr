@@ -40,40 +40,11 @@ export async function getStaleGroups(): Promise<StaleGroup[]> {
   return api.get("/groups/stale")
 }
 
-/** Re-bind suggestion for a stale source — a likely-renamed live group (#450). */
-export interface StaleRebindSuggestion {
-  group_id: number
-  group_name: string
-  old_group_name: string
-  candidate_group_id: number
-  candidate_group_name: string
-  similarity: number
-  suggested_pattern: string | null
-}
-
-export async function getStaleRebindSuggestions(): Promise<StaleRebindSuggestion[]> {
-  return api.get("/groups/stale/suggestions")
-}
-
-export interface GroupRebindRequest {
-  m3u_group_id: number
-  m3u_group_name: string
-  /** Adopt this name pattern in the same click (rename-proofing). */
-  pattern?: string | null
-}
-
-export async function rebindGroup(
-  groupId: number,
-  data: GroupRebindRequest
-): Promise<{ id: number }> {
-  return api.post(`/groups/${groupId}/rebind`, data)
-}
-
 export async function createGroup(data: EventGroupCreate): Promise<EventGroup> {
   return api.post("/groups", data)
 }
 
-/** Live resolution of a group-name pattern against Dispatcharr M3U groups (#450). */
+/** Live resolution of a group-name pattern against Dispatcharr M3U groups (exception-keyword sources). */
 export interface GroupPatternPreview {
   valid: boolean
   total: number

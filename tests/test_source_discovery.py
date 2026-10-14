@@ -202,19 +202,12 @@ def test_stale_streams_are_not_matched(db):
 def test_groups_that_are_already_sources_are_not_read(db):
     with get_db() as conn:
         create_group(conn, name="By id", leagues=[], m3u_group_id=7)
-        create_group(
-            conn,
-            name="By pattern",
-            leagues=[],
-            m3u_group_name_pattern=r"EPL \(MW\d+\)",
-            m3u_group_name_pattern_enabled=True,
-        )
         create_group(conn, name="Disabled", leagues=[], m3u_group_id=9, enabled=False)
         conn.commit()
-    groups = [_group(7, "USA | NBA"), _group(8, "EPL (MW7)"), _group(9, "Old"), _group(10, "New")]
+    groups = [_group(7, "USA | NBA"), _group(9, "Old"), _group(10, "New")]
     summary, m3u, _ = _scan(groups, {})
     assert m3u.read == [10]
-    assert summary.skipped_sources == 3
+    assert summary.skipped_sources == 2
 
 
 def test_empty_and_dismissed_groups_are_not_read(db):

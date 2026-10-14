@@ -78,8 +78,8 @@ class ExceptionKeyword:
 def compile_source_pattern(pattern: str | None) -> re.Pattern | None:
     """Compile a match-source regex, or None if empty/invalid.
 
-    Case-insensitive search, the same semantics as the event-group
-    ``m3u_group_name_pattern``. The API rejects invalid patterns; an invalid
+    Case-insensitive search, the same semantics as the stream include and
+    exclude regexes. The API rejects invalid patterns; an invalid
     one already stored is skipped rather than failing every match.
     """
     if not pattern or not pattern.strip():
