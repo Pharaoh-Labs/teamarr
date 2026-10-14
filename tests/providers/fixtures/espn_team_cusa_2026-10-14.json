@@ -1,0 +1,121 @@
+{
+ "team": {
+  "id": "55",
+  "displayName": "Jacksonville State Gamecocks",
+  "abbreviation": "JXST",
+  "record": {
+   "items": [
+    {
+     "description": "Overall Record",
+     "stats": [
+      {
+       "name": "OTLosses",
+       "value": 1.0
+      },
+      {
+       "name": "OTWins",
+       "value": 0.0
+      },
+      {
+       "name": "avgPointsAgainst",
+       "value": 22.714284896850586
+      },
+      {
+       "name": "avgPointsFor",
+       "value": 27.285715103149414
+      },
+      {
+       "name": "differential",
+       "value": 32.0
+      },
+      {
+       "name": "divisionWinPercent",
+       "value": 0.0
+      },
+      {
+       "name": "gamesBehind",
+       "value": 0.0
+      },
+      {
+       "name": "gamesPlayed",
+       "value": 7.0
+      },
+      {
+       "name": "leagueWinPercent",
+       "value": 1.0
+      },
+      {
+       "name": "losses",
+       "value": 2.0
+      },
+      {
+       "name": "playoffSeed",
+       "value": 1.0
+      },
+      {
+       "name": "pointDifferential",
+       "value": 32.0
+      },
+      {
+       "name": "points",
+       "value": 1.5
+      },
+      {
+       "name": "pointsAgainst",
+       "value": 159.0
+      },
+      {
+       "name": "pointsFor",
+       "value": 191.0
+      },
+      {
+       "name": "streak",
+       "value": 4.0
+      },
+      {
+       "name": "ties",
+       "value": 0.0
+      },
+      {
+       "name": "winPercent",
+       "value": 0.7142857313156128
+      },
+      {
+       "name": "wins",
+       "value": 5.0
+      },
+      {
+       "name": "divisionLosses",
+       "value": 0.0
+      },
+      {
+       "name": "divisionRecord"
+      },
+      {
+       "name": "divisionTies",
+       "value": 0.0
+      },
+      {
+       "name": "divisionWins",
+       "value": 0.0
+      },
+      {
+       "name": "lockedDivRank",
+       "value": 0.0
+      }
+     ],
+     "summary": "5-2",
+     "type": "total"
+    }
+   ]
+  },
+  "standingSummary": "1st in CUSA",
+  "groups": {
+   "id": "12",
+   "isConference": true,
+   "parent": {
+    "id": "80"
+   }
+  }
+ }
+}
