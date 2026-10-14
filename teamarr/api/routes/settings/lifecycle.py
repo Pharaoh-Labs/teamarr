@@ -126,6 +126,18 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
             detail="source_discovery_auto_max_streams must be at least 1",
         )
 
+    for name, floor in (
+        ("source_idle_days", 1),
+        ("source_gone_days", 1),
+        ("source_missing_delete_days", 0),
+    ):
+        value = getattr(update, name)
+        if value is not None and value < floor:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{name} must be at least {floor}",
+            )
+
     if update.interval_minutes is not None and update.interval_minutes < 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -151,6 +163,9 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
             channel_reset_cron=update.channel_reset_cron,
             source_discovery_mode=update.source_discovery_mode,
             source_discovery_auto_max_streams=update.source_discovery_auto_max_streams,
+            source_idle_days=update.source_idle_days,
+            source_gone_days=update.source_gone_days,
+            source_missing_delete_days=update.source_missing_delete_days,
         )
 
     # Apply scheduler state change immediately if enabled was updated

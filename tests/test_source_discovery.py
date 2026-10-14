@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from teamarr.consumers.matching import StreamCategory
-from teamarr.consumers.source_discovery import (
+from teamarr.consumers.source_lifecycle.discovery import (
     TIER_GAMES,
     TIER_NAME_ONLY,
     TIER_TEAMS,
@@ -259,7 +259,7 @@ def test_a_replay_group_is_recorded_but_never_matched_or_suggested(db):
 
 def test_the_scan_waits_for_a_generation_run_between_groups(db, monkeypatch):
     from teamarr.consumers import generation_status
-    from teamarr.consumers import source_discovery as sd
+    from teamarr.consumers.source_lifecycle import discovery as sd
 
     answers = iter([True, True, False])
     monkeypatch.setattr(generation_status, "is_in_progress", lambda: next(answers, False))
@@ -634,7 +634,7 @@ def test_the_scan_is_on_by_default_and_the_only_control_is_the_switch(api):
 
 
 def test_a_scan_is_skipped_without_dispatcharr_and_only_one_runs_at_a_time(db, monkeypatch):
-    from teamarr.consumers import source_discovery as sd
+    from teamarr.consumers.source_lifecycle import discovery as sd
 
     monkeypatch.setattr(
         "teamarr.dispatcharr.factory.get_dispatcharr_connection", lambda *a, **k: None
@@ -678,7 +678,7 @@ def _backdate(source_id, **cols):
 
 
 def _maintain(live=(1,), evidence=None):
-    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, maintain_managed_sources
     from teamarr.utilities.tz import now_utc
 
     summary = ScanSummary()
@@ -721,6 +721,18 @@ def test_disabling_by_hand_also_claims_it_so_discovery_never_turns_it_back_on(ap
     summary = _maintain(evidence={1: ScanEvidence(1, "USA: ESPN PLUS", game_matches=9)})
     source = _source(source_id)
     assert (source.managed, source.enabled, summary.sources_reenabled) == (False, False, 0)
+
+
+def test_the_idle_window_is_the_policy_setting(api):
+    # Sources → Automation → Retire (#1058): the days are a setting, not a constant.
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=2)
+    assert _maintain().sources_disabled == 0
+    with get_db() as conn:
+        conn.execute("UPDATE settings SET source_idle_days = 1")
+        conn.commit()
+    assert _maintain().sources_disabled == 1
+    assert _source(source_id).enabled is False
 
 
 def test_an_idle_managed_source_is_disabled_and_comes_back_with_games(api):
@@ -929,7 +941,7 @@ def _two_days(gid, name, games, leagues, streams=50, name_leagues=(), team=0, te
 
 
 def _auto(summary_only=False):
-    from teamarr.consumers.source_discovery import ScanSummary, auto_add_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, auto_add_sources
     from teamarr.utilities.tz import now_utc
 
     summary = ScanSummary()
@@ -1015,7 +1027,7 @@ def test_one_day_of_evidence_is_not_enough(db):
             ],
             now_utc() + timedelta(days=1),
         )
-    from teamarr.consumers.source_discovery import ScanSummary, auto_add_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, auto_add_sources
 
     s = ScanSummary()
     with get_db() as conn:

@@ -107,6 +107,12 @@ class SchedulerSettings:
     # fixed hour (SOURCE_DISCOVERY_CRON, #1027); the switch is the only control.
     source_discovery_mode: str = "suggest"
     source_discovery_auto_max_streams: int = 1000
+    # Source lifecycle rules (#1058): days idle before a discovered source is
+    # switched off, days gone before a switched-off one is removed, and days a
+    # hand-made source's group may be missing before it is deleted (0 = never).
+    source_idle_days: int = 14
+    source_gone_days: int = 14
+    source_missing_delete_days: int = 0
 
 
 @dataclass

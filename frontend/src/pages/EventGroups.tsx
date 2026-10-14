@@ -65,7 +65,7 @@ import {
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
 import { BulkEditDialog } from "./event-groups/BulkEditDialog"
-import { SuggestedSources } from "@/components/SuggestedSources"
+import { SourceAutomation } from "@/components/SourceAutomation"
 import { getFailedReasonLabel, getLeagueDisplayName } from "@/lib/utils"
 
 // Helper to get display name (prefer display_name over name)
@@ -87,14 +87,12 @@ export function EventGroups() {
   const cachedLeagues = leaguesResponse?.leagues
   const allLeagueSlugs = useMemo(() => cachedLeagues?.map(l => l.slug) ?? [], [cachedLeagues])
   const deleteMutation = useDeleteGroup()
-  const { formatRelativeTime, formatDateTime } = useDateFormat()
+  const { formatDateTime } = useDateFormat()
   // Stale source groups (lylt.2) — their Dispatcharr M3U group is gone.
   const { data: staleGroups = [] } = useQuery({
     queryKey: ["groups", "stale"],
     queryFn: getStaleGroups,
   })
-  const [showStaleDelete, setShowStaleDelete] = useState(false)
-  const [deletingStale, setDeletingStale] = useState(false)
   const staleIds = useMemo(() => new Set(staleGroups.map((g) => g.id)), [staleGroups])
   const toggleMutation = useToggleGroup()
   const previewMutation = usePreviewGroup()
@@ -210,23 +208,6 @@ export function EventGroups() {
     }
   }
 
-  const handleDeleteAllStale = async () => {
-    setDeletingStale(true)
-    try {
-      const results = await Promise.allSettled(
-        staleGroups.map((g) => deleteMutation.mutateAsync(g.id)),
-      )
-      const ok = results.filter((r) => r.status === "fulfilled").length
-      const failed = results.length - ok
-      if (failed === 0) toast.success(`Deleted ${ok} stale source${ok === 1 ? "" : "s"}`)
-      else toast.warning(`Deleted ${ok}, failed ${failed}`)
-      setShowStaleDelete(false)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete stale sources")
-    } finally {
-      setDeletingStale(false)
-    }
-  }
 
   const handleToggle = async (group: EventGroup) => {
     try {
@@ -393,51 +374,7 @@ export function EventGroups() {
       </div>
 
 
-      {/* Stale sources — their Dispatcharr M3U group is gone (lylt.2) */}
-      {staleGroups.length > 0 && (
-        <Alert
-          variant="warning"
-          icon={<CircleAlert />}
-          title={`${staleGroups.length} stream source${staleGroups.length === 1 ? "" : "s"} missing from Dispatcharr`}
-        >
-          <div className="space-y-2">
-            <p className="text-sm">
-              {staleGroups.length === 1
-                ? "Its M3U group was removed or renamed in Dispatcharr, so it can no longer pull streams. Delete it, or restore the source in Dispatcharr."
-                : "Their M3U groups were removed or renamed in Dispatcharr, so they can no longer pull streams. Delete them, or restore the sources in Dispatcharr."}
-            </p>
-            <ul className="space-y-1.5 text-sm">
-              {staleGroups.map((g) => {
-                return (
-                  <li key={g.id} className="space-y-1">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-medium">{g.display_name || g.name}</span>
-                      {g.m3u_group_name && (
-                        <span className="text-xs text-muted-foreground">was &ldquo;{g.m3u_group_name}&rdquo;</span>
-                      )}
-                      {g.source_last_seen && (
-                        <span className="text-xs text-muted-foreground">
-                          · last seen {formatRelativeTime(g.source_last_seen)}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowStaleDelete(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Delete all stale
-            </Button>
-          </div>
-        </Alert>
-      )}
-
-      <SuggestedSources leagueName={getLeagueDisplay} />
+      <SourceAutomation leagueName={getLeagueDisplay} />
 
       {/* Fixed Batch Operations Bar */}
       {selectedIds.size > 0 && (
@@ -663,7 +600,7 @@ export function EventGroups() {
                                 title={
                                   (group.auto_added_at
                                     ? `Added automatically by source discovery on ${group.auto_added_at.slice(0, 10)}. `
-                                    : "Added from the Suggested sources list. ") +
+                                    : "Added from Automation → Discover. ") +
                                   "It is switched off when it has matched nothing for two weeks and back on when its group has events again. Editing it makes it an ordinary source."
                                 }
                               >
@@ -926,17 +863,6 @@ export function EventGroups() {
         confirmLabel={`Delete ${selectedIds.size} Groups`}
         isPending={deleteMutation.isPending}
         onConfirm={handleBulkDelete}
-      />
-
-      {/* Delete-all-stale confirmation */}
-      <ConfirmDialog
-        open={showStaleDelete}
-        onOpenChange={setShowStaleDelete}
-        title={`Delete ${staleGroups.length} stale source${staleGroups.length === 1 ? "" : "s"}`}
-        description="These sources' M3U groups no longer exist in Dispatcharr. Deleting them also removes their managed channels. This cannot be undone."
-        confirmLabel="Delete all stale"
-        isPending={deletingStale}
-        onConfirm={handleDeleteAllStale}
       />
 
       {/* Stream Preview Modal */}

@@ -62,6 +62,8 @@ from teamarr.database.source_candidates import (
 )
 from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
 
+from .policy import SourceLifecyclePolicy, load_policy
+
 logger = logging.getLogger(__name__)
 
 # Evidence is judged over this many days of scans.
@@ -82,7 +84,7 @@ SAME_CONTENT_OVERLAP = 0.8
 SAME_CONTENT_MIN_EVENTS = 3
 
 # A managed source that has matched nothing for this long is disabled ...
-MANAGED_IDLE_DAYS = 14
+MANAGED_IDLE_DAYS = 14  # defaults; the live values are the SourceLifecyclePolicy fields
 # ... or this long when its group's name still names a subscribed league.
 MANAGED_IDLE_DAYS_WITH_NAME = 21
 # A disabled managed source whose group has been gone this long is removed.
@@ -538,12 +540,11 @@ def auto_add_sources(conn: Connection, now: datetime, summary: ScanSummary) -> N
     name-only groups and replay groups never reach here; the stream-count cap
     keeps the network catch-alls the user's own call.
     """
-    from teamarr.database.settings import get_scheduler_settings
 
     toggled = auto_leagues(conn)
     if not toggled:
         return
-    max_streams = get_scheduler_settings(conn).source_discovery_auto_max_streams
+    max_streams = load_policy(conn).auto_max_streams
     stamp = to_db_utc(now)
     for candidate in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="new"):
         if auto_add_decision(candidate, toggled, max_streams) is None:
@@ -577,6 +578,7 @@ def maintain_managed_sources(
     live_group_ids: set[int],
     evidence: dict[int, ScanEvidence],
     summary: ScanSummary,
+    policy: SourceLifecyclePolicy | None = None,
 ) -> None:
     """Retire managed sources that went quiet and bring back ones with games again.
 
@@ -587,6 +589,7 @@ def maintain_managed_sources(
     * disabled, its group shows games in this scan -> enabled again
     * disabled, its group gone for the gone window -> removed
     """
+    policy = policy or load_policy(conn)
     named = {
         c.m3u_group_id: bool(c.name_leagues)
         for c in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted")
@@ -608,9 +611,7 @@ def maintain_managed_sources(
         group_live = source.m3u_group_id in live_group_ids
         if source.enabled:
             idle = _age_days(source.last_matched_at or created.get(source.id), now)
-            limit = (
-                MANAGED_IDLE_DAYS_WITH_NAME if named.get(source.m3u_group_id) else MANAGED_IDLE_DAYS
-            )
+            limit = policy.idle_days_named if named.get(source.m3u_group_id) else policy.idle_days
             if idle is not None and idle >= limit:
                 set_managed_source_enabled(conn, source.id, False)
                 summary.sources_disabled += 1
@@ -634,7 +635,7 @@ def maintain_managed_sources(
             logger.info("[DISCOVERY] Re-enabled managed source %r: games again", source.name)
         elif not group_live:
             gone = _age_days(seen.get(source.id) or created.get(source.id), now)
-            if gone is not None and gone >= MANAGED_GONE_DAYS:
+            if gone is not None and gone >= policy.gone_days:
                 delete_group(conn, source.id)
                 forget_removed_source(conn, source.id)
                 summary.sources_removed += 1

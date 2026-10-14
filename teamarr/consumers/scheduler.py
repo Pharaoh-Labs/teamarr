@@ -409,7 +409,7 @@ class CronScheduler:
         Called by its own sub-scheduler. Reads Dispatcharr and writes only
         the discovery evidence tables.
         """
-        from teamarr.consumers.source_discovery import run_discovery_scan
+        from teamarr.consumers.source_lifecycle import run_discovery_scan
 
         return run_discovery_scan(self._db_factory)
 
