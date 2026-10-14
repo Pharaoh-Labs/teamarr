@@ -88,8 +88,6 @@ class EventEPGGroup:
     m3u_account_name: str | None = None
     # Group-name pattern binding (#450): regex over live M3U group names,
     # re-resolved at stream-fetch time for provider-rename resilience.
-    m3u_group_name_pattern: str | None = None
-    m3u_group_name_pattern_enabled: bool = False
     # Processing stats
     last_refresh: datetime | None = None
     stream_count: int = 0
@@ -134,6 +132,9 @@ class EventEPGGroup:
     auto_added_at: str | None = None  # Set when discovery added it on its own (#997)
     last_matched_at: str | None = None  # Last run in which it matched a stream
     last_matched_leagues: list[str] = field(default_factory=list)
+    # The Dispatcharr group behind this source is gone (#1046 for channel-source
+    # rows; M3U rows use the same column through the stale-groups flow).
+    source_missing: bool = False
     # (#542) Dispatcharr channel group a channel-source row reads; None = all
     dispatcharr_channel_group_id: int | None = None
     # Per-group subscription overrides (NULL = inherit global)
@@ -211,14 +212,6 @@ def _row_to_group(row) -> EventEPGGroup:
         m3u_group_name=row["m3u_group_name"],
         m3u_account_id=row["m3u_account_id"],
         m3u_account_name=row["m3u_account_name"],
-        m3u_group_name_pattern=(
-            row["m3u_group_name_pattern"] if "m3u_group_name_pattern" in row.keys() else None
-        ),
-        m3u_group_name_pattern_enabled=(
-            bool(row["m3u_group_name_pattern_enabled"])
-            if "m3u_group_name_pattern_enabled" in row.keys()
-            else False
-        ),
         last_refresh=last_refresh,
         stream_count=row["stream_count"] or 0,
         matched_count=row["matched_count"] or 0,
@@ -298,6 +291,7 @@ def _row_to_group(row) -> EventEPGGroup:
             if "last_matched_leagues" in row.keys()
             else []
         ),
+        source_missing=bool(row["source_missing"]) if "source_missing" in row.keys() else False,
         dispatcharr_channel_group_id=(
             row["dispatcharr_channel_group_id"]
             if "dispatcharr_channel_group_id" in row.keys()
@@ -310,9 +304,7 @@ def _row_to_group(row) -> EventEPGGroup:
             else None
         ),
         subscription_soccer_mode=(
-            row["subscription_soccer_mode"]
-            if "subscription_soccer_mode" in row.keys()
-            else None
+            row["subscription_soccer_mode"] if "subscription_soccer_mode" in row.keys() else None
         ),
         subscription_soccer_followed_teams=(
             json.loads(row["subscription_soccer_followed_teams"])
@@ -384,9 +376,7 @@ def get_all_groups(
     if exclude_channel_source:
         clauses.append("COALESCE(is_channel_source, 0) = 0")
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    cursor = conn.execute(
-        f"SELECT * FROM event_epg_groups {where} ORDER BY sort_order, name"
-    )
+    cursor = conn.execute(f"SELECT * FROM event_epg_groups {where} ORDER BY sort_order, name")
 
     return [_row_to_group(row) for row in cursor.fetchall()]
 
@@ -397,7 +387,10 @@ CHANNEL_SOURCE_NAME = "Dispatcharr Channels"
 def _channel_source_names(dp_group_id: int | None, group_names: dict[int, str]) -> tuple[str, str]:
     """(name, display_name) for a channel-source row."""
     if dp_group_id is None:
-        return CHANNEL_SOURCE_NAME, f"{CHANNEL_SOURCE_NAME} (EPG source)"
+        # The catch-all row exists because no groups are selected and reads
+        # every group; say so, or it looks like a group the user just
+        # deselected is still there (#1046).
+        return CHANNEL_SOURCE_NAME, f"{CHANNEL_SOURCE_NAME} (all groups)"
     label = group_names.get(dp_group_id) or f"group {dp_group_id}"
     return f"{CHANNEL_SOURCE_NAME}: {label}", f"Dispatcharr: {label}"
 
@@ -580,9 +573,7 @@ def get_enabled_soccer_leagues(conn: Connection) -> list[str]:
     Returns:
         List of enabled soccer league codes (e.g., ['eng.1', 'esp.1', 'uefa.champions'])
     """
-    cursor = conn.execute(
-        "SELECT league_code FROM leagues WHERE sport = 'soccer' AND enabled = 1"
-    )
+    cursor = conn.execute("SELECT league_code FROM leagues WHERE sport = 'soccer' AND enabled = 1")
     return [row["league_code"] for row in cursor.fetchall()]
 
 
@@ -608,8 +599,6 @@ def create_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
-    m3u_group_name_pattern: str | None = None,
-    m3u_group_name_pattern_enabled: bool = False,
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool = False,
@@ -686,7 +675,6 @@ def create_group(
             stream_timezone, duplicate_event_handling,
             channel_assignment_mode, sort_order, total_stream_count,
             m3u_group_id, m3u_group_name, m3u_account_id, m3u_account_name,
-            m3u_group_name_pattern, m3u_group_name_pattern_enabled,
             stream_include_regex, stream_include_regex_enabled,
             stream_exclude_regex, stream_exclude_regex_enabled,
             custom_regex_teams, custom_regex_teams_enabled,
@@ -702,7 +690,7 @@ def create_group(
             include_teams, exclude_teams, team_filter_mode,
             channel_sort_order, overlap_handling, enabled,
             subscription_leagues, subscription_soccer_mode, subscription_soccer_followed_teams
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
@@ -720,8 +708,6 @@ def create_group(
             m3u_group_name,
             m3u_account_id,
             m3u_account_name,
-            m3u_group_name_pattern,
-            int(m3u_group_name_pattern_enabled),
             stream_include_regex,
             int(stream_include_regex_enabled),
             stream_exclude_regex,
@@ -756,7 +742,8 @@ def create_group(
             json.dumps(subscription_leagues) if subscription_leagues else None,
             subscription_soccer_mode,
             json.dumps(subscription_soccer_followed_teams)
-            if subscription_soccer_followed_teams else None,
+            if subscription_soccer_followed_teams
+            else None,
         ),
     )
     group_id = cursor.lastrowid
@@ -788,8 +775,6 @@ def update_group(
     m3u_group_name: str | None = None,
     m3u_account_id: int | None = None,
     m3u_account_name: str | None = None,
-    m3u_group_name_pattern: str | None = None,
-    m3u_group_name_pattern_enabled: bool | None = None,
     # Stream filtering
     stream_include_regex: str | None = None,
     stream_include_regex_enabled: bool | None = None,
@@ -833,7 +818,6 @@ def update_group(
     clear_m3u_group_name: bool = False,
     clear_m3u_account_id: bool = False,
     clear_m3u_account_name: bool = False,
-    clear_m3u_group_name_pattern: bool = False,
     clear_stream_include_regex: bool = False,
     clear_stream_exclude_regex: bool = False,
     clear_custom_regex_teams: bool = False,
@@ -896,10 +880,6 @@ def update_group(
     builder.set_("m3u_group_name", m3u_group_name, clear=clear_m3u_group_name)
     builder.set_("m3u_account_id", m3u_account_id, clear=clear_m3u_account_id)
     builder.set_("m3u_account_name", m3u_account_name, clear=clear_m3u_account_name)
-    builder.set_(
-        "m3u_group_name_pattern", m3u_group_name_pattern, clear=clear_m3u_group_name_pattern
-    )
-    builder.set_("m3u_group_name_pattern_enabled", m3u_group_name_pattern_enabled, encoder=int)
 
     # Stream filtering
     builder.set_("stream_include_regex", stream_include_regex, clear=clear_stream_include_regex)
@@ -1441,9 +1421,7 @@ def get_group_xmltv(conn: Connection, group_id: int) -> str | None:
     return row["xmltv_content"] if row else None
 
 
-def get_group_xmltv_with_metadata(
-    conn: Connection, group_id: int
-) -> tuple[str, str] | None:
+def get_group_xmltv_with_metadata(conn: Connection, group_id: int) -> tuple[str, str] | None:
     """Get stored XMLTV content and metadata for a group.
 
     Args:
@@ -1528,4 +1506,3 @@ def delete_group_xmltv(conn: Connection, group_id: int) -> bool:
         logger.debug("[DELETED] XMLTV for group id=%d", group_id)
         return True
     return False
-

@@ -52,7 +52,7 @@ Preview lists each unmatched stream with what the classifier actually read out o
 
 ## Review Sources
 
-The **Review sources** panel sits above Suggested sources and is separate from the existing missing-group banner. It surfaces configured sources that may need attention; it never changes a source automatically. A missing M3U group still belongs to the stale-source and re-bind flow.
+The **Review sources** panel is separate from **Automation**, which contains Suggested sources and missing-group handling. It surfaces configured sources that may need attention; it never changes a source automatically. A missing M3U group appears under **Automation → Remove** and is never treated as an inactivity recommendation.
 
 Recommendations use recent, completed full-generation runs only. Failed source runs, empty/filtered groups, and runs with recorded provider event-fetch failures are excluded. Successful provider event data is recorded independently of stream matches, so a source can be reviewed even when it is the only source for a league and has stopped matching. NFL, NHL, and MLB use broad calendar windows; other leagues need positive dated event data in a recent successful run. Unknown or inactive schedules do not count as evidence that a source is bad.
 
@@ -74,15 +74,13 @@ From there:
 - **Single import** (+ icon) opens the full source editor for that group.
 - **Import N Groups** imports your selection in bulk, via a modal that sets the shared settings up front: Stream Timezone, Enabled, and the three matching types (Stream name matching, Team stream source, EPG program matching).
 
-## Suggested Sources
+## Automation
 
-Providers add, rename and drop M3U groups through the year, so a hand-kept source list drifts. Teamarr can look for sources itself. Open **Suggested sources** at the top of the Sources page.
+Everything Teamarr does to the source list on its own lives in one place: **Automation**, at the top of the Sources page, with four blocks in the order things happen. The rules are settings; the daily scan and every generation run read the same ones. **A source you add or edit yourself is touched only by the last rule, and only if you switch it on.**
 
-**What a scan does.** It reads every M3U group that is not already a source, puts every stream in it through the same filtering and matching a generation run uses, and records which groups carried events in leagues you subscribe to. A stream that only matches because team matching was assumed is not counted as a game, so a group that would match nothing as a plain source is never suggested on that basis. Nothing is created and nothing else is changed. A scan takes a few minutes on a large install; it waits for a generation run to finish and pauses if one starts.
+### Discover
 
-**When it runs.** Once a day at 11:00 local time, while the **Scan daily** switch in the Suggested sources header is on (it is on by default; switch it off and nothing scans). Press **Scan now** to run one sooner. More often finds nothing new: the suggestions below read a week of evidence.
-
-**What gets suggested.** Evidence is kept for a week, because most groups are empty or placeholders between match days:
+Providers add, rename and drop M3U groups through the year, so a hand-kept source list drifts. Once a day at 11:00 local time, while the **Scan daily** switch is on (it is on by default), Teamarr reads every M3U group that is not already a source, puts every stream in it through the same filtering and matching a generation run uses, and records which groups carried events in leagues you subscribe to. Press **Scan now** to run one sooner. Evidence is kept for a week, because most groups are empty or placeholders between match days:
 
 | Badge | Meaning |
 |-------|---------|
@@ -90,68 +88,47 @@ Providers add, rename and drop M3U groups through the year, so a hand-kept sourc
 | **Team streams** | The group's name names a subscribed league and its streams are that league's teams ("NFL | Dallas Cowboys"). Added as a team-stream source. |
 | **Name only** | The group's name names a subscribed league, but no scan has matched anything in it yet — usually a group waiting for match day. It drops off the list by itself if it has had streams every day for a week and still matched nothing. |
 
-Discovery reads stream names only. **It does not use EPG matching**: reading the guide for hundreds of linear channels on every scan would cost far more than it finds. A group of linear channels ("ESPN", "TSN1", "Sky Sports Main Event") therefore produces no evidence and is never suggested or added automatically. Add it yourself as an EPG-matching source, or select its channel group under *Matching → Dispatcharr as a Stream Source*.
+Discovery reads stream names only. **It does not use EPG matching**: reading the guide for hundreds of linear channels on every scan would cost far more than it finds. A group of linear channels ("ESPN", "TSN1") is never suggested; add it as an EPG-matching source yourself, or select its channel group under Matching → Dispatcharr as a Stream Source.
 
-Three kinds of group are never suggested:
+Three kinds of group are never suggested: **replay groups** (the name says replay, or most stream names do), **news and regional channels** (a stream naming one team counts only in a league the group's own name names), and **groups you dismissed**.
 
-- **Replay groups.** A group whose name says "replay", or whose streams mostly do ("NBA Replay 9"), is left out entirely.
-- **News and regional channels.** A stream that only names one team counts as evidence only in a league the group's own name names, so a channel that happens to contain a country name does not qualify its group.
-- **Groups you dismissed.**
+The list is flat and organized by the M3U account each group comes from. When two suggested groups carry the same events, the weaker one says *same events as …*; both stay listed. **Add** creates the source. **✕** dismisses the group. Tick several rows, or a whole account, to add or dismiss them together.
 
-The list is flat and organized by the M3U account each group comes from. When two suggested groups carry the same events — the same feeds listed under several groups or providers — the weaker one says *same events as …*. Each can still be added on its own.
+**Decisions are remembered.** A dismissed group is not suggested or scanned again unless you restore it from *Show dismissed groups*, also when the provider renames it and it comes back under the same name. Deleting a source you added from a suggestion counts as dismissing its group. A source you added is never offered again; if it is later removed because its group disappeared, it is added back when the group returns.
 
-**Add** creates the source. **✕** dismisses the group. Tick several rows (or a whole account) to add or dismiss them together.
+A renamed group is handled here too: the old source goes missing (see Remove), and the new group is suggested, or added on its own under Add, as soon as a scan sees games in it.
 
-**Decisions are remembered.** You rule on a group once:
+### Add
 
-- A dismissed group is not suggested or scanned again unless you restore it from *Show dismissed groups* — also when the provider renames it and it comes back as a new group with the same name.
-- Deleting a source you added from a suggestion counts as dismissing its group.
-- A source you added is never offered again. If it is later removed because its group disappeared, it is added back when the group returns.
+Switch on a league or a whole sport (a sport covers every league under it, including leagues discovered later). The daily scan then adds qualifying groups as sources without asking. A group qualifies when:
 
-### Automatic mode
+- it has **Events found** or **Team streams** evidence: three matched streams, or one when its name names the league;
+- on **two different scan days** within the week, so a one-off listing never imports;
+- **at least half** of its matched streams are in leagues you switched on;
+- it has no more streams than **Auto-add groups up to** (default 1,000). Bigger groups, the network catch-alls, stay your call and remain suggested.
 
-Under **Subscriptions → Find sources automatically**, switch on a league or a whole sport (a sport covers every league under it, including leagues discovered later). The daily scan then adds qualifying groups as sources on its own instead of waiting for you — so the **Scan daily** switch on the Sources page has to be on, and the card warns you when it is not. The size cap for automatic adding (**Auto-add groups up to**) lives on the same card:
+Name-only groups, replay groups, dismissed groups and linear channels are never added. Each suggestion says why automatic mode is holding it. A source added this way carries an **Auto-added** badge.
 
-- the group has **Events found** or **Team streams** evidence — three matched streams, or one when its name names the league;
-- on **two different scan days** within the week, so a one-off listing never imports (a weekly league is added the week after it first appears);
-- **at least half** of its matched streams are in leagues you switched on — a mixed network group qualifies on the league that dominates it;
-- it has no more streams than the **Auto-add groups up to** cap on the Find sources automatically card (default 1,000). Bigger groups, the network catch-alls, stay your call and remain suggested.
+### Retire
 
-Name-only groups, replay groups, dismissed groups and linear channels (EPG matching) are never added. Each suggestion in the list says why automatic mode is holding it. A source added this way carries an **Auto-added** badge with the date; otherwise it behaves exactly like a managed source you added by hand, including retirement and the rule that any hand edit makes it yours.
+A source added by discovery is marked **Managed**:
 
-### Managed sources
-
-A source added from the suggestions is marked **Managed**:
-
-- It is switched off when it has matched nothing for two weeks (three when its name still names a subscribed league). Its settings are kept.
-- Its inactivity clock pauses during the offseason and whenever recent event evidence is unavailable for its league. A new season gets a 21-day opening grace period before idle time counts. Unknown league scope or unavailable schedule evidence does not trigger retirement.
+- It is switched off after **N days without a match** (default 14; seven more when the group's name still names a subscribed league). Its settings are kept.
+- Its inactivity clock pauses during the offseason and until positive event evidence exists for its scoped league. A new season gets a 21-day opening grace period before idle time counts. Unknown league scope or unavailable schedule evidence does not trigger retirement.
 - It is switched back on when a scan sees events in its group again.
-- It is removed only after it has been switched off and its group has been gone from Dispatcharr for two weeks.
+- It is removed once it has been switched off and its group has been **gone from Dispatcharr for N days** (default 14), counted from the last scan that saw the group. If the group returns, the source is added back without asking.
 
-Editing, enabling or disabling a managed source by hand makes it an ordinary source. **A source you added or edited yourself is never switched off or removed automatically.**
+Both windows are settings in this block. Editing, enabling or disabling a managed source by hand makes it an ordinary source, and these rules stop applying to it.
 
-## Binding by Name Pattern
+### Remove
 
-Some IPTV providers rotate group names — `EPL (MW1)` becomes `EPL (MW2)`, dated tournament groups come and go. Dispatcharr matches M3U groups by exact name, so a provider rename always creates a **new** group and a source pinned to the old one silently stops finding streams.
+Every generation run checks that each source's M3U group still exists in Dispatcharr. A source whose group was removed or renamed is listed here as **missing** and marked **Source missing** in the table; it can no longer pull streams, and its channels stay until their normal expiry. **Delete all missing** removes them in one go.
 
-**Bind by name pattern** (in the source's Basic Settings) makes the source rename-proof: instead of the pinned group, the source binds to a regular expression over live M3U group names, re-resolved on every generation run. A pattern like `EPL \(MW\d+\)` keeps matching no matter which matchweek the provider is on. If the pattern matches several groups at once, the source scans all of them (scoped to its M3U account), and while a renamed group's old and new versions briefly coexist, stale streams from the old one are filtered out automatically.
+**Delete a source whose group has been missing for N days** is the one rule that applies to sources you made yourself. It is **0 (never) by default**, because deleting a source drops its league scope, keywords and overrides. Set it to a number of days and a missing hand-made source is deleted on its own once it has been missing that long, counted from the last run that saw its group. Discovered sources follow the Retire rules instead. A deleted source's group is not suggested straight back; it counts as dismissed.
 
-The editor shows a live **"Matches N groups"** preview as you type. A pattern that matches nothing means the source is treated as stale — same as a missing pinned group.
-
-A stale pattern never deletes your channels: when it matches nothing, the source simply skips the run and existing channels stay until their normal post-event expiry. If the pattern still matches *some* groups but misses one (say a rename escaped your regex), streams from the missed group are treated like streams removed from the M3U — they're detached on the next run, and a channel is removed only once no streams are left on it.
-
-### Re-imported M3U Accounts
+## Re-imported M3U Accounts
 
 Deleting and re-adding an M3U account in Dispatcharr gives it a **new account ID**, which leaves every source that was bound to it pointing at an ID that no longer exists — the source looks configured but resolves to zero streams. Teamarr repairs this on its own: each generation run re-resolves a source's stored account ID against the live M3U accounts and, when the account name still matches, updates the source to the new ID. The Streams view also falls back to showing the group's streams unfiltered while the stored ID is stale, so a re-imported account never leaves the source looking empty.
-
-### Re-bind Suggestions
-
-When a source goes stale, Teamarr scans the live M3U groups for a likely rename — an unused group whose name closely matches the old one — and offers it right in the stale-sources banner:
-
-- **Re-bind** — one click pins the source to the new group (and turns pattern binding off, so the pin is what's actually used).
-- **Re-bind + pattern** — also derives a pattern from the old/new name difference (`EPL (MW1)` → `EPL (MW2)` suggests `^EPL \(MW\d+\)$`) and enables pattern binding with it, so the *next* rename re-binds automatically.
-
-Suggestions are never applied silently — the suggested pattern is shown before you click, and you can always fine-tune it later in the source editor with the live match preview. Re-binding only updates the source's binding; existing channels are untouched.
 
 ## Stream Matching Pipeline
 

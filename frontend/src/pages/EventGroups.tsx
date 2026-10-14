@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react"
 import { useNavigate } from "react-router"
 import { toast } from "sonner"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import {
   Search,
   Trash2,
@@ -61,14 +61,11 @@ import { useMatchRate, matchRateColor } from "@/hooks/useMatchRate"
 import type { EventGroup, PreviewGroupResponse } from "@/api/types"
 import {
   getStaleGroups,
-  getStaleRebindSuggestions,
-  rebindGroup,
-  type StaleRebindSuggestion,
 } from "@/api/groups"
 import { useDateFormat } from "@/hooks/useDateFormat"
 import { getLeagues } from "@/api/teams"
 import { BulkEditDialog } from "./event-groups/BulkEditDialog"
-import { SuggestedSources } from "@/components/SuggestedSources"
+import { SourceAutomation } from "@/components/SourceAutomation"
 import { SourceHealthReview } from "@/components/SourceHealthReview"
 import { getFailedReasonLabel, getLeagueDisplayName } from "@/lib/utils"
 
@@ -91,27 +88,13 @@ export function EventGroups() {
   const cachedLeagues = leaguesResponse?.leagues
   const allLeagueSlugs = useMemo(() => cachedLeagues?.map(l => l.slug) ?? [], [cachedLeagues])
   const deleteMutation = useDeleteGroup()
-  const { formatRelativeTime, formatDateTime } = useDateFormat()
+  const { formatDateTime } = useDateFormat()
   // Stale source groups (lylt.2) — their Dispatcharr M3U group is gone.
   const { data: staleGroups = [] } = useQuery({
     queryKey: ["groups", "stale"],
     queryFn: getStaleGroups,
   })
-  const [showStaleDelete, setShowStaleDelete] = useState(false)
-  const [deletingStale, setDeletingStale] = useState(false)
   const staleIds = useMemo(() => new Set(staleGroups.map((g) => g.id)), [staleGroups])
-  // Re-bind suggestions (#450): likely-renamed live groups for the stale sources.
-  const queryClient = useQueryClient()
-  const { data: rebindSuggestions = [] } = useQuery({
-    queryKey: ["groups", "stale", "suggestions"],
-    queryFn: getStaleRebindSuggestions,
-    enabled: staleGroups.length > 0,
-  })
-  const suggestionByGroupId = useMemo(
-    () => new Map(rebindSuggestions.map((s) => [s.group_id, s])),
-    [rebindSuggestions],
-  )
-  const [rebindingId, setRebindingId] = useState<number | null>(null)
   const toggleMutation = useToggleGroup()
   const previewMutation = usePreviewGroup()
   const clearCacheMutation = useClearGroupMatchCache()
@@ -226,44 +209,6 @@ export function EventGroups() {
     }
   }
 
-  const handleDeleteAllStale = async () => {
-    setDeletingStale(true)
-    try {
-      const results = await Promise.allSettled(
-        staleGroups.map((g) => deleteMutation.mutateAsync(g.id)),
-      )
-      const ok = results.filter((r) => r.status === "fulfilled").length
-      const failed = results.length - ok
-      if (failed === 0) toast.success(`Deleted ${ok} stale source${ok === 1 ? "" : "s"}`)
-      else toast.warning(`Deleted ${ok}, failed ${failed}`)
-      setShowStaleDelete(false)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete stale sources")
-    } finally {
-      setDeletingStale(false)
-    }
-  }
-
-  const handleRebind = async (s: StaleRebindSuggestion, adoptPattern: boolean) => {
-    setRebindingId(s.group_id)
-    try {
-      await rebindGroup(s.group_id, {
-        m3u_group_id: s.candidate_group_id,
-        m3u_group_name: s.candidate_group_name,
-        pattern: adoptPattern ? s.suggested_pattern : undefined,
-      })
-      toast.success(
-        adoptPattern
-          ? `Re-bound "${s.group_name}" with rename-proof pattern`
-          : `Re-bound "${s.group_name}" to "${s.candidate_group_name}"`,
-      )
-      queryClient.invalidateQueries({ queryKey: ["groups"] })
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to re-bind source")
-    } finally {
-      setRebindingId(null)
-    }
-  }
 
   const handleToggle = async (group: EventGroup) => {
     try {
@@ -430,94 +375,11 @@ export function EventGroups() {
       </div>
 
 
-      {/* Stale sources — their Dispatcharr M3U group is gone (lylt.2) */}
-      {staleGroups.length > 0 && (
-        <Alert
-          variant="warning"
-          icon={<CircleAlert />}
-          title={`${staleGroups.length} stream source${staleGroups.length === 1 ? "" : "s"} missing from Dispatcharr`}
-        >
-          <div className="space-y-2">
-            <p className="text-sm">
-              {staleGroups.length === 1
-                ? "Its M3U group was removed or renamed in Dispatcharr, so it can no longer pull streams. Delete it, or restore the source in Dispatcharr."
-                : "Their M3U groups were removed or renamed in Dispatcharr, so they can no longer pull streams. Delete them, or restore the sources in Dispatcharr."}
-              {rebindSuggestions.length > 0 &&
-                " Teamarr found likely renames — re-bind in one click below."}
-            </p>
-            <ul className="space-y-1.5 text-sm">
-              {staleGroups.map((g) => {
-                const suggestion = suggestionByGroupId.get(g.id)
-                return (
-                  <li key={g.id} className="space-y-1">
-                    <div className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-medium">{g.display_name || g.name}</span>
-                      {g.m3u_group_name && (
-                        <span className="text-xs text-muted-foreground">was &ldquo;{g.m3u_group_name}&rdquo;</span>
-                      )}
-                      {g.source_last_seen && (
-                        <span className="text-xs text-muted-foreground">
-                          · last seen {formatRelativeTime(g.source_last_seen)}
-                        </span>
-                      )}
-                    </div>
-                    {/* Rename flywheel (#450): likely-renamed live group → one-click re-bind */}
-                    {suggestion && (
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-4">
-                        <span>
-                          Likely renamed to{" "}
-                          <span className="font-medium">&ldquo;{suggestion.candidate_group_name}&rdquo;</span>
-                          <span className="text-xs text-muted-foreground">
-                            {" "}({Math.round(suggestion.similarity * 100)}% similar)
-                          </span>
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={rebindingId === g.id}
-                          onClick={() => handleRebind(suggestion, false)}
-                        >
-                          Re-bind
-                        </Button>
-                        {suggestion.suggested_pattern && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={rebindingId === g.id}
-                              title="Re-bind AND enable pattern binding with the suggested pattern, so future renames re-bind automatically"
-                              onClick={() => handleRebind(suggestion, true)}
-                            >
-                              Re-bind + pattern
-                            </Button>
-                            <code className="text-xs text-muted-foreground break-all">
-                              {suggestion.suggested_pattern}
-                            </code>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowStaleDelete(true)}
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Delete all stale
-            </Button>
-          </div>
-        </Alert>
-      )}
-
+      <SourceAutomation leagueName={getLeagueDisplay} />
       <SourceHealthReview
         leagueName={getLeagueDisplay}
         onEdit={(groupId) => navigate(`/sources/${groupId}`)}
       />
-      <SuggestedSources leagueName={getLeagueDisplay} />
 
       {/* Fixed Batch Operations Bar */}
       {selectedIds.size > 0 && (
@@ -727,6 +589,15 @@ export function EventGroups() {
                                 Dispatcharr group
                               </Badge>
                             )}
+                            {group.is_channel_source && group.source_missing && (
+                              <Badge
+                                variant="destructive"
+                                className="text-xs"
+                                title="This Dispatcharr channel group no longer exists. Untick it under Matching → Dispatcharr as a Stream Source to remove this source."
+                              >
+                                Group missing
+                              </Badge>
+                            )}
                             {group.managed && (
                               <Badge
                                 variant="info"
@@ -734,7 +605,7 @@ export function EventGroups() {
                                 title={
                                   (group.auto_added_at
                                     ? `Added automatically by source discovery on ${group.auto_added_at.slice(0, 10)}. `
-                                    : "Added from the Suggested sources list. ") +
+                                    : "Added from Automation → Discover. ") +
                                   "It is switched off when it has matched nothing for two weeks and back on when its group has events again. Editing it makes it an ordinary source."
                                 }
                               >
@@ -997,17 +868,6 @@ export function EventGroups() {
         confirmLabel={`Delete ${selectedIds.size} Groups`}
         isPending={deleteMutation.isPending}
         onConfirm={handleBulkDelete}
-      />
-
-      {/* Delete-all-stale confirmation */}
-      <ConfirmDialog
-        open={showStaleDelete}
-        onOpenChange={setShowStaleDelete}
-        title={`Delete ${staleGroups.length} stale source${staleGroups.length === 1 ? "" : "s"}`}
-        description="These sources' M3U groups no longer exist in Dispatcharr. Deleting them also removes their managed channels. This cannot be undone."
-        confirmLabel="Delete all stale"
-        isPending={deletingStale}
-        onConfirm={handleDeleteAllStale}
       />
 
       {/* Stream Preview Modal */}

@@ -102,6 +102,7 @@ def run_cleanup_tasks(
 
     return results
 
+
 def finalize_stats_run(
     stats_run: Any,
     result: GenerationResult,

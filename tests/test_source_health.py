@@ -241,8 +241,7 @@ def test_generic_source_uses_inherited_global_league_scope(db_conn):
         (json.dumps(["nfl", "mlb"]),),
     )
     db_conn.execute(
-        "UPDATE event_epg_groups SET last_matched_at = ?, "
-        "last_matched_leagues = '[]' WHERE id = ?",
+        "UPDATE event_epg_groups SET last_matched_at = ?, last_matched_leagues = '[]' WHERE id = ?",
         (_stamp(datetime(2026, 10, 1, tzinfo=UTC)), group_id),
     )
     _runs(db_conn, group_id, now)
@@ -362,8 +361,7 @@ def test_empty_group_runs_do_not_count_as_health_evidence(db_conn):
     now = datetime(2026, 10, 20, 12, tzinfo=UTC)
     group_id = _source(db_conn)
     db_conn.execute(
-        "UPDATE event_epg_groups SET last_matched_at = ?, "
-        "last_matched_leagues = ? WHERE id = ?",
+        "UPDATE event_epg_groups SET last_matched_at = ?, last_matched_leagues = ? WHERE id = ?",
         (_stamp(datetime(2026, 2, 9, tzinfo=UTC)), '["nfl"]', group_id),
     )
     _runs(db_conn, group_id, now, eligible=0)
@@ -388,8 +386,7 @@ def test_provider_fetch_failures_do_not_count_as_health_evidence(db_conn):
     now = datetime(2026, 10, 20, 12, tzinfo=UTC)
     group_id = _source(db_conn)
     db_conn.execute(
-        "UPDATE event_epg_groups SET last_matched_at = ?, "
-        "last_matched_leagues = ? WHERE id = ?",
+        "UPDATE event_epg_groups SET last_matched_at = ?, last_matched_leagues = ? WHERE id = ?",
         (_stamp(datetime(2026, 2, 9, tzinfo=UTC)), '["nfl"]', group_id),
     )
     _runs(db_conn, group_id, now, provider_failures=1)
@@ -407,16 +404,15 @@ def test_keep_hides_until_match_watermark_changes(db_conn):
     )
     _runs(db_conn, group_id, now)
     _record_league_activity(db_conn, now, "nfl")
-    set_source_health_decision(
-        db_conn, group_id, "keep", last_matched_at=last_match, now=now
-    )
+    set_source_health_decision(db_conn, group_id, "keep", last_matched_at=last_match, now=now)
 
     hidden = _recommendations(db_conn, now)
     assert hidden["recommendations"] == []
     assert hidden["hidden_count"] == 1
-    assert _recommendations(db_conn, now, include_hidden=True)["recommendations"][0][
-        "decision"
-    ] == "keep"
+    assert (
+        _recommendations(db_conn, now, include_hidden=True)["recommendations"][0]["decision"]
+        == "keep"
+    )
 
     db_conn.execute(
         "UPDATE event_epg_groups SET last_matched_at = ? WHERE id = ?",
@@ -436,16 +432,22 @@ def test_health_api_exposes_recommendations_and_decisions(client, db_conn):
     kept = client.post(f"/api/v1/groups/{group_id}/health/keep")
     assert kept.status_code == 200
     assert kept.json() == {"group_id": group_id, "decision": "keep"}
-    assert db_conn.execute(
-        "SELECT decision FROM source_health_decisions WHERE group_id = ?", (group_id,)
-    ).fetchone()[0] == "keep"
+    assert (
+        db_conn.execute(
+            "SELECT decision FROM source_health_decisions WHERE group_id = ?", (group_id,)
+        ).fetchone()[0]
+        == "keep"
+    )
 
     snoozed = client.post(f"/api/v1/groups/{group_id}/health/snooze")
     assert snoozed.status_code == 200
-    assert db_conn.execute(
-        "SELECT decision, snoozed_until FROM source_health_decisions WHERE group_id = ?",
-        (group_id,),
-    ).fetchone()["decision"] == "snooze"
+    assert (
+        db_conn.execute(
+            "SELECT decision, snoozed_until FROM source_health_decisions WHERE group_id = ?",
+            (group_id,),
+        ).fetchone()["decision"]
+        == "snooze"
+    )
 
     restored = client.delete(f"/api/v1/groups/{group_id}/health/decision")
     assert restored.status_code == 200

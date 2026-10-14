@@ -35,7 +35,6 @@ from teamarr.database.groups import (
 from teamarr.database.settings import get_feed_separation_settings
 from teamarr.database.subscription import (
     get_subscription_template_for_event,
-    get_subscription_templates,
 )
 from teamarr.services import SportsDataService, create_default_service
 from teamarr.utilities.art_url import read_art_base_url
@@ -630,20 +629,11 @@ class EventGroupProcessor(
             epg_match_enabled=group.epg_match_enabled,
         )
 
-        # Template is required — check subscription templates
-        sub_templates = get_subscription_templates(conn)
-        has_template = len(sub_templates) > 0
-
-        if not has_template:
-            logger.warning(
-                "[EVENT_GROUP_SKIP] Group '%s' (id=%d): no template assigned - "
-                "template is required for channel naming. Skipping group.",
-                group.name,
-                group.id,
-            )
-            result.errors.append("No template assigned - template is required for channel naming")
-            result.completed_at = now_utc()
-            return result
+        # No template gate here (#1061). Matching runs whenever the source is
+        # enabled: managed team channels are fed from it, and an event with no
+        # template is skipped by the lifecycle with its own reason. The old
+        # "no template, skip the group" rule predates team channels and turned
+        # "I want no event channels" into "nothing matches".
 
         # Per-phase wall time for this group, reported on the parent run's
         # per-group breakdown so slow groups can be diagnosed without log
@@ -871,6 +861,17 @@ class EventGroupProcessor(
             if cleanup_count > 0:
                 result.channels_deleted = cleanup_count
                 logger.info("[EVENT_EPG] Cleaned up %d channels due to team filter", cleanup_count)
+
+            # A league whose events no longer resolve an event template has
+            # had its event channels un-asked-for (#1061): retire them now
+            # rather than letting them sit until their own expiry.
+            untemplated_count = self._cleanup_untemplated_channels(group, conn, all_matched_events)
+            if untemplated_count > 0:
+                result.channels_deleted += untemplated_count
+                logger.info(
+                    "[EVENT_EPG] Retired %d channel(s) whose league has no event template",
+                    untemplated_count,
+                )
 
             # Reclaim feed-separated channels that lost eligibility — the master
             # toggle went off (#672) or their sport left feed_separation.sports

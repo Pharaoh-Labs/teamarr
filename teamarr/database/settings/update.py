@@ -120,6 +120,9 @@ def update_scheduler_settings(
     channel_reset_cron: str | None | object = _NOT_PROVIDED,
     source_discovery_mode: str | None = None,
     source_discovery_auto_max_streams: int | None = None,
+    source_idle_days: int | None = None,
+    source_gone_days: int | None = None,
+    source_missing_delete_days: int | None = None,
 ) -> bool:
     """Update scheduler settings (channel_reset_cron: None = clear).
 
@@ -132,6 +135,9 @@ def update_scheduler_settings(
         channel_reset_enabled=channel_reset_enabled,
         source_discovery_mode=source_discovery_mode,
         source_discovery_auto_max_streams=source_discovery_auto_max_streams,
+        source_idle_days=source_idle_days,
+        source_gone_days=source_gone_days,
+        source_missing_delete_days=source_missing_delete_days,
     ) | _skip_missing(channel_reset_cron=channel_reset_cron)
     return _apply(conn, "scheduler", provided)
 

@@ -265,6 +265,7 @@ Each rule runs in one of two modes: `priority` (band assignment) or `score` (num
 | `consumers/lifecycle/` | Channel lifecycle management (service coordinator + creator/syncer/cleanup/naming) |
 | `consumers/lifecycle/dynamic_resolver.py` | Wildcard resolution |
 | `consumers/reconciliation.py` | Drift detection and repair |
+| `consumers/source_lifecycle/` | Source automation: discovery scan, auto-add, retirement (daily) and missing-group detection with auto-delete (per run), one policy from settings |
 | `consumers/lifecycle/timing.py` | Channel create/delete timing |
 | `services/sports_data.py` | Provider orchestration with caching |
 | `services/stream_ordering.py` | Channel priority rules |

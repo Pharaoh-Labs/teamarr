@@ -223,6 +223,10 @@ class SchedulerSettingsModel(BaseModel):
     # Source discovery (#997); the scan runs once a day, no cron to set (#1027)
     source_discovery_mode: str = "suggest"
     source_discovery_auto_max_streams: int = 1000
+    # Source lifecycle rules (#1058)
+    source_idle_days: int = 14
+    source_gone_days: int = 14
+    source_missing_delete_days: int = 0
 
 
 class SchedulerSettingsUpdate(BaseModel):
@@ -234,6 +238,9 @@ class SchedulerSettingsUpdate(BaseModel):
     channel_reset_cron: str | None = None
     source_discovery_mode: Literal["off", "suggest"] | None = None
     source_discovery_auto_max_streams: int | None = None
+    source_idle_days: int | None = None
+    source_gone_days: int | None = None
+    source_missing_delete_days: int | None = None
 
 
 class SchedulerStatusResponse(BaseModel):

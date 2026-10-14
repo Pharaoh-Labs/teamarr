@@ -42,9 +42,7 @@ def set_source_health_decision(
 
 def clear_source_health_decision(conn: Connection, group_id: int) -> bool:
     """Restore a kept/snoozed source to the active review list."""
-    cursor = conn.execute(
-        "DELETE FROM source_health_decisions WHERE group_id = ?", (group_id,)
-    )
+    cursor = conn.execute("DELETE FROM source_health_decisions WHERE group_id = ?", (group_id,))
     conn.commit()
     return cursor.rowcount > 0
 

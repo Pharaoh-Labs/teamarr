@@ -212,6 +212,9 @@ class ExcludedReason(Enum):
     EVENT_PAST = "event_past"  # Event already ended (past delete threshold)
     BEFORE_WINDOW = "before_window"  # Too early to create channel
     EVENT_POSTPONED = "event_postponed"  # Postponed, and postponed channels are off (#948)
+    # No event template covers the league or sport: event channels were not
+    # asked for here. The match still feeds managed team channels (#1061).
+    NO_EVENT_TEMPLATE = "no_event_template"
 
 
 # =============================================================================
@@ -508,6 +511,7 @@ EXCLUDED_DISPLAY: dict[ExcludedReason | None, str] = {
     ExcludedReason.EVENT_PAST: "Event already ended",
     ExcludedReason.BEFORE_WINDOW: "Before create window",
     ExcludedReason.EVENT_POSTPONED: "Event is postponed",
+    ExcludedReason.NO_EVENT_TEMPLATE: "No event template for this league",
 }
 
 

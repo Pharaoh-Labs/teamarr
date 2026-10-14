@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from teamarr.consumers.matching import StreamCategory
-from teamarr.consumers.source_discovery import (
+from teamarr.consumers.source_lifecycle.discovery import (
     TIER_GAMES,
     TIER_NAME_ONLY,
     TIER_TEAMS,
@@ -202,19 +202,12 @@ def test_stale_streams_are_not_matched(db):
 def test_groups_that_are_already_sources_are_not_read(db):
     with get_db() as conn:
         create_group(conn, name="By id", leagues=[], m3u_group_id=7)
-        create_group(
-            conn,
-            name="By pattern",
-            leagues=[],
-            m3u_group_name_pattern=r"EPL \(MW\d+\)",
-            m3u_group_name_pattern_enabled=True,
-        )
         create_group(conn, name="Disabled", leagues=[], m3u_group_id=9, enabled=False)
         conn.commit()
-    groups = [_group(7, "USA | NBA"), _group(8, "EPL (MW7)"), _group(9, "Old"), _group(10, "New")]
+    groups = [_group(7, "USA | NBA"), _group(9, "Old"), _group(10, "New")]
     summary, m3u, _ = _scan(groups, {})
     assert m3u.read == [10]
-    assert summary.skipped_sources == 3
+    assert summary.skipped_sources == 2
 
 
 def test_empty_and_dismissed_groups_are_not_read(db):
@@ -266,7 +259,7 @@ def test_a_replay_group_is_recorded_but_never_matched_or_suggested(db):
 
 def test_the_scan_waits_for_a_generation_run_between_groups(db, monkeypatch):
     from teamarr.consumers import generation_status
-    from teamarr.consumers import source_discovery as sd
+    from teamarr.consumers.source_lifecycle import discovery as sd
 
     answers = iter([True, True, False])
     monkeypatch.setattr(generation_status, "is_in_progress", lambda: next(answers, False))
@@ -641,7 +634,7 @@ def test_the_scan_is_on_by_default_and_the_only_control_is_the_switch(api):
 
 
 def test_a_scan_is_skipped_without_dispatcharr_and_only_one_runs_at_a_time(db, monkeypatch):
-    from teamarr.consumers import source_discovery as sd
+    from teamarr.consumers.source_lifecycle import discovery as sd
 
     monkeypatch.setattr(
         "teamarr.dispatcharr.factory.get_dispatcharr_connection", lambda *a, **k: None
@@ -685,7 +678,7 @@ def _backdate(source_id, **cols):
 
 
 def _maintain(live=(1,), evidence=None):
-    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, maintain_managed_sources
     from teamarr.utilities.tz import now_utc, to_db_utc
 
     summary = ScanSummary()
@@ -753,6 +746,18 @@ def test_disabling_by_hand_also_claims_it_so_discovery_never_turns_it_back_on(ap
     assert (source.managed, source.enabled, summary.sources_reenabled) == (False, False, 0)
 
 
+def test_the_idle_window_is_the_policy_setting(api):
+    # Sources → Automation → Retire (#1058): the days are a setting, not a constant.
+    _, source_id = _accept_first(api)
+    _backdate(source_id, created_at=2)
+    assert _maintain().sources_disabled == 0
+    with get_db() as conn:
+        conn.execute("UPDATE settings SET source_idle_days = 1")
+        conn.commit()
+    assert _maintain().sources_disabled == 1
+    assert _source(source_id).enabled is False
+
+
 def test_an_idle_managed_source_is_disabled_and_comes_back_with_games(api):
     _, source_id = _accept_first(api)
     _backdate(source_id, created_at=15)
@@ -765,7 +770,7 @@ def test_an_idle_managed_source_is_disabled_and_comes_back_with_games(api):
 
 
 def test_an_offseason_does_not_retire_a_managed_source(api):
-    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, maintain_managed_sources
 
     _, source_id = _accept_first(api)  # accepted candidate has observed NHL evidence
     with get_db() as conn:
@@ -787,7 +792,7 @@ def test_an_offseason_does_not_retire_a_managed_source(api):
 
 
 def test_managed_retirement_resumes_after_current_season_opportunity(api):
-    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, maintain_managed_sources
 
     _, source_id = _accept_first(api)
     with get_db() as conn:
@@ -805,12 +810,12 @@ def test_managed_retirement_resumes_after_current_season_opportunity(api):
             (
                 to_db_utc(now),
                 to_db_utc(now),
-                    json.dumps(
-                        {
-                            "groups": [],
-                            "observed_event_dates": {"nhl": [now.date().isoformat()]},
-                        }
-                    ),
+                json.dumps(
+                    {
+                        "groups": [],
+                        "observed_event_dates": {"nhl": [now.date().isoformat()]},
+                    }
+                ),
             ),
         )
         summary = ScanSummary()
@@ -827,7 +832,7 @@ def test_managed_retirement_resumes_after_current_season_opportunity(api):
 
 
 def test_managed_non_calendar_scope_survives_candidate_scan_expiry(api):
-    from teamarr.consumers.source_discovery import ScanSummary, maintain_managed_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, maintain_managed_sources
     from teamarr.utilities.tz import to_db_utc
 
     cid, source_id = _accept_first(api)
@@ -1063,7 +1068,7 @@ def _two_days(gid, name, games, leagues, streams=50, name_leagues=(), team=0, te
 
 
 def _auto(summary_only=False):
-    from teamarr.consumers.source_discovery import ScanSummary, auto_add_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, auto_add_sources
     from teamarr.utilities.tz import now_utc
 
     summary = ScanSummary()
@@ -1149,7 +1154,7 @@ def test_one_day_of_evidence_is_not_enough(db):
             ],
             now_utc() + timedelta(days=1),
         )
-    from teamarr.consumers.source_discovery import ScanSummary, auto_add_sources
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, auto_add_sources
 
     s = ScanSummary()
     with get_db() as conn:

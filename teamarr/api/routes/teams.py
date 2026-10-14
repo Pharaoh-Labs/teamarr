@@ -183,7 +183,9 @@ def get_team_channel_status(team_id: int):
         else:
             dispatcharr_error = "Dispatcharr connection not available"
     except Exception as exc:
-        dispatcharr_error = str(exc)
+        # The log carries the detail; the response names the failure class
+        # only, so no exception text reaches the browser (#1051).
+        dispatcharr_error = f"Dispatcharr lookup failed ({type(exc).__name__})"
         logger.warning(
             "[TEAMS] Failed to resolve Dispatcharr channel for team %s: %s",
             team_id,

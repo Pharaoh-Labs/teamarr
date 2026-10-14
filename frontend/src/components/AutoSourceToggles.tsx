@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react"
-import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { AlertTriangle, Sparkles } from "lucide-react"
-import { Card } from "@/components/ui/card"
+import { CollapsibleSection } from "@/components/ui/collapsible-section"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
@@ -20,9 +19,10 @@ import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
  * only suggesting them. A sport toggle covers every league under it, including
  * ones discovered later. Saved immediately; independent of the picker's Save.
  *
- * The toggles only act when the daily scan runs, so the card says when that is
- * and warns, with a link to the switch, while the scan is off (#1027). The
- * auto-add stream cap lives here too: it only ever gates automatic adding.
+ * The toggles only act when the daily scan runs, so the block warns while the
+ * scan is off (#1027). The auto-add stream cap lives here too: it only ever
+ * gates automatic adding. Rendered as the Add block of Sources → Automation
+ * (#1058; it used to sit on the Subscriptions page).
  */
 export function AutoSourceToggles() {
   const { data: subscription } = useSubscription()
@@ -93,24 +93,25 @@ export function AutoSourceToggles() {
     save(autoLeagues, next)
   }
 
-  if (!subscription || groups.length === 0) return null
-
+  const on = autoLeagues.size + autoSports.size
   return (
-    <Card className="p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4" />
-        <Label className="text-base font-medium">Find sources automatically</Label>
-      </div>
+    <CollapsibleSection
+      title="Add"
+      icon={<Sparkles className="h-4 w-4" />}
+      count={on > 0 ? `(${on} on)` : undefined}
+      variant="subsection"
+      persistKey="sources.automation.add"
+    >
+    <div className="space-y-3 pt-2">
       <p className="text-xs text-muted-foreground">
-        Source discovery scans your M3U groups once a day; to check sooner, press Scan now under{" "}
-        <Link to="/sources" className="underline underline-offset-2">
-          Sources → Suggested sources
-        </Link>
-        . For a league or sport switched on here, groups carrying its events are added as sources
-        on their own instead of waiting in the Suggested sources list. A sport covers every league
-        under it. Groups you dismissed, replay groups and linear channels with guide data (EPG
-        matching) are never added.
+        For a league or sport switched on here, the daily scan adds groups carrying its events as
+        sources on its own instead of leaving them in the Discover list above. A sport covers
+        every league under it. Groups you dismissed, replay groups and linear channels with guide
+        data (EPG matching) are never added.
       </p>
+      {(!subscription || groups.length === 0) && (
+        <p className="text-sm text-muted-foreground">Subscribe to a league first.</p>
+      )}
       {scanOff && (
         <div
           role="alert"
@@ -118,11 +119,8 @@ export function AutoSourceToggles() {
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>
-            The daily scan is switched off, so these switches do nothing. Turn on{" "}
-            <Link to="/sources" className="font-medium underline underline-offset-2">
-              Scan daily
-            </Link>{" "}
-            under Sources → Suggested sources, or press Scan now there.
+            The daily scan is switched off, so these switches do nothing. Turn on Scan daily
+            under Discover, above, or press Scan now there.
           </span>
         </div>
       )}
@@ -178,6 +176,7 @@ export function AutoSourceToggles() {
           )
         })}
       </div>
-    </Card>
+    </div>
+    </CollapsibleSection>
   )
 }

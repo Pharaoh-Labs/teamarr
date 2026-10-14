@@ -62,7 +62,6 @@ from teamarr.consumers.reconciliation import (
     ReconciliationIssue,
     ReconciliationResult,
     create_reconciler,
-    detect_stale_groups,
 )
 from teamarr.consumers.scheduler import (
     LifecycleScheduler,
@@ -71,6 +70,7 @@ from teamarr.consumers.scheduler import (
     start_lifecycle_scheduler,
     stop_lifecycle_scheduler,
 )
+from teamarr.consumers.source_lifecycle import detect_stale_groups
 from teamarr.consumers.stream_match_cache import (
     StreamCacheEntry,
     StreamMatchCache,

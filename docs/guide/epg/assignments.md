@@ -24,6 +24,18 @@ When generating EPG, Teamarr checks the event's league first, then its sport, th
 
 If two rules at the same tier both match (say, two league rules covering NHL), the first one wins — there's no explicit tie-breaking, so keep tiers non-overlapping. If **no** rule matches at all (including no default), the event renders with built-in generic formatting.
 
+## Assignments Decide Whether Event Channels Exist
+
+An assignment is also the switch for event channels. A matched stream whose event resolves **no** template (no league rule, no sport rule, no default) creates no event channel; the run's detail lists it as excluded with the reason *No event template for this league*. Matching still runs, so the same stream still feeds any [managed team channel](teams) for the teams involved.
+
+That gives you three setups without touching your sources:
+
+- **Event channels everywhere** — keep a default rule.
+- **Event channels for some leagues only** — assign templates to those leagues or sports and remove the default rule. Other leagues feed team channels only.
+- **Team channels only** — assign no event template at all.
+
+Removing a rule retires the channels it had created on the next generation run.
+
 Because one rule-set is global, a multi-sport source resolves a *different* template per event — an NHL game and an NBA game in the same source each get their own league's template.
 
 ## Managing Assignments

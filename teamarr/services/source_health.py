@@ -121,9 +121,7 @@ def managed_source_idle_days(
             # forever merely because they have no hard-coded season profile.
             opportunity_start = activity_starts.get(code)
         if opportunity_start is not None:
-            eligible_starts.append(
-                opportunity_start + timedelta(days=SEASON_START_GRACE_DAYS)
-            )
+            eligible_starts.append(opportunity_start + timedelta(days=SEASON_START_GRACE_DAYS))
     if not eligible_starts:
         return None
     season_opportunity_start = min(eligible_starts)
@@ -261,7 +259,7 @@ def _named_leagues(group: EventEPGGroup, surfaces: dict[str, set[str]]) -> list[
     """Use configured league names/aliases as source-specific scope evidence."""
     # Reuse discovery's data-driven matcher; unlike a hard-coded alias list,
     # this follows league names already present in the database.
-    from teamarr.consumers.source_discovery import leagues_named_by
+    from teamarr.consumers.source_lifecycle.discovery import leagues_named_by
 
     text = " ".join(
         value for value in (group.name, group.display_name, group.m3u_group_name) if value
@@ -307,9 +305,7 @@ def _focus_leagues(
 ) -> list[str]:
     observed = {code.lower() for code in group.last_matched_leagues if code}
     named = {code.lower() for code in _named_leagues(group, surfaces) if code}
-    configured = _configured_leagues(
-        group, inherited_leagues, enabled_soccer, soccer_team_leagues
-    )
+    configured = _configured_leagues(group, inherited_leagues, enabled_soccer, soccer_team_leagues)
     if group.subscription_leagues is not None:
         return sorted(observed | named | configured)
     # Inherited global scope is deliberately only a fallback. A source-specific
@@ -330,9 +326,7 @@ def _season_state(
     """
     if not focus_leagues:
         return None, [], None
-    statuses = {
-        code: league_season_active(code, today, recently_active) for code in focus_leagues
-    }
+    statuses = {code: league_season_active(code, today, recently_active) for code in focus_leagues}
     active = sorted(code for code, status in statuses.items() if status is True)
     if active:
         starts = []
@@ -355,9 +349,7 @@ def _days_since(value: str | datetime | None, now: datetime) -> int | None:
     return max(0, int((now - parsed).total_seconds() // 86400))
 
 
-def _decision_is_hidden(
-    decision: Any, group: EventEPGGroup, now: datetime
-) -> bool:
+def _decision_is_hidden(decision: Any, group: EventEPGGroup, now: datetime) -> bool:
     if not decision:
         return False
     if decision["decision"] == "keep":
@@ -377,9 +369,7 @@ def _recommendation(
     enabled_soccer: set[str],
     soccer_team_leagues: dict[tuple[str, str], set[str]],
 ) -> dict[str, Any] | None:
-    focus = _focus_leagues(
-        group, surfaces, inherited_leagues, enabled_soccer, soccer_team_leagues
-    )
+    focus = _focus_leagues(group, surfaces, inherited_leagues, enabled_soccer, soccer_team_leagues)
     active, active_leagues, season_start = _season_state(focus, today, recently_active)
     if active is not True:
         # Unknown activity is not evidence of a bad source. Provider event
@@ -413,9 +403,7 @@ def _recommendation(
     # Do not count a known offseason toward the current season's quiet streak.
     if season_start is not None:
         active_season_days = max(0, (now.date() - season_start).days)
-        quiet_since = (
-            min(quiet_since, active_season_days) if quiet_since is not None else None
-        )
+        quiet_since = min(quiet_since, active_season_days) if quiet_since is not None else None
 
     aggregate_eligible = sum(run["eligible"] for run in relevant_runs)
     aggregate_matched = sum(run["matched"] for run in relevant_runs)
@@ -477,7 +465,7 @@ def get_source_health(
     recently_active, _ = league_activity_evidence(conn, now)
     groups = get_all_groups(conn, include_disabled=True)
     missing_ids = {item["id"] for item in get_stale_groups(conn)}
-    from teamarr.consumers.source_discovery import league_name_surfaces
+    from teamarr.consumers.source_lifecycle.discovery import league_name_surfaces
     from teamarr.database.groups import get_enabled_soccer_leagues
     from teamarr.database.subscription import get_subscription
 
@@ -489,9 +477,7 @@ def get_source_health(
     for row in conn.execute(
         "SELECT provider_team_id, provider, league FROM team_cache WHERE sport = 'soccer'"
     ):
-        soccer_team_leagues[(row["provider"], row["provider_team_id"])].add(
-            row["league"].lower()
-        )
+        soccer_team_leagues[(row["provider"], row["provider_team_id"])].add(row["league"].lower())
     inherited_leagues = _configured_leagues(
         EventEPGGroup(
             id=0,
@@ -511,11 +497,7 @@ def get_source_health(
     recommendations = []
     hidden_count = 0
     for group in groups:
-        if (
-            not group.enabled
-            or group.is_channel_source
-            or group.id in missing_ids
-        ):
+        if not group.enabled or group.is_channel_source or group.id in missing_ids:
             continue
         candidate = _recommendation(
             group,

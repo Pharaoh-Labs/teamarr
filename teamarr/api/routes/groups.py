@@ -30,7 +30,6 @@ from teamarr.database.groups import (
     get_group_channel_count,
     get_group_xmltv_with_metadata,
     get_stale_groups,
-    mark_group_source_seen,
     reorder_groups,
     set_group_enabled,
     update_group,
@@ -106,9 +105,6 @@ class GroupCreate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
-    # Group-name pattern binding (#450)
-    m3u_group_name_pattern: str | None = None
-    m3u_group_name_pattern_enabled: bool = False
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -166,9 +162,6 @@ class GroupUpdate(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
-    # Group-name pattern binding (#450)
-    m3u_group_name_pattern: str | None = None
-    m3u_group_name_pattern_enabled: bool | None = None
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool | None = None
@@ -215,7 +208,6 @@ class GroupUpdate(BaseModel):
     clear_m3u_group_name: bool = False
     clear_m3u_account_id: bool = False
     clear_m3u_account_name: bool = False
-    clear_m3u_group_name_pattern: bool = False
     clear_stream_include_regex: bool = False
     clear_stream_exclude_regex: bool = False
     clear_custom_regex_teams: bool = False
@@ -255,9 +247,6 @@ class GroupResponse(BaseModel):
     m3u_group_name: str | None = None
     m3u_account_id: int | None = None
     m3u_account_name: str | None = None
-    # Group-name pattern binding (#450)
-    m3u_group_name_pattern: str | None = None
-    m3u_group_name_pattern_enabled: bool = False
     # Stream filtering
     stream_include_regex: str | None = None
     stream_include_regex_enabled: bool = False
@@ -324,6 +313,10 @@ class GroupResponse(BaseModel):
     managed: bool = False  # created by source discovery (#997)
     auto_added_at: str | None = None  # discovery added it on its own (#997)
     dispatcharr_channel_group_id: int | None = None
+    # (#1046) The Dispatcharr group behind the source is gone. Set by the
+    # stale-groups pass for channel-source rows; M3U rows surface the same
+    # state through /groups/stale.
+    source_missing: bool = False
 
 
 class GroupListResponse(BaseModel):
@@ -699,8 +692,6 @@ def list_groups(
                 m3u_group_name=g.m3u_group_name,
                 m3u_account_id=g.m3u_account_id,
                 m3u_account_name=get_account_name(g),
-                m3u_group_name_pattern=g.m3u_group_name_pattern,
-                m3u_group_name_pattern_enabled=g.m3u_group_name_pattern_enabled,
                 stream_include_regex=g.stream_include_regex,
                 stream_include_regex_enabled=g.stream_include_regex_enabled,
                 stream_exclude_regex=g.stream_exclude_regex,
@@ -751,6 +742,7 @@ def list_groups(
                 overlap_handling=g.overlap_handling,
                 enabled=g.enabled,
                 is_channel_source=g.is_channel_source,
+                source_missing=g.source_missing,
                 managed=g.managed,
                 auto_added_at=g.auto_added_at,
                 dispatcharr_channel_group_id=g.dispatcharr_channel_group_id,
@@ -817,8 +809,6 @@ def create_group(request: GroupCreate):
             m3u_group_name=request.m3u_group_name,
             m3u_account_id=request.m3u_account_id,
             m3u_account_name=request.m3u_account_name,
-            m3u_group_name_pattern=request.m3u_group_name_pattern,
-            m3u_group_name_pattern_enabled=request.m3u_group_name_pattern_enabled,
             stream_include_regex=request.stream_include_regex,
             stream_include_regex_enabled=request.stream_include_regex_enabled,
             stream_exclude_regex=request.stream_exclude_regex,
@@ -890,8 +880,6 @@ def create_group(request: GroupCreate):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=group.m3u_account_name,
-        m3u_group_name_pattern=group.m3u_group_name_pattern,
-        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -941,6 +929,7 @@ def create_group(request: GroupCreate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        source_missing=group.source_missing,
         managed=group.managed,
         auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
@@ -1342,119 +1331,6 @@ def restore_source_health_recommendation(group_id: int) -> dict[str, Any]:
     return {"group_id": group_id, "restored": restored}
 
 
-@router.get("/stale/suggestions")
-def list_stale_rebind_suggestions() -> list[dict]:
-    """Re-bind suggestions for stale sources (#450, the rename flywheel).
-
-    For each stale source, scans live M3U-provided Dispatcharr groups that no
-    source is bound to — scoped to the stale source's own M3U account (a
-    rename happens within one playlist) — and returns the closest name match
-    above the similarity threshold, plus a synthesized name pattern when the
-    old/new diff yields a safe one. Soft-empty when Dispatcharr is
-    unconfigured or unreachable — the stale banner must degrade, not error.
-    """
-    from teamarr.services.group_pattern import find_rebind_suggestions
-
-    conn_dc = get_dispatcharr_connection(get_db)
-    if not conn_dc:
-        return []
-    try:
-        live_groups = conn_dc.m3u.list_groups()
-    except Exception as e:
-        logger.warning("[REBIND] Could not list Dispatcharr groups: %s", e)
-        return []
-
-    with get_db() as conn:
-        stale = get_stale_groups(conn)
-        if not stale:
-            return []
-        bound = {
-            row[0]
-            for row in conn.execute(
-                "SELECT m3u_group_id FROM event_epg_groups WHERE m3u_group_id IS NOT NULL"
-            )
-        }
-
-    # Account attribution for candidate scoping: list_groups' nested account
-    # payload is version-dependent, so use the account detail endpoint per
-    # distinct stale-source account. Failed fetches stay absent from the map
-    # (those sources then get no suggestion rather than a cross-account one).
-    account_group_ids: dict[int, set[int]] = {}
-    for account_id in {aid for row in stale if (aid := row.get("m3u_account_id")) is not None}:
-        try:
-            counts = conn_dc.m3u.get_account_group_counts(account_id)
-        except Exception as e:
-            logger.warning("[REBIND] Could not fetch account %d groups: %s", account_id, e)
-            continue
-        if counts:
-            account_group_ids[account_id] = set(counts)
-
-    return find_rebind_suggestions(stale, live_groups, bound, account_group_ids)
-
-
-class GroupRebindRequest(BaseModel):
-    """One-click re-bind of a stale source to its renamed Dispatcharr group (#450)."""
-
-    m3u_group_id: int
-    m3u_group_name: str
-    # Optionally adopt a name pattern in the same click (rename-proofing).
-    pattern: str | None = None
-
-
-@router.post("/{group_id}/rebind")
-def rebind_group(group_id: int, request: GroupRebindRequest) -> dict:
-    """Re-bind a stale source to a new Dispatcharr group in one call.
-
-    Updates the pinned group id/name, then clears the stale flag so the
-    banner resolves immediately instead of waiting for the next generation
-    run. The resulting binding mode is deterministic: with ``pattern``,
-    pattern binding is enabled with it; without, pattern binding is turned
-    OFF — stream fetch gives an enabled pattern precedence over the pinned
-    id, so leaving a dead pattern active would keep the source broken.
-    Never touches channels — re-binding is a pure binding update (bpqb.8).
-    """
-    from teamarr.services.group_pattern import compile_group_pattern
-
-    if request.pattern is not None and compile_group_pattern(request.pattern) is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid pattern: {request.pattern!r}",
-        )
-
-    with get_db() as conn:
-        if get_group(conn, group_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Group {group_id} not found",
-            )
-        update_group(
-            conn,
-            group_id,
-            m3u_group_id=request.m3u_group_id,
-            m3u_group_name=request.m3u_group_name,
-            m3u_group_name_pattern=request.pattern,
-            m3u_group_name_pattern_enabled=bool(request.pattern),
-        )
-        mark_group_source_seen(conn, group_id)
-        group = get_group(conn, group_id)
-
-    logger.info(
-        "[REBIND] Source %d re-bound to group %d ('%s')%s",
-        group_id,
-        request.m3u_group_id,
-        request.m3u_group_name,
-        f" with pattern {request.pattern!r}" if request.pattern else "",
-    )
-    assert group is not None
-    return {
-        "id": group.id,
-        "m3u_group_id": group.m3u_group_id,
-        "m3u_group_name": group.m3u_group_name,
-        "m3u_group_name_pattern": group.m3u_group_name_pattern,
-        "m3u_group_name_pattern_enabled": group.m3u_group_name_pattern_enabled,
-    }
-
-
 @router.get("/{group_id}", response_model=GroupResponse)
 def get_group_by_id(group_id: int):
     """Get a single event EPG group."""
@@ -1502,8 +1378,6 @@ def get_group_by_id(group_id: int):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=m3u_account_name,
-        m3u_group_name_pattern=group.m3u_group_name_pattern,
-        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1553,6 +1427,7 @@ def get_group_by_id(group_id: int):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        source_missing=group.source_missing,
         managed=group.managed,
         auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
@@ -1641,8 +1516,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 m3u_group_name=request.m3u_group_name,
                 m3u_account_id=request.m3u_account_id,
                 m3u_account_name=request.m3u_account_name,
-                m3u_group_name_pattern=request.m3u_group_name_pattern,
-                m3u_group_name_pattern_enabled=request.m3u_group_name_pattern_enabled,
                 stream_include_regex=request.stream_include_regex,
                 stream_include_regex_enabled=request.stream_include_regex_enabled,
                 stream_exclude_regex=request.stream_exclude_regex,
@@ -1684,7 +1557,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 clear_m3u_group_name=request.clear_m3u_group_name,
                 clear_m3u_account_id=request.clear_m3u_account_id,
                 clear_m3u_account_name=request.clear_m3u_account_name,
-                clear_m3u_group_name_pattern=request.clear_m3u_group_name_pattern,
                 clear_stream_include_regex=request.clear_stream_include_regex,
                 clear_stream_exclude_regex=request.clear_stream_exclude_regex,
                 clear_custom_regex_teams=request.clear_custom_regex_teams,
@@ -1749,8 +1621,6 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         m3u_group_name=group.m3u_group_name,
         m3u_account_id=group.m3u_account_id,
         m3u_account_name=group.m3u_account_name,
-        m3u_group_name_pattern=group.m3u_group_name_pattern,
-        m3u_group_name_pattern_enabled=group.m3u_group_name_pattern_enabled,
         stream_include_regex=group.stream_include_regex,
         stream_include_regex_enabled=group.stream_include_regex_enabled,
         stream_exclude_regex=group.stream_exclude_regex,
@@ -1800,6 +1670,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        source_missing=group.source_missing,
         managed=group.managed,
         auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
@@ -2061,7 +1932,7 @@ def list_dispatcharr_channel_groups() -> dict:
 
 
 class GroupPatternPreviewRequest(BaseModel):
-    """Preview which live M3U groups a name pattern resolves to (#450)."""
+    """Preview which live M3U groups a name pattern resolves to."""
 
     pattern: str
 
@@ -2070,9 +1941,9 @@ class GroupPatternPreviewRequest(BaseModel):
 def preview_group_name_pattern(request: GroupPatternPreviewRequest) -> dict:
     """Resolve a group-name pattern against live Dispatcharr M3U groups.
 
-    Powers the live "matches N groups" preview in the source editor. Only
-    M3U-provided groups are considered (same rule as generation-time
-    resolution). An invalid regex returns ``valid: false`` rather than an
+    Powers the live "matches N groups" preview in the exception-keyword
+    source editor (a keyword matched by M3U group). Only M3U-provided groups
+    are considered. An invalid regex returns ``valid: false`` rather than an
     error so the UI can show inline feedback while the user types.
     """
     from teamarr.services.group_pattern import (

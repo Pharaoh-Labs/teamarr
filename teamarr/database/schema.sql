@@ -468,7 +468,11 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Source discovery (#997): scan M3U groups that are not sources for subscribed games.
     -- 'off' | 'suggest' (candidates wait for review). Runs on its own cron, never per generation.
     source_discovery_mode TEXT DEFAULT 'suggest',  -- 'off' | 'suggest'; the scan runs once a day (#1027)
-    source_discovery_auto_max_streams INTEGER DEFAULT 1000,  -- a bigger group is suggested, never auto-added
+    source_discovery_auto_max_streams INTEGER DEFAULT 1000,
+    -- Source lifecycle rules (#1058), read as one policy by both passes.
+    source_idle_days INTEGER DEFAULT 14,            -- discovered source switched off after N days without a match (+7 when its name names a league)
+    source_gone_days INTEGER DEFAULT 14,            -- switched-off discovered source removed after its group has been gone N days
+    source_missing_delete_days INTEGER DEFAULT 0,   -- hand-made source deleted after its group has been missing N days; 0 = never  -- a bigger group is suggested, never auto-added
 
     -- Stream Filtering (global defaults for event groups)
     -- Require event pattern: only match streams that look like events (have vs/@/at/date patterns)
@@ -708,14 +712,6 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     m3u_group_name TEXT,
     m3u_account_id INTEGER,                  -- Dispatcharr M3U account ID
     m3u_account_name TEXT,                   -- M3U account name for display
-
-    -- Group-name pattern binding (#450): when enabled, the source is bound to a
-    -- regex over live M3U group NAMES instead of the pinned m3u_group_id. The
-    -- pattern re-resolves to live group ids at stream-fetch time, so provider
-    -- renames (which always spawn a NEW Dispatcharr group id) re-bind
-    -- automatically. Scope: M3U-provided groups only.
-    m3u_group_name_pattern TEXT,
-    m3u_group_name_pattern_enabled BOOLEAN DEFAULT 0,
 
     -- Stale-source detection (lylt): a group is "stale" when its M3U source
     -- channel-group no longer exists in Dispatcharr (deleted/renamed). Distinct

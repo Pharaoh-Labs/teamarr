@@ -30,9 +30,6 @@ export interface EventGroup {
   m3u_group_name: string | null
   m3u_account_id: number | null
   m3u_account_name: string | null
-  // Group-name pattern binding (#450)
-  m3u_group_name_pattern: string | null
-  m3u_group_name_pattern_enabled: boolean
   // Stream filtering
   stream_include_regex: string | null
   stream_include_regex_enabled: boolean
@@ -94,6 +91,8 @@ export interface EventGroup {
   // (null = every group). Only its league scope and team filter are editable.
   is_channel_source?: boolean
   dispatcharr_channel_group_id?: number | null
+  // (#1046) The Dispatcharr group behind a channel source no longer exists.
+  source_missing?: boolean
   // (#997) Created by source discovery; retired on its own when it goes quiet.
   // Any hand edit clears it.
   managed?: boolean
@@ -115,9 +114,6 @@ export interface EventGroupCreate {
   m3u_group_name?: string | null
   m3u_account_id?: number | null
   m3u_account_name?: string | null
-  // Group-name pattern binding (#450)
-  m3u_group_name_pattern?: string | null
-  m3u_group_name_pattern_enabled?: boolean
   // Stream filtering
   stream_include_regex?: string | null
   stream_include_regex_enabled?: boolean
@@ -163,7 +159,6 @@ export interface EventGroupUpdate extends Partial<EventGroupCreate> {
   clear_m3u_group_name?: boolean
   clear_m3u_account_id?: boolean
   clear_m3u_account_name?: boolean
-  clear_m3u_group_name_pattern?: boolean
   clear_stream_include_regex?: boolean
   clear_stream_exclude_regex?: boolean
   clear_custom_regex_teams?: boolean
