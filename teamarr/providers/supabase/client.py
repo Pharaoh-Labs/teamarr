@@ -227,11 +227,8 @@ class SupabaseLeagueClient(BaseHTTPClient):
             api_key = self._extract_api_key(bundle)
 
             if supabase_url and api_key:
-                logger.info(
-                    "[SUPABASE] Extracted credentials from %s (key: %s...)",
-                    bundle_url,
-                    api_key[:20],
-                )
+                # Never log any part of the key (#1051).
+                logger.info("[SUPABASE] Extracted credentials from %s", bundle_url)
                 # Extract and cache logo map as a side effect
                 logo_map = self._extract_logo_map(bundle, base)
                 if logo_map:
