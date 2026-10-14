@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { ToggleCard } from "@/components/ui/toggle-card"
 import { CheckboxListPicker } from "@/components/ui/checkbox-list-picker"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { StreamProfileSelector } from "@/components/StreamProfileSelector"
 import {
@@ -48,6 +49,41 @@ export function EpgMatchingSettings() {
   const channelGroupsQuery = useChannelGroupsWithChannels(
     dispatcharrStatus.data?.connected ?? false
   )
+  // (#1046) An empty selection means every group is scanned. The "All groups"
+  // box makes that rule visible: it is ticked exactly when nothing is picked,
+  // unticks itself when a group is picked, and ticking it clears the picks.
+  // It cannot be unticked on its own — "scan nothing" is the card's switch.
+  const selectedGroupIds = epg?.epg_channel_source_groups ?? []
+  const allGroups = selectedGroupIds.length === 0
+  const liveGroups = channelGroupsQuery.data ?? []
+  // A selected group that Dispatcharr no longer lists keeps its row running
+  // under a stale name; show it so it can be unticked. Only when the list was
+  // actually read: an outage returns an empty list and must not relabel
+  // every selection as gone.
+  const liveIds = new Set(liveGroups.map((g) => g.id))
+  const goneGroupIds =
+    channelGroupsQuery.isSuccess && liveGroups.length > 0
+      ? selectedGroupIds.filter((id) => !liveIds.has(id))
+      : []
+  const pickerItems = [
+    ...liveGroups.map((g) => ({
+      value: String(g.id),
+      label: `${g.name} (${g.channel_count} channel${g.channel_count === 1 ? "" : "s"})`,
+    })),
+    ...goneGroupIds.map((id) => ({
+      value: String(id),
+      label: `group ${id} — no longer in Dispatcharr`,
+    })),
+  ]
+  const setGroupSelection = (vals: string[]) =>
+    epg &&
+    setEPG({
+      ...epg,
+      epg_channel_source_groups: vals.map(Number),
+      stream_profile_overrides: epg.stream_profile_overrides.filter(
+        (m) => m.target_type !== "dispatcharr_channel_group" || vals.includes(String(m.target_id))
+      ),
+    })
 
   return (
     <div className="space-y-4">
@@ -143,28 +179,41 @@ export function EpgMatchingSettings() {
           </p>
         }
       >
-        <div className="max-w-md">
-          <CheckboxListPicker
-            label="Dispatcharr groups to include"
-            selected={(epg?.epg_channel_source_groups ?? []).map(String)}
-            onChange={(vals) =>
-              epg && setEPG({
-                ...epg,
-                epg_channel_source_groups: vals.map(Number),
-                stream_profile_overrides:
-                  epg.stream_profile_overrides.filter((m) => m.target_type !== "dispatcharr_channel_group" || vals.includes(String(m.target_id))),
-              })
+        <div className="max-w-md space-y-2">
+          <Label>Dispatcharr groups to include</Label>
+          <label
+            className="flex items-start gap-2 cursor-pointer"
+            title={
+              allGroups
+                ? "Tick groups below to scan only those. To scan nothing, turn the card off."
+                : "Clear the ticked groups and scan every group"
             }
-            items={(channelGroupsQuery.data ?? []).map((g) => ({
-              value: String(g.id),
-              label: `${g.name} (${g.channel_count} channel${g.channel_count === 1 ? "" : "s"})`,
-            }))}
+          >
+            <Checkbox
+              checked={allGroups}
+              disabled={allGroups}
+              onCheckedChange={(checked) => checked && setGroupSelection([])}
+            />
+            <span className="text-sm">
+              <span className="font-medium">All groups</span>
+              <span className="block text-xs text-muted-foreground">
+                {allGroups
+                  ? "Every Dispatcharr group with channels is scanned. Tick groups below to scan only those."
+                  : "Only the ticked groups are scanned."}
+              </span>
+            </span>
+          </label>
+          <CheckboxListPicker
+            selected={selectedGroupIds.map(String)}
+            onChange={setGroupSelection}
+            items={pickerItems}
+            hideSelectAll
             searchPlaceholder="Search Dispatcharr groups..."
           />
           <p className="text-xs text-muted-foreground pt-1">
-            Lists the Dispatcharr groups that hold channels. Only these groups are
-            scanned — fewer = faster. Empty = all. They also become sort options
-            under Channels → Stream Priority.
+            Lists the Dispatcharr groups that hold channels. Fewer groups = faster
+            generation. Ticked groups also become sort options under Channels →
+            Stream Priority.
           </p>
           {(epg?.epg_channel_source_groups.length ?? 0) > 0 && (
             <div className="space-y-2 pt-3">

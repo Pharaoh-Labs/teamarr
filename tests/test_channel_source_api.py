@@ -227,3 +227,24 @@ def test_dispatcharr_being_down_does_not_fail_the_save(empty_db, monkeypatch):
     monkeypatch.setattr("teamarr.api.routes.settings.epg._channel_source_group_names", boom)
     _save_selection(True, [470])
     assert client.get("/api/v1/settings/epg").json()["epg_channel_source_groups"] == [470]
+
+
+def test_catch_all_row_says_it_reads_every_group(tmp_path, monkeypatch):
+    # No groups selected = every group is scanned; the row's name says so, or
+    # a group the user just deselected looks like it is still there (#1046).
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
+    init_db()
+    with get_db() as conn:
+        ensure_channel_source_group(conn, True, selected_group_ids=[])
+    names = {g["name"]: g["display_name"] for g in _listed().values() if g["is_channel_source"]}
+    assert names == {"Dispatcharr Channels": "Dispatcharr Channels (all groups)"}
+
+
+def test_missing_dispatcharr_group_is_reported_on_the_row(rows):
+    # The stale pass flags a channel-source row whose group is gone (#1046);
+    # the list carries the flag so the Sources page can say so.
+    with get_db() as conn:
+        conn.execute("UPDATE event_epg_groups SET source_missing = 1 WHERE id = ?", (rows[470],))
+    listed = _listed()
+    assert listed[rows[470]]["source_missing"] is True
+    assert listed[rows[1222]]["source_missing"] is False

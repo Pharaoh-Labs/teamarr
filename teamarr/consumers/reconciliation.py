@@ -952,6 +952,24 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                 mark_group_source_seen(conn, row["id"])
             else:
                 mark_group_source_missing(conn, row["id"])
+
+        # Channel-source rows (#542) read a Dispatcharr channel group by id.
+        # One whose group was deleted stays selected and keeps running under
+        # its last name, fetching nothing, with nothing telling the user
+        # (#1046). Flag it the same way; it never enters the stale list, which
+        # is the M3U rebind/delete flow. The catch-all row (NULL id) reads
+        # every group and is always present.
+        for row in conn.execute(
+            """
+            SELECT id, dispatcharr_channel_group_id AS dp_id
+            FROM event_epg_groups
+            WHERE enabled = 1 AND COALESCE(is_channel_source, 0) = 1
+            """
+        ).fetchall():
+            if row["dp_id"] is None or row["dp_id"] in existing_ids:
+                mark_group_source_seen(conn, row["id"])
+            else:
+                mark_group_source_missing(conn, row["id"])
         stale = get_stale_groups(conn)
 
     if stale:

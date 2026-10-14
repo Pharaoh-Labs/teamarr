@@ -319,6 +319,10 @@ class GroupResponse(BaseModel):
     managed: bool = False  # created by source discovery (#997)
     auto_added_at: str | None = None  # discovery added it on its own (#997)
     dispatcharr_channel_group_id: int | None = None
+    # (#1046) The Dispatcharr group behind the source is gone. Set by the
+    # stale-groups pass for channel-source rows; M3U rows surface the same
+    # state through /groups/stale.
+    source_missing: bool = False
 
 
 class GroupListResponse(BaseModel):
@@ -746,6 +750,7 @@ def list_groups(
                 overlap_handling=g.overlap_handling,
                 enabled=g.enabled,
                 is_channel_source=g.is_channel_source,
+                source_missing=g.source_missing,
                 managed=g.managed,
                 auto_added_at=g.auto_added_at,
                 dispatcharr_channel_group_id=g.dispatcharr_channel_group_id,
@@ -936,6 +941,7 @@ def create_group(request: GroupCreate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        source_missing=group.source_missing,
         managed=group.managed,
         auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
@@ -1489,6 +1495,7 @@ def get_group_by_id(group_id: int):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        source_missing=group.source_missing,
         managed=group.managed,
         auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
@@ -1736,6 +1743,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         overlap_handling=group.overlap_handling,
         enabled=group.enabled,
         is_channel_source=group.is_channel_source,
+        source_missing=group.source_missing,
         managed=group.managed,
         auto_added_at=group.auto_added_at,
         dispatcharr_channel_group_id=group.dispatcharr_channel_group_id,
