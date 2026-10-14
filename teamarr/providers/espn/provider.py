@@ -1510,8 +1510,16 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         if not overall:
             return None
 
-        # Parse stats from overall record
-        stats = {s["name"]: s["value"] for s in overall.get("stats", [])}
+        # Parse stats from overall record. A stat can arrive as a bare name
+        # with no value (#1047: ESPN's Conference USA records carry
+        # {"name": "divisionRecord"} and nothing else); it is skipped rather
+        # than failing the whole team, which left every C-USA programme
+        # without a record, streak or scoring average.
+        stats = {
+            s["name"]: s["value"]
+            for s in overall.get("stats", [])
+            if "name" in s and s.get("value") is not None
+        }
 
         # Parse record string
         record_str = overall.get("summary", "0-0")
