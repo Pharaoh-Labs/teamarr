@@ -1,7 +1,7 @@
 """Source discovery API (#997): suggested sources and the scan that finds them.
 
 A candidate is an M3U group that is not a source. See
-``consumers/source_discovery.py`` for how evidence is gathered and judged.
+``consumers/source_lifecycle/discovery.py`` for how evidence is gathered and judged.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import threading
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from teamarr.consumers.source_discovery import (
+from teamarr.consumers.source_lifecycle.discovery import (
     EVIDENCE_WINDOW_DAYS,
     TIER_GAMES,
     TIER_NAME_ONLY,

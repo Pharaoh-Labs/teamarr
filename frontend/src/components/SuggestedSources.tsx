@@ -50,13 +50,13 @@ const TIER_BADGE: Record<SuggestionTier, { label: string; variant: "success" | "
 }
 
 /**
- * Suggested sources (#997): M3U groups that are not sources but carry — or by
- * their name should carry — games in subscribed leagues. Found by a scan that
+ * Discover (#997, the Suggested sources block of Sources → Automation, #1058):
+ * M3U groups that are not sources but carry — or by their name should carry —
+ * games in subscribed leagues. Found by a scan that
  * runs once a day while the "Scan daily" switch in the header is on (#1027:
  * no cron to set, the tiers read a week of evidence); accepting one creates a
  * managed source, which is retired on its own when it goes quiet. Hand-made
- * sources are never touched. The auto-add stream cap lives with the automatic
- * mode toggles on the Subscriptions page.
+ * sources are never touched. The auto-add stream cap lives with the Add toggles.
  */
 export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
   const queryClient = useQueryClient()
@@ -206,9 +206,9 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
 
   return (
     <CollapsibleSection
-      title="Suggested sources"
+      title="Discover"
       icon={<Sparkles className="h-4 w-4" />}
-      count={open.length > 0 ? `(${open.length})` : undefined}
+      count={open.length > 0 ? `(${open.length} suggested)` : undefined}
       variant="subsection"
       persistKey="sources.suggested"
       actions={
@@ -237,15 +237,14 @@ export function SuggestedSources({ leagueName }: { leagueName: LeagueName }) {
         <p className="text-xs text-muted-foreground">
           Once a day, Teamarr looks through every M3U group that is not already a source and
           suggests the ones carrying events in leagues you subscribe to, listed by the M3U account
-          they come from. Replay groups are left out. Switch a league or sport to automatic under
-          Subscriptions → Find sources automatically and its groups are added without asking,
-          once they have shown events on two different days. Discovery reads stream names only: it does not use
+          they come from. Replay groups are left out. Switch a league or sport on under Add, below, and its
+          groups are added without asking, once they have shown events on two different days. Discovery reads stream names only: it does not use
           EPG matching, so linear channels such as ESPN or TSN1 are never suggested. Add those
           as an EPG-matching source yourself, or select their channel group under Matching →
           Dispatcharr as a Stream Source. A source added from here is{" "}
-          <span className="font-medium">managed</span>: it is switched off when it has matched
-          nothing for two weeks and back on when its group has games again. Sources you add or
-          edit yourself are never changed.
+          <span className="font-medium">managed</span>: the Retire rules below switch it off when
+          it goes quiet, back on when its group has games again, and remove it when the group is
+          gone.
         </p>
 
         {last && (

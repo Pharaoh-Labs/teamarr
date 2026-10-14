@@ -21,7 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { LeaguePicker } from "@/components/LeaguePicker"
-import { AutoSourceToggles } from "@/components/AutoSourceToggles"
+import { Link } from "react-router"
 import { SelectedBadges } from "@/components/ui/selected-badges"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
 import { TeamPicker } from "@/components/TeamPicker"
@@ -294,7 +294,15 @@ export function GlobalDefaults({
           </div>
         </Card>
       )}
-      {activeTile === "sportleague" && <AutoSourceToggles />}
+      {activeTile === "sportleague" && (
+        <p className="text-xs text-muted-foreground">
+          Want groups for these leagues added as sources on their own? That lives under{" "}
+          <Link to="/sources" className="underline underline-offset-2">
+            Sources → Automation → Add
+          </Link>
+          .
+        </p>
+      )}
 
       {/* ── Tile: Soccer ── */}
       {activeTile === "soccer" && (

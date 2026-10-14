@@ -59,6 +59,12 @@ export interface SchedulerSettings {
   source_discovery_mode: "off" | "suggest"
   // (#997) a group with more streams is suggested, never added automatically
   source_discovery_auto_max_streams: number
+  // (#1058) source lifecycle rules: days idle before a discovered source is
+  // switched off, days gone before a switched-off one is removed, days a
+  // hand-made source's group may be missing before it is deleted (0 = never)
+  source_idle_days: number
+  source_gone_days: number
+  source_missing_delete_days: number
 }
 
 export interface SchedulerSettingsUpdate {
@@ -68,6 +74,9 @@ export interface SchedulerSettingsUpdate {
   channel_reset_cron?: string | null
   source_discovery_mode?: "off" | "suggest"
   source_discovery_auto_max_streams?: number
+  source_idle_days?: number
+  source_gone_days?: number
+  source_missing_delete_days?: number
 }
 
 export interface EPGSettings {
