@@ -120,6 +120,7 @@ so both players end up in the artwork. Singles names are unaffected.
 
 - Filters are **opt-in**: variables without one are unchanged, so a variable that already
   holds a full URL is never double-encoded.
+- The same filters work on the wildcards in [dynamic channel group and profile patterns](../channels/output.md): `{sport|upper}` names the group "HOCKEY".
 - A misspelled filter (e.g. `|urlencodee`) renders literally, just like a misspelled
   variable name, so you can spot the typo. The live preview applies filters too.
 - In the template editor, hover any variable chip to preview each filter against the

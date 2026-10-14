@@ -6,14 +6,40 @@ Auto-creates groups/profiles in Dispatcharr if they don't exist.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from sqlite3 import Connection as SQLiteConnection
 from typing import Any
 
 from teamarr.core.sports import get_sport_display_names_from_db
 from teamarr.dispatcharr.factory import get_dispatcharr_connection
+from teamarr.templates.filters import FILTERS
 
 logger = logging.getLogger(__name__)
+
+# A wildcard in a group or profile pattern, with an optional chain of the
+# template filters (#1050): ``{sport|upper}`` → HOCKEY, ``{league|lower}``.
+# ``conference_abbrev`` is listed before ``conference`` so the alternation
+# cannot stop short at the prefix.
+WILDCARD_PATTERN = re.compile(
+    r"\{(sport|league|conference_abbrev|conference|division|exception_keyword)"
+    r"((?:\|[A-Za-z_]+)*)\}"
+)
+
+
+def pattern_uses(pattern: str | None, name: str) -> bool:
+    """Whether ``pattern`` carries the ``{name}`` wildcard, filtered or not."""
+    return any(m.group(1) == name for m in WILDCARD_PATTERN.finditer(pattern or ""))
+
+
+def has_unresolved_wildcard(text: str | None) -> bool:
+    """Whether a resolved pattern still carries a wildcard token.
+
+    A token survives resolution when its value was empty (a non-NCAA event
+    under ``{conference}``, a channel with no keyword) or when it names a
+    filter that does not exist; both fall back to the static group.
+    """
+    return WILDCARD_PATTERN.search(text or "") is not None
 
 
 def _group_key(name: str) -> str:
@@ -176,7 +202,6 @@ class DynamicResolver:
         if not self._db_factory:
             return None
         try:
-
             return get_dispatcharr_connection(self._db_factory)
         except Exception as e:
             logger.warning("[RESOLVER] Failed to get Dispatcharr connection: %s", e)
@@ -306,31 +331,33 @@ class DynamicResolver:
         Returns:
             Resolved string with wildcards replaced by display names
         """
-        result = pattern
+        # Values are looked up lazily: a pattern without {sport} never asks
+        # for the sport's display name.
+        sources = {
+            "sport": lambda: self.get_sport_display_name(event_sport) if event_sport else None,
+            "league": lambda: self.get_league_alias(event_league) if event_league else None,
+            "conference": lambda: conference,
+            "division": lambda: division,
+            "conference_abbrev": lambda: conference_abbrev,
+            "exception_keyword": lambda: exception_keyword,
+        }
 
-        if event_sport and "{sport}" in result:
-            display_name = self.get_sport_display_name(event_sport)
-            result = result.replace("{sport}", display_name)
+        def replace(match: re.Match) -> str:
+            value = sources[match.group(1)]()
+            if not value:
+                return match.group(0)  # unresolved: the caller falls back
+            # The same |filter chain as templates (#1050), left to right. An
+            # unknown filter keeps the token literal, as templates do, so the
+            # typo is visible and the channel lands in the static group
+            # rather than in a group named for the typo.
+            for name in (f for f in match.group(2).lower().split("|") if f):
+                filter_fn = FILTERS.get(name)
+                if filter_fn is None:
+                    return match.group(0)
+                value = filter_fn(value)
+            return value
 
-        if event_league and "{league}" in result:
-            alias = self.get_league_alias(event_league)
-            result = result.replace("{league}", alias)
-
-        # Exact-token replaces: '{conference}' cannot match inside
-        # '{conference_abbrev}' because the latter's brace follows '_'.
-        if conference and "{conference}" in result:
-            result = result.replace("{conference}", conference)
-
-        if division and "{division}" in result:
-            result = result.replace("{division}", division)
-
-        if conference_abbrev and "{conference_abbrev}" in result:
-            result = result.replace("{conference_abbrev}", conference_abbrev)
-
-        if exception_keyword and "{exception_keyword}" in result:
-            result = result.replace("{exception_keyword}", exception_keyword)
-
-        return result
+        return WILDCARD_PATTERN.sub(replace, pattern)
 
     def _validate_group_id(self, group_id: int | None) -> int | None:
         """Drop a configured group id that no longer exists in Dispatcharr.
@@ -524,12 +551,12 @@ class DynamicResolver:
         # Pattern mode: resolve {sport}/{league}/{conference}/{division} wildcards
         if "{" in mode:
             conference = (
-                self.get_event_conference(event) if "{conference}" in mode else None
+                self.get_event_conference(event) if pattern_uses(mode, "conference") else None
             )
-            division = self.get_event_division(event) if "{division}" in mode else None
+            division = self.get_event_division(event) if pattern_uses(mode, "division") else None
             conference_abbrev = (
                 self.get_event_conference_abbrev(event)
-                if "{conference_abbrev}" in mode
+                if pattern_uses(mode, "conference_abbrev")
                 else None
             )
             resolved_name = self.resolve_pattern(
@@ -545,14 +572,7 @@ class DynamicResolver:
             # Check if any wildcards remain unresolved (a non-NCAA event under
             # a {conference}/{conference_abbrev}/{division} pattern falls back
             # to the static group)
-            if (
-                "{sport}" in resolved_name
-                or "{league}" in resolved_name
-                or "{conference}" in resolved_name
-                or "{division}" in resolved_name
-                or "{conference_abbrev}" in resolved_name
-                or "{exception_keyword}" in resolved_name
-            ):
+            if has_unresolved_wildcard(resolved_name):
                 logger.warning(
                     "[RESOLVER] Pattern has unresolved wildcards: %s -> %s (sport=%s, league=%s)",
                     mode,
@@ -623,17 +643,7 @@ class DynamicResolver:
                     # only), so without these checks a profile pattern using
                     # one would create a profile literally named
                     # "NCAAF | {conference}".
-                    if any(
-                        token in resolved_name
-                        for token in (
-                            "{sport}",
-                            "{league}",
-                            "{conference}",
-                            "{conference_abbrev}",
-                            "{division}",
-                            "{exception_keyword}",
-                        )
-                    ):
+                    if has_unresolved_wildcard(resolved_name):
                         logger.warning(
                             "[RESOLVER] Profile pattern has unresolved wildcards: %s -> %s",
                             item,
