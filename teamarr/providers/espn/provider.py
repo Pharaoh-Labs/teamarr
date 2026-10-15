@@ -303,7 +303,6 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         events: list[Event] = []
         seen: set[str] = set()
         for block in data.get("scores") or []:
-            block_leagues = block.get("leagues") or []
             for event_data in block.get("events") or []:
                 competition = (event_data.get("competitions") or [{}])[0]
                 card = str((competition.get("class") or {}).get("generalClassCard") or "").strip()
@@ -315,27 +314,10 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
                 seen.add(event_id)
                 event = self._parse_event(event_data, league)
                 if event:
-                    # ESPN addresses each tour as its own numbered series and
-                    # game-thumbs keys cricket art under that slug (bead s7ny).
-                    event.series_slug = self._cricket_series_slug(event_data, block_leagues)
                     if format_key == "test":
                         self._attach_test_days(event, event_data)
                     events.append(event)
         return events
-
-    @staticmethod
-    def _cricket_series_slug(event_data: dict, block_leagues: list[dict]) -> str:
-        """The ESPN series slug of a panel event, digits included (bead s7ny).
-
-        ESPN fills ``leagues[].slug`` with the series' numeric id — the same
-        value game-thumbs stores cricket art under — but it can arrive blank,
-        so fall back to the league id, then the event's own ``leagueId``.
-        """
-        for league in block_leagues:
-            slug = str(league.get("slug") or league.get("id") or "").strip()
-            if slug:
-                return slug
-        return str(event_data.get("leagueId") or "").strip()
 
     def _attach_test_days(self, event: Event, event_data: dict) -> None:
         """Give a Test one session per scheduled day (#944, bead 7cmb.8).
