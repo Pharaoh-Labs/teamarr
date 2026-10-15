@@ -332,6 +332,13 @@ export function TemplateForm() {
       return
     }
 
+    // Subtitle and description may be blank (#1063); a title never should be.
+    if (!formData.title_format?.trim()) {
+      toast.error("Program Title Template is required")
+      setActiveTab("defaults")
+      return
+    }
+
     if (isEdit) {
       updateMutation.mutate(formData)
     } else {
