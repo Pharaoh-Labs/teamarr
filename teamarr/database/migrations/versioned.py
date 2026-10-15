@@ -14,6 +14,7 @@ import sqlite3
 import unicodedata
 
 from teamarr.database.checkpoint_v43 import apply_checkpoint_v43
+from teamarr.database.migrations.cricket import migrate_franchise_cricket
 
 logger = logging.getLogger(__name__)
 
@@ -381,6 +382,12 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             _migrate_v99_drop_group_templates,
         )
         current_version = 99
+
+    if current_version < 100:
+        _apply_migration(
+            conn, 100, "migrate franchise cricket identities to ESPN", migrate_franchise_cricket
+        )
+        current_version = 100
 
 
 # =============================================================================

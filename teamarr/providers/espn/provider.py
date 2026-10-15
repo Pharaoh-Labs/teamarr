@@ -32,6 +32,7 @@ from teamarr.providers.espn.client import (
     scoreboard_groups_for_divisions,
 )
 from teamarr.providers.espn.constants import STATUS_MAP, TOURNAMENT_SPORTS
+from teamarr.providers.espn.cricket import CricketSeriesMixin
 from teamarr.providers.espn.editorial_canary import EditorialDriftCanary
 from teamarr.providers.espn.mma import MMAParserMixin
 from teamarr.providers.espn.tennis import TennisParserMixin
@@ -58,7 +59,9 @@ RANKING_PRIMARY_POLL_TYPE = "ap"
 RANKING_MAX = 25
 
 
-class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, SportsProvider):
+class ESPNProvider(
+    CricketSeriesMixin, MMAParserMixin, TennisParserMixin, TournamentParserMixin, SportsProvider
+):
     """ESPN implementation of SportsProvider.
 
     Pure fetch + normalize layer. No caching - that's handled by SportsDataService.
@@ -371,6 +374,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         cricket_format = self._cricket_panel_format(sport_league)
         if cricket_format:
             return self._get_cricket_panel_events(league, target_date, cricket_format)
+        if self._cricket_series_id(league):
+            return self._get_cricket_series_events(league, target_date)
 
         # MMA promotions use a different API endpoint
         if self._is_mma(league, sport):
@@ -453,6 +458,9 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         populate. Avoids the sparse fixed-date scan that misses spaced-out
         schedules (NBA Finals, weekly NFL).
         """
+        if self._cricket_series_id(league):
+            today = date.today()
+            return self._cricket_series_events(league, {today.year - 1, today.year})
         sport = self._get_sport(league)
         if self._is_mma(league, sport):
             # Cards run ~weekly, so a today/yesterday scan is empty most of the
@@ -503,6 +511,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         then returns the most recent one — e.g. NFL in June → the Super Bowl.
         Best sample, since a finished game populates every postgame variable.
         """
+        if self._cricket_series_id(league):
+            return self._get_cricket_series_recent_final(league)
         sport = self._get_sport(league)
         if sport in TOURNAMENT_SPORTS:
             return None
@@ -585,6 +595,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         """
         if self._cricket_panel_format(self._get_sport_league_from_db(league)):
             return []
+        if self._cricket_series_id(league):
+            return self._get_cricket_series_team_schedule(team_id, league, days_ahead)
         # Apply team ID correction for known ESPN mismatches
         corrected_id = ESPN_TEAM_ID_CORRECTIONS.get((league, team_id))
         if corrected_id:
@@ -744,6 +756,11 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         return False
 
     def get_team(self, team_id: str, league: str) -> Team | None:
+        if self._cricket_series_id(league):
+            return next(
+                (team for team in self._get_cricket_series_teams(league) if team.id == team_id),
+                None,
+            )
         # Combat sports don't have teams endpoint - skip to avoid 404 spam
         if league in self.LEAGUES_WITHOUT_TEAMS:
             return None
@@ -1427,6 +1444,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         Returns:
             List of Team objects for this league
         """
+        if self._cricket_series_id(league):
+            return self._get_cricket_series_teams(league)
         # Combat sports don't have teams - skip to avoid 404 spam
         if league in self.LEAGUES_WITHOUT_TEAMS:
             logger.debug("[ESPN] Teams endpoint not available for %s (individual sport)", league)
@@ -1516,6 +1535,8 @@ class ESPNProvider(MMAParserMixin, TennisParserMixin, TournamentParserMixin, Spo
         """
         # Get sport/league from database config
         sport_league = self._get_sport_league_from_db(league)
+        if sport_league and sport_league[0] == "cricket":
+            return None  # Cricket's team endpoint has no record/statistics payload.
 
         data = self._client.get_team(league, team_id, sport_league)
         if not data or "team" not in data:

@@ -75,7 +75,7 @@ Each league in `schema.sql` maps to a provider via the `provider` and `provider_
 | MLB Stats | `sport_id` | `11` (Triple-A) |
 | HockeyTech | `client_code` | `echl`, `gojhl` |
 | Supabase | league website URL | `https://cbl.ca` (credentials are scraped from the site) |
-| TSDB | `league_id` | `4460` (IPL) |
+| TSDB | `league_id` | `4488` (IMSA) |
 
 ## Design Principles
 

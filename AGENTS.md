@@ -21,6 +21,12 @@ Support-bundle v2 adds `owner_type` and the nullable plugin identity/adoption fi
 
 ## Quick Reference
 
+Franchise cricket (#1069): IPL, BBL, SA20 and MLC use ESPN numeric series IDs.
+Their team lists and schedules come from cached explicit-season scoreboards, not
+the unsupported cricket team endpoints. Preserve local team/channel IDs when
+migrating provider identities; old event channels retain ownership until normal
+retirement. All remaining TSDB leagues require a premium key.
+
 ```bash
 bd ready              # Find available work
 bd show <id>          # View issue details

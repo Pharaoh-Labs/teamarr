@@ -10,6 +10,11 @@ redirect_from:
 
 # Teams
 
+**Cricket:** IPL, Big Bash, SA20 and Major League Cricket support team import and
+team channels through ESPN, with no premium API key. Existing recognized team
+selections migrate automatically. The international ODI, T20I and Test format
+leagues remain event-only. See [migration details](../../reference/providers/espn.md#franchise-cricket).
+
 ![EPG → Team EPG — settings card, stats, and the teams table](../../assets/images/epg-teams.png)
 
 Team EPG builds one persistent **XMLTV schedule** per active team in the guide Teamarr writes. By default, point one of your existing Dispatcharr channels at the team's XMLTV channel id through Dispatcharr's normal EPG association. This is a manual, guide-only setup: Teamarr does not create or modify that Dispatcharr channel.
