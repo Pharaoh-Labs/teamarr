@@ -35,17 +35,6 @@ the shipped art paths compose **both** players per side with no template changes
 the separator Game Thumbs matches the joined string to a single athlete and renders one
 player per side.
 
-### Cricket series slugs
-
-ESPN addresses every cricket tour as its own numbered series (`8050`, `1554555`, …), and
-Game Thumbs stores cricket art under those slugs. On cricket events `{league_code}`
-emits the match's series slug — digits included — instead of the format code
-(`cricket-odi`/`cricket-t20i`/`cricket-test`), so the shipped
-`{league_code}/{away_team|pascal}/{home_team|pascal}/…` art paths reach the series' art
-with no template changes. Every other league keeps resolving `{league_code}` to the raw
-league code, and channel naming is unaffected — only the rendered value in templates
-changes.
-
 ### Conventions the starter templates use
 
 The shipped [starter templates](../templates/defaults) use these Game Thumbs query parameters:

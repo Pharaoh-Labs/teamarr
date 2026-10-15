@@ -173,52 +173,6 @@ def test_a_format_league_is_a_filter_over_the_days_panel():
     assert t20[0].game_event_note in ("3rd T20I", "12th Match")
 
 
-def test_panel_events_carry_their_series_slug():
-    from datetime import date
-
-    events = _panel_provider().get_events("cricket-t20i", date(2026, 10, 11))
-    by_id = {e.id: e for e in events}
-    # The fixture's series blocks have no slug, so the league id is the
-    # fallback — numeric either way (bead s7ny). 1554555 is the T20 World
-    # Cup qualifier, a pure series id with no name-shaped slug at all.
-    assert by_id["1529232"].series_slug == "24289"
-    assert by_id["1554579"].series_slug == "1554555"
-
-
-def test_a_present_series_slug_wins_over_the_league_id():
-    from datetime import date
-
-    panel = {
-        "scores": [
-            {
-                "leagues": [
-                    {"id": "24289", "slug": "8050", "name": "West Indies tour of India 2026/27"}
-                ],
-                "events": [EVENTS["1529232"]],
-            }
-        ]
-    }
-    events = _panel_provider(_PanelClient(panel)).get_events("cricket-t20i", date(2026, 10, 11))
-    assert [e.series_slug for e in events] == ["8050"]
-
-
-def test_a_blank_slug_falls_back_to_the_events_league_id():
-    from datetime import date
-
-    event = dict(EVENTS["1529232"], leagueId="4242")
-    panel = {"scores": [{"leagues": [{"slug": "", "name": "Tour"}], "events": [event]}]}
-    events = _panel_provider(_PanelClient(panel)).get_events("cricket-t20i", date(2026, 10, 11))
-    assert [e.series_slug for e in events] == ["4242"]
-
-
-def test_no_series_information_anywhere_leaves_the_slug_empty():
-    from datetime import date
-
-    panel = {"scores": [{"events": [EVENTS["1529232"]]}]}
-    events = _panel_provider(_PanelClient(panel)).get_events("cricket-t20i", date(2026, 10, 11))
-    assert [e.series_slug for e in events] == [""]
-
-
 def test_the_two_leagues_share_one_panel_request_per_day():
     from datetime import date
 

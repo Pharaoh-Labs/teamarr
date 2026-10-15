@@ -179,7 +179,7 @@ Core identifiers for teams, leagues, and matchups.
 | `{league_name}` | League display name from the leagues table | base | `NFL` |
 | `{league_abbrev}` | League abbreviation built from the league name — existing capitals plus the first letter of each word | base | `WC` (from `World Cup`) |
 | `{league_id}` | League identifier for URLs | base | `nfl` |
-| `{league_code}` | Raw league code; on cricket events the numeric ESPN series slug (game thumbs keys cricket art under it) | base | `nfl` · cricket: `8050` |
+| `{league_code}` | Raw league code | base | `nfl` |
 | `{sport}` | Sport display name | base | `Football` |
 | `{gracenote_category}` | Gracenote category for EPG; customizable per league (Settings → Advanced → Gracenote Category Overrides) | base | `NFL Football` |
 | `{exception_keyword}` | Exception keyword label (e.g., 'Spanish', '4K'); on channels no keyword matched, the **Untagged label** from Channels → Dispatcharr Output, or empty | base | `4K` |
