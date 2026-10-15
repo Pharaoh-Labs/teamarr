@@ -46,6 +46,15 @@ with no template changes. Every other league keeps resolving `{league_code}` to 
 league code, and channel naming is unaffected — only the rendered value in templates
 changes.
 
+The numeric series slug is retained through the service and stream-match caches,
+so the same template works on both fresh and cached events. Legacy cricket cache
+entries without the field refresh automatically on the next lookup; manual fixture
+pins and skips are preserved. No template edit or global cache purge is needed.
+For example, given series slug `8836`, the path renders as
+`8836/WestIndies/India/thumb.png?style=1&logo=true&fallback=true&badge=%20`,
+not `cricket-t20i/WestIndies/India/…`. The actual number comes from the match's ESPN
+series metadata, not its format or team names.
+
 ### Conventions the starter templates use
 
 The shipped [starter templates](../templates/defaults) use these Game Thumbs query parameters:

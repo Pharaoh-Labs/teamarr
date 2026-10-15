@@ -21,6 +21,10 @@ Support-bundle v2 adds `owner_type` and the nullable plugin identity/adoption fi
 
 ## Quick Reference
 
+Cricket artwork: `{league_code}` renders `Event.series_slug` (the ESPN numeric
+series identity). Preserve it through service-cache serialization and match-cache
+reconstruction; canonical league keys and manually pinned matches stay unchanged.
+
 ```bash
 bd ready              # Find available work
 bd show <id>          # View issue details
