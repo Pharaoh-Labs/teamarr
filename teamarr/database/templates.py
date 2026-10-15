@@ -228,9 +228,12 @@ def _row_to_template(row: Row) -> Template:
         template_type=row["template_type"] or "team",
         sport=row["sport"],
         league=row["league"],
-        title_format=row["title_format"] or "{team_name} {sport}",
-        subtitle_template=row["subtitle_template"] or "{venue_full}",
-        description_template=row["description_template"] or "{matchup} | {venue_full}",
+        # A blank field stays blank (#1063): the schema DEFAULTs and starter
+        # snapshots supply the initial text, and the editor saves a cleared
+        # field as NULL on purpose. Re-filling it here overrode the user.
+        title_format=row["title_format"] or "",
+        subtitle_template=row["subtitle_template"] or "",
+        description_template=row["description_template"] or "",
         program_art_url=row["program_art_url"],
         game_duration_mode=row["game_duration_mode"] or "sport",
         game_duration_override=row["game_duration_override"],
