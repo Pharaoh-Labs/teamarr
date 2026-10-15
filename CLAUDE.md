@@ -280,10 +280,6 @@ cricket team endpoints. Preserve local team/channel IDs when migrating provider
 identities; old event channels retain ownership until normal retirement. All
 remaining TSDB leagues require a premium key.
 
-Cricket artwork: `{league_code}` renders `Event.series_slug` (the ESPN numeric
-series identity). Preserve it through service-cache serialization and match-cache
-reconstruction; canonical league keys and manually pinned matches stay unchanged.
-
 **Dispatcharr Sync Reliability** (`lifecycle/service.py`):
 All `update_channel` calls go through `_safe_update_channel`, which checks `OperationResult.success` before persisting to local DB. On API failure, the DB stays unchanged so drift is re-detected on the next generation run. Profile sync also compares against Dispatcharr's actual state (`current_channel.channel_profile_ids`) for self-healing. Profile add/remove sets are diffed against that actual membership (or the catalog, for a stored `[0]`), never the stored list alone, and `0` is never queued as a profile — the ALL-profiles sentinel is not a profile (#894). New ids persist only once their bulk updates land (`_pending_profile_db_writes`). `_validate_profile_ids` re-reads the profile catalog once before calling an id stale, because the dynamic resolver creates `{sport}`/`{league}` profiles mid-run. Reconciliation (`reconciliation.py`) detects stream and profile drift as additional drift fields, and applies the same sentinel rule as the sync (#910): a stored `[0]` is in sync when the channel is a member of every profile in the catalog (read once per pass), an empty Dispatcharr list is real drift, and an unreadable catalog is not reported — a literal `[0]` vs concrete-list comparison flagged every all-profiles channel on every pass.
 
