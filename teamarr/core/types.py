@@ -290,6 +290,13 @@ class Event:
     draw_type: str | None = None  # e.g., "Men's Singles", "Mixed Doubles"
     is_major: bool = False  # ESPN tournament major flag (grand slams)
 
+    # Cricket-specific: the ESPN series this match belongs to (bead s7ny).
+    # ESPN has no standing cricket leagues — every tour is its own numbered
+    # series — and game-thumbs keys cricket art under that series slug, so
+    # the {league_code} template variable resolves to it on cricket events.
+    # The numeric slug is the point: digits pass through untouched.
+    series_slug: str = ""  # e.g. "8050"; panel leagues[].slug, id/event leagueId fallback
+
 
 @dataclass(frozen=True)
 class TeamStats:

@@ -359,7 +359,6 @@ def extract_sport(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not sport_code:
         return ""
 
-
     service = get_league_mapping_service()
     return service.get_sport_display_name(sport_code)
 
@@ -393,10 +392,24 @@ def extract_league_id(ctx: TemplateContext, game_ctx: GameContext | None) -> str
     name="league_code",
     category=Category.IDENTITY,
     suffix_rules=SuffixRules.BASE_ONLY,
-    description="Raw league code (e.g., 'nfl', 'mens-college-basketball', 'eng.1')",
+    description="Raw league code (e.g., 'nfl', 'mens-college-basketball', 'eng.1'); "
+    "cricket events emit the numeric ESPN series slug (e.g., '8050')",
 )
 def extract_league_code(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
-    """Return raw league_code, ignoring any alias."""
+    """Return raw league_code, ignoring any alias.
+
+    Cricket (bead s7ny): ESPN addresses every tour as its own numbered
+    series, and game-thumbs keys cricket art under that numeric slug — the
+    format code ('cricket-t20i') matches nothing there. A panel event
+    carries its series slug in ``Event.series_slug``; when present it wins,
+    so art paths like ``{league_code}/{away_team|pascal}/…`` reach the
+    series' art and digits pass through untouched. Only the rendered value
+    changes — matching, DB keys and ``{league}`` keep the format code — and
+    every non-cricket league resolves exactly as before.
+    """
+    event = game_ctx.event if game_ctx else None
+    if event is not None and event.series_slug:
+        return event.series_slug
     return ctx.team_config.league
 
 
