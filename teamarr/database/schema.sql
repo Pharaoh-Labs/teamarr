@@ -1454,12 +1454,11 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('cricket-odi', 'espn', 'cricket/panel:odi', NULL, 'One Day Internationals', 'cricket', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-cricket.png', NULL, 0, 'ODI', 'odi', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('cricket-t20i', 'espn', 'cricket/panel:t20i', NULL, 'T20 Internationals', 'cricket', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-cricket.png', NULL, 0, 'T20I', 't20i', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('cricket-test', 'espn', 'cricket/panel:test', NULL, 'Test Matches', 'cricket', 'https://a.espncdn.com/redesign/assets/img/icons/ESPN-icon-cricket.png', NULL, 0, 'Tests', 'test', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    -- Cricket (TSDB) - Premium tier, requires TSDB premium key for full event coverage
-    ('ipl', 'tsdb', '4460', 'Indian Premier League', 'Indian Premier League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/gaiti11741709844.png', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('bbl', 'tsdb', '4461', 'Australian Big Bash League', 'Big Bash League', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/yko7ny1546635346.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    ('sa20', 'tsdb', '5532', 'SA20', 'South Africa Twenty20', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/aakvuk1734183412.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
-    -- MLC: short US T20 season fits the free rolling next-events window (eventsnextleague), so no premium key needed.
-    ('mlc', 'tsdb', '5401', 'Major League Cricket', 'Major League Cricket', 'cricket', 'https://r2.thesportsdb.com/images/media/league/badge/mbbos01689159510.png', NULL, 1, 'MLC', 'mlc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    -- Recurring franchise cricket (ESPN, #1069): season scoreboards include teams and fixtures.
+    ('ipl', 'espn', 'cricket/8048', NULL, 'Indian Premier League', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/8048.png', NULL, 1, 'IPL', 'ipl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('bbl', 'espn', 'cricket/8044', NULL, 'Big Bash League', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/8044.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('sa20', 'espn', 'cricket/21275', NULL, 'South Africa Twenty20', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/21275.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('mlc', 'espn', 'cricket/21266', NULL, 'Major League Cricket', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/21266.png', NULL, 1, 'MLC', 'mlc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Rugby (ESPN)
     ('rwc',   'espn', 'rugby/164205',    NULL, 'Rugby World Cup',                 'rugby', 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Rugby_World_Cup_Logo%2C_used_post_RWC_2023.svg', NULL, 1, 'RWC',   'rwc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
