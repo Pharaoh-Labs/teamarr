@@ -1868,7 +1868,7 @@ CREATE TABLE IF NOT EXISTS managed_channel_history (
 
     -- Change source
     change_source TEXT
-        CHECK(change_source IN ('epg_generation', 'reconciliation', 'api', 'scheduler', 'manual', 'external_sync', 'lifecycle', 'cross_group_enforcement', 'keyword_enforcement', 'keyword_ordering')),
+        CHECK(change_source IN ('epg_generation', 'reconciliation', 'api', 'scheduler', 'manual', 'external_sync', 'lifecycle', 'cross_group_enforcement', 'keyword_enforcement', 'keyword_ordering', 'team_filter', 'template_assignment')),
 
     -- Change details
     field_name TEXT,                         -- For 'modified': which field changed

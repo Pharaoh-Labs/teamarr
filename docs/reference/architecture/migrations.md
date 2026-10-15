@@ -141,6 +141,7 @@ Some schema changes need to happen **before** the checkpoint runs (e.g., renamin
 | `_migrate_settings_for_v65` | Settings table rebuild (channel lifecycle overhaul) |
 | `_migrate_detection_keywords_check` | Rebuilds detection_keywords for a new CHECK constraint |
 | `_migrate_stream_match_cache_check` | Rebuilds stream_match_cache for a new CHECK constraint |
+| `_migrate_channel_history_check` | Rebuilds managed_channel_history so `change_source` accepts `team_filter` / `template_assignment` (#1065) |
 
 (Column additions that used to be pre-migrations are now handled by schema reconciliation.)
 Pre-migrations are idempotent and only modify the schema if the target column/table doesn't already exist.
