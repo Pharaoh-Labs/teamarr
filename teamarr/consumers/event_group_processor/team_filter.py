@@ -352,16 +352,9 @@ class TeamFiltering:
             # Soft delete in our database
             mark_channel_deleted(conn, channel.id, reason=reason)
 
-            # Log the history
-            log_channel_history(
-                conn=conn,
-                managed_channel_id=channel.id,
-                change_type="deleted",
-                change_source=change_source,
-                notes=f"Channel deleted: {reason}",
-            )
-
-            # Delete from Dispatcharr if connected
+            # Delete from Dispatcharr BEFORE writing history (#1065): the
+            # history row is bookkeeping, and a rejected insert used to leave
+            # the channel soft-deleted here but still live in Dispatcharr.
             if self._dispatcharr_client and channel.dispatcharr_channel_id:
                 try:
                     lifecycle_service = create_lifecycle_service(
@@ -379,6 +372,21 @@ class TeamFiltering:
                         channel.dispatcharr_channel_id,
                         e,
                     )
+
+            try:
+                log_channel_history(
+                    conn=conn,
+                    managed_channel_id=channel.id,
+                    change_type="deleted",
+                    change_source=change_source,
+                    notes=f"Channel deleted: {reason}",
+                )
+            except Exception as e:
+                logger.warning(
+                    "[EVENT_EPG] Channel %d deleted but history not recorded: %s",
+                    channel.id,
+                    e,
+                )
 
             return True
         except Exception as e:

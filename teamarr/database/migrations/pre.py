@@ -19,6 +19,7 @@ def run_pre_migrations(conn: sqlite3.Connection) -> None:
     _migrate_settings_for_v65(conn)
     _migrate_detection_keywords_check(conn)
     _migrate_stream_match_cache_check(conn)
+    _migrate_channel_history_check(conn)
 
 
 def _rename_league_id_column_if_needed(conn: sqlite3.Connection) -> None:
@@ -241,3 +242,34 @@ def _migrate_stream_match_cache_check(conn: sqlite3.Connection) -> None:
         "match_method CHECK constraint (user corrections backed up)"
     )
 
+
+def _migrate_channel_history_check(conn: sqlite3.Connection) -> None:
+    """Pre-migration: rebuild managed_channel_history if its change_source CHECK is stale.
+
+    The team-filter delete path logs ``change_source='team_filter'`` and, since
+    #1061, ``'template_assignment'``; databases created before #1065 bake a CHECK
+    that rejects both, so the history insert threw after the soft delete and the
+    Dispatcharr delete behind it never ran (orphaned channels, logged, non-fatal).
+    Detect the stale constraint and drop the table so executescript recreates it
+    with the current CHECK; every row is backed up to
+    _managed_channel_history_backup and restored in _run_migrations.
+    """
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='managed_channel_history'"
+        ).fetchone()
+    except Exception:
+        return  # Table doesn't exist yet (fresh install)
+    if not row or not row[0]:
+        return
+    if "template_assignment" in row[0]:
+        return  # Constraint already current — nothing to do
+
+    conn.execute("DROP TABLE IF EXISTS _managed_channel_history_backup")
+    conn.execute(
+        "CREATE TABLE _managed_channel_history_backup AS SELECT * FROM managed_channel_history"
+    )
+    conn.execute("DROP TABLE managed_channel_history")
+    logger.info(
+        "[PRE-MIGRATE] managed_channel_history dropped to refresh stale change_source CHECK"
+    )

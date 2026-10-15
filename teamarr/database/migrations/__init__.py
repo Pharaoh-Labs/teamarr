@@ -6,6 +6,7 @@
 """
 
 from teamarr.database.migrations.pre import (
+    _migrate_channel_history_check,
     _migrate_detection_keywords_check,
     _migrate_exception_keywords_columns,
     _migrate_settings_for_v65,
@@ -20,6 +21,7 @@ from teamarr.database.migrations.versioned import (
     _column_exists,
     _dedup_cross_group_channels,
     _get_current_schema_version,
+    _migrate_channel_history_restore_if_needed,
     _migrate_detection_keywords_restore_if_needed,
     _migrate_stream_match_cache_restore_if_needed,
     _migrate_v50_soccer_modes,
@@ -62,7 +64,9 @@ __all__ = [
     "_column_exists",
     "_dedup_cross_group_channels",
     "_get_current_schema_version",
+    "_migrate_channel_history_check",
     "_migrate_detection_keywords_check",
+    "_migrate_channel_history_restore_if_needed",
     "_migrate_detection_keywords_restore_if_needed",
     "_migrate_exception_keywords_columns",
     "_migrate_settings_for_v65",

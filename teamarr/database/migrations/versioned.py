@@ -155,6 +155,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_v65_lifecycle_timing_restore_if_needed(conn)
     _migrate_detection_keywords_restore_if_needed(conn)
     _migrate_stream_match_cache_restore_if_needed(conn)
+    _migrate_channel_history_restore_if_needed(conn)
     if current_version < 65:
         _advance_version(conn, 65, "event-anchored lifecycle timing")
         current_version = 65
@@ -1092,6 +1093,40 @@ def _migrate_detection_keywords_restore_if_needed(conn: sqlite3.Connection) -> N
     except Exception as e:
         logger.warning("[MIGRATE] detection_keywords restore failed: %s", e)
         conn.execute("DROP TABLE IF EXISTS _detection_keywords_backup")
+
+
+def _migrate_channel_history_restore_if_needed(conn: sqlite3.Connection) -> None:
+    """Restore managed_channel_history after the change_source CHECK rebuild (#1065).
+
+    Keyed off the backup table's existence. Rows are copied over the columns
+    the two tables share; ids are kept so nothing downstream re-numbers.
+    """
+    has_backup = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master "
+        "WHERE type='table' AND name='_managed_channel_history_backup'"
+    ).fetchone()[0]
+    if not has_backup:
+        return
+
+    try:
+        backup_cols = [
+            r[1] for r in conn.execute("PRAGMA table_info(_managed_channel_history_backup)")
+        ]
+        new_cols = [r[1] for r in conn.execute("PRAGMA table_info(managed_channel_history)")]
+        common = [c for c in new_cols if c in backup_cols]
+        col_list = ", ".join(common)
+        # ON DELETE CASCADE means a live row always names a live channel; a
+        # stray orphan (FKs off at some point) would fail the whole insert.
+        conn.execute(
+            f"INSERT OR IGNORE INTO managed_channel_history ({col_list}) "
+            f"SELECT {col_list} FROM _managed_channel_history_backup "
+            "WHERE managed_channel_id IN (SELECT id FROM managed_channels)"
+        )
+        conn.execute("DROP TABLE _managed_channel_history_backup")
+        logger.info("[MIGRATE] Restored managed_channel_history after CHECK constraint refresh")
+    except Exception as e:
+        logger.warning("[MIGRATE] managed_channel_history restore failed: %s", e)
+        conn.execute("DROP TABLE IF EXISTS _managed_channel_history_backup")
 
 
 def _migrate_stream_match_cache_restore_if_needed(conn: sqlite3.Connection) -> None:
