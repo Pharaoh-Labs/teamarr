@@ -1320,15 +1320,6 @@ class TeamMatcher:
                 detail="Skipped by user",
             )
 
-        # Refresh pre-series-slug cricket rows, but never discard a user's
-        # pinned fixture/skip just because its artwork metadata is old (#1071).
-        if (
-            not entry.user_corrected
-            and entry.cached_data.get("sport") == "cricket"
-            and "series_slug" not in entry.cached_data
-        ):
-            return None
-
         # Reconstruct event from cached data
         event = self._reconstruct_event(entry.cached_data)
         if not event:
@@ -3125,7 +3116,6 @@ class TeamMatcher:
                 status=status,
                 league=cached_data.get("league", ""),
                 sport=cached_data.get("sport", ""),
-                series_slug=cached_data.get("series_slug") or "",
                 season_type=cached_data.get("season_type"),
                 venue=venue,
                 broadcasts=broadcasts,
