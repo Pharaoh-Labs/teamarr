@@ -27,6 +27,10 @@ the unsupported cricket team endpoints. Preserve local team/channel IDs when
 migrating provider identities; old event channels retain ownership until normal
 retirement. All remaining TSDB leagues require a premium key.
 
+Cricket artwork: `{league_code}` renders `Event.series_slug` (the ESPN numeric
+series identity). Preserve it through service-cache serialization and match-cache
+reconstruction; canonical league keys and manually pinned matches stay unchanged.
+
 ```bash
 bd ready              # Find available work
 bd show <id>          # View issue details

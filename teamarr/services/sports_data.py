@@ -181,7 +181,9 @@ def _team_dict_is_stale(team_dict: dict | None) -> bool:
 
 
 def _event_dict_is_stale(event_dict: dict) -> bool:
-    """Detect cached events written before short_name flowed end-to-end."""
+    """Refresh legacy rows missing team names or cricket artwork identity."""
+    if event_dict.get("sport") == "cricket" and "series_slug" not in event_dict:
+        return True
     return _team_dict_is_stale(event_dict.get("home_team")) or _team_dict_is_stale(
         event_dict.get("away_team")
     )
