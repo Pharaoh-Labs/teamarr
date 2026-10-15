@@ -2,9 +2,13 @@
 
 import re
 from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from teamarr.core.types import Event, Team
 from teamarr.utilities.event_status import is_event_final
+
+if TYPE_CHECKING:
+    from teamarr.providers.espn.client import ESPNClient
 
 
 class CricketSeriesMixin:
@@ -17,6 +21,21 @@ class CricketSeriesMixin:
     label plus the years near the requested day; never infer it from today's year
     alone. The client memoises these reads across all consumers.
     """
+
+    if TYPE_CHECKING:
+        # Provided by the host provider class (ESPNProvider).
+        _client: ESPNClient
+
+        def _get_sport_league_from_db(self, league: str) -> tuple[str, str] | None: ...
+
+        def _parse_event(self, data: dict, league: str) -> Event | None: ...
+
+        def _parse_team_from_teams_endpoint(
+            self, team_data: dict, league: str, sport: str
+        ) -> Team | None: ...
+
+        @staticmethod
+        def _event_has_team(team_id: str, event: Event) -> bool: ...
 
     def _cricket_series_id(self, league: str) -> str | None:
         pair = self._get_sport_league_from_db(league)
