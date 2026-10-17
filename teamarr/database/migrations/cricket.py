@@ -113,7 +113,10 @@ def migrate_franchise_cricket(conn: sqlite3.Connection) -> None:
         for row in rows_by_table[table]:
             league = row[league_col]
             candidates = [league] if league in names else list(names) if league is None else []
-            if league in names:
+            if league in names and table != "team_cache":
+                # team_cache is the provider's own list, seeded for every league
+                # an install's providers serve; only user configuration says the
+                # install used these leagues.
                 cricket_rows += 1
             for candidate in candidates:
                 new_id = names[candidate].get(_name(row["team_name"] or ""))

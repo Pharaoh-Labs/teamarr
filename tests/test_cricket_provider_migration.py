@@ -226,3 +226,20 @@ def test_negative_cache_is_left_alone_on_an_install_without_cricket(db_conn):
     migrate_franchise_cricket(conn)
     assert conn.execute("SELECT count(*) FROM stream_match_cache").fetchone()[0] == 1
     assert conn.execute("SELECT provider FROM teams").fetchone()[0] == "tsdb"
+
+
+def test_provider_cache_rows_alone_do_not_trigger_the_negative_cache_flush(db_conn):
+    # A TSDB key seeds team_cache for every league TSDB serves, subscribed or
+    # not; that is the provider's list, not the user's configuration.
+    conn = db_conn
+    conn.execute(
+        "INSERT INTO team_cache(team_name,provider,provider_team_id,league,sport) "
+        "VALUES('Seattle Orcas','tsdb','old-seattle','mlc','cricket')"
+    )
+    conn.execute(
+        "INSERT INTO stream_match_cache(fingerprint,group_id,stream_id,stream_name,"
+        "event_id,league,user_corrected) VALUES('negative',1,1,'name','__FAILED__','unknown',0)"
+    )
+    migrate_franchise_cricket(conn)
+    assert conn.execute("SELECT count(*) FROM stream_match_cache").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM team_cache WHERE league='mlc'").fetchone()[0] == 0
