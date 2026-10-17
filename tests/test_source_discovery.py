@@ -269,6 +269,61 @@ def test_the_scan_waits_for_a_generation_run_between_groups(db, monkeypatch):
     assert naps == [2, 2]
 
 
+def test_the_scan_never_bumps_the_generation_counter(db):
+    # A matcher built without a generation increments the counter per batch;
+    # a scan did that once per group, and the next run's purge_stale then
+    # dropped every cached row as stale (#1081). The scan pins the matcher to
+    # the current generation instead.
+    from teamarr.consumers.stream_match_cache import (
+        get_generation_counter,
+        increment_generation_counter,
+    )
+
+    increment_generation_counter(get_db)
+    before = get_generation_counter(get_db)
+    _, _, proc = _scan([_group(7, "Sports")], {7: [_stream(1, "nhl: A vs B")]})
+    assert proc._generation == before
+    assert get_generation_counter(get_db) == before
+
+
+def test_the_scan_runs_its_matching_with_debug_quiet(db, monkeypatch):
+    import threading
+
+    from teamarr.utilities import logging as tlog
+
+    seen = {}
+    proc = FakeProcessor()
+    original = proc._match_streams
+
+    def spy(*args, **kwargs):
+        seen["quiet"] = threading.get_ident() in tlog._quiet_threads
+        return original(*args, **kwargs)
+
+    proc._match_streams = spy
+    m3u = FakeM3U([_group(7, "Sports")], {7: [_stream(1, "nhl: A vs B")]})
+    SourceDiscovery(get_db, SimpleNamespace(m3u=m3u), proc).scan(now=NOW)
+    assert seen == {"quiet": True}
+    assert threading.get_ident() not in tlog._quiet_threads
+
+
+def test_the_discovery_task_lets_a_same_minute_generation_start_first():
+    from teamarr.consumers.scheduler import generation_due_this_minute, wait_for_generation_start
+
+    assert generation_due_this_minute("0 * * * *", datetime(2026, 10, 17, 11, 0, 3)) is True
+    assert generation_due_this_minute("0 * * * *", datetime(2026, 10, 17, 11, 1, 3)) is False
+    assert generation_due_this_minute("30 2 * * *", datetime(2026, 10, 17, 11, 0, 3)) is False
+    assert generation_due_this_minute("not a cron", datetime(2026, 10, 17, 11, 0, 3)) is False
+
+    answers = iter([False, False, True])
+    naps = []
+    assert wait_for_generation_start(lambda: next(answers, True), naps.append) is True
+    assert naps == [1, 1]
+    # A generation that never starts (disabled, or skipped) does not hold the scan.
+    naps = []
+    assert wait_for_generation_start(lambda: False, naps.append, grace_seconds=3) is False
+    assert naps == [1, 1, 1]
+
+
 def test_a_group_count_the_listing_does_not_give_is_read_not_assumed_empty(db):
     old_style = SimpleNamespace(id=7, name="Sports", m3u_accounts=(4, 2))
     _, m3u, _ = _scan([old_style], {7: [_stream(1, "nhl: A vs B")]})

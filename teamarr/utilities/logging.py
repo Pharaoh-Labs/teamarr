@@ -23,6 +23,8 @@ import json
 import logging
 import os
 import sys
+import threading
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -106,6 +108,34 @@ def _get_formatter(use_json: bool = False) -> logging.Formatter:
     )
 
 
+# Threads whose DEBUG records are dropped (#1081). The daily source-discovery
+# scan matches ~66,000 streams through the same code a generation run uses and
+# would write ~50 MB of per-stream DEBUG in three minutes — the whole rotating
+# window — so an install kept about two hours of history and never the run that
+# ran alongside the scan. The filter is per thread so a concurrent run's DEBUG
+# still lands, and INFO and above from the quiet thread are untouched.
+_quiet_threads: set[int] = set()
+_quiet_lock = threading.Lock()
+
+
+class _QuietDebugFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno > logging.DEBUG or record.thread not in _quiet_threads
+
+
+@contextmanager
+def quiet_debug():
+    """Drop this thread's DEBUG records for the duration of the block."""
+    ident = threading.get_ident()
+    with _quiet_lock:
+        _quiet_threads.add(ident)
+    try:
+        yield
+    finally:
+        with _quiet_lock:
+            _quiet_threads.discard(ident)
+
+
 def setup_logging(
     log_level: str | None = None,
     log_dir: str | Path | None = None,
@@ -153,6 +183,8 @@ def setup_logging(
     )
     file_handler.setLevel(logging.DEBUG)  # Always log DEBUG to file
     file_handler.setFormatter(formatter)
+    file_handler.addFilter(_QuietDebugFilter())
+    console_handler.addFilter(_QuietDebugFilter())
 
     # === Error Log File (errors only) ===
     error_log = log_path / "teamarr_errors.log"

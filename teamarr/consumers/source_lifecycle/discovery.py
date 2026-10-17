@@ -40,7 +40,7 @@ from sqlite3 import Connection
 from typing import Any
 
 from teamarr.consumers.matching import StreamCategory
-from teamarr.consumers.stream_match_cache import NullStreamMatchCache
+from teamarr.consumers.stream_match_cache import NullStreamMatchCache, get_generation_counter
 from teamarr.database.groups import (
     EventEPGGroup,
     create_group,
@@ -61,6 +61,7 @@ from teamarr.database.source_candidates import (
     set_candidate_status,
     upsert_accepted_candidate,
 )
+from teamarr.utilities.logging import quiet_debug
 from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
 
 from .policy import SourceLifecyclePolicy, load_policy
@@ -408,25 +409,32 @@ class SourceDiscovery:
 
         found: list[ScanEvidence] = []
         if leagues:
-            for index, group in enumerate(todo):
-                if progress:
-                    progress(index, len(todo), group.name)
-                self._yield_to_generation()
-                try:
-                    evidence = self._scan_group(group, leagues, now.date())
-                except Exception:
-                    # One unreadable group must not cost the rest of the scan.
-                    logger.exception("[DISCOVERY] Failed to scan group %r", group.name)
-                    summary.errors += 1
-                    continue
-                evidence.name_leagues = leagues_named_by(group.name, surfaces)
-                summary.groups_scanned += 1
-                if evidence.replay:
-                    summary.skipped_replay += 1
-                summary.streams_matched_against += evidence.streams_read
-                if evidence.game_matches:
-                    summary.groups_with_games += 1
-                found.append(evidence)
+            # The scan is read-only, and that includes the match-cache
+            # generation counter (#1081): a matcher built without a generation
+            # increments it on every batch, so a scan bumped it once per group
+            # and the next run's purge_stale found every cached row stale and
+            # dropped it — the run after the scan re-scored every stream.
+            self._processor._generation = get_generation_counter(self._db_factory)
+            with quiet_debug():
+                for index, group in enumerate(todo):
+                    if progress:
+                        progress(index, len(todo), group.name)
+                    self._yield_to_generation()
+                    try:
+                        evidence = self._scan_group(group, leagues, now.date())
+                    except Exception:
+                        # One unreadable group must not cost the rest of the scan.
+                        logger.exception("[DISCOVERY] Failed to scan group %r", group.name)
+                        summary.errors += 1
+                        continue
+                    evidence.name_leagues = leagues_named_by(group.name, surfaces)
+                    summary.groups_scanned += 1
+                    if evidence.replay:
+                        summary.skipped_replay += 1
+                    summary.streams_matched_against += evidence.streams_read
+                    if evidence.game_matches:
+                        summary.groups_with_games += 1
+                    found.append(evidence)
 
         with self._db_factory() as conn:
             for group in renamed:
