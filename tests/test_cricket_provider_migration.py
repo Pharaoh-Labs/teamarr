@@ -154,6 +154,7 @@ def test_conflicting_names_for_same_old_identity_require_review(db_conn, caplog)
 
 def test_cached_results_clear_but_pins_and_dispatcharr_ownership_survive(db_conn):
     conn = db_conn
+    add_team(conn)  # an install that held a franchise cricket team under TSDB
     for key in [
         "events:mlc:2026",
         "events_raw:TSDBProvider:mlc:2026",
@@ -211,3 +212,17 @@ def test_fresh_league_mappings_are_espn_and_importable(db_conn):
             (league,),
         ).fetchone()
         assert row[:] == ("espn", f"cricket/{slug}", 1)
+
+
+def test_negative_cache_is_left_alone_on_an_install_without_cricket(db_conn):
+    # Flushing every failed row costs one full re-match run (#1081); only an
+    # install that held franchise cricket rows under TSDB pays for it.
+    conn = db_conn
+    add_team(conn, "Some Rugby Club", "old-rugby", league="rwc")
+    conn.execute(
+        "INSERT INTO stream_match_cache(fingerprint,group_id,stream_id,stream_name,"
+        "event_id,league,user_corrected) VALUES('negative',1,1,'name','__FAILED__','unknown',0)"
+    )
+    migrate_franchise_cricket(conn)
+    assert conn.execute("SELECT count(*) FROM stream_match_cache").fetchone()[0] == 1
+    assert conn.execute("SELECT provider FROM teams").fetchone()[0] == "tsdb"

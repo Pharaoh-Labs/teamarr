@@ -74,6 +74,10 @@ def migrate_franchise_cricket(conn: sqlite3.Connection) -> None:
     }
     old_ids: dict[tuple[str, str], str] = {}
     conflicts: set[tuple[str, str]] = set()
+    # Rows that belong to a franchise cricket league under TSDB. Zero means the
+    # install never used these leagues, and the migration must then leave the
+    # negative match cache alone: flushing it costs one full re-match run (#1081).
+    cricket_rows = 0
 
     def remember(league, old_id, new_id):
         key = (league, str(old_id))
@@ -109,6 +113,8 @@ def migrate_franchise_cricket(conn: sqlite3.Connection) -> None:
         for row in rows_by_table[table]:
             league = row[league_col]
             candidates = [league] if league in names else list(names) if league is None else []
+            if league in names:
+                cricket_rows += 1
             for candidate in candidates:
                 new_id = names[candidate].get(_name(row["team_name"] or ""))
                 if new_id:
@@ -135,6 +141,7 @@ def migrate_franchise_cricket(conn: sqlite3.Connection) -> None:
                         continue
                     league = entry.get("league")
                     if isinstance(league, str) and league in names:
+                        cricket_rows += 1
                         new_id = names[league].get(_name(entry.get("name") or ""))
                         if new_id:
                             remember(league, entry.get("team_id"), new_id)
@@ -206,9 +213,12 @@ def migrate_franchise_cricket(conn: sqlite3.Connection) -> None:
             conn.execute(
                 "DELETE FROM stream_match_cache WHERE league=? AND user_corrected=0", (league,)
             )
-    # Negative cache rows have no reliable league attribution. Pinned user
-    # corrections (including explicit skips) must remain untouched.
-    if {"event_id", "user_corrected"} <= columns("stream_match_cache"):
+    # Negative cache rows have no reliable league attribution, so a franchise
+    # cricket stream that failed under TSDB can only be retried by flushing them
+    # all. Only an install that actually held these leagues pays for that; on
+    # one that never did, the flush was ~50k rows and a full re-match run for
+    # nothing. Pinned user corrections (including explicit skips) stay either way.
+    if cricket_rows and {"event_id", "user_corrected"} <= columns("stream_match_cache"):
         conn.execute(
             "DELETE FROM stream_match_cache WHERE event_id='__FAILED__' AND user_corrected=0"
         )
