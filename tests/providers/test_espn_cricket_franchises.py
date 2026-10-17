@@ -59,7 +59,6 @@ def test_events_parse_and_dedupe_default_against_explicit_season(league):
     assert len(events) == 1
     event = events[0]
     assert event.id == raw["id"] and event.sport == "cricket"
-    assert event.series_slug == SERIES[league]
     assert event.home_score is None and event.away_score is None
     assert event.game_event_note == "1st Match"
     assert event.status.state == ("final" if league in {"mlc", "ipl"} else "scheduled")

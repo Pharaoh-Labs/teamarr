@@ -71,7 +71,6 @@ class CricketSeriesMixin:
                     continue
                 event = self._parse_event(raw, league)
                 if event:
-                    event.series_slug = self._cricket_series_id(league) or ""
                     events[event.id] = event
         return sorted(events.values(), key=lambda e: e.start_time)
 
