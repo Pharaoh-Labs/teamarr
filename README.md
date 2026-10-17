@@ -33,6 +33,9 @@ docker compose up -d
 
 ## Documentation
 
+Cricket: IPL, BBL, SA20 and Major League Cricket use ESPN without a premium key,
+with team import and team channels alongside international Test, ODI and T20I event coverage.
+
 **Official Docs**: [pharaoh-labs.github.io/teamarr](https://pharaoh-labs.github.io/teamarr/) — User Guide, Technical Reference, Supported Leagues
 
 ## Contributing

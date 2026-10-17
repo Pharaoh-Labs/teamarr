@@ -1,0 +1,101 @@
+{
+  "_source": "ESPN scoreboard?season=2026 (SA20 season=2027), captured 2026-10-14. Fields trimmed; one event per series, full team IDs/names.",
+  "mlc": {
+    "leagues": [{"id": "21266", "links": [{"href": "https://www.espn.com/cricket/series/_/id/21266/season/2026/major-league-cricket"}]}],
+    "teams": [
+      {"id": "1381354", "name": "Los Angeles Knight Riders", "abbreviation": "LAKR"},
+      {"id": "1381355", "name": "MI New York", "abbreviation": "MI NY"},
+      {"id": "1381357", "name": "San Francisco Unicorns", "abbreviation": "SF"},
+      {"id": "1381359", "name": "Seattle Orcas", "abbreviation": "SEO", "logos": [{"href": "https://a.espncdn.com/i/teamlogos/cricket/500/1381359.png", "rel": ["full", "default"]}]},
+      {"id": "1381353", "name": "Texas Super Kings", "abbreviation": "TSK"},
+      {"id": "1381360", "name": "Washington Freedom", "abbreviation": "WSF"}
+    ],
+    "events": [{
+      "id": "1528557", "name": "Texas Super Kings v Seattle Orcas", "shortName": "TSK v SEO", "date": "2026-06-19T00:30Z",
+      "competitions": [{
+        "id": "1528557", "date": "2026-06-19T00:30Z", "description": "1st Match",
+        "class": {"generalClassCard": "Twenty20"},
+        "status": {"summary": "Texas won by 6 wkts (9b rem)", "type": {"description": "Result", "state": "post"}},
+        "competitors": [
+          {"homeAway": "home", "score": "221/4 (18.3/20 ov, target 221)", "team": {"id": "1381353", "displayName": "Texas Super Kings", "abbreviation": "TSK"}},
+          {"homeAway": "away", "score": "220/2", "team": {"id": "1381359", "displayName": "Seattle Orcas", "abbreviation": "SEO"}}
+        ]
+      }]
+    }]
+  },
+  "ipl": {
+    "leagues": [{"id": "8048", "links": [{"href": "https://www.espn.com/cricket/series/_/id/8048/season/2026/indian-premier-league"}]}],
+    "teams": [
+      {"id": "335974", "name": "Chennai Super Kings", "abbreviation": "CSK"},
+      {"id": "335975", "name": "Delhi Capitals", "abbreviation": "DC"},
+      {"id": "1298769", "name": "Gujarat Titans", "abbreviation": "GT"},
+      {"id": "335971", "name": "Kolkata Knight Riders", "abbreviation": "KKR"},
+      {"id": "1298768", "name": "Lucknow Super Giants", "abbreviation": "LSG"},
+      {"id": "335978", "name": "Mumbai Indians", "abbreviation": "MI"},
+      {"id": "335973", "name": "Punjab Kings", "abbreviation": "PBKS"},
+      {"id": "335977", "name": "Rajasthan Royals", "abbreviation": "RR"},
+      {"id": "335970", "name": "Royal Challengers Bengaluru", "abbreviation": "RCB"},
+      {"id": "628333", "name": "Sunrisers Hyderabad", "abbreviation": "SRH"}
+    ],
+    "events": [{
+      "id": "1527674", "name": "Royal Challengers Bengaluru v Sunrisers Hyderabad", "shortName": "RCB v SRH", "date": "2026-03-28T14:00Z",
+      "competitions": [{
+        "id": "1527674", "date": "2026-03-28T14:00Z", "description": "1st Match",
+        "class": {"generalClassCard": "Twenty20"},
+        "status": {"summary": "RCB won by 6 wkts (26b rem)", "type": {"description": "Result", "state": "post"}},
+        "competitors": [
+          {"homeAway": "home", "score": "203/4 (15.4/20 ov, target 202)", "team": {"id": "335970", "displayName": "Royal Challengers Bengaluru", "abbreviation": "RCB"}},
+          {"homeAway": "away", "score": "201/9", "team": {"id": "628333", "displayName": "Sunrisers Hyderabad", "abbreviation": "SRH"}}
+        ]
+      }]
+    }]
+  },
+  "bbl": {
+    "leagues": [{"id": "8044", "links": [{"href": "https://www.espn.com/cricket/series/_/id/8044/season/2026/big-bash-league"}]}],
+    "teams": [
+      {"id": "509667", "name": "Adelaide Strikers", "abbreviation": "AS"},
+      {"id": "509668", "name": "Brisbane Heat", "abbreviation": "BH"},
+      {"id": "509669", "name": "Hobart Hurricanes", "abbreviation": "HH"},
+      {"id": "509671", "name": "Melbourne Renegades", "abbreviation": "MR"},
+      {"id": "509672", "name": "Melbourne Stars", "abbreviation": "MS"},
+      {"id": "509670", "name": "Perth Scorchers", "abbreviation": "PS"},
+      {"id": "509673", "name": "Sydney Sixers", "abbreviation": "SS"},
+      {"id": "509674", "name": "Sydney Thunder", "abbreviation": "ST"}
+    ],
+    "events": [{
+      "id": "1545498", "name": "Melbourne Renegades v Perth Scorchers", "shortName": "MR v PS", "date": "2026-12-12T09:10Z",
+      "competitions": [{
+        "id": "1545498", "date": "2026-12-12T09:10Z", "description": "1st Match",
+        "class": {"generalClassCard": "Twenty20"},
+        "status": {"summary": "Starts at 14:40 local time", "type": {"description": "Scheduled", "state": "pre"}},
+        "competitors": [
+          {"homeAway": "home", "score": "", "team": {"id": "509671", "displayName": "Melbourne Renegades", "abbreviation": "MR"}},
+          {"homeAway": "away", "score": "", "team": {"id": "509670", "displayName": "Perth Scorchers", "abbreviation": "PS"}}
+        ]
+      }]
+    }]
+  },
+  "sa20": {
+    "leagues": [{"id": "21275", "links": [{"href": "https://www.espn.com/cricket/series/_/id/21275/season/2027/sa20"}]}],
+    "teams": [
+      {"id": "1335272", "name": "Durban's Super Giants", "abbreviation": "DSG"},
+      {"id": "1335270", "name": "Joburg Super Kings", "abbreviation": "JSK"},
+      {"id": "1328786", "name": "MI Cape Town", "abbreviation": "MICT"},
+      {"id": "1335274", "name": "Paarl Royals", "abbreviation": "PR"},
+      {"id": "1335271", "name": "Pretoria Capitals", "abbreviation": "PC"},
+      {"id": "1335273", "name": "Sunrisers Eastern Cape", "abbreviation": "SEC"}
+    ],
+    "events": [{
+      "id": "1547230", "name": "Sunrisers Eastern Cape v Pretoria Capitals", "shortName": "SEC v PC", "date": "2027-01-17T13:30Z",
+      "competitions": [{
+        "id": "1547230", "date": "2027-01-17T13:30Z", "description": "1st Match",
+        "class": {"generalClassCard": "Twenty20"},
+        "status": {"summary": "Starts at 15:30 local time", "type": {"description": "Scheduled", "state": "pre"}},
+        "competitors": [
+          {"homeAway": "home", "score": "", "team": {"id": "1335273", "displayName": "Sunrisers Eastern Cape", "abbreviation": "SEC"}},
+          {"homeAway": "away", "score": "", "team": {"id": "1335271", "displayName": "Pretoria Capitals", "abbreviation": "PC"}}
+        ]
+      }]
+    }]
+  }
+}

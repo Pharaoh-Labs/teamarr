@@ -25,14 +25,14 @@ Leagues have different levels of support:
 
 | Provider | Description |
 |----------|-------------|
-| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. International cricket (ODIs, T20Is, Tests) comes from its daily score panel. |
+| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. Covers international cricket (ODIs, T20Is, Tests) and franchise cricket (IPL, BBL, SA20, MLC), without an API key. |
 | **Bell Media** | CFL plus CHL, OHL, WHL, QMJHL, AHL, and PWHL via TSN's public sports widget API. |
 | **NASCAR** | NASCAR Cup, O'Reilly (Xfinity), and Truck series via the official cf.nascar.com schedule API. Full race-weekend sessions, no API key required. See [provider docs](providers/nascar). |
 | **MLB Stats API** | Minor League Baseball (MiLB) — Triple-A, Double-A, High-A, Single-A, Rookie |
 | **Squiggle** | AFL (Australian Football League). Free, no API key required. See [provider docs](providers/squiggle). |
 | **HockeyTech** | Canadian and US junior/minor hockey leagues (ECHL, USHL, Junior A) |
 | **Supabase** | Supabase-backed leagues such as the Canadian Baseball League (CBL). No API key required. See [provider docs](providers/supabase). |
-| **TheSportsDB** | Rugby, franchise cricket (IPL, BBL, SA20, MLC), boxing, Scandinavian leagues, and more. Requires a [premium API key](providers/tsdb.md). |
+| **TheSportsDB** | Rugby, boxing, Scandinavian leagues, and more. Requires a [premium API key](providers/tsdb.md). |
 
 ### TSDB Key Requirement
 
@@ -356,13 +356,13 @@ splitting and matching details.
 | One Day Internationals | `cricket-odi` | ESPN |
 | T20 Internationals | `cricket-t20i` | ESPN |
 | Test Matches | `cricket-test` | ESPN |
-| Indian Premier League | `ipl` | TSDB |
-| Big Bash League | `bbl` | TSDB |
-| SA20 | `sa20` | TSDB |
-| Major League Cricket | `mlc` | TSDB |
+| Indian Premier League | `ipl` | ESPN |
+| Big Bash League | `bbl` | ESPN |
+| SA20 | `sa20` | ESPN |
+| Major League Cricket | `mlc` | ESPN |
 
 {: .note }
-The three international leagues come from ESPN's daily cricket score panel: ESPN has no standing cricket leagues, so each is a filter over whatever tours and tournaments have a match that day, by format. They have no team list, so team channels and the team importer are not offered for them. A Test match is one channel per day: each day is a session with its own create and retire time, named by `{session_name}` ("Day 3"), and a stream whose name says "Day 3" feeds that day only while a plain "1st Test" feed feeds every day (#944). The four franchise leagues are TSDB-sourced, so a [premium API key](providers/tsdb.md) is required.
+The three international leagues filter ESPN's daily cricket score panel by format, over changing tour IDs. They have no team list, so team channels and the team importer are not offered for them. A Test match is one channel per day: each day is a session with its own create and retire time, named by `{session_name}` ("Day 3"), and a stream whose name says "Day 3" feeds that day only while a plain "1st Test" feed feeds every day (#944). The four franchise leagues use ESPN's complete season scoreboards, support team import and team channels, and require **no premium key**. See [franchise cricket migration notes](providers/espn.md#franchise-cricket).
 
 ---
 

@@ -7,7 +7,7 @@ nav_order: 1
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 102 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 107 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 
@@ -27,6 +27,7 @@ ESPN is the primary data provider (priority 0), serving 102 pre-configured leagu
 | `/{sport}/{league}/summary?event={event_id}` | Event details and scores |
 | `/{sport}/{league}/teams` | All teams in a league (cache refresh) |
 | `/{sport}/{league}/rankings` | Poll rankings — college leagues only |
+| `/cricket/{series_id}/scoreboard?season={YYYY}` | Complete franchise season and team list |
 
 ## HTTP Client Configuration
 
@@ -66,7 +67,7 @@ baseball/mlb
 | Combat Sports | UFC, PFL, LFA | Event Card matching; ESPN files most other promotions (Cage Warriors, OKTAGON, RIZIN, ONE) under a catch-all `mma/other` bucket rather than their own slugs |
 | Motorsports | F1, IndyCar | Race weekend sessions |
 | Tennis | ATP, WTA | One event per match; grand slams split by draw type |
-| Cricket | ODIs, T20 Internationals, Test Matches | Format leagues over ESPN's daily score panel: ESPN has no standing cricket leagues, each tour or tournament is its own numbered league, so `cricket-odi`, `cricket-t20i` and `cricket-test` filter the day's panel by format. No teams endpoint. A Test is one channel per day, each day a session (#944) |
+| Cricket | ODIs, T20 Internationals, Test Matches; IPL, BBL, SA20, MLC | Internationals filter the daily score panel by format (#944). Franchise leagues use recurring numeric series IDs and complete season scoreboards, including team import and team channels (#1069) |
 | Lacrosse | NLL, PLL, NCAA M/W | |
 | Volleyball | NCAA M/W | |
 | Softball | NCAA Softball | |
@@ -80,6 +81,33 @@ Soccer leagues use ESPN's dot notation: `{country}.{tier}` (e.g., `eng.1` for Pr
 Rugby uses numeric slug IDs instead of string slugs — `rugby/180659` (Six Nations), `rugby/242041` (Super Rugby) — and rugby league is a separate ESPN sport path: `rugby-league/3` (NRL).
 
 ## Special Behaviors
+
+### Franchise cricket
+
+IPL (`cricket/8048`), BBL (`cricket/8044`), SA20 (`cricket/21275`) and MLC
+(`cricket/21266`) require **no API key**. Their team list, team lookup, schedules,
+history and previews come from scoreboards, not ESPN's unsupported cricket team
+endpoints. A season response is shared for five minutes across day/team readers;
+failed season requests have a 30-second retry cooldown. International format
+leagues keep their daily-panel behavior and do not offer team import.
+
+An explicit season is essential: a date alone silently searches the default
+season. BBL uses its starting year (2026 includes January 2027); SA20's labels
+are irregular (2025/26, then 2027, with no 2026 label). Teamarr reads the default
+series link and nearby season years, deduplicates matches and uses their UTC
+timestamps with the usual user-timezone day filtering. Cricket numeric scores
+and team statistics remain unavailable; result text is retained.
+
+On upgrade, existing league subscriptions stay selected. Recognized TSDB teams,
+team filters, aliases, priorities and numbering pins move to ESPN IDs without
+changing local team IDs, XMLTV IDs, custom logos or durable team-channel ownership.
+Unknown or duplicate team configurations are preserved with a migration warning;
+review and reselect those entries in the team picker rather than removing an
+exclude filter. Old event channels retain their original ownership until normal
+retirement. Pinned manual stream corrections are kept; re-pin a correction to an
+ESPN fixture if it still references an old TSDB event.
+
+### Shared behaviors
 
 - **Status mapping**: ESPN event statuses are normalized to Teamarr's internal `scheduled`, `in_progress`, `final`, `postponed`, `cancelled`
 - **Cricket statuses** carry no status name, only a state and a description ("Stumps", "Result", "No result", "Abandoned"); Teamarr maps those directly (stumps and rain delays are a match in progress; a match marked live whose summary still says "Starts at" is scheduled). Cricket scores are innings text and are not parsed; the match label ("3rd ODI") and the result text ("India won by 14 runs") are kept instead. (#944)

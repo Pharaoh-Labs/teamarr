@@ -76,7 +76,7 @@ def test_existing_install_is_upgraded_and_keeps_its_assignments(db_path):
 
     with get_connection(db_path) as conn:
         assert "group_templates" not in _tables(conn)
-        assert conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 100
+        assert conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 101
         rows = conn.execute("SELECT template_id, leagues FROM subscription_templates").fetchall()
         assert [(r[0], r[1]) for r in rows] == [(template, '["nfl"]')]
 

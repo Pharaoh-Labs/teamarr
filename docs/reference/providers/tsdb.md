@@ -7,7 +7,7 @@ nav_order: 7
 
 # TheSportsDB Provider
 
-TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including cricket, boxing, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 49 leagues in total — **all of them require a TheSportsDB premium API key**.
+TheSportsDB (TSDB) is a community-driven sports data API. Teamarr uses it as a fallback provider (priority 100) for leagues not covered by ESPN, including boxing, Scandinavian leagues, Brazilian state championships, and motorsports (IMSA, WEC). It serves 46 leagues in total — **all of them require a TheSportsDB premium API key**.
 
 ## API Details
 
@@ -30,6 +30,9 @@ With a key, coverage is the full premium capability set: 100 req/min, 20-event n
 
 AFL was formerly a TSDB league but is now served by the free [Squiggle](squiggle) provider. NRL and Super Rugby Pacific also migrated from TSDB to ESPN. Super League stays on TSDB: ESPN's `rugby-league` tree carries only the NRL.
 
+IPL, BBL, SA20 and MLC now use [ESPN](espn#franchise-cricket), without a premium
+key. Their existing subscriptions and recognized team selections migrate on upgrade.
+
 The `tsdb_tier` column that used to classify leagues as `free`/`premium` is retired (values cleared at schema v92; the column is dropped one release later).
 
 ## Configuration
@@ -40,19 +43,15 @@ Get a key at [thesportsdb.com/pricing](https://www.thesportsdb.com/pricing).
 
 ## Supported Leagues
 
-TSDB serves **50 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
+TSDB serves **46 leagues** in total. The table below is representative, not exhaustive — it omits the 23 Brazilian state championships, `fiba`/`fibaw` (FIBA Basketball World Cup M/W), and `uru.2` (Uruguayan Segunda División), among others. See [Supported Leagues](../supported-leagues) for the full list.
 
 | League | Code | TSDB ID | Sport |
 |--------|------|---------|-------|------|
 | Unrivaled | `unrivaled` | 5622 | Basketball |
 | Norwegian Fjordkraft-ligaen | `norwegian-hockey` | 4926 | Hockey |
 | Boxing | `boxing` | 4445 | Boxing |
-| Major League Cricket | `mlc` | 5401 | Cricket |
 | WPBL | `wpbl` | 5929 | Baseball |
 | Swedish Hockey League | `shl` | 4419 | Hockey |
-| Indian Premier League | `ipl` | 4460 | Cricket |
-| Big Bash League | `bbl` | 4461 | Cricket |
-| South Africa Twenty20 (SA20) | `sa20` | 5532 | Cricket |
 | Svenska Cupen | `svenska-cupen` | 4756 | Soccer |
 | Canadian Premier League | `can.1` | 4820 | Soccer |
 | Swedish Superettan | `swe.2` | 4403 | Soccer |
