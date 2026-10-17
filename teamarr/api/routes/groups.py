@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from teamarr.consumers.source_lifecycle.discovery import adopt_source, release_source
 from teamarr.consumers.stream_match_cache import (
     StreamMatchCache,
     clear_all_match_data,
@@ -190,6 +191,9 @@ class GroupUpdate(BaseModel):
     channel_sort_order: str | None = None
     overlap_handling: str | None = None
     enabled: bool | None = None
+    # Automate (#1079): hand the source to Automation (managed) or take it back.
+    # Omitted = unchanged. Needs Stream name or Team matching.
+    managed: bool | None = None
     # Per-group subscription overrides (NULL = inherit global)
     subscription_leagues: list[str] | None = None
     subscription_soccer_mode: str | None = None
@@ -420,6 +424,7 @@ class BulkGroupUpdateRequest(BaseModel):
     name_match_enabled: bool | None = None
     team_streams_enabled: bool | None = None
     epg_match_enabled: bool | None = None
+    managed: bool | None = None  # Automate (#1079); omitted = unchanged
 
     # Team filtering
     include_teams: list[TeamFilterEntry] | None = None
@@ -544,6 +549,34 @@ VALID_OVERLAP_HANDLING = {"add_stream", "add_only", "create_all", "skip"}
 def _effective_flag(patch: bool | None, current: bool) -> bool:
     """Resolve a partial-update boolean: the patch value if given, else current."""
     return current if patch is None else patch
+
+
+AUTOMATE_NEEDS_MATCHING = (
+    "Automate needs Stream name or Team matching: the scan never reads the guide, "
+    "so it could not switch an EPG-only source back on."
+)
+
+
+def _apply_automate(conn, group, requested: bool | None, name_match: bool, team_streams: bool):
+    """Set or clear the Automate switch after an update (#1079).
+
+    ``requested`` None leaves the flag alone, except that a managed source
+    whose matching types no longer include Stream name or Team matching is
+    handed back, because Automation could never wake it.
+    """
+    can_automate = name_match or team_streams
+    if requested is True:
+        if not can_automate:
+            raise ValueError(AUTOMATE_NEEDS_MATCHING)
+        if not group.managed:
+            fresh = get_group(conn, group.id)
+            if fresh is not None:
+                adopt_source(conn, fresh)
+    elif requested is False:
+        if group.managed:
+            release_source(conn, group)
+    elif group.managed and not can_automate:
+        release_source(conn, group)
 
 
 # What a channel-source row lets the user change (#542). Everything else is
@@ -1188,6 +1221,13 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
                     # Stream filters + custom regex (#551)
                     **_bulk_regex_kwargs(request),
                 )
+                _apply_automate(
+                    conn,
+                    group,
+                    request.managed,
+                    _effective_flag(request.name_match_enabled, group.name_match_enabled),
+                    _effective_flag(request.team_streams_enabled, group.team_streams_enabled),
+                )
 
                 results.append(
                     BulkGroupUpdateResult(
@@ -1407,11 +1447,17 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
             )
 
         # Validate the post-update matching types (patch overrides current value).
+        name_match = _effective_flag(request.name_match_enabled, group.name_match_enabled)
+        team_streams = _effective_flag(request.team_streams_enabled, group.team_streams_enabled)
         require_matching_type(
-            _effective_flag(request.name_match_enabled, group.name_match_enabled),
-            _effective_flag(request.team_streams_enabled, group.team_streams_enabled),
+            name_match,
+            team_streams,
             _effective_flag(request.epg_match_enabled, group.epg_match_enabled),
         )
+        if request.managed is True and not (name_match or team_streams):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=AUTOMATE_NEEDS_MATCHING
+            )
 
         # Check for duplicate name if changing (within same M3U account)
         # Determine the target account_id (could be changing)
@@ -1523,6 +1569,8 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(e),
             ) from None
+
+        _apply_automate(conn, group, request.managed, name_match, team_streams)
 
         # Clean up XMLTV content when group is disabled
         if request.enabled is False:

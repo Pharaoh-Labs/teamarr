@@ -116,11 +116,13 @@ function RetireRules() {
     >
       <div className="space-y-3 pt-2">
         <p className="text-xs text-muted-foreground">
-          A source added by discovery is marked <span className="font-medium">managed</span>. It
-          is switched off when it stops matching, switched back on when a scan sees games in its
-          group again, and removed once its group has been gone from Dispatcharr for a while. Its
-          settings are kept until it is removed. Editing a managed source by hand makes it yours,
-          and these rules stop applying to it.
+          A source added by discovery, or one you hand over with its{" "}
+          <span className="font-medium">Automate</span> switch, is marked{" "}
+          <span className="font-medium">Automated</span>. It is switched off when it stops
+          matching, switched back on when a scan sees games in its group again, and removed once
+          its group has been gone from Dispatcharr for a while. Its settings are kept until it is
+          removed. Switching it off yourself, or turning Automate off, makes it a manually imported
+          source again, and these rules stop applying to it.
         </p>
         <DaysField
           id="source-idle-days"
@@ -193,7 +195,7 @@ function RemoveMissing() {
         <DaysField
           id="source-missing-delete-days"
           label="days a source's group may be missing before the source is deleted (0 = never)"
-          hint="Applies to sources you made yourself; discovered sources follow the Retire rules. Deleting removes the source's channels and settings, so this is off by default."
+          hint="Applies to manually imported sources; automated sources follow the Retire rules. Deleting removes the source's channels and settings, so this is off by default."
           value={scheduler?.source_missing_delete_days}
           min={0}
           onSave={(n) => save({ source_missing_delete_days: n })}

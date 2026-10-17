@@ -140,6 +140,7 @@ export interface EventGroupCreate {
   name_match_enabled?: boolean
   team_streams_enabled?: boolean
   epg_match_enabled?: boolean
+  managed?: boolean  // Automate (#1079): hand the source to Automation. Omitted = unchanged.
   // Team filtering (canonical team selection, inherited by children)
   include_teams?: TeamFilterEntry[] | null
   exclude_teams?: TeamFilterEntry[] | null
@@ -191,6 +192,7 @@ export interface BulkGroupUpdateRequest {
   name_match_enabled?: boolean | null
   team_streams_enabled?: boolean | null
   epg_match_enabled?: boolean | null
+  managed?: boolean | null  // Automate (#1079)
   // Team filtering
   include_teams?: TeamFilterEntry[] | null
   exclude_teams?: TeamFilterEntry[] | null

@@ -99,13 +99,15 @@ Name-only groups, replay groups, dismissed groups and linear channels are never 
 
 ### Retire
 
-A source added by discovery is marked **Managed**:
+A source added by discovery is marked **Automated**:
 
 - It is switched off after **N days without a match** (default 14; seven more when the group's name still names a subscribed league). Its settings are kept.
-- It is switched back on when a scan sees events in its group again.
+- It is switched back on when a scan sees games in its group again: streams matched to events, or team streams in a league the group's name names.
 - It is removed once it has been switched off and its group has been **gone from Dispatcharr for N days** (default 14), counted from the last scan that saw the group. If the group returns, the source is added back without asking.
 
-Both windows are settings in this block. Editing, enabling or disabling a managed source by hand makes it an ordinary source, and these rules stop applying to it.
+Both windows are settings in this block. Switching an automated source off or on by hand makes it a manually imported source again, and these rules stop applying to it. Other edits leave it automated.
+
+**Automate.** A source you added yourself can be handed to these rules with the **Automate** switch in its editor (Basic Settings, next to the matching toggles) or in Bulk Edit. It needs Stream name or Team matching: the scan never reads the guide, so it could not switch an EPG-only source back on. A team-only source wakes only if its group name names the league. Turn the switch off to take the source back. Nothing happens on its own when you upgrade: discovered sources show the switch on, manually imported ones show it off.
 
 ### Remove
 

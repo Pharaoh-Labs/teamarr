@@ -181,6 +181,42 @@ def get_candidates(
     return list(candidates.values())
 
 
+def upsert_accepted_candidate(
+    conn: Connection,
+    *,
+    m3u_group_id: int,
+    m3u_group_name: str,
+    m3u_account_ids: list[int],
+    name_leagues: list[str],
+    source_group_id: int,
+) -> None:
+    """Record a group as an accepted candidate linked to ``source_group_id``.
+
+    The Automate switch (#1079) gives a source the user made the row a
+    discovered source has. An existing row keeps its scan history; only its
+    status and link change, and a dismissal is lifted — the user just said yes.
+    """
+    conn.execute(
+        """INSERT INTO source_candidates
+               (m3u_group_id, m3u_group_name, m3u_account_ids, name_leagues,
+                status, source_group_id)
+           VALUES (?, ?, ?, ?, 'accepted', ?)
+           ON CONFLICT(m3u_group_id) DO UPDATE SET
+               m3u_group_name = excluded.m3u_group_name,
+               name_leagues = excluded.name_leagues,
+               status = 'accepted',
+               source_group_id = excluded.source_group_id""",
+        (
+            m3u_group_id,
+            m3u_group_name,
+            json.dumps(sorted(m3u_account_ids)),
+            json.dumps(sorted(name_leagues)),
+            source_group_id,
+        ),
+    )
+    conn.commit()
+
+
 def set_candidate_status(
     conn: Connection, candidate_id: int, status: str, source_group_id: int | None = None
 ) -> bool:
