@@ -100,6 +100,8 @@ function BulkEditForm({
   const [bypassPlayoffs, setBypassPlayoffs] = useState(false)
   const [nameMatchEnabled, setNameMatchEnabled] = useState(false)
   const [nameMatch, setNameMatch] = useState(true)
+  const [automateEnabled, setAutomateEnabled] = useState(false)
+  const [automate, setAutomate] = useState(true)
   const [teamStreamsEnabled, setTeamStreamsEnabled] = useState(false)
   const [teamStreams, setTeamStreams] = useState(false)
   const [epgMatchEnabled, setEpgMatchEnabled] = useState(false)
@@ -131,6 +133,7 @@ function BulkEditForm({
     teamFilterEnabled ||
     nameMatchEnabled ||
     teamStreamsEnabled ||
+    automateEnabled ||
     epgMatchEnabled ||
     subscriptionEnabled ||
     skipBuiltinEnabled ||
@@ -160,6 +163,10 @@ function BulkEditForm({
 
     if (epgMatchEnabled) {
       request.epg_match_enabled = epgMatch
+    }
+
+    if (automateEnabled) {
+      request.managed = automate
     }
 
     if (teamFilterEnabled) {
@@ -386,6 +393,27 @@ function BulkEditForm({
               <Switch checked={teamStreams} onCheckedChange={setTeamStreams} />
               <span className="text-sm text-muted-foreground">
                 {teamStreams ? "Enabled — team-branded streams will match events where that team plays" : "Disabled"}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Automate (#1079) */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox
+              checked={automateEnabled}
+              onCheckedChange={(checked) => setAutomateEnabled(!!checked)}
+            />
+            <span className="text-sm font-medium">Automate</span>
+          </label>
+          {automateEnabled && (
+            <div className="flex items-center gap-3 pl-6">
+              <Switch checked={automate} onCheckedChange={setAutomate} />
+              <span className="text-sm text-muted-foreground">
+                {automate
+                  ? "On — Automation retires, revives and removes these sources like discovered ones (needs Stream name or Team matching)"
+                  : "Off — these sources are yours; Automation leaves them alone"}
               </span>
             </div>
           )}

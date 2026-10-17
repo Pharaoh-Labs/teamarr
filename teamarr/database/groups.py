@@ -298,9 +298,7 @@ def _row_to_group(row) -> EventEPGGroup:
             else None
         ),
         subscription_soccer_mode=(
-            row["subscription_soccer_mode"]
-            if "subscription_soccer_mode" in row.keys()
-            else None
+            row["subscription_soccer_mode"] if "subscription_soccer_mode" in row.keys() else None
         ),
         subscription_soccer_followed_teams=(
             json.loads(row["subscription_soccer_followed_teams"])
@@ -372,9 +370,7 @@ def get_all_groups(
     if exclude_channel_source:
         clauses.append("COALESCE(is_channel_source, 0) = 0")
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    cursor = conn.execute(
-        f"SELECT * FROM event_epg_groups {where} ORDER BY sort_order, name"
-    )
+    cursor = conn.execute(f"SELECT * FROM event_epg_groups {where} ORDER BY sort_order, name")
 
     return [_row_to_group(row) for row in cursor.fetchall()]
 
@@ -571,9 +567,7 @@ def get_enabled_soccer_leagues(conn: Connection) -> list[str]:
     Returns:
         List of enabled soccer league codes (e.g., ['eng.1', 'esp.1', 'uefa.champions'])
     """
-    cursor = conn.execute(
-        "SELECT league_code FROM leagues WHERE sport = 'soccer' AND enabled = 1"
-    )
+    cursor = conn.execute("SELECT league_code FROM leagues WHERE sport = 'soccer' AND enabled = 1")
     return [row["league_code"] for row in cursor.fetchall()]
 
 
@@ -742,7 +736,8 @@ def create_group(
             json.dumps(subscription_leagues) if subscription_leagues else None,
             subscription_soccer_mode,
             json.dumps(subscription_soccer_followed_teams)
-            if subscription_soccer_followed_teams else None,
+            if subscription_soccer_followed_teams
+            else None,
         ),
     )
     group_id = cursor.lastrowid
@@ -854,6 +849,12 @@ def update_group(
     Returns:
         True if updated
     """
+    was_enabled = None
+    if enabled is not None:
+        row = conn.execute(
+            "SELECT enabled FROM event_epg_groups WHERE id = ?", (group_id,)
+        ).fetchone()
+        was_enabled = bool(row["enabled"]) if row else None
     builder = _UpdateBuilder()
 
     # Identity / basics
@@ -947,7 +948,11 @@ def update_group(
         return False
 
     cursor = conn.execute(builder.build_query("event_epg_groups"), builder.params(group_id))
-    _claim_managed_source(conn, group_id)
+    if enabled is not None and enabled != was_enabled:
+        # Switching a source off (or on) by hand takes it back from Automation,
+        # so the scan never wakes a source the user put to sleep (#997). Any
+        # other edit leaves the Automate switch alone (#1079).
+        _claim_managed_source(conn, group_id)
     if cursor.rowcount > 0:
         logger.info("[UPDATED] Event group id=%d", group_id)
         return True
@@ -1115,12 +1120,15 @@ def update_group_stats(
 
 
 def _claim_managed_source(conn: Connection, group_id: int) -> None:
-    """A hand edit makes a discovered source the user's own (#997).
+    """Switching a source off or on by hand takes it back from Automation (#997).
 
-    ``update_group`` and ``set_group_enabled`` are the user-edit paths, so
-    both come through here. Source discovery changes a managed source with
-    its own statements (``set_managed_source_enabled``) and never claims it.
-    A source that is not managed is untouched.
+    ``set_group_enabled`` and an ``update_group`` that changes ``enabled`` come
+    through here: a source the user put to sleep must never be woken by the
+    scan. Every other edit leaves ``managed`` alone — the Automate switch
+    (``set_group_managed``, #1079) is the one control that sets or clears it.
+    Source discovery changes a managed source with its own statements
+    (``set_managed_source_enabled``) and never claims it. A source that is not
+    managed is untouched.
     """
     conn.execute(
         "UPDATE event_epg_groups SET managed = 0 WHERE id = ? AND managed = 1", (group_id,)
@@ -1408,9 +1416,7 @@ def get_group_xmltv(conn: Connection, group_id: int) -> str | None:
     return row["xmltv_content"] if row else None
 
 
-def get_group_xmltv_with_metadata(
-    conn: Connection, group_id: int
-) -> tuple[str, str] | None:
+def get_group_xmltv_with_metadata(conn: Connection, group_id: int) -> tuple[str, str] | None:
     """Get stored XMLTV content and metadata for a group.
 
     Args:
@@ -1495,5 +1501,3 @@ def delete_group_xmltv(conn: Connection, group_id: int) -> bool:
         logger.debug("[DELETED] XMLTV for group id=%d", group_id)
         return True
     return False
-
-

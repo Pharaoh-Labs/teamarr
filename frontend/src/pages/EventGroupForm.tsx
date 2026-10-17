@@ -120,6 +120,7 @@ export function EventGroupForm() {
 
   // Mutations
   const createMutation = useCreateGroup()
+  const canAutomate = (formData.name_match_enabled ?? true) || Boolean(formData.team_streams_enabled)
   const updateMutation = useUpdateGroup()
 
   // Test Patterns modal — bidirectional sync with form
@@ -193,6 +194,7 @@ export function EventGroupForm() {
         name_match_enabled: group.name_match_enabled,
         team_streams_enabled: group.team_streams_enabled,
         epg_match_enabled: group.epg_match_enabled,
+        managed: group.managed ?? false,
         // Team filtering
         include_teams: group.include_teams,
         exclude_teams: group.exclude_teams,
@@ -272,7 +274,7 @@ export function EventGroupForm() {
       }
 
       if (isEdit) {
-        const updateData: EventGroupUpdate = { ...submitData }
+        const updateData: EventGroupUpdate = { ...submitData, managed: canAutomate && (data.managed ?? false) }
 
         // Compute clear flags for nullable fields that were changed from a value to null/undefined
         // This is required because the backend only clears fields when explicit clear_* flags are set
@@ -513,6 +515,26 @@ export function EventGroupForm() {
                   <Label className="font-normal">EPG matching</Label>
                   <p className="text-xs text-muted-foreground">
                     Match static linear channels (e.g. "ESPN", "NBA1") to events via EPG.
+                  </p>
+                </div>
+              </div>
+
+              {/* Automate (#1079): hand the source to Automation's Retire/Remove rules */}
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={canAutomate && (formData.managed ?? false)}
+                  disabled={!canAutomate}
+                  onCheckedChange={(checked) => setFormData({ ...formData, managed: checked })}
+                />
+                <div>
+                  <Label className={canAutomate ? "font-normal" : "font-normal text-muted-foreground"}>
+                    Automate{!canAutomate && " (needs Stream name or Team matching)"}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Switched off after the Retire idle window without a match, back on when a scan
+                    sees games in its group, removed once the group has been gone the Retire gone
+                    window. Switching the source off yourself takes it back. A team-only source
+                    wakes only if its group name names the league.
                   </p>
                 </div>
               </div>

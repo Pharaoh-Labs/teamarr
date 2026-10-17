@@ -600,11 +600,11 @@ export function EventGroups() {
                                 title={
                                   (group.auto_added_at
                                     ? `Added automatically by source discovery on ${group.auto_added_at.slice(0, 10)}. `
-                                    : "Added from Automation → Discover. ") +
-                                  "It is switched off when it has matched nothing for two weeks and back on when its group has events again. Editing it makes it an ordinary source."
+                                    : "Added from Automation → Discover, or handed over with the Automate switch. ") +
+                                  "It is switched off after the Retire idle window without a match and back on when its group has games again. Switching it off yourself, or turning Automate off, makes it an ordinary source."
                                 }
                               >
-                                {group.auto_added_at ? "Auto-added" : "Managed"}
+                                {group.auto_added_at ? "Auto-added" : "Automated"}
                               </Badge>
                             )}
                             {/* Stale-source badge (lylt) */}

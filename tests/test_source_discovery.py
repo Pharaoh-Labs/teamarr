@@ -706,13 +706,136 @@ def test_accepting_a_candidate_creates_a_managed_source(api):
     assert api.post(f"/api/v1/source-discovery/candidates/{cid}/accept").status_code == 409
 
 
-def test_a_hand_edit_makes_a_managed_source_the_users_own(api):
+def test_a_hand_edit_leaves_a_managed_source_automated(api):
+    # The Automate switch is the one control over ``managed`` (#1079); editing
+    # the subscription override no longer silently hands the source back.
     _, source_id = _accept_first(api)
     assert (
         api.put(f"/api/v1/groups/{source_id}", json={"subscription_leagues": ["nhl"]}).status_code
         == 200
     )
+    assert _source(source_id).managed is True
+
+
+def test_the_automate_switch_hands_a_source_back_and_over(api):
+    _, source_id = _accept_first(api)
+    assert api.put(f"/api/v1/groups/{source_id}", json={"managed": False}).status_code == 200
     assert _source(source_id).managed is False
+    assert api.put(f"/api/v1/groups/{source_id}", json={"managed": True}).status_code == 200
+    assert _source(source_id).managed is True
+
+
+def test_changing_enabled_through_the_form_takes_the_source_back(api):
+    _, source_id = _accept_first(api)
+    # The form sends the whole row back; the same enabled state is not a hand switch.
+    assert api.put(f"/api/v1/groups/{source_id}", json={"enabled": True}).status_code == 200
+    assert _source(source_id).managed is True
+    assert api.put(f"/api/v1/groups/{source_id}", json={"enabled": False}).status_code == 200
+    assert _source(source_id).managed is False
+
+
+def test_automate_on_a_manually_imported_source_writes_its_candidate_row(api):
+    from teamarr.database.groups import create_group
+
+    with get_db() as conn:
+        source_id = create_group(
+            conn,
+            name="Live | FA Cup",
+            leagues=[],
+            m3u_group_id=77,
+            m3u_group_name="UK: NHL Centre Ice",
+        )
+    assert _source(source_id).managed is False
+    resp = api.put(f"/api/v1/groups/{source_id}", json={"managed": True})
+    assert resp.status_code == 200, resp.text
+    source = _source(source_id)
+    assert source.managed is True
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT status, source_group_id, name_leagues FROM source_candidates "
+            "WHERE m3u_group_id = 77"
+        ).fetchone()
+    assert (row["status"], row["source_group_id"]) == ("accepted", source_id)
+    assert json.loads(row["name_leagues"]) == ["nhl"]
+    # Automated and enabled: the scan treats its group as taken, like any source.
+    listed = api.get("/api/v1/groups").json()["groups"]
+    assert next(g for g in listed if g["id"] == source_id)["managed"] is True
+
+
+def test_automate_needs_stream_name_or_team_matching(api):
+    from teamarr.database.groups import create_group
+
+    with get_db() as conn:
+        source_id = create_group(
+            conn,
+            name="UK: Sky Sports Main Event",
+            leagues=[],
+            m3u_group_id=78,
+            name_match_enabled=False,
+            epg_match_enabled=True,
+        )
+    resp = api.put(f"/api/v1/groups/{source_id}", json={"managed": True})
+    assert resp.status_code == 400
+    assert "Stream name or Team" in resp.json()["detail"]
+    # ... and an automated source edited down to EPG-only is handed back, since
+    # Automation could never switch it on again.
+    _, managed_id = _accept_first(api)
+    resp = api.put(
+        f"/api/v1/groups/{managed_id}",
+        json={
+            "name_match_enabled": False,
+            "team_streams_enabled": False,
+            "epg_match_enabled": True,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert _source(managed_id).managed is False
+
+
+def test_bulk_edit_sets_the_automate_switch(api):
+    from teamarr.database.groups import create_group
+
+    with get_db() as conn:
+        a = create_group(conn, name="A", leagues=[], m3u_group_id=81)
+        b = create_group(conn, name="B", leagues=[], m3u_group_id=82)
+    resp = api.put("/api/v1/groups/bulk", json={"group_ids": [a, b], "managed": True})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["total_updated"] == 2
+    assert (_source(a).managed, _source(b).managed) == (True, True)
+    resp = api.put("/api/v1/groups/bulk", json={"group_ids": [a], "managed": False})
+    assert resp.status_code == 200
+    assert (_source(a).managed, _source(b).managed) == (False, True)
+
+
+def test_team_streams_in_a_named_league_wake_a_retired_source(api):
+    # The revive rule reads the same evidence discovery accepts for a
+    # team-stream source: one-team matches in a league the group's name names.
+    _, source_id = _accept_first(api)
+    with get_db() as conn:
+        conn.execute("UPDATE event_epg_groups SET enabled = 0 WHERE id = ?", (source_id,))
+        conn.commit()
+    summary = _maintain(
+        evidence={
+            1: ScanEvidence(
+                1,
+                "NHL: ESPN PLUS",
+                team_only_matches=4,
+                team_leagues={"nhl": 4},
+                name_leagues=["nhl"],
+            )
+        }
+    )
+    assert (summary.sources_reenabled, _source(source_id).enabled) == (1, True)
+    with get_db() as conn:
+        conn.execute("UPDATE event_epg_groups SET enabled = 0 WHERE id = ?", (source_id,))
+        conn.commit()
+    # Team matches in a league the name does not mention are noise, as in discovery.
+    summary = _maintain(
+        evidence={
+            1: ScanEvidence(1, "USA: ESPN PLUS", team_only_matches=4, team_leagues={"nhl": 4})
+        }
+    )
+    assert (summary.sources_reenabled, _source(source_id).enabled) == (0, False)
 
 
 def test_disabling_by_hand_also_claims_it_so_discovery_never_turns_it_back_on(api):

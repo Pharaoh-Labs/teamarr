@@ -59,6 +59,7 @@ from teamarr.database.source_candidates import (
     get_candidates,
     record_scan,
     set_candidate_status,
+    upsert_accepted_candidate,
 )
 from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
 
@@ -489,6 +490,44 @@ def accept_candidate(
     return source_id
 
 
+def adopt_source(conn: Connection, source: EventEPGGroup) -> None:
+    """Hand a source the user made to Automation: the Automate switch (#1079).
+
+    The source becomes managed, so the Retire and Remove rules apply to it
+    exactly as to a discovered one. It also gets the accepted candidate row a
+    discovered source has: the scan skips groups that belong to an enabled
+    source but reads a retired one's group again, and without this row it
+    would list a sleeping source's group under Suggested, where accepting it
+    would create a duplicate. The name's league words are recorded so the
+    named idle grace applies.
+    """
+    if source.m3u_group_id is not None:
+        league_codes = [row[0] for row in conn.execute("SELECT league_code FROM leagues") if row[0]]
+        named = leagues_named_by(
+            source.m3u_group_name or source.name, league_name_surfaces(conn, league_codes)
+        )
+        upsert_accepted_candidate(
+            conn,
+            m3u_group_id=source.m3u_group_id,
+            m3u_group_name=source.m3u_group_name or source.name,
+            m3u_account_ids=[source.m3u_account_id] if source.m3u_account_id else [],
+            name_leagues=named,
+            source_group_id=source.id,
+        )
+    set_group_managed(conn, source.id, True)
+    logger.info("[DISCOVERY] Automate on for source %r (id=%d)", source.name, source.id)
+
+
+def release_source(conn: Connection, source: EventEPGGroup) -> None:
+    """Take a source back from Automation: the Automate switch off (#1079).
+
+    The candidate row stays accepted and linked, so the scan still treats the
+    group as taken; deleting the source dismisses it as before.
+    """
+    set_group_managed(conn, source.id, False)
+    logger.info("[DISCOVERY] Automate off for source %r (id=%d)", source.name, source.id)
+
+
 def auto_leagues(conn: Connection) -> set[str]:
     """Leagues automatic mode is on for: toggled leagues plus every league of a
     toggled sport, including leagues discovered after the toggle was set."""
@@ -629,7 +668,10 @@ def maintain_managed_sources(
                 "UPDATE event_epg_groups SET source_last_seen = ? WHERE id = ?",
                 (to_db_utc(now), source.id),
             )
-        if group_live and found and found.game_matches:
+        # Games in the group bring it back: two-sided matches, or one-team
+        # matches in a league the group's name names — the same evidence
+        # discovery accepts for a team-stream source (#1079).
+        if group_live and found and (found.game_matches or team_stream_leagues(found)):
             set_managed_source_enabled(conn, source.id, True)
             summary.sources_reenabled += 1
             logger.info("[DISCOVERY] Re-enabled managed source %r: games again", source.name)
