@@ -11,10 +11,12 @@ Configuration via environment variables:
 
 import logging
 import os
+import threading
 import time
 from dataclasses import dataclass
 
 from teamarr.providers.base_client import BaseHTTPClient
+from teamarr.utilities.cache import TTLCache
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +190,8 @@ class ESPNClient(BaseHTTPClient):
         self._core_url = ESPN_CORE_URL
         # date_str -> (monotonic stamp, panel). A failed fetch is never memoised.
         self._cricket_panel_cache: dict[str, tuple[float, dict]] = {}
+        self._cricket_season_cache = TTLCache(default_ttl_seconds=300, max_size=64)
+        self._cricket_season_lock = threading.Lock()
         self._ufc_athlete_url = ESPN_UFC_ATHLETE_URL
 
     def _request(self, url: str, params: dict | None = None) -> dict | None:
@@ -443,6 +447,28 @@ class ESPNClient(BaseHTTPClient):
         if data is not None:
             self._cricket_panel_cache[date_str] = (now, data)
         return data
+
+    def get_cricket_season(self, series_id: str, season: int | None = None) -> dict | None:
+        """Full franchise season, or the default slate's metadata when season is None.
+
+        Cricket's date filter silently stays in the default season unless an
+        explicit season is supplied. ``season`` alone returns the whole schedule
+        and a complete top-level ``teams`` list (#1069). Share that payload across
+        all day/team readers. A short failure cooldown prevents missing seasons
+        (e.g. SA20's 2026 label) being requested once per team per day; it is not
+        treated as a successful empty schedule and is retried after 30 seconds.
+        """
+        key = f"{series_id}:{season}"
+        with self._cricket_season_lock:
+            hit = self._cricket_season_cache.get(key)
+            if hit is not None:
+                return hit["data"]
+            params = {"season": season} if season is not None else None
+            data = self._request(f"{self._base_url}/cricket/{series_id}/scoreboard", params)
+            if data is not None and not isinstance(data.get("events"), list):
+                data = None
+            self._cricket_season_cache.set(key, {"data": data}, ttl_seconds=300 if data else 30)
+            return data
 
     def get_teams(self, league: str, sport_league: tuple[str, str] | None = None) -> dict | None:
         """Fetch all teams for a league.
