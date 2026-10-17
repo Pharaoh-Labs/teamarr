@@ -11,7 +11,7 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 
 ## Route Modules
 
-19 route modules with 205 total endpoints, registered in `app.py`:
+19 route modules with 206 total endpoints, registered in `app.py`:
 
 | Module | Endpoints | Description |
 |--------|-----------|-------------|
