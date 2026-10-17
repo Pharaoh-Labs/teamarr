@@ -569,7 +569,9 @@ def _apply_automate(conn, group, requested: bool | None, name_match: bool, team_
         if not can_automate:
             raise ValueError(AUTOMATE_NEEDS_MATCHING)
         if not group.managed:
-            adopt_source(conn, get_group(conn, group.id))
+            fresh = get_group(conn, group.id)
+            if fresh is not None:
+                adopt_source(conn, fresh)
     elif requested is False:
         if group.managed:
             release_source(conn, group)

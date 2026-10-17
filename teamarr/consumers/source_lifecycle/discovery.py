@@ -167,8 +167,12 @@ def is_replay_group(group_name: str, stream_names: list[str]) -> bool:
     return saying_so / len(stream_names) >= REPLAY_STREAM_SHARE
 
 
-def team_stream_leagues(candidate: CandidateEvidence) -> dict[str, int]:
-    """One-team matches that count: those in a league the group's name names."""
+def team_stream_leagues(candidate: CandidateEvidence | ScanEvidence) -> dict[str, int]:
+    """One-team matches that count: those in a league the group's name names.
+
+    Reads a window's evidence or one scan's: the revive rule (#1079) asks
+    the same question of the scan that just ran.
+    """
     named = set(candidate.name_leagues)
     return {lg: n for lg, n in candidate.team_leagues.items() if lg in named}
 
