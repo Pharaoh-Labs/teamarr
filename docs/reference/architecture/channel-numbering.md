@@ -37,8 +37,8 @@ holds golden-equivalence tests that assert this for compact, gap and strict.
 
 ## Resolution: most specific wins
 
-`LaneResolver.resolve(sport, league, home_team, away_team, season_type)`
-returns the lane for a channel. Precedence:
+`LaneResolver.resolve(sport, league, home_team, away_team, season_type, *,
+segment, exception_keyword)` returns the lane for a channel. Precedence:
 
 1. **Team** pin matching the home team
 2. **Team** pin matching the away team
@@ -71,6 +71,66 @@ play-in games land in a Postseason block.
 The season is stored on the channel (`managed_channels.season_type`, written
 at creation and kept current by the settings sync), because re-layout
 resolves lanes from the stored row and has no event to ask.
+
+### Segment and keyword conditions (#1018)
+
+A pin may also carry `segments` (a list of session / card-segment codes) and a
+`keyword` condition. A row with any unsatisfied condition is not a candidate.
+Among the candidates, scope rank decides first. Inside one rank the winner is
+the first row by this fixed key, so the result never depends on insertion
+order or on how many conditions a row has:
+
+1. keyword specificity, highest first: `feed:<feed_key>`, then
+   `label:<label>`, then `driver` / `variant`, then `any`, then `main`, then
+   no keyword
+2. rows with segments before rows without
+3. rows with a season before rows without
+4. `(sort_order, id)`
+
+A season-only row therefore resolves exactly as before. For example, a
+`keyword=main` block beats a `segments=[race]` block for the main race
+channel, and `feed:driver:charles-leclerc` beats `label:Charles Leclerc`, which beats
+`driver`, for that driver.
+
+Segment codes must come from the known set for the block's own sport:
+`SESSION_ORDER` for racing (`fp1`, `fp2`, `fp3`, `sprint_qualifying`, `sprint`,
+`qualifying`, `race`) and the card segments for MMA (`early_prelims`,
+`prelims`, `main_card`). `main_card` on an F1 block is rejected, and a sport with
+no segments rejects any code. A league block takes its sport from the leagues
+table, and a team block from the team's `team_cache` row.
+`GET /numbering-exceptions/segment-codes` lists the codes by sport.
+
+`keyword` values:
+
+| Value | Satisfied by |
+|---|---|
+| `main` | a channel with no exception keyword |
+| `any` | any exception-keyword channel |
+| `driver` / `variant` | a race feed of that kind in the channel's league |
+| `feed:<feed_key>` | one race feed, e.g. `feed:driver:charles-leclerc` |
+| `label:<label>` | one exception keyword, matched case-insensitively |
+
+A channel whose segment is `NULL` satisfies no segments condition.
+
+The segment is stored on the channel row (`managed_channels.segment`, the
+lowercase suffix of `event_id`) because re-layout has no event. The race feed
+is not stored. `LaneResolver.load` reads `race_feeds` and maps
+`(league, feed label)` to `feed_key`, and a channel's `exception_keyword`
+equals its feed label, so the resolver derives the feed from the keyword. A
+roster refresh that adds a feed takes effect on the next re-grid. Migration v100
+backfills `segment` for existing racing and mma rows from the `-<segment>`
+suffix of `event_id`, for known codes only. It is safe to re-run.
+
+A league block whose only condition is `keyword = main` also takes that
+league's team channels and any channel without a keyword. A racing event with
+no session data carries no segment, so it matches no segments block.
+
+Example, F1 with four blocks, each a league pin: main channel for `race`,
+`qualifying`, `sprint_qualifying`, `sprint` at 1200 (`keyword=main`); driver feeds
+at 1300 (`keyword=driver`); other race feeds at 1400 (`keyword=variant`); an
+unconditioned pin at 1500 takes practice. Every row is a candidate at league
+rank, and the keyword rule picks the lane, so a main race channel lands at 1200
+rather than 1500.
 
 ### Channel group on a block (#950)
 
@@ -192,6 +252,8 @@ CREATE TABLE numbering_exceptions (
     sort_order INTEGER NOT NULL DEFAULT 0,
     enabled BOOLEAN DEFAULT 1,
     season_type TEXT,               -- NULL = any season (#950)
+    segments TEXT,                  -- NULL = any; comma-joined segment codes (#1018)
+    keyword TEXT,                   -- NULL = any; main|any|driver|variant|feed:<key>|label:<label>
     channel_group_id INTEGER,       -- output group for the block's channels (#950)
     channel_group_mode TEXT,        -- ...or a pattern, e.g. '09 TEAMARR {league}'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
