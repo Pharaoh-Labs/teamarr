@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, type InputHTMLAttributes } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { LoaderCircle, Pin, Plus, Trash2 } from "lucide-react"
@@ -20,6 +20,8 @@ import { Select } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { TeamPicker } from "@/components/TeamPicker"
 import { getLeagues, getTeamPickerLeagues } from "@/api/teams"
+import { useRaceFeeds } from "@/hooks/useRaceFeeds"
+import type { RaceFeed } from "@/api/raceFeeds"
 import { useSports } from "@/hooks/useSports"
 import { getSportDisplayName } from "@/lib/utils"
 import {
@@ -27,6 +29,7 @@ import {
   useDeleteNumberingException,
   useNumberingExceptions,
   useNumberingPreview,
+  useSegmentCodes,
   useUpdateNumberingException,
 } from "@/hooks/useNumberingExceptions"
 import type { NumberingException, NumberingScope } from "@/api/numberingExceptions"
@@ -42,7 +45,10 @@ import type { TeamFilterEntry } from "@/api/types"
  * re-grid in sticky modes, so the change lands on the next generation.
  *
  * A block may be limited to one season type and may name the channel group its
- * channels go to (#950) — "NBA postseason at 900, in 09 TEAMARR {league}".
+ * channels go to (#950) — "NBA postseason at 900, in 09 TEAMARR {league}". It may
+ * also be limited to session / card-segment codes and to one kind of channel
+ * (main, driver feeds, other race feeds, one feed) — "F1 race and qualifying at
+ * 1200" (#1018). Those controls sit under Advanced.
  */
 
 const SEASON_OPTIONS: { value: string; label: string }[] = [
@@ -51,6 +57,203 @@ const SEASON_OPTIONS: { value: string; label: string }[] = [
   { value: "regular", label: "Regular season" },
   { value: "postseason", label: "Postseason" },
 ]
+
+const KEYWORD_PRESETS: { value: string; label: string }[] = [
+  { value: "", label: "Any channel" },
+  { value: "main", label: "Main channel only" },
+  { value: "any", label: "Any keyword channel" },
+]
+
+// Race-feed kinds, offered only where the league (or racing sport) has race feeds.
+const KEYWORD_RACE_KINDS: { value: string; label: string }[] = [
+  { value: "driver", label: "Any driver feed" },
+  { value: "variant", label: "Any other race feed" },
+]
+
+// Select value that reveals the keyword-label input. A stored label keyword is
+// "label:<label>"; the bare prefix means "keyword chosen, label not typed yet".
+const LABEL_PREFIX = "label:"
+
+const parseSegments = (raw: string): string[] | null => {
+  const codes = Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((c) => c.trim().toLowerCase())
+        .filter(Boolean)
+    )
+  )
+  return codes.length ? codes : null
+}
+
+/** A keyword value that still needs its label typed. */
+const isIncompleteKeyword = (v: string) =>
+  v.startsWith(LABEL_PREFIX) && !v.slice(LABEL_PREFIX.length).trim()
+
+/** Race-feed options for a block: feeds of its league, or none for a racing sport. */
+type RaceOptions = { feeds: RaceFeed[] } | null
+
+const keywordLabel = (keyword: string, feeds: RaceFeed[]): string => {
+  const preset = [...KEYWORD_PRESETS, ...KEYWORD_RACE_KINDS].find((o) => o.value === keyword)
+  if (preset) return preset.label
+  if (keyword.startsWith("feed:")) {
+    const row = feeds.find((f) => f.feed_key === keyword.slice(5))
+    return row ? row.label : keyword.slice(5)
+  }
+  if (keyword.startsWith(LABEL_PREFIX)) return `Keyword ${keyword.slice(LABEL_PREFIX.length)}`
+  return keyword
+}
+
+/**
+ * Keyword condition select. Its mode comes from ``value`` alone: the label
+ * input shows while the value starts with "label:". ``onChange`` fires on every
+ * edit; ``onCommit`` (optional) fires when a choice is final, meaning a select
+ * pick or the label input losing focus.
+ */
+function KeywordSelect({
+  value,
+  onChange,
+  onCommit,
+  race,
+  id,
+  className,
+}: {
+  value: string
+  onChange: (v: string) => void
+  onCommit?: (v: string) => void
+  race: RaceOptions
+  id?: string
+  className?: string
+}) {
+  const labelMode = value.startsWith(LABEL_PREFIX)
+  const feeds = race?.feeds ?? []
+  const known =
+    labelMode ||
+    KEYWORD_PRESETS.some((o) => o.value === value) ||
+    (race !== null && KEYWORD_RACE_KINDS.some((o) => o.value === value)) ||
+    feeds.some((f) => `feed:${f.feed_key}` === value)
+  const pick = (v: string) => {
+    onChange(v)
+    onCommit?.(v)
+  }
+  return (
+    <>
+      <Select
+        id={id}
+        value={labelMode ? LABEL_PREFIX : value}
+        onChange={(e) => pick(e.target.value)}
+        className={className}
+        aria-label="Keyword"
+      >
+        {KEYWORD_PRESETS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+        {race &&
+          KEYWORD_RACE_KINDS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        {feeds.map((f) => (
+          <option key={f.feed_key} value={`feed:${f.feed_key}`}>
+            {f.label}
+          </option>
+        ))}
+        <option value={LABEL_PREFIX}>Specific keyword…</option>
+        {!known && <option value={value}>{keywordLabel(value, feeds)}</option>}
+      </Select>
+      {labelMode && (
+        <Input
+          value={value.slice(LABEL_PREFIX.length)}
+          onChange={(e) => onChange(`${LABEL_PREFIX}${e.target.value}`)}
+          onBlur={() => onCommit?.(value)}
+          className="w-36 h-8"
+          placeholder="Keyword label"
+          aria-label="Keyword label"
+        />
+      )}
+    </>
+  )
+}
+
+/** Segments text input with a datalist of the known codes for the block's sport. */
+function SegmentsInput({
+  codes,
+  listId,
+  ...props
+}: {
+  codes: string[]
+  listId: string
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "list">) {
+  return (
+    <>
+      <Input list={listId} {...props} />
+      <datalist id={listId}>
+        {codes.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+    </>
+  )
+}
+
+/** Race-feed options a block can offer, given the leagues the race-feeds API lists. */
+function raceOptionsFor(
+  leagueCode: string | null | undefined,
+  sport: string | null | undefined,
+  scope: NumberingScope,
+  raceLeagues: string[],
+  feeds: RaceFeed[]
+): RaceOptions {
+  if (leagueCode && raceLeagues.includes(leagueCode)) {
+    return { feeds: feeds.filter((f) => f.league === leagueCode) }
+  }
+  if (scope === "sport" && sport === "racing") return { feeds: [] }
+  return null
+}
+
+/** Segments and keyword of a block as summary-row text. */
+function BlockConditions({ b, feeds }: { b: NumberingException; feeds: RaceFeed[] }) {
+  return (
+    <>
+      {b.segments && ` · segments: ${b.segments.join(", ")}`}
+      {b.keyword && ` · keyword: ${keywordLabel(b.keyword, feeds)}`}
+    </>
+  )
+}
+
+/** One row's keyword select. A half-typed label stays a draft until it is complete. */
+function BlockKeyword({
+  b,
+  race,
+  onSave,
+}: {
+  b: NumberingException
+  race: RaceOptions
+  onSave: (b: NumberingException, value: string) => Promise<void>
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = async (v: string) => {
+    if (isIncompleteKeyword(v)) return
+    const next = v.startsWith(LABEL_PREFIX) ? `${LABEL_PREFIX}${v.slice(6).trim()}` : v
+    try {
+      if (next !== (b.keyword ?? "")) await onSave(b, next)
+    } finally {
+      setDraft(null)
+    }
+  }
+  return (
+    <KeywordSelect
+      value={draft ?? b.keyword ?? ""}
+      onChange={setDraft}
+      onCommit={commit}
+      race={race}
+      className="w-44 h-8"
+    />
+  )
+}
 
 const SCOPE_LABEL: Record<NumberingScope, string> = {
   team: "Team",
@@ -72,7 +275,20 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
   const { data: sportsData } = useSports()
   const sportsMap = sportsData?.sports
 
+  const { data: raceData } = useRaceFeeds()
+  const { data: segmentCodes } = useSegmentCodes()
+  const raceLeagues = useMemo(() => raceData?.leagues ?? [], [raceData])
+  const raceFeeds = useMemo(() => raceData?.feeds ?? [], [raceData])
+
   const [addOpen, setAddOpen] = useState(false)
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const toggleExpanded = (id: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   const sorted = useMemo(() => blocks ?? [], [blocks])
 
@@ -114,6 +330,24 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
     }
   }
 
+  const onSegmentsBlur = async (b: NumberingException, raw: string) => {
+    const next = parseSegments(raw)
+    if ((next ?? []).join(",") === (b.segments ?? []).join(",")) return
+    try {
+      await update.mutateAsync({ id: b.id, data: { segments: next, set_segments: true } })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update segments")
+    }
+  }
+
+  const onKeywordChange = async (b: NumberingException, value: string) => {
+    try {
+      await update.mutateAsync({ id: b.id, data: { keyword: value || null, set_keyword: true } })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update keyword")
+    }
+  }
+
   const onGroupBlur = async (b: NumberingException, raw: string) => {
     const v = raw.trim()
     if (v === (b.channel_group_mode ?? "")) return
@@ -146,7 +380,8 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
               belongs to one block — to put a team first inside its league&apos;s block, use
               Priority Teams above. Blocks spill forward if they fill up. A block can be
               limited to one season (playoffs only, say) and can send its channels to its
-              own channel group.
+              own channel group. Under Advanced, racing and MMA blocks can also be limited
+              to sessions (race, qualifying…) and to the main channel or a kind of keyword.
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -168,7 +403,7 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
             {sorted.map((b) => (
               <div
                 key={b.id}
-                className={`flex items-center gap-3 px-3 py-2 ${b.enabled ? "" : "opacity-60"}`}
+                className={`flex flex-wrap items-center gap-3 px-3 py-2 ${b.enabled ? "" : "opacity-60"}`}
               >
                 <Input
                   type="number"
@@ -192,6 +427,7 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                   <div className="text-xs text-muted-foreground">
                     {getSportDisplayName(b.sport, sportsMap)}
                     {b.end != null && ` · ends at ${b.end}`}
+                    <BlockConditions b={b} feeds={raceFeeds} />
                     {` · ${b.channel_count} channel${b.channel_count === 1 ? "" : "s"} today`}
                   </div>
                 </div>
@@ -207,6 +443,43 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                     </option>
                   ))}
                 </Select>
+                {(() => {
+                  const codes = segmentCodes?.[b.sport] ?? []
+                  const race = raceOptionsFor(
+                    b.league_code,
+                    b.sport,
+                    b.scope,
+                    raceLeagues,
+                    raceFeeds
+                  )
+                  const open = expanded.has(b.id) || !!b.segments || !!b.keyword
+                  if (!open) return null
+                  return (
+                    <>
+                      {codes.length > 0 && (
+                        <SegmentsInput
+                          codes={codes}
+                          listId={`segments-codes-${b.id}`}
+                          defaultValue={(b.segments ?? []).join(", ")}
+                          key={`segments-${b.id}-${(b.segments ?? []).join(",")}`}
+                          className="w-36 h-8"
+                          placeholder="Any segment"
+                          onBlur={(e) => onSegmentsBlur(b, e.target.value)}
+                          aria-label="Segments"
+                        />
+                      )}
+                      <BlockKeyword b={b} race={race} onSave={onKeywordChange} />
+                    </>
+                  )
+                })()}
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                  onClick={() => toggleExpanded(b.id)}
+                  aria-expanded={expanded.has(b.id)}
+                >
+                  Advanced
+                </button>
                 <Input
                   defaultValue={b.channel_group_mode ?? ""}
                   key={`group-${b.id}-${b.channel_group_mode ?? ""}`}
@@ -310,6 +583,10 @@ function AddBlockDialog({
     () => Object.entries(sportsMap ?? {}).sort((a, b) => a[1].localeCompare(b[1])),
     [sportsMap]
   )
+  const { data: raceData } = useRaceFeeds()
+  const { data: segmentCodes } = useSegmentCodes()
+  const raceLeagues = useMemo(() => raceData?.leagues ?? [], [raceData])
+  const raceFeeds = useMemo(() => raceData?.feeds ?? [], [raceData])
   const groupLabels = useMemo(
     () => Array.from(new Set(existing.map((b) => b.label).filter(Boolean) as string[])),
     [existing]
@@ -322,8 +599,10 @@ function AddBlockDialog({
   const [start, setStart] = useState("")
   const [end, setEnd] = useState("")
   const [label, setLabel] = useState("")
-  const [showEnd, setShowEnd] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [season, setSeason] = useState("")
+  const [segments, setSegments] = useState("")
+  const [keyword, setKeyword] = useState("")
   const [groupPattern, setGroupPattern] = useState("")
 
   const reset = () => {
@@ -334,8 +613,10 @@ function AddBlockDialog({
     setStart("")
     setEnd("")
     setLabel("")
-    setShowEnd(false)
+    setShowAdvanced(false)
     setSeason("")
+    setSegments("")
+    setKeyword("")
     setGroupPattern("")
   }
 
@@ -346,13 +627,31 @@ function AddBlockDialog({
     if (match && !start) setStart(String(match.start))
   }
 
+  // Sport of the chosen scope, for the segment codes and race-feed options.
+  const scopeLeague =
+    scope === "league" ? leagueCode : scope === "team" ? (team[0]?.league ?? "") : ""
+  const scopeSport =
+    scope === "sport" ? sport : (leagues.find((l) => l.slug === scopeLeague)?.sport ?? "")
+  const codes = segmentCodes?.[scopeSport] ?? []
+  const race = raceOptionsFor(scopeLeague, scopeSport, scope, raceLeagues, raceFeeds)
+
+  // Race-feed choices made for an earlier scope do not carry to one without feeds.
+  const raceOnly =
+    keyword === "driver" || keyword === "variant" || keyword.startsWith("feed:")
+  const submitKeyword = keyword.startsWith(LABEL_PREFIX)
+    ? `${LABEL_PREFIX}${keyword.slice(LABEL_PREFIX.length).trim()}`
+    : raceOnly && race === null
+      ? null
+      : keyword || null
+
   const startNum = parseInt(start)
   const endNum = end === "" ? null : parseInt(end)
   const valid =
     !isNaN(startNum) &&
     startNum >= 1 &&
     (endNum === null || (!isNaN(endNum) && endNum >= startNum)) &&
-    (scope === "team" ? team.length === 1 : scope === "league" ? !!leagueCode : !!sport)
+    (scope === "team" ? team.length === 1 : scope === "league" ? !!leagueCode : !!sport) &&
+    !isIncompleteKeyword(keyword)
 
   const submit = async () => {
     if (!valid) return
@@ -368,6 +667,8 @@ function AddBlockDialog({
         team_id: scope === "team" ? team[0].team_id : null,
         team_league: scope === "team" ? team[0].league : null,
         season_type: season || null,
+        segments: codes.length > 0 ? parseSegments(segments) : null,
+        keyword: submitKeyword,
         channel_group_mode: groupPattern.trim() || null,
       })
       toast.success("Block added — re-grid queued for the next generation")
@@ -510,29 +811,63 @@ function AddBlockDialog({
             group these channels would otherwise use.
           </p>
 
-          {showEnd ? (
-            <div className="space-y-2 max-w-[50%]">
-              <Label htmlFor="pin-end">End channel</Label>
-              <Input
-                id="pin-end"
-                type="number"
-                min={1}
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-                placeholder="No limit"
-              />
-              <p className="text-xs text-muted-foreground">
-                When the block is full, extra channels overflow to Everything Else instead
-                of spilling forward.
+          {showAdvanced ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                {codes.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="pin-segments">Segments (optional)</Label>
+                    <SegmentsInput
+                      id="pin-segments"
+                      codes={codes}
+                      listId="pin-segment-codes"
+                      value={segments}
+                      onChange={(e) => setSegments(e.target.value)}
+                      placeholder={codes.slice(-2).join(", ")}
+                    />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="pin-keyword">Keyword</Label>
+                  <KeywordSelect
+                    id="pin-keyword"
+                    value={keyword}
+                    onChange={setKeyword}
+                    race={race}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-2">
+                {codes.length > 0 &&
+                  `Segments are comma-separated codes (${codes.join(", ")}); the block then holds only those. `}
+                Keyword limits the block to the main channel, any keyword channel, or one
+                keyword. Among blocks of the same scope, the most specific keyword wins, then
+                segments, then season.
               </p>
+
+              <div className="space-y-2 max-w-[50%]">
+                <Label htmlFor="pin-end">End channel</Label>
+                <Input
+                  id="pin-end"
+                  type="number"
+                  min={1}
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                  placeholder="No limit"
+                />
+                <p className="text-xs text-muted-foreground">
+                  When the block is full, extra channels overflow to Everything Else instead
+                  of spilling forward.
+                </p>
+              </div>
             </div>
           ) : (
             <button
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-              onClick={() => setShowEnd(true)}
+              onClick={() => setShowAdvanced(true)}
             >
-              Set an end channel (advanced)
+              Advanced: segments, keyword, end channel
             </button>
           )}
         </div>

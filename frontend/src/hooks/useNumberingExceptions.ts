@@ -5,6 +5,7 @@ import {
   updateNumberingException,
   deleteNumberingException,
   getNumberingPreview,
+  getSegmentCodes,
 } from "@/api/numberingExceptions"
 import type {
   NumberingExceptionCreate,
@@ -29,6 +30,14 @@ export function useNumberingExceptions() {
 
 export function useNumberingPreview() {
   return useQuery({ queryKey: PREVIEW_KEY, queryFn: getNumberingPreview })
+}
+
+export function useSegmentCodes() {
+  return useQuery({
+    queryKey: ["numbering-exceptions", "segment-codes"],
+    queryFn: getSegmentCodes,
+    staleTime: Infinity,
+  })
 }
 
 export function useCreateNumberingException() {

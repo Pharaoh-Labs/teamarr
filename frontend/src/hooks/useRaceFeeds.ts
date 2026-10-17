@@ -11,10 +11,11 @@ import {
 
 const KEY = ["race-feeds"] as const
 
-export function useRaceFeeds(league?: string) {
+export function useRaceFeeds(league?: string, enabled = true) {
   return useQuery({
     queryKey: [...KEY, { league: league ?? null }],
     queryFn: () => getRaceFeeds(league),
+    enabled,
   })
 }
 

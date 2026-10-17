@@ -474,11 +474,18 @@ class ChannelLifecycleService(
             event_group_id=event_group_id,
         )
 
-    def _pinned_block_group(self, event) -> tuple[int | None, str | None] | None:
-        """Channel group carried by the event's pinned block, if any (#950).
+    def _pinned_block_group(
+        self,
+        event,
+        segment: str | None = None,
+        exception_keyword: str | None = None,
+    ) -> tuple[int | None, str | None] | None:
+        """Channel group carried by the channel's pinned block, if any (#950).
 
-        Returns ``(static_group_id, mode)`` when the block the event numbers
-        into names an output group, else None. One resolver per batch
+        Returns ``(static_group_id, mode)`` when the block the channel numbers
+        into names an output group, else None. Resolved per channel, so a
+        session's main channel and its feed channels can sit in different
+        blocks with different groups (#1018). One resolver per batch
         (``_lane_resolver``, loaded where ``_league_configs`` is), and the same
         call on the create and sync paths — a channel must not flip groups
         between runs.
@@ -494,6 +501,8 @@ class ChannelLifecycleService(
             home.name if home else None,
             away.name if away else None,
             getattr(event, "season_type", None),
+            segment=segment,
+            exception_keyword=exception_keyword,
         )
         if block is None or not block.has_channel_group:
             return None

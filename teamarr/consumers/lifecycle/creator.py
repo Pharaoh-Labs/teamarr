@@ -387,7 +387,7 @@ class ChannelCreator(_LifecycleHost):
                                 effective_group_mode = lc.channel_group_mode
                         # A pinned block's own group outranks both (#950), so the
                         # number range and the group stay in step.
-                        block_group = self._pinned_block_group(event)
+                        block_group = self._pinned_block_group(event, segment, matched_keyword)
                         if block_group is not None:
                             if block_group[0] is not None:
                                 effective_group_id = block_group[0]
@@ -1075,6 +1075,8 @@ class ChannelCreator(_LifecycleHost):
             home_team=event.home_team.name if getattr(event, "home_team", None) else None,
             away_team=event.away_team.name if getattr(event, "away_team", None) else None,
             season_type=getattr(event, "season_type", None),
+            segment=segment,
+            exception_keyword=matched_keyword,
         )
         if not channel_number:
             return ChannelCreationResult(
@@ -1221,6 +1223,7 @@ class ChannelCreator(_LifecycleHost):
                 else None,
                 event_name=event.name,
                 season_type=getattr(event, "season_type", None),
+                segment=segment.lower() if segment else None,
                 has_local_broadcast=has_local_broadcast(event),
                 league=event.league,
                 sport=event.sport,
@@ -1301,6 +1304,8 @@ class ChannelCreator(_LifecycleHost):
         home_team: str | None = None,
         away_team: str | None = None,
         season_type: str | None = None,
+        segment: str | None = None,
+        exception_keyword: str | None = None,
     ) -> int | None:
         """Get next available channel number.
 
@@ -1311,7 +1316,8 @@ class ChannelCreator(_LifecycleHost):
         Args:
             conn: Database connection
             event_league: League code for the event
-            sport / home_team / away_team / season_type: lane resolution keys
+            sport / home_team / away_team / season_type / segment /
+                exception_keyword: lane resolution keys
 
         Returns:
             Next available channel number as int, or None if range exhausted
@@ -1326,6 +1332,8 @@ class ChannelCreator(_LifecycleHost):
             home_team=home_team,
             away_team=away_team,
             season_type=season_type,
+            segment=segment,
+            exception_keyword=exception_keyword,
         )
         if next_num is None:
             logger.warning(
