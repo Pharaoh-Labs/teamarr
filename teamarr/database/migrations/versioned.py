@@ -80,7 +80,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     if current_version < 49:
         # v44-v49: column additions only — handled entirely by reconciliation.
         _advance_version(
-            conn, 49,
+            conn,
+            49,
             "reconciliation: update check / logo cleanup / stream profile-timezone / "
             "channel reset / combat-sports regex",
         )
@@ -107,7 +108,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     if current_version < 57:
         # v54-v57: column additions only — handled by reconciliation.
         _advance_version(
-            conn, 57,
+            conn,
+            57,
             "reconciliation: scheduled backup / gold zone / playoff bypass re-apply",
         )
         current_version = 57
@@ -126,7 +128,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 61:
         _apply_migration(
-            conn, 61, "subscription league config table",
+            conn,
+            61,
+            "subscription league config table",
             _migrate_v61_subscription_league_config,
         )
         current_version = 61
@@ -139,7 +143,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 63:
         _apply_migration(
-            conn, 63, "channel ownership: nullable source group",
+            conn,
+            63,
+            "channel ownership: nullable source group",
             _migrate_v63_nullable_managed_channel_group,
         )
         current_version = 63
@@ -175,49 +181,59 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 69:
         _apply_migration(
-            conn, 69, "feed team channel discrimination",
+            conn,
+            69,
+            "feed team channel discrimination",
             _migrate_v69_feed_team_channels,
         )
         current_version = 69
 
     if current_version < 71:
         # v70-v71: column additions only — handled by reconciliation.
-        _advance_version(
-            conn, 71, "reconciliation: month/day regex / Emby integration"
-        )
+        _advance_version(conn, 71, "reconciliation: month/day regex / Emby integration")
         current_version = 71
 
     if current_version < 72:
         _apply_migration(
-            conn, 72, "split xmltv event/filler categories",
+            conn,
+            72,
+            "split xmltv event/filler categories",
             _migrate_v72_split_xmltv_categories,
         )
         current_version = 72
 
     if current_version < 73:
         _apply_migration(
-            conn, 73, "dedupe MiLB league codes after rename",
+            conn,
+            73,
+            "dedupe MiLB league codes after rename",
             _migrate_v73_dedupe_milb_renamed_codes,
         )
         current_version = 73
 
     if current_version < 74:
         _apply_migration(
-            conn, 74, "preserve EPG-match off-state after global switch removal",
+            conn,
+            74,
+            "preserve EPG-match off-state after global switch removal",
             _migrate_v74_preserve_epg_match_offstate,
         )
         current_version = 74
 
     if current_version < 75:
         _apply_migration(
-            conn, 75, "extract common art base URL from templates (epic z02s)",
+            conn,
+            75,
+            "extract common art base URL from templates (epic z02s)",
             _migrate_v75_extract_art_base_url,
         )
         current_version = 75
 
     if current_version < 76:
         _apply_migration(
-            conn, 76, "normalize relative template art paths to leading slash (z02s)",
+            conn,
+            76,
+            "normalize relative template art paths to leading slash (z02s)",
             _migrate_v76_leading_slash_art_paths,
         )
         current_version = 76
@@ -226,14 +242,13 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         # Structural work happens in _migrate_stream_match_cache_check /
         # _restore (keyed on the CHECK content, not this version) — this
         # bump is bookkeeping.
-        _advance_version(
-            conn, 77, "stream_match_cache CHECK allows 'direct'/'epg' match methods"
-        )
+        _advance_version(conn, 77, "stream_match_cache CHECK allows 'direct'/'epg' match methods")
         current_version = 77
 
     if current_version < 78:
         _apply_migration(
-            conn, 78,
+            conn,
+            78,
             "strip corrupting leading slash before variable-led art values (#275)",
             _migrate_v78_strip_slash_before_art_variable,
         )
@@ -241,7 +256,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 79:
         _apply_migration(
-            conn, 79,
+            conn,
+            79,
             "backfill managed_channels team abbrevs + feed_team_name from team_cache (#403)",
             _migrate_v79_backfill_channel_team_display,
         )
@@ -249,7 +265,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 80:
         _apply_migration(
-            conn, 80,
+            conn,
+            80,
             "convert filler final/not-final conditionals to condition rows (#420)",
             _migrate_v80_filler_conditionals_to_rows,
         )
@@ -257,7 +274,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 81:
         _apply_migration(
-            conn, 81,
+            conn,
+            81,
             "seed 'Sports event' into template event categories (#423)",
             _migrate_v81_seed_sports_event_category,
         )
@@ -265,7 +283,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 82:
         _apply_migration(
-            conn, 82,
+            conn,
+            82,
             "fold scalar Channels DVR settings into channelsdvr_servers list (#381)",
             _migrate_v82_channelsdvr_servers_list,
         )
@@ -273,7 +292,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 83:
         _apply_migration(
-            conn, 83,
+            conn,
+            83,
             "fold scalar Emby/Jellyfin settings into server lists (#471)",
             _migrate_v83_media_server_lists,
         )
@@ -281,7 +301,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 84:
         _apply_migration(
-            conn, 84,
+            conn,
+            84,
             "rewrite retired transform variables to base|filter form (#484)",
             _migrate_v84_filter_consolidation,
         )
@@ -301,7 +322,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 88:
         _apply_migration(
-            conn, 88,
+            conn,
+            88,
             "retire manual numbering mode; league starts → pinned blocks (#333)",
             _migrate_v88_numbering_exceptions,
         )
@@ -313,7 +335,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 90:
         _apply_migration(
-            conn, 90,
+            conn,
+            90,
             "consolidate per-group sub-runs into their full_epg run (#645)",
             _migrate_v90_consolidate_group_subruns,
         )
@@ -325,7 +348,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 92:
         _apply_migration(
-            conn, 92,
+            conn,
+            92,
             "retire tsdb_tier — TSDB is premium-key only (#676)",
             _migrate_v92_retire_tsdb_tier,
         )
@@ -333,7 +357,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 93:
         _apply_migration(
-            conn, 93,
+            conn,
+            93,
             "stop resurrecting deleted default exception keywords (#726)",
             _migrate_v93_mark_default_exception_keywords_seeded,
         )
@@ -348,7 +373,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         # reconciliation; the only data transform seeds the team-template
         # channel name/logo defaults on existing team templates.
         _apply_migration(
-            conn, 95, "managed team channels: seed template channel name/logo defaults",
+            conn,
+            95,
+            "managed team channels: seed template channel name/logo defaults",
             _migrate_v95_team_channel_defaults,
         )
         current_version = 95
@@ -364,28 +391,36 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
 
     if current_version < 97:
         _apply_migration(
-            conn, 97, "scope managed-channel event identity to core ownership",
+            conn,
+            97,
+            "scope managed-channel event identity to core ownership",
             _migrate_v97_plugin_channel_identity,
         )
         current_version = 97
 
     if current_version < 98:
         _apply_migration(
-            conn, 98, "retire the 'default' template duration mode",
+            conn,
+            98,
+            "retire the 'default' template duration mode",
             _migrate_v98_retire_default_duration_mode,
         )
         current_version = 98
 
     if current_version < 99:
         _apply_migration(
-            conn, 99, "drop the retired group_templates table",
+            conn,
+            99,
+            "drop the retired group_templates table",
             _migrate_v99_drop_group_templates,
         )
         current_version = 99
 
     if current_version < 100:
         _apply_migration(
-            conn, 100, "backfill managed_channels.segment from the event_id suffix",
+            conn,
+            100,
+            "backfill managed_channels.segment from the event_id suffix",
             _migrate_v100_backfill_channel_segment,
         )
         current_version = 100
@@ -395,6 +430,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             conn, 101, "migrate franchise cricket identities to ESPN", migrate_franchise_cricket
         )
         current_version = 101
+
+    if current_version < 102:
+        _apply_migration(
+            conn,
+            102,
+            "remove the LFA league: ESPN's mma/lfa slug stopped in June 2026",
+            _migrate_v102_remove_lfa,
+        )
+        current_version = 102
 
 
 # =============================================================================
@@ -455,8 +499,7 @@ def _recover_schema_version_from_v65_backup_if_needed(conn: sqlite3.Connection) 
     """
     try:
         has_v65_backup = conn.execute(
-            "SELECT COUNT(*) FROM sqlite_master "
-            "WHERE type='table' AND name='_settings_v65_backup'"
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_settings_v65_backup'"
         ).fetchone()[0]
         if not has_v65_backup:
             return
@@ -508,9 +551,7 @@ def _migrate_v50_soccer_modes(conn: sqlite3.Connection) -> None:
     if not all_soccer_leagues:
         return
 
-    cursor = conn.execute(
-        "SELECT id, leagues FROM event_epg_groups WHERE leagues IS NOT NULL"
-    )
+    cursor = conn.execute("SELECT id, leagues FROM event_epg_groups WHERE leagues IS NOT NULL")
     for row in cursor.fetchall():
         group_id = row[0]
         try:
@@ -538,9 +579,7 @@ def _migrate_v53_api_defaults(conn: sqlite3.Connection) -> None:
     it is, lift existing users from the old defaults to avoid regression.
     """
     conn.execute("UPDATE settings SET api_timeout = 30 WHERE api_timeout = 10 AND id = 1")
-    conn.execute(
-        "UPDATE settings SET api_retry_count = 5 WHERE api_retry_count = 3 AND id = 1"
-    )
+    conn.execute("UPDATE settings SET api_retry_count = 5 WHERE api_retry_count = 3 AND id = 1")
 
 
 def _migrate_v58_sports_subscription(conn: sqlite3.Connection) -> None:
@@ -690,9 +729,7 @@ def _migrate_v58_sports_subscription(conn: sqlite3.Connection) -> None:
         pass
 
     # Flatten group hierarchy.
-    conn.execute(
-        "UPDATE event_epg_groups SET group_mode = 'multi', parent_group_id = NULL"
-    )
+    conn.execute("UPDATE event_epg_groups SET group_mode = 'multi', parent_group_id = NULL")
 
     # Downgrade safety: every group's leagues mirror the subscription.
     if subscription_leagues:
@@ -710,12 +747,12 @@ def _migrate_v59_channel_numbering(conn: sqlite3.Connection) -> None:
     the lowest start number of any manual group containing that league.
     """
     _add_column_if_not_exists(
-        conn, "settings", "global_channel_mode",
+        conn,
+        "settings",
+        "global_channel_mode",
         "TEXT DEFAULT 'auto' CHECK(global_channel_mode IN ('auto', 'manual'))",
     )
-    _add_column_if_not_exists(
-        conn, "settings", "league_channel_starts", "JSON DEFAULT '{}'"
-    )
+    _add_column_if_not_exists(conn, "settings", "league_channel_starts", "JSON DEFAULT '{}'")
     _add_column_if_not_exists(
         conn, "settings", "global_consolidation_mode", "TEXT DEFAULT 'consolidate'"
     )
@@ -730,9 +767,7 @@ def _migrate_v59_channel_numbering(conn: sqlite3.Connection) -> None:
         pass
 
     global_mode = "manual" if has_manual > 0 else "auto"
-    conn.execute(
-        "UPDATE settings SET global_channel_mode = ? WHERE id = 1", (global_mode,)
-    )
+    conn.execute("UPDATE settings SET global_channel_mode = ? WHERE id = 1", (global_mode,))
 
     if has_manual > 0:
         league_starts: dict[str, int] = {}
@@ -832,8 +867,7 @@ def _migrate_v62_default_channel_group(conn: sqlite3.Connection) -> None:
         """)
         conn.execute("DROP TABLE subscription_league_config")
         conn.execute(
-            "ALTER TABLE subscription_league_config_new "
-            "RENAME TO subscription_league_config"
+            "ALTER TABLE subscription_league_config_new RENAME TO subscription_league_config"
         )
     except sqlite3.OperationalError as e:
         logger.warning("[MIGRATE v62] Could not recreate subscription_league_config: %s", e)
@@ -847,8 +881,7 @@ def _migrate_v63_nullable_managed_channel_group(conn: sqlite3.Connection) -> Non
     table rebuild to change NOT NULL or FK actions.
     """
     has_mc = conn.execute(
-        "SELECT COUNT(*) FROM sqlite_master "
-        "WHERE type='table' AND name='managed_channels'"
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='managed_channels'"
     ).fetchone()[0]
     if not has_mc:
         return
@@ -933,10 +966,8 @@ def _migrate_v63_nullable_managed_channel_group(conn: sqlite3.Connection) -> Non
             "ON managed_channels(scheduled_delete_at) WHERE deleted_at IS NULL",
             "CREATE INDEX IF NOT EXISTS idx_managed_channels_dispatcharr "
             "ON managed_channels(dispatcharr_channel_id)",
-            "CREATE INDEX IF NOT EXISTS idx_managed_channels_tvg "
-            "ON managed_channels(tvg_id)",
-            "CREATE INDEX IF NOT EXISTS idx_managed_channels_sync "
-            "ON managed_channels(sync_status)",
+            "CREATE INDEX IF NOT EXISTS idx_managed_channels_tvg ON managed_channels(tvg_id)",
+            "CREATE INDEX IF NOT EXISTS idx_managed_channels_sync ON managed_channels(sync_status)",
             # Group-scoped unique index (later changed to event-scoped in v64).
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_mc_unique_event "
             "ON managed_channels("
@@ -961,9 +992,7 @@ def _migrate_v63_nullable_managed_channel_group(conn: sqlite3.Connection) -> Non
         # Old test schemas may have different columns — clean up the temp table.
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("DROP TABLE IF EXISTS managed_channels_new")
-        logger.warning(
-            "[MIGRATE v63] Could not rebuild managed_channels (schema mismatch): %s", e
-        )
+        logger.warning("[MIGRATE v63] Could not rebuild managed_channels (schema mismatch): %s", e)
 
 
 def _migrate_v64_dedup_channels(conn: sqlite3.Connection) -> None:
@@ -975,8 +1004,7 @@ def _migrate_v64_dedup_channels(conn: sqlite3.Connection) -> None:
     then we replace the index.
     """
     has_mc = conn.execute(
-        "SELECT COUNT(*) FROM sqlite_master "
-        "WHERE type='table' AND name='managed_channels'"
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='managed_channels'"
     ).fetchone()[0]
     if not has_mc:
         return
@@ -998,9 +1026,7 @@ def _migrate_v64_dedup_channels(conn: sqlite3.Connection) -> None:
             WHERE deleted_at IS NULL
         """)
     except sqlite3.OperationalError as e:
-        logger.warning(
-            "[MIGRATE v64] Could not create event-scoped unique index: %s", e
-        )
+        logger.warning("[MIGRATE v64] Could not create event-scoped unique index: %s", e)
 
 
 def _migrate_v65_lifecycle_timing_restore_if_needed(conn: sqlite3.Connection) -> None:
@@ -1011,8 +1037,7 @@ def _migrate_v65_lifecycle_timing_restore_if_needed(conn: sqlite3.Connection) ->
     here, so we key off the existence of the backup table instead.
     """
     has_v65_backup = conn.execute(
-        "SELECT COUNT(*) FROM sqlite_master "
-        "WHERE type='table' AND name='_settings_v65_backup'"
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_settings_v65_backup'"
     ).fetchone()[0]
     if not has_v65_backup:
         return
@@ -1063,8 +1088,7 @@ def _migrate_v65_lifecycle_timing_restore_if_needed(conn: sqlite3.Connection) ->
 
         conn.execute("DELETE FROM settings WHERE id = 1")
         conn.execute(
-            f"INSERT INTO settings ({col_list}) "
-            f"SELECT {col_list} FROM _settings_v65_backup"
+            f"INSERT INTO settings ({col_list}) SELECT {col_list} FROM _settings_v65_backup"
         )
         conn.execute("UPDATE settings SET schema_version = 65 WHERE id = 1")
         conn.execute("DROP TABLE _settings_v65_backup")
@@ -1157,9 +1181,7 @@ def _migrate_stream_match_cache_restore_if_needed(conn: sqlite3.Connection) -> N
         return
 
     try:
-        backup_cols = [
-            r[1] for r in conn.execute("PRAGMA table_info(_stream_match_cache_backup)")
-        ]
+        backup_cols = [r[1] for r in conn.execute("PRAGMA table_info(_stream_match_cache_backup)")]
         new_cols = [r[1] for r in conn.execute("PRAGMA table_info(stream_match_cache)")]
         common = [c for c in new_cols if c in backup_cols]
         col_list = ", ".join(common)
@@ -1170,8 +1192,7 @@ def _migrate_stream_match_cache_restore_if_needed(conn: sqlite3.Connection) -> N
         )
         conn.execute("DROP TABLE _stream_match_cache_backup")
         logger.info(
-            "[MIGRATE] Restored user-corrected stream matches after "
-            "match_method CHECK refresh"
+            "[MIGRATE] Restored user-corrected stream matches after match_method CHECK refresh"
         )
     except Exception as e:
         logger.warning("[MIGRATE] stream_match_cache restore failed: %s", e)
@@ -1187,13 +1208,9 @@ def _migrate_v66_tsdb_tiers(conn: sqlite3.Connection) -> None:
         premium_leagues = ["ipl", "bbl", "sa20", "afl", "nrl", "super-rugby"]
 
         for code in free_leagues:
-            conn.execute(
-                "UPDATE leagues SET tsdb_tier = 'free' WHERE league_code = ?", (code,)
-            )
+            conn.execute("UPDATE leagues SET tsdb_tier = 'free' WHERE league_code = ?", (code,))
         for code in premium_leagues:
-            conn.execute(
-                "UPDATE leagues SET tsdb_tier = 'premium' WHERE league_code = ?", (code,)
-            )
+            conn.execute("UPDATE leagues SET tsdb_tier = 'premium' WHERE league_code = ?", (code,))
     except sqlite3.OperationalError:
         # leagues table absent in minimal test databases.
         pass
@@ -1320,56 +1337,127 @@ _BELL_HOCKEY_TEAM_IDS = {
     # score widget. Lookup normalizes punctuation and accents in persisted
     # HockeyTech names before matching them to these entries.
     "chl": {
-        "peterborough petes": "12", "kelowna rockets": "4", "london knights": "38",
-        "chicoutimi saguenens": "101", "moncton wildcats": "14",
-        "everett silvertips": "100", "medicine hat tigers": "1",
-        "rimouski oceanic": "5", "saginaw spirit": "96", "kitchener rangers": "32",
+        "peterborough petes": "12",
+        "kelowna rockets": "4",
+        "london knights": "38",
+        "chicoutimi saguenens": "101",
+        "moncton wildcats": "14",
+        "everett silvertips": "100",
+        "medicine hat tigers": "1",
+        "rimouski oceanic": "5",
+        "saginaw spirit": "96",
+        "kitchener rangers": "32",
     },
     "ohl": {
-        "barrie colts": "7", "brampton steelheads": "18", "brantford bulldogs": "1",
-        "erie otters": "8", "flint firebirds": "13", "guelph storm": "9",
-        "kingston frontenacs": "2", "kitchener rangers": "10", "london knights": "14",
-        "niagara icedogs": "20", "north bay battalion": "19", "oshawa generals": "4",
-        "ottawa 67s": "5", "owen sound attack": "11", "peterborough petes": "6",
-        "saginaw spirit": "34", "sarnia sting": "15", "soo greyhounds": "16",
-        "sudbury wolves": "12", "windsor spitfires": "17",
+        "barrie colts": "7",
+        "brampton steelheads": "18",
+        "brantford bulldogs": "1",
+        "erie otters": "8",
+        "flint firebirds": "13",
+        "guelph storm": "9",
+        "kingston frontenacs": "2",
+        "kitchener rangers": "10",
+        "london knights": "14",
+        "niagara icedogs": "20",
+        "north bay battalion": "19",
+        "oshawa generals": "4",
+        "ottawa 67s": "5",
+        "owen sound attack": "11",
+        "peterborough petes": "6",
+        "saginaw spirit": "34",
+        "sarnia sting": "15",
+        "soo greyhounds": "16",
+        "sudbury wolves": "12",
+        "windsor spitfires": "17",
     },
     "whl": {
-        "brandon wheat kings": "201", "calgary hitmen": "202", "edmonton oil kings": "228",
-        "everett silvertips": "226", "kamloops blazers": "203", "kelowna rockets": "204",
-        "lethbridge hurricanes": "205", "medicine hat tigers": "206", "moose jaw warriors": "207",
-        "penticton vees": "277", "portland winterhawks": "208", "prince albert raiders": "209",
-        "prince george cougars": "210", "red deer rebels": "211", "regina pats": "212",
-        "saskatoon blades": "213", "seattle thunderbirds": "214", "spokane chiefs": "215",
-        "swift current broncos": "216", "tricity americans": "217", "vancouver giants": "223",
-        "victoria royals": "227", "wenatchee wild": "222",
+        "brandon wheat kings": "201",
+        "calgary hitmen": "202",
+        "edmonton oil kings": "228",
+        "everett silvertips": "226",
+        "kamloops blazers": "203",
+        "kelowna rockets": "204",
+        "lethbridge hurricanes": "205",
+        "medicine hat tigers": "206",
+        "moose jaw warriors": "207",
+        "penticton vees": "277",
+        "portland winterhawks": "208",
+        "prince albert raiders": "209",
+        "prince george cougars": "210",
+        "red deer rebels": "211",
+        "regina pats": "212",
+        "saskatoon blades": "213",
+        "seattle thunderbirds": "214",
+        "spokane chiefs": "215",
+        "swift current broncos": "216",
+        "tricity americans": "217",
+        "vancouver giants": "223",
+        "victoria royals": "227",
+        "wenatchee wild": "222",
     },
     "qmjhl": {
-        "baiecomeau drakkar": "16", "blainvilleboisbriand armada": "19",
-        "cape breton eagles": "3", "charlottetown islanders": "7", "chicoutimi saguenens": "10",
-        "drummondville voltigeurs": "14", "gatineau olympiques": "12", "halifax mooseheads": "5",
-        "moncton wildcats": "1", "newfoundland regiment": "2", "quebec remparts": "9",
-        "rimouski oceanic": "18", "rouynnoranda huskies": "11", "saint john sea dogs": "8",
-        "shawinigan cataractes": "13", "sherbrooke phoenix": "60", "valdor foreurs": "15",
+        "baiecomeau drakkar": "16",
+        "blainvilleboisbriand armada": "19",
+        "cape breton eagles": "3",
+        "charlottetown islanders": "7",
+        "chicoutimi saguenens": "10",
+        "drummondville voltigeurs": "14",
+        "gatineau olympiques": "12",
+        "halifax mooseheads": "5",
+        "moncton wildcats": "1",
+        "newfoundland regiment": "2",
+        "quebec remparts": "9",
+        "rimouski oceanic": "18",
+        "rouynnoranda huskies": "11",
+        "saint john sea dogs": "8",
+        "shawinigan cataractes": "13",
+        "sherbrooke phoenix": "60",
+        "valdor foreurs": "15",
         "victoriaville tigres": "17",
     },
     "ahl": {
-        "abbotsford canucks": "440", "bakersfield condors": "402", "belleville senators": "413",
-        "bridgeport islanders": "317", "calgary wranglers": "444", "charlotte checkers": "384",
-        "chicago wolves": "330", "cleveland monsters": "373", "coachella valley firebirds": "445",
-        "colorado eagles": "419", "grand rapids griffins": "328", "hartford wolf pack": "307",
-        "henderson silver knights": "437", "hershey bears": "319", "iowa wild": "389",
-        "laval rocket": "415", "lehigh valley phantoms": "313", "manitoba moose": "321",
-        "milwaukee admirals": "327", "ontario reign": "403", "providence bruins": "309",
-        "rochester americans": "323", "rockford icehogs": "372", "san diego gulls": "404",
-        "san jose barracuda": "405", "springfield thunderbirds": "411", "syracuse crunch": "324",
-        "texas stars": "380", "toronto marlies": "335", "tucson roadrunners": "412",
-        "utica comets": "390", "wilkesbarrescranton penguins": "316",
+        "abbotsford canucks": "440",
+        "bakersfield condors": "402",
+        "belleville senators": "413",
+        "bridgeport islanders": "317",
+        "calgary wranglers": "444",
+        "charlotte checkers": "384",
+        "chicago wolves": "330",
+        "cleveland monsters": "373",
+        "coachella valley firebirds": "445",
+        "colorado eagles": "419",
+        "grand rapids griffins": "328",
+        "hartford wolf pack": "307",
+        "henderson silver knights": "437",
+        "hershey bears": "319",
+        "iowa wild": "389",
+        "laval rocket": "415",
+        "lehigh valley phantoms": "313",
+        "manitoba moose": "321",
+        "milwaukee admirals": "327",
+        "ontario reign": "403",
+        "providence bruins": "309",
+        "rochester americans": "323",
+        "rockford icehogs": "372",
+        "san diego gulls": "404",
+        "san jose barracuda": "405",
+        "springfield thunderbirds": "411",
+        "syracuse crunch": "324",
+        "texas stars": "380",
+        "toronto marlies": "335",
+        "tucson roadrunners": "412",
+        "utica comets": "390",
+        "wilkesbarrescranton penguins": "316",
     },
     "pwhl": {
-        "boston fleet": "1", "minnesota frost": "2", "montreal victoire": "3",
-        "new york sirens": "4", "ottawa charge": "5", "toronto sceptres": "6",
-        "seattle torrent": "8", "vancouver goldeneyes": "9",
+        "boston fleet": "1",
+        "minnesota frost": "2",
+        "montreal victoire": "3",
+        "new york sirens": "4",
+        "ottawa charge": "5",
+        "toronto sceptres": "6",
+        "seattle torrent": "8",
+        "vancouver goldeneyes": "9",
     },
 }
 
@@ -1402,9 +1490,7 @@ def _migrate_v96_hockeytech_bellmedia(conn: sqlite3.Connection) -> None:
         conn.execute(f"DELETE FROM team_cache WHERE league IN ({placeholders})", leagues)
     if _table_exists(conn, "league_cache"):
         conn.execute(f"DELETE FROM league_cache WHERE league_slug IN ({placeholders})", leagues)
-    if _table_exists(conn, "service_cache") and _column_exists(
-        conn, "service_cache", "cache_key"
-    ):
+    if _table_exists(conn, "service_cache") and _column_exists(conn, "service_cache", "cache_key"):
         for league in leagues:
             conn.execute(
                 "DELETE FROM service_cache WHERE cache_key LIKE ? OR cache_key LIKE ? "
@@ -1471,9 +1557,7 @@ def _migrate_v96_hockeytech_bellmedia(conn: sqlite3.Connection) -> None:
         for column in columns:
             if not _column_exists(conn, table, column):
                 continue
-            rows = conn.execute(
-                f"SELECT rowid AS _rowid, {column} FROM {table} WHERE {where}"
-            )
+            rows = conn.execute(f"SELECT rowid AS _rowid, {column} FROM {table} WHERE {where}")
             for row in rows:
                 updated = remap(row[column])
                 if updated != row[column]:
@@ -1528,8 +1612,7 @@ def _migrate_v69_feed_team_channels(conn: sqlite3.Connection) -> None:
     uniqueness key gains feed_team_id (COALESCEd to '' for null).
     """
     has_mc = conn.execute(
-        "SELECT COUNT(*) FROM sqlite_master "
-        "WHERE type='table' AND name='managed_channels'"
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='managed_channels'"
     ).fetchone()[0]
     if not has_mc:
         return
@@ -1588,9 +1671,7 @@ def _migrate_v72_split_xmltv_categories(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE templates DROP COLUMN categories_apply_to")
         logger.info("[MIGRATE v72] Dropped templates.categories_apply_to column")
     except sqlite3.OperationalError as e:
-        logger.warning(
-            "[MIGRATE v72] DROP COLUMN templates.categories_apply_to skipped: %s", e
-        )
+        logger.warning("[MIGRATE v72] DROP COLUMN templates.categories_apply_to skipped: %s", e)
 
 
 # Renames applied by commit db53687 (Apr 2026): old league_code → new league_code.
@@ -1644,9 +1725,11 @@ def _migrate_v73_dedupe_milb_renamed_codes(conn: sqlite3.Connection) -> None:
         # column is actually present. Partial schemas (test fixtures, in-flight
         # migrations) without the scope columns can't have the corresponding
         # UNIQUE constraint either, so a plain UPDATE is safe there.
-        scope = unique_scope if unique_scope and all(
-            _column_exists(conn, table, c) for c in unique_scope
-        ) else None
+        scope = (
+            unique_scope
+            if unique_scope and all(_column_exists(conn, table, c) for c in unique_scope)
+            else None
+        )
         for old, new in rename.items():
             if scope:
                 # If a row with the new code already exists for the same
@@ -1682,8 +1765,9 @@ def _migrate_v73_dedupe_milb_renamed_codes(conn: sqlite3.Connection) -> None:
             )
             if cur.rowcount:
                 logger.info(
-                    "[MIGRATE v73] Deleted %d orphan team_cache rows under "
-                    "old MiLB codes %s", cur.rowcount, old_codes,
+                    "[MIGRATE v73] Deleted %d orphan team_cache rows under old MiLB codes %s",
+                    cur.rowcount,
+                    old_codes,
                 )
         except sqlite3.OperationalError as e:
             logger.warning("[MIGRATE v73] team_cache cleanup skipped: %s", e)
@@ -1698,7 +1782,8 @@ def _migrate_v73_dedupe_milb_renamed_codes(conn: sqlite3.Connection) -> None:
             if cur.rowcount:
                 logger.info(
                     "[MIGRATE v73] Deleted %d duplicate MiLB league rows %s",
-                    cur.rowcount, old_codes,
+                    cur.rowcount,
+                    old_codes,
                 )
         except sqlite3.OperationalError as e:
             logger.warning("[MIGRATE v73] leagues cleanup skipped: %s", e)
@@ -1777,11 +1862,13 @@ def _migrate_v75_extract_art_base_url(conn: sqlite3.Connection) -> None:
     # Only operate on art columns the templates table actually has (tests may
     # build a partial schema).
     art_columns = [
-        c for c in ("program_art_url", "event_channel_logo_url")
+        c
+        for c in ("program_art_url", "event_channel_logo_url")
         if _column_exists(conn, "templates", c)
     ]
     json_columns = [
-        c for c in ("pregame_fallback", "postgame_fallback", "idle_content")
+        c
+        for c in ("pregame_fallback", "postgame_fallback", "idle_content")
         if _column_exists(conn, "templates", c)
     ]
     if not art_columns and not json_columns:
@@ -1796,9 +1883,7 @@ def _migrate_v75_extract_art_base_url(conn: sqlite3.Connection) -> None:
         return f"{parts.scheme}://{parts.netloc}"
 
     select_cols = ["id", *art_columns, *json_columns]
-    rows = conn.execute(
-        f"SELECT {', '.join(select_cols)} FROM templates"
-    ).fetchall()
+    rows = conn.execute(f"SELECT {', '.join(select_cols)} FROM templates").fetchall()
 
     # Pass 1: tally how often each origin appears across every art value.
     from collections import Counter
@@ -1839,7 +1924,7 @@ def _migrate_v75_extract_art_base_url(conn: sqlite3.Connection) -> None:
     def strip(url):
         # Drop the origin, keep a leading-slash-rooted path (e.g. "/{league}/cover.png").
         if isinstance(url, str) and url.startswith(prefix):
-            return "/" + url[len(prefix):]
+            return "/" + url[len(prefix) :]
         return url
 
     # Pass 2: strip the origin from every matching field.
@@ -1889,11 +1974,13 @@ def _migrate_v76_leading_slash_art_paths(conn: sqlite3.Connection) -> None:
         return
 
     art_columns = [
-        c for c in ("program_art_url", "event_channel_logo_url")
+        c
+        for c in ("program_art_url", "event_channel_logo_url")
         if _column_exists(conn, "templates", c)
     ]
     json_columns = [
-        c for c in ("pregame_fallback", "postgame_fallback", "idle_content")
+        c
+        for c in ("pregame_fallback", "postgame_fallback", "idle_content")
         if _column_exists(conn, "templates", c)
     ]
     if not art_columns and not json_columns:
@@ -1957,11 +2044,13 @@ def _migrate_v78_strip_slash_before_art_variable(conn: sqlite3.Connection) -> No
         return
 
     art_columns = [
-        c for c in ("program_art_url", "event_channel_logo_url")
+        c
+        for c in ("program_art_url", "event_channel_logo_url")
         if _column_exists(conn, "templates", c)
     ]
     json_columns = [
-        c for c in ("pregame_fallback", "postgame_fallback", "idle_content")
+        c
+        for c in ("pregame_fallback", "postgame_fallback", "idle_content")
         if _column_exists(conn, "templates", c)
     ]
     if not art_columns and not json_columns:
@@ -2061,9 +2150,7 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
 def _column_exists(conn: sqlite3.Connection, table: str, column: str) -> bool:
     if not _table_exists(conn, table):
         return False
-    return any(
-        row["name"] == column for row in conn.execute(f"PRAGMA table_info({table})")
-    )
+    return any(row["name"] == column for row in conn.execute(f"PRAGMA table_info({table})"))
 
 
 def _v73_remap_json_array(
@@ -2132,7 +2219,9 @@ def _v73_remap_json_array(
     if updated:
         logger.info(
             "[MIGRATE v73] Remapped MiLB codes in %d row(s) of %s.%s",
-            updated, table, column,
+            updated,
+            table,
+            column,
         )
 
 
@@ -2217,16 +2306,18 @@ def _dedup_cross_group_channels(conn: sqlite3.Connection) -> None:
             )
             total_merged += 1
             logger.info(
-                "[MIGRATE v64] Merged channel '%s' (id=%d) into "
-                "'%s' (id=%d) for event %s",
-                loser_name, loser_id, winner_name, winner_id,
+                "[MIGRATE v64] Merged channel '%s' (id=%d) into '%s' (id=%d) for event %s",
+                loser_name,
+                loser_id,
+                winner_name,
+                winner_id,
                 event_id,
             )
 
     logger.info(
-        "[MIGRATE v64] Dedup complete: %d duplicate(s) merged "
-        "from %d duplicate group(s)",
-        total_merged, len(dup_groups),
+        "[MIGRATE v64] Dedup complete: %d duplicate(s) merged from %d duplicate group(s)",
+        total_merged,
+        len(dup_groups),
     )
 
 
@@ -2239,34 +2330,6 @@ def _dedup_cross_group_channels(conn: sqlite3.Connection) -> None:
 # They are preserved as part of the safety fallback.
 # Delete these when removing the legacy migration code above.
 # =============================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def _add_column_if_not_exists(
@@ -2287,16 +2350,6 @@ def _add_column_if_not_exists(
         return
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
-
-
-
-
-
-
-
-
-
-
 
 
 def _migrate_v80_filler_conditionals_to_rows(conn: sqlite3.Connection) -> None:
@@ -2596,9 +2649,7 @@ def _migrate_v84_filter_consolidation(conn: sqlite3.Connection) -> None:
     The resolver keeps the retired names as permanent legacy aliases, so this
     is belt-and-suspenders: anything missed still renders old-style.
     """
-    template_cols = {
-        row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()
-    }
+    template_cols = {row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()}
     cols = [c for c in _V84_TEMPLATE_COLUMNS if c in template_cols]
     rewritten = 0
     if cols:
@@ -2619,9 +2670,7 @@ def _migrate_v84_filter_consolidation(conn: sqlite3.Connection) -> None:
                 )
                 rewritten += 1
 
-    settings_cols = {
-        row[1] for row in conn.execute("PRAGMA table_info(settings)").fetchall()
-    }
+    settings_cols = {row[1] for row in conn.execute("PRAGMA table_info(settings)").fetchall()}
     row = (
         conn.execute("SELECT channel_id_format FROM settings WHERE id = 1").fetchone()
         if "channel_id_format" in settings_cols
@@ -2784,9 +2833,7 @@ def _migrate_v90_consolidate_group_subruns(conn: sqlite3.Connection) -> None:
     )
     deleted = conn.execute("DELETE FROM processing_runs WHERE run_type != 'full_epg'").rowcount
     for table in ("epg_matched_streams", "epg_failed_matches"):
-        conn.execute(
-            f"DELETE FROM {table} WHERE run_id NOT IN (SELECT id FROM processing_runs)"
-        )
+        conn.execute(f"DELETE FROM {table} WHERE run_id NOT IN (SELECT id FROM processing_runs)")
     conn.execute("DROP TABLE IF EXISTS _v90_subrun_map")
     logger.info("[MIGRATE] v90: consolidated %d per-group sub-run row(s)", deleted)
 
@@ -2837,7 +2884,11 @@ def _migrate_v97_plugin_channel_identity(conn: sqlite3.Connection) -> None:
     # Isolated migration fixtures may omit managed_channels or intentionally
     # exercise a pre-reconciliation table. init_db reconciles before reaching us.
     identity_columns = {
-        "event_id", "event_provider", "primary_stream_id", "plugin_id", "feed_team_id"
+        "event_id",
+        "event_provider",
+        "primary_stream_id",
+        "plugin_id",
+        "feed_team_id",
     }
     if not identity_columns <= columns:
         return
@@ -2849,6 +2900,48 @@ def _migrate_v97_plugin_channel_identity(conn: sqlite3.Connection) -> None:
                             COALESCE(feed_team_id, ''), primary_stream_id)
         WHERE deleted_at IS NULL AND plugin_id IS NULL
     """)
+
+
+def _migrate_v102_remove_lfa(conn: sqlite3.Connection) -> None:
+    """Remove the LFA league (#1083).
+
+    ESPN's ``mma/lfa`` slug lists nothing after LFA 235 (2026-06-19); later
+    cards surface only in the ``mma/other`` bucket, after the fact, so the
+    league could never create a channel ahead of a stream. ``INSERT OR
+    REPLACE`` in schema.sql never deletes, so existing installs drop the row
+    here, along with any subscription to it and its cache rows. Managed
+    channels are left to retire on their own schedule. Re-running changes
+    nothing.
+    """
+    code = "lfa"
+    for table, column in (
+        ("sports_subscription", "leagues"),
+        ("sports_subscription", "auto_source_leagues"),
+        ("subscription_templates", "leagues"),
+        ("event_epg_groups", "leagues"),
+        ("event_epg_groups", "subscription_leagues"),
+    ):
+        if not _table_exists(conn, table) or not _column_exists(conn, table, column):
+            continue
+        for row in conn.execute(f"SELECT rowid AS _rowid, {column} AS v FROM {table}"):
+            try:
+                values = json.loads(row["v"]) if row["v"] else None
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(values, list) or code not in values:
+                continue
+            kept = [v for v in values if v != code]
+            conn.execute(
+                f"UPDATE {table} SET {column} = ? WHERE rowid = ?",
+                (json.dumps(kept), row["_rowid"]),
+            )
+    for table, column in (
+        ("team_cache", "league"),
+        ("league_cache", "league_slug"),
+        ("leagues", "league_code"),
+    ):
+        if _table_exists(conn, table) and _column_exists(conn, table, column):
+            conn.execute(f"DELETE FROM {table} WHERE {column} = ?", (code,))
 
 
 def _migrate_v100_backfill_channel_segment(conn: sqlite3.Connection) -> None:
@@ -2863,12 +2956,18 @@ def _migrate_v100_backfill_channel_segment(conn: sqlite3.Connection) -> None:
     if not {"segment", "event_id", "sport"} <= columns:
         return
     codes = (
-        "fp1", "fp2", "fp3", "sprint_qualifying", "sprint", "qualifying", "race",
-        "early_prelims", "prelims", "main_card",
+        "fp1",
+        "fp2",
+        "fp3",
+        "sprint_qualifying",
+        "sprint",
+        "qualifying",
+        "race",
+        "early_prelims",
+        "prelims",
+        "main_card",
     )
-    whens = " ".join(
-        "WHEN substr(event_id, -(length(?) + 1)) = '-' || ? THEN ?" for _ in codes
-    )
+    whens = " ".join("WHEN substr(event_id, -(length(?) + 1)) = '-' || ? THEN ?" for _ in codes)
     params = [value for code in codes for value in (code, code, code)]
     conn.execute(
         f"UPDATE managed_channels SET segment = CASE {whens} ELSE segment END "

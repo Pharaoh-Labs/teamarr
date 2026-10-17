@@ -162,7 +162,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 101** (not every version number has a migration block — column-only versions are handled by reconciliation)
+**Current schema version: 102** (not every version number has a migration block — column-only versions are handled by reconciliation)
 
 | Version | Type | Description |
 |---------|------|-------------|
@@ -177,3 +177,4 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 | 99 | Structure | Drops the retired `group_templates` table and its index (#822); template assignments live in `subscription_templates` |
 | 100 | Data | Backfills `managed_channels.segment` from the `-<segment>` suffix of `event_id` on racing and MMA channels, for known codes only (#1018) |
 | 101 | Data | Migrates recognized franchise cricket team identities and selections from TSDB to ESPN, preserving channel configuration and clearing provider caches (#1069) |
+| 102 | Data | Removes the LFA league (#1083): ESPN's `mma/lfa` slug stopped listing cards after June 2026; drops the row, subscriptions to it and its cache rows |
