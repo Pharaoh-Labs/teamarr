@@ -12,6 +12,7 @@ Integrates with FastAPI lifespan for clean startup/shutdown.
 
 import logging
 import threading
+import time
 from datetime import datetime
 from typing import Any
 
@@ -26,6 +27,32 @@ logger = logging.getLogger(__name__)
 # evidence window, so a second scan in a day finds nothing new; the user's only
 # control is the on/off switch (`source_discovery_mode`). Local time.
 SOURCE_DISCOVERY_CRON = "0 11 * * *"
+
+
+# How long the discovery task waits for a generation due in the same minute
+# to mark itself running before it starts its own scan (#1081).
+GENERATION_START_GRACE_SECONDS = 60
+
+
+def generation_due_this_minute(cron_expression: str, now: datetime) -> bool:
+    """Whether the generation cron fires in the minute ``now`` falls in."""
+    try:
+        return croniter.match(cron_expression, now)
+    except (ValueError, TypeError):
+        return False
+
+
+def wait_for_generation_start(
+    is_in_progress: Any, sleep: Any, grace_seconds: float = GENERATION_START_GRACE_SECONDS
+) -> bool:
+    """Poll until a generation reports in progress or the grace runs out."""
+    waited = 0.0
+    while waited < grace_seconds:
+        if is_in_progress():
+            return True
+        sleep(1)
+        waited += 1
+    return is_in_progress()
 
 
 class SubTaskScheduler:
@@ -409,8 +436,14 @@ class CronScheduler:
         Called by its own sub-scheduler. Reads Dispatcharr and writes only
         the discovery evidence tables.
         """
+        from teamarr.consumers import generation_status
         from teamarr.consumers.source_lifecycle import run_discovery_scan
 
+        if generation_due_this_minute(self._cron_expression, datetime.now()):
+            # Both crons fire in the same second (11:00 on an hourly default);
+            # the scan's "wait for a running generation" check sees nothing
+            # yet and the two overlap. Let the run start first (#1081).
+            wait_for_generation_start(generation_status.is_in_progress, time.sleep)
         return run_discovery_scan(self._db_factory)
 
     def _task_channel_reset(self) -> dict:
@@ -438,7 +471,6 @@ class CronScheduler:
             return {"skipped": True, "reason": "No reset cron expression configured"}
 
         logger.info("[CRON] Running scheduled channel reset")
-
 
         client = get_dispatcharr_client(self._db_factory)
         if not client:
@@ -764,5 +796,3 @@ def restart_scheduler_sub_task(task_name: str) -> bool:
         return False
     _scheduler.restart_sub_task(task_name)
     return True
-
-
