@@ -7,7 +7,7 @@ nav_order: 1
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 107 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 106 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 
@@ -64,7 +64,7 @@ baseball/mlb
 | Baseball | MLB, NCAA Baseball, World Baseball Classic, Little League Baseball | MiLB handled by MLB Stats provider; LLB is the August World Series only |
 | Soccer | 48 pre-configured, ~228 discovered | Dot notation: `eng.1`, `ger.2` |
 | Rugby | 20 leagues (Six Nations, Rugby World Cup, Super Rugby, URC, Premiership, Top 14, MLR, NRL, Olympic 7s, …) | Second-largest ESPN sport by league count; NRL and Super Rugby Pacific migrated here from TSDB |
-| Combat Sports | UFC, PFL, LFA | Event Card matching; ESPN files most other promotions (Cage Warriors, OKTAGON, RIZIN, ONE) under a catch-all `mma/other` bucket rather than their own slugs |
+| Combat Sports | UFC, PFL | Event Card matching. ESPN files every other promotion (Cage Warriors, OKTAGON, RIZIN, ONE, and LFA since June 2026) under a catch-all `mma/other` bucket, and only after the event, so none of them can be a league (#760, #1083) |
 | Motorsports | F1, IndyCar | Race weekend sessions |
 | Tennis | ATP, WTA | One event per match; grand slams split by draw type |
 | Cricket | ODIs, T20 Internationals, Test Matches; IPL, BBL, SA20, MLC | Internationals filter the daily score panel by format (#944). Franchise leagues use recurring numeric series IDs and complete season scoreboards, including team import and team channels (#1069) |

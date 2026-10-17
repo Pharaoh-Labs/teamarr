@@ -6,7 +6,7 @@ nav_order: 1
 
 # Supported Sports & Leagues
 
-Teamarr supports **179 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
+Teamarr supports **178 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -299,7 +299,6 @@ Combat sports are **Event Only** - no team import available.
 |--------|-----|----------|------|
 | Ultimate Fighting Championship | `ufc` | ESPN | Event Card |
 | Professional Fighters League | `pfl` | ESPN | Event Card |
-| Legacy Fighting Alliance | `lfa` | ESPN | Event Card |
 | Boxing | `boxing` | TSDB | Event Card |
 
 Combat sports use "Event Card" matching rather than team vs team matching.
