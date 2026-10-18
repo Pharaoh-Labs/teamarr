@@ -86,6 +86,7 @@ class FakeProcessor:
                 results.append(
                     SimpleNamespace(
                         matched=True,
+                        included=True,
                         stream_id=s["id"],
                         league=league,
                         category=StreamCategory.TEAM_VS_TEAM,
@@ -96,6 +97,7 @@ class FakeProcessor:
                 results.append(
                     SimpleNamespace(
                         matched=True,
+                        included=True,
                         stream_id=s["id"],
                         league="nba",
                         category=StreamCategory.TEAM_ONLY,
@@ -139,6 +141,36 @@ def test_a_group_with_games_is_recorded_with_its_leagues(db):
     assert summary.groups_with_games == 1
 
 
+class ExcludingProcessor(FakeProcessor):
+    """The matcher as it really behaves: it searches every league it knows
+    and marks a hit outside the subscription matched but not included."""
+
+    def _match_streams(self, streams, group, today, resolved_leagues=None, cache=None):
+        result = super()._match_streams(streams, group, today, resolved_leagues, cache)
+        for r in result.results:
+            if r.matched and r.league not in resolved_leagues:
+                r.included = False
+                r.exclusion_reason = f"league_not_included:{r.league}"
+        return result
+
+
+def test_a_match_outside_the_subscription_is_not_evidence(db):
+    """#1088: an NFL+NHL+NBA install saw groups suggested on NCAA soccer, EFL
+    and WTA matches — hits a run would have excluded."""
+    streams = {
+        7: [_stream(1, "sco.1: Celtic vs Rangers"), _stream(2, "eng.2: Leeds vs Hull")],
+        8: [_stream(3, "nhl: A vs B"), _stream(4, "wta: C vs D")],
+    }
+    m3u = FakeM3U([_group(7, "US| SOCCER PPV"), _group(8, "US| ESPN+ PPV")], streams)
+    summary = SourceDiscovery(get_db, SimpleNamespace(m3u=m3u), ExcludingProcessor()).scan(now=NOW)
+    cands = _by_name()
+    soccer, espn = cands["US| SOCCER PPV"], cands["US| ESPN+ PPV"]
+    assert (soccer.best_game_matches, soccer.leagues) == (0, {})
+    assert suggestion_tier(soccer) is None
+    assert (espn.best_game_matches, espn.leagues) == (1, {"nhl": 1})
+    assert summary.groups_with_games == 1
+
+
 class RunFilterProcessor(FakeProcessor):
     """The run's filter as a source built from games evidence applies it:
     with team matching off, the global event pattern drops a stream that has
@@ -158,6 +190,7 @@ class RunFilterProcessor(FakeProcessor):
             results.append(
                 SimpleNamespace(
                     matched=True,
+                    included=True,
                     stream_id=s["id"],
                     league=league,
                     category=StreamCategory.RACING_EVENT,

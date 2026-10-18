@@ -338,7 +338,11 @@ class SourceDiscovery:
         games: dict[int, str] = {}
         team_only: dict[int, str] = {}
         for r in result.results:
-            if not r.matched:
+            # The matcher searches every league it knows and marks a hit
+            # outside the subscription matched-but-not-included
+            # (``league_not_included``); a run drops it, so it is not
+            # evidence either (#1088).
+            if not r.matched or not r.included:
                 continue
             if r.category == StreamCategory.TEAM_ONLY:
                 team_only.setdefault(r.stream_id, r.league or "")
