@@ -39,7 +39,7 @@ Pick a static group from the dropdown. By default the list hides M3U-sourced gro
 | **Static** | All channels go to the selected group above |
 | **Dynamic by Sport** | Auto-creates and assigns groups named by sport |
 | **Dynamic by League** | Auto-creates and assigns groups named by league |
-| **Custom pattern** | Define a pattern using `{sport}`, `{league}`, `{conference}`, `{conference_abbrev}`, `{division}`, and `{exception_keyword}` placeholders |
+| **Custom pattern** | Define a pattern using `{sport}`, `{league}`, `{conference}`, `{conference_abbrev}`, `{division}`, and `{exception_keyword}` placeholders. A value with no placeholder is taken as a group name as it stands |
 
 When **Custom pattern** is selected, a pattern field appears. For example, `{sport} | {league}` creates groups like "Hockey | NHL". Teamarr creates these dynamic groups in Dispatcharr automatically.
 
