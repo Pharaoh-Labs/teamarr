@@ -549,6 +549,19 @@ export async function testDispatcharrConnection(data?: {
   return api.post("/dispatcharr/test", data || {})
 }
 
+export interface ApiKeyAdoptResponse {
+  success: boolean
+  // true = a new key was generated (the account had none); false = adopted the existing one
+  created: boolean
+  error: string | null
+}
+
+// Switch the saved connection to an API key: adopts the account's existing
+// key, generates one only when there is none (#817).
+export async function adoptDispatcharrApiKey(): Promise<ApiKeyAdoptResponse> {
+  return api.post("/dispatcharr/api-key/adopt", {})
+}
+
 export async function getDispatcharrStatus(): Promise<DispatcharrStatus> {
   return api.get("/dispatcharr/status")
 }

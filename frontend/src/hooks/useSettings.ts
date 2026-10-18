@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/
 import {
   getSettings,
   updateDispatcharrSettings,
+  adoptDispatcharrApiKey,
   testDispatcharrConnection,
   getDispatcharrStatus,
   getDispatcharrEPGSources,
@@ -114,6 +115,8 @@ export function useSettings() {
 // ---------------------------------------------------------------------------
 
 export const useUpdateDispatcharrSettings = settingsMutationHook(updateDispatcharrSettings)
+// Saves the adopted key server-side, so the settings query must refetch (#817)
+export const useAdoptDispatcharrApiKey = settingsMutationHook(adoptDispatcharrApiKey)
 
 // Lifecycle range changes can arm a channel re-grid (force_channel_relayout_pending)
 export const useUpdateLifecycleSettings = settingsMutationHook(updateLifecycleSettings, [
