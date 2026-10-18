@@ -406,6 +406,7 @@ GROUPS: dict[str, GroupSpec] = {
                     "url": "dispatcharr_url",
                     "username": "dispatcharr_username",
                     "password": "dispatcharr_password",
+                    "api_key": "dispatcharr_api_key",
                     "epg_id": "dispatcharr_epg_id",
                 },
                 hooks={

@@ -90,10 +90,12 @@ class DispatcharrSettingsModel(BaseModel):
     url: str | None = None
     username: str | None = None
     password: str | None = None
+    # Preferred credential (#817); masked like the password
+    api_key: str | None = None
 
-    @field_serializer("password")
+    @field_serializer("password", "api_key")
     @classmethod
-    def _mask_password(cls, v: str | None) -> str | None:
+    def _mask_secret(cls, v: str | None) -> str | None:
         return MASKED_SECRET if v else None
 
     epg_id: int | None = None
@@ -131,6 +133,8 @@ class DispatcharrSettingsUpdate(BaseModel):
     url: str | None = None
     username: str | None = None
     password: str | None = None
+    # Omitted or masked = keep; "" = remove the key (back to username/password)
+    api_key: str | None = None
     epg_id: int | None = None
     default_channel_profile_ids: list[str | int] | None = None
     default_stream_profile_id: int | None = None
@@ -156,6 +160,7 @@ class ConnectionTestRequest(BaseModel):
     url: str | None = Field(None, description="Override URL (uses saved if not provided)")
     username: str | None = Field(None, description="Override username")
     password: str | None = Field(None, description="Override password")
+    api_key: str | None = Field(None, description="Override API key (wins over a password)")
 
 
 class ConnectionTestResponse(BaseModel):
@@ -169,6 +174,8 @@ class ConnectionTestResponse(BaseModel):
     group_count: int | None = None
     channel_count: int | None = None
     error: str | None = None
+    # "api_key" or "password": which credential the test used
+    auth_method: str | None = None
 
 
 # =============================================================================

@@ -29,6 +29,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
     url: initial.url,
     username: initial.username,
     password: "", // Don't show masked password
+    api_key: "", // Don't show masked key either
     epg_id: initial.epg_id,
     cleanup_unused_logos: initial.cleanup_unused_logos,
   })
@@ -55,10 +56,25 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
       if (dispatcharr.password) {
         data.password = dispatcharr.password
       }
+      if (dispatcharr.api_key) {
+        data.api_key = dispatcharr.api_key
+      }
       await updateDispatcharr.mutateAsync(data)
       toast.success("Dispatcharr settings saved")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  // An empty string tells the backend to drop the stored key, so the
+  // connection goes back to the username and password (#817).
+  const handleRemoveApiKey = async () => {
+    try {
+      await updateDispatcharr.mutateAsync({ api_key: "" })
+      setDispatcharr({ ...dispatcharr, api_key: "" })
+      toast.success("API key removed — using username and password")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove API key")
     }
   }
 
@@ -68,9 +84,11 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
         url: dispatcharr.url || undefined,
         username: dispatcharr.username || undefined,
         password: dispatcharr.password || undefined,
+        api_key: dispatcharr.api_key || undefined,
       })
       if (result.success) {
-        toast.success(`Connected! ${result.account_count} accounts, ${result.group_count} groups, ${result.channel_count} channels`)
+        const via = result.auth_method === "api_key" ? " via API key" : ""
+        toast.success(`Connected${via}! ${result.account_count} accounts, ${result.group_count} groups, ${result.channel_count} channels`)
       } else {
         toast.error(result.error || "Connection failed")
       }
@@ -148,6 +166,36 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
               onChange={(e) => setDispatcharr({ ...dispatcharr, url: e.target.value })}
               placeholder="http://localhost:9191"
             />
+          </div>
+
+          {/* API key (#817): the preferred credential. Username and password
+              stay as the fallback for Dispatcharr < 0.20.0 and for anyone
+              who has not minted a key yet. */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="dispatcharr-api-key">API Key (recommended)</Label>
+              {initial.api_key && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRemoveApiKey}
+                  disabled={updateDispatcharr.isPending}
+                >
+                  Remove saved key
+                </Button>
+              )}
+            </div>
+            <Input
+              id="dispatcharr-api-key"
+              type="password"
+              value={dispatcharr.api_key ?? ""}
+              onChange={(e) => setDispatcharr({ ...dispatcharr, api_key: e.target.value })}
+              placeholder={initial.api_key ? "Leave blank to keep current" : "Paste a key from your Dispatcharr profile"}
+            />
+            <p className="text-xs text-muted-foreground">
+              Generate one on your Dispatcharr profile page (Dispatcharr 0.20.0 or later). When a key is saved,
+              the username and password below are not used.
+            </p>
           </div>
 
           {/* Credentials */}

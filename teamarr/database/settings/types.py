@@ -14,6 +14,9 @@ class DispatcharrSettings:
     url: str | None = None
     username: str | None = None
     password: str | None = None
+    # Preferred credential (#817): when set, every request carries it as
+    # X-API-Key and the username/password are never used.
+    api_key: str | None = None
     epg_id: int | None = None
     # None = all profiles, [] = no profiles
     # Can contain: int IDs, "{sport}", "{league}" wildcards

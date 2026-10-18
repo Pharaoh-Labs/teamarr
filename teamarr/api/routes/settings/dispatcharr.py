@@ -5,10 +5,12 @@ import logging
 from fastapi import APIRouter
 
 from teamarr.database import get_db
+from teamarr.database.settings.update import _NOT_PROVIDED
 from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
 from teamarr.dispatcharr.factory import DispatcharrFactory
 
 from .models import (
+    MASKED_SECRET,
     ConnectionTestRequest,
     ConnectionTestResponse,
     DispatcharrSettingsModel,
@@ -32,9 +34,21 @@ def get_dispatcharr_settings():
     return to_model(DispatcharrSettingsModel, settings)
 
 
+def _api_key_update(value: str | None) -> str | None | object:
+    """Omitted or masked = keep the stored key; blank = remove it; else set it."""
+    if value is None or value == MASKED_SECRET:
+        return _NOT_PROVIDED
+    return value.strip() or None
+
+
 @router.put("/settings/dispatcharr", response_model=DispatcharrSettingsModel)
 def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
-    """Update Dispatcharr integration settings."""
+    """Update Dispatcharr integration settings.
+
+    ``api_key`` (#817): omitted or masked keeps the stored key, an empty
+    string removes it (the connection goes back to username/password), any
+    other value replaces it.
+    """
     from teamarr.database.settings import (
         get_dispatcharr_settings,
         update_dispatcharr_settings,
@@ -47,6 +61,7 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
             url=update.url,
             username=update.username,
             password=unmask_or_skip(update.password),
+            api_key=_api_key_update(update.api_key),
             epg_id=update.epg_id,
             default_channel_profile_ids=update.default_channel_profile_ids,
             default_stream_profile_id=update.default_stream_profile_id,
@@ -92,6 +107,7 @@ def test_dispatcharr_connection(request: ConnectionTestRequest | None = None):
             url=request.url,
             username=request.username,
             password=request.password,
+            api_key=unmask_or_skip(request.api_key),
         )
     else:
         result = factory.test_connection()
@@ -105,6 +121,7 @@ def test_dispatcharr_connection(request: ConnectionTestRequest | None = None):
         group_count=result.group_count,
         channel_count=result.channel_count,
         error=result.error,
+        auth_method=result.auth_method,
     )
 
 

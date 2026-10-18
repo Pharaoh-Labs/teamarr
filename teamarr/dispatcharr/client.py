@@ -138,6 +138,7 @@ class DispatcharrClient:
         password: str,
         timeout: float = 30.0,
         max_retries: int = 5,
+        api_key: str | None = None,
     ):
         """Initialize Dispatcharr client.
 
@@ -147,9 +148,11 @@ class DispatcharrClient:
             password: Dispatcharr password
             timeout: Request timeout in seconds (default: 30.0)
             max_retries: Maximum retry attempts for transient errors (default: 5)
+            api_key: Dispatcharr API key (#817); when set, username and
+                password are never sent and no JWT is minted
         """
         self._base_url = base_url.rstrip("/")
-        self._auth = TokenManager(base_url, username, password, timeout)
+        self._auth = TokenManager(base_url, username, password, timeout, api_key=api_key)
         self._timeout = timeout
         self._max_retries = max_retries
         self._client: httpx.Client | None = None
@@ -210,15 +213,12 @@ class DispatcharrClient:
             )
             return None
 
-        token = self._auth.get_token()
-        if not token:
+        auth_headers = self._auth.auth_headers()
+        if not auth_headers:
             logger.error("[DISPATCHARR] Failed to obtain authentication token")
             return None
 
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        }
+        headers = {**auth_headers, "Content-Type": "application/json"}
 
         full_url = f"{self._base_url}{endpoint}"
         client = self._get_client()
@@ -238,8 +238,13 @@ class DispatcharrClient:
                     logger.error("[DISPATCHARR] Unsupported HTTP method: %s", method)
                     return None
 
-                # Handle 401 with re-authentication (not counted as retry)
+                # Handle 401 with re-authentication (not counted as retry).
+                # An API key has nothing to refresh: a 401 is a bad or revoked
+                # key, and retrying would only send it again.
                 if response.status_code == 401 and retry_on_401:
+                    if self._auth.uses_api_key:
+                        logger.error("[DISPATCHARR] API key rejected (401) for %s", endpoint)
+                        return response
                     logger.debug("[DISPATCHARR] Received 401, clearing session and retrying...")
                     self._auth.clear()
                     return self.request(method, endpoint, data, retry_on_401=False)
@@ -502,8 +507,7 @@ class DispatcharrClient:
             Dict with success (bool), message (str), and optionally error details
         """
         try:
-            token = self._auth.get_token()
-            if not token:
+            if not self._auth.auth_headers():
                 return {
                     "success": False,
                     "message": "Authentication failed - check credentials",
