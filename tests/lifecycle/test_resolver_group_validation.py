@@ -38,3 +38,39 @@ def test_unknown_group_kept_when_fetch_failed():
 def test_none_static_group_stays_none():
     r = _resolver({10}, loaded=True)
     assert r.resolve_channel_group("static", None, None, None) is None
+
+
+# --- a value with no wildcard is a literal group name (#1095) ----------------
+
+
+def _naming_resolver():
+    r = _resolver({10}, loaded=True)
+    created = []
+
+    def get_or_create(name):
+        created.append(name)
+        return 77
+
+    r._get_or_create_group = get_or_create
+    return r, created
+
+
+def test_a_plain_name_is_that_group():
+    # "Favourite Teams" in a pinned block's group box used to be an unknown
+    # mode: saved, then dropped at generation time for the static group.
+    r, created = _naming_resolver()
+    assert r.resolve_channel_group("Favourite Teams", None, "football", "nfl") == 77
+    assert created == ["Favourite Teams"]
+
+
+def test_a_plain_name_outranks_the_static_fallback():
+    r, created = _naming_resolver()
+    assert r.resolve_channel_group(" Favourite Teams ", 10, "football", "nfl") == 77
+    assert created == ["Favourite Teams"]
+
+
+def test_an_empty_mode_still_falls_back_to_the_static_group():
+    r, created = _naming_resolver()
+    assert r.resolve_channel_group("", 10, "football", "nfl") == 10
+    assert created == []
+

@@ -484,9 +484,9 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                   defaultValue={b.channel_group_mode ?? ""}
                   key={`group-${b.id}-${b.channel_group_mode ?? ""}`}
                   className="w-48 h-8"
-                  placeholder="Channel group pattern"
+                  placeholder="Channel group or pattern"
                   onBlur={(e) => onGroupBlur(b, e.target.value)}
-                  aria-label="Channel group pattern"
+                  aria-label="Channel group or pattern"
                 />
                 <Switch
                   checked={b.enabled}
@@ -764,7 +764,7 @@ function AddBlockDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="pin-label">Group (optional)</Label>
+              <Label htmlFor="pin-label">Block label (optional)</Label>
               <Input
                 id="pin-label"
                 list="pin-group-labels"
@@ -781,7 +781,8 @@ function AddBlockDialog({
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
             Each start belongs to one block. To share a block between several teams, leagues,
-            or sports, give them the same group name and start.
+            or sports, give them the same label and start. The label is not a channel group —
+            that is the field under Advanced.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
@@ -801,14 +802,15 @@ function AddBlockDialog({
                 id="pin-group-pattern"
                 value={groupPattern}
                 onChange={(e) => setGroupPattern(e.target.value)}
-                placeholder="e.g. 09 TEAMARR {league}"
+                placeholder="e.g. Favourite Teams, or 09 TEAMARR {league}"
               />
             </div>
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
             A season limits the block to those games; the rest number as if the block were
-            not there. A channel group pattern (with {"{sport}"} or {"{league}"}) overrides the
-            group these channels would otherwise use.
+            not there. A channel group — a plain name, or a pattern with {"{sport}"} or{" "}
+            {"{league}"} — sends these channels there instead of the group they would otherwise
+            use, created in Dispatcharr if needed.
           </p>
 
           {showAdvanced ? (

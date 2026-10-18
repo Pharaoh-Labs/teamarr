@@ -592,11 +592,23 @@ class DynamicResolver:
             )
             return group_id
 
-        # Unknown mode, fallback
+        # No wildcard: the value IS the group name (#1095). "Favourite Teams"
+        # in a pinned block's group box used to land here as an unknown mode
+        # and fall back to the static group with only a warning to show for it.
+        name = (mode or "").strip()
+        if name:
+            group_id = self._get_or_create_group(name)
+            self._log_resolution(
+                ("literal", name, name, group_id),
+                "[RESOLVER] Group name: '%s' -> group_id=%s",
+                name,
+                group_id,
+            )
+            return group_id
+
+        # Empty mode, fallback
         logger.warning(
-            "[RESOLVER] Unknown mode '%s', falling back to static_group_id=%s",
-            mode,
-            static_group_id,
+            "[RESOLVER] Empty group mode, falling back to static_group_id=%s", static_group_id
         )
         return static_group_id
 
