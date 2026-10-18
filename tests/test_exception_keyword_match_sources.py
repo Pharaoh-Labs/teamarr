@@ -365,7 +365,7 @@ class TestFailedGroupFetch:
         fetcher = StreamFetcher.__new__(StreamFetcher)
         fetcher._dispatcharr_client = SimpleNamespace(m3u=m3u)
         fetcher._db_factory = db_factory
-        group = SimpleNamespace(is_channel_source=False, m3u_group_id=None)
+        group = SimpleNamespace(is_channel_source=False, m3u_group_id=33)
         return fetcher._fetch_streams(group)[0]
 
     def test_failed_fetch_names_groups_from_stored_rows(self, db_factory):

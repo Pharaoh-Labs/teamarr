@@ -172,3 +172,31 @@ class TestCleanupSafety:
 
         assert lifecycle.cleanup_deleted_streams.call_args.kwargs["changed_only"] is False
         lifecycle.process_matched_streams.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# A source reads one M3U group (#1089)
+# ---------------------------------------------------------------------------
+
+
+class TestUnboundSourceFetchesNothing:
+    def test_no_group_id_reads_nothing_and_never_lists_every_stream(self):
+        from types import SimpleNamespace
+
+        from teamarr.consumers.event_group_processor.stream_fetcher import StreamFetcher
+
+        calls = []
+
+        def list_streams(**kwargs):
+            calls.append(kwargs)
+            return [SimpleNamespace(id=1, name="Arsenal v Chelsea")]
+
+        fetcher = StreamFetcher.__new__(StreamFetcher)
+        m3u = SimpleNamespace(list_streams=list_streams)
+        fetcher._dispatcharr_client = SimpleNamespace(m3u=m3u)
+        fetcher._db_factory = None
+        group = SimpleNamespace(id=5, name="LIVE | Scottish Football", is_channel_source=False)
+        group.m3u_group_id = None
+
+        assert fetcher._fetch_streams(group) == []
+        assert calls == []
