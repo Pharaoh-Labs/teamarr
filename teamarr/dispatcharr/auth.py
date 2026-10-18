@@ -16,9 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 class TokenManager:
-    """Manages JWT tokens for Dispatcharr API authentication.
+    """Manages Dispatcharr API credentials: an API key, or JWT tokens.
 
-    Features:
+    With an API key (#817) every request carries ``X-API-Key`` and nothing is
+    ever logged in, refreshed or cached — Dispatcharr accepts the key on every
+    endpoint since v0.20.0 (``apps.accounts.authentication.ApiKeyAuthentication``
+    is a global DRF auth class). Without one, the username/password flow below
+    mints and refreshes JWTs exactly as before.
+
+    Features (JWT flow):
     - Automatic token caching per URL/username combination
     - Proactive token refresh before expiry (1 minute buffer)
     - Automatic re-authentication on token failure
@@ -26,9 +32,9 @@ class TokenManager:
 
     Usage:
         manager = TokenManager("http://localhost:9191", "admin", "password")
-        token = manager.get_token()
-        if token:
-            headers = {"Authorization": f"Bearer {token}"}
+        headers = manager.auth_headers()
+        if headers:
+            headers = {**headers, "Content-Type": "application/json"}
     """
 
     # Class-level session storage for multi-instance support
@@ -49,6 +55,7 @@ class TokenManager:
         username: str,
         password: str,
         timeout: float = 30.0,
+        api_key: str | None = None,
     ):
         """Initialize token manager.
 
@@ -57,12 +64,14 @@ class TokenManager:
             username: Dispatcharr username
             password: Dispatcharr password
             timeout: Request timeout in seconds (default: 30.0)
+            api_key: Dispatcharr API key; when set, username/password are unused
         """
         self._base_url = base_url.rstrip("/")
         self._username = username
         self._password = password
+        self._api_key = (api_key or "").strip() or None
         self._timeout = timeout
-        self._session_key = f"{self._base_url}_{self._username}"
+        self._session_key = f"{self._base_url}_{'apikey' if self._api_key else self._username}"
         # Initialize shared session state and lock if they do not exist.
         # Multiple DispatcharrClient instances can be created during concurrent
         # API requests, so auth locking must be shared per URL/user pair.
@@ -83,14 +92,35 @@ class TokenManager:
         """Get current session data."""
         return self._sessions[self._session_key]
 
+    @property
+    def uses_api_key(self) -> bool:
+        """Whether requests authenticate with an API key rather than a JWT."""
+        return self._api_key is not None
+
+    def auth_headers(self) -> dict[str, str] | None:
+        """Headers that authenticate a request, or None when nothing can.
+
+        An API key is sent as ``X-API-Key`` (Dispatcharr checks that header
+        before ``Authorization``). Otherwise a JWT is obtained — logging in or
+        refreshing as needed — and sent as a bearer token.
+        """
+        if self._api_key:
+            return {"X-API-Key": self._api_key}
+        token = self.get_token()
+        return {"Authorization": f"Bearer {token}"} if token else None
+
     def get_token(self) -> str | None:
-        """Get a valid access token, authenticating if necessary.
+        """Get a valid JWT access token, authenticating if necessary.
 
         Thread-safe: Uses lock to prevent concurrent authentication attempts.
+        Always None with an API key — there is no token to get; use
+        ``auth_headers``.
 
         Returns:
             Valid access token or None if authentication fails
         """
+        if self._api_key:
+            return None
         with self._lock:
             # Check if current token is valid
             if self._is_valid():

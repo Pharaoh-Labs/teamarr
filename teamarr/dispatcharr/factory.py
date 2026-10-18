@@ -88,7 +88,7 @@ class DispatcharrFactory:
         with self._db_factory() as conn:
             settings = get_dispatcharr_settings(conn)
 
-        return bool(settings.enabled and settings.url and settings.username)
+        return bool(settings.enabled and settings.url and (settings.api_key or settings.username))
 
     @property
     def is_connected(self) -> bool:
@@ -223,41 +223,44 @@ class DispatcharrFactory:
         url: str | None = None,
         username: str | None = None,
         password: str | None = None,
+        api_key: str | None = None,
     ) -> "ConnectionTestResult":
         """Test connection to Dispatcharr.
 
-        If no parameters provided, uses settings from database.
+        If no parameters provided, uses settings from database. A credential
+        typed into the form is tested as typed: an API key wins over a
+        password, a typed password is tested even when a key is saved (the
+        user is asking about that password), and with neither the saved key
+        is used before the saved password.
 
         Args:
             url: Optional URL override
             username: Optional username override
             password: Optional password override
+            api_key: Optional API key override (#817)
 
         Returns:
             ConnectionTestResult with success status and details
         """
 
-        # Get settings
-        if url and username and password:
-            test_url = url
-            test_username = username
-            test_password = password
-            with self._db_factory() as conn:
-                api_settings = get_all_settings(conn).api
+        with self._db_factory() as conn:
+            settings = get_dispatcharr_settings(conn)
+            api_settings = get_all_settings(conn).api
+
+        test_url = url or settings.url
+        test_username = username or settings.username or ""
+        if api_key:
+            test_api_key, test_password = api_key, ""
+        elif password:
+            test_api_key, test_password = None, password
         else:
-            with self._db_factory() as conn:
-                settings = get_dispatcharr_settings(conn)
-                api_settings = get_all_settings(conn).api
-
-            if not settings.url or not settings.username:
-                return ConnectionTestResult(
-                    success=False,
-                    error="Dispatcharr not configured",
-                )
-
-            test_url = url or settings.url
-            test_username = username or settings.username
-            test_password = password or settings.password or ""
+            test_api_key, test_password = settings.api_key, settings.password or ""
+        if not test_url or not (test_api_key or test_username):
+            return ConnectionTestResult(
+                success=False,
+                error="Dispatcharr not configured",
+            )
+        auth_method = "api_key" if test_api_key else "password"
 
         # Test connection
         try:
@@ -267,6 +270,7 @@ class DispatcharrFactory:
                 password=test_password,
                 timeout=float(api_settings.timeout),
                 max_retries=api_settings.retry_count,
+                api_key=test_api_key,
             )
 
             # Try to get channels (simple test)
@@ -278,6 +282,17 @@ class DispatcharrFactory:
                     url=test_url,
                     username=test_username,
                     error="Authentication failed or server unavailable",
+                    auth_method=auth_method,
+                )
+
+            if response.status_code == 401 and auth_method == "api_key":
+                client.close()
+                return ConnectionTestResult(
+                    success=False,
+                    url=test_url,
+                    username=test_username,
+                    error="API key rejected - generate a new one on your Dispatcharr profile",
+                    auth_method=auth_method,
                 )
 
             if response.status_code != 200:
@@ -288,6 +303,7 @@ class DispatcharrFactory:
                     url=test_url,
                     username=test_username,
                     error=f"API error: {error_msg}",
+                    auth_method=auth_method,
                 )
 
             data = response.json()
@@ -329,6 +345,7 @@ class DispatcharrFactory:
                 channel_count=channel_count,
                 account_count=account_count,
                 group_count=group_count,
+                auth_method=auth_method,
             )
 
         except Exception as e:
@@ -336,7 +353,7 @@ class DispatcharrFactory:
 
             # Parse common errors
             if "401" in error_msg or "Unauthorized" in error_msg:
-                error_msg = "Authentication failed - check username/password"
+                error_msg = "Authentication failed - check API key or username/password"
             elif "Connection refused" in error_msg:
                 error_msg = "Connection refused - check URL"
             elif "Name or service not known" in error_msg:
@@ -349,6 +366,7 @@ class DispatcharrFactory:
                 url=test_url,
                 username=test_username,
                 error=error_msg,
+                auth_method=auth_method,
             )
 
     def _create_connection(self) -> DispatcharrConnection | None:
@@ -362,16 +380,19 @@ class DispatcharrFactory:
             settings = get_dispatcharr_settings(conn)
             api_settings = get_all_settings(conn).api
 
-        if not settings.enabled or not settings.url or not settings.username:
+        if not settings.enabled or not settings.url:
+            return None
+        if not settings.api_key and not settings.username:
             return None
 
         try:
             client = DispatcharrClient(
                 base_url=settings.url,
-                username=settings.username,
+                username=settings.username or "",
                 password=settings.password or "",
                 timeout=float(api_settings.timeout),
                 max_retries=api_settings.retry_count,
+                api_key=settings.api_key,
             )
 
             connection = DispatcharrConnection(
@@ -404,7 +425,10 @@ class DispatcharrFactory:
         with self._db_factory() as conn:
             settings = get_dispatcharr_settings(conn)
 
-        return f"{settings.url}:{settings.username}:{settings.password}:{settings.enabled}"
+        return (
+            f"{settings.url}:{settings.username}:{settings.password}:"
+            f"{settings.api_key}:{settings.enabled}"
+        )
 
 
 @dataclass
@@ -419,10 +443,13 @@ class ConnectionTestResult:
     group_count: int | None = None
     channel_count: int | None = None
     error: str | None = None
+    auth_method: str | None = None  # "api_key" | "password" (#817)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         result: dict[str, Any] = {"success": self.success}
+        if self.auth_method:
+            result["auth_method"] = self.auth_method
         if self.url:
             result["url"] = self.url
         if self.username:

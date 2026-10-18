@@ -423,6 +423,7 @@ CREATE TABLE IF NOT EXISTS settings (
     dispatcharr_url TEXT,
     dispatcharr_username TEXT,
     dispatcharr_password TEXT,                -- Note: Consider encrypting in production
+    dispatcharr_api_key TEXT,                 -- Preferred over username/password when set (#817)
     dispatcharr_epg_id INTEGER,               -- Teamarr's EPG source ID in Dispatcharr
     default_channel_profile_ids JSON,         -- Default channel profiles for event channels
     default_stream_profile_id INTEGER,        -- Default stream profile for event channels

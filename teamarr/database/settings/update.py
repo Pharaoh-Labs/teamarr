@@ -71,6 +71,7 @@ def update_dispatcharr_settings(
     url: str | None = None,
     username: str | None = None,
     password: str | None = None,
+    api_key: str | None | object = _NOT_PROVIDED,
     epg_id: int | None = None,
     default_channel_profile_ids: list[int] | None | object = _NOT_PROVIDED,
     default_stream_profile_id: int | None | object = _NOT_PROVIDED,
@@ -87,7 +88,7 @@ def update_dispatcharr_settings(
     Only updates fields that are explicitly provided. For the sentinel-guarded
     fields, None is a meaningful value: default_channel_profile_ids None =
     "all profiles" (stored as JSON null); the profile/group ids None = clear
-    to SQL NULL.
+    to SQL NULL; api_key None = clear (back to username/password).
 
     Returns:
         True if updated
@@ -101,6 +102,7 @@ def update_dispatcharr_settings(
         managed_team_channel_league_groups=managed_team_channel_league_groups,
         cleanup_unused_logos=cleanup_unused_logos,
     ) | _skip_missing(
+        api_key=api_key,
         default_channel_profile_ids=default_channel_profile_ids,
         default_stream_profile_id=default_stream_profile_id,
         default_channel_group_id=default_channel_group_id,

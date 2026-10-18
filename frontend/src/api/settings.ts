@@ -6,6 +6,9 @@ export interface DispatcharrSettings {
   url: string | null
   username: string | null
   password: string | null
+  // Preferred credential (#817). Read back masked ("********") when set; on
+  // update, omit to keep, send "" to remove, anything else to replace.
+  api_key: string | null
   epg_id: number | null
   // null = all profiles (default), [] = no profiles, [1,2,...] = specific profiles
   // Can include wildcards: "{sport}", "{league}"
@@ -490,6 +493,8 @@ export interface ConnectionTestResponse {
   group_count: number | null
   channel_count: number | null
   error: string | null
+  // "api_key" | "password": which credential the test used
+  auth_method: string | null
 }
 
 export interface SchedulerStatus {
@@ -539,6 +544,7 @@ export async function testDispatcharrConnection(data?: {
   url?: string
   username?: string
   password?: string
+  api_key?: string
 }): Promise<ConnectionTestResponse> {
   return api.post("/dispatcharr/test", data || {})
 }

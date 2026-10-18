@@ -22,10 +22,13 @@ Server URL and credentials for connecting to Dispatcharr.
 |-------|-------------|
 | **Enable** | Toggle Dispatcharr integration on/off |
 | **URL** | Dispatcharr server URL (e.g., `http://localhost:9191`) |
-| **Username** | Dispatcharr login username |
-| **Password** | Dispatcharr login password. The saved password is never displayed — the field loads empty with "Leave blank to keep current" |
+| **API Key** | Recommended. A personal API key from your Dispatcharr profile page (Dispatcharr 0.20.0 or later). When a key is saved, Teamarr sends it on every request and never uses the username and password. The saved key is never displayed — the field loads empty with "Leave blank to keep current"; **Remove saved key** drops it and goes back to the username and password |
+| **Username** | Dispatcharr login username. Used only when no API key is saved |
+| **Password** | Dispatcharr login password. Used only when no API key is saved. The saved password is never displayed — the field loads empty with "Leave blank to keep current" |
 
-Use the **Test** button to verify your connection — a successful test reports the connected account's live counts (accounts, groups, channels).
+Use the **Test** button to verify your connection — a successful test reports the connected account's live counts (accounts, groups, channels) and says when it connected via the API key. A key typed into the field is tested as typed; a typed password is tested even when a key is saved.
+
+**Why a key?** Dispatcharr keeps one API key per user, which you can revoke at any time from your profile without changing your password, and Teamarr then holds nothing that can log into Dispatcharr's web UI. Generating a new key on the profile page replaces the old one, so paste the new key here afterwards.
 
 ### Connection Status
 

@@ -15,7 +15,7 @@ Teamarr creates and manages channels in Dispatcharr automatically. This guide co
 1. Go to **Settings → Dispatcharr**
 2. Enable the integration toggle
 3. Enter your Dispatcharr URL (e.g., `http://dispatcharr:9191`)
-4. Enter your Dispatcharr username and password
+4. Paste an API key from your Dispatcharr profile page (Dispatcharr 0.20.0 or later), or enter your Dispatcharr username and password
 5. Click **Test** — a successful test reports the connected account, group, and channel counts
 6. Click **Save**
 
