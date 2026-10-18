@@ -369,6 +369,73 @@ class DispatcharrFactory:
                 auth_method=auth_method,
             )
 
+    def adopt_api_key(self) -> "ApiKeyAdoptResult":
+        """Switch the saved connection from username/password to an API key (#817).
+
+        Dispatcharr keeps ONE key per user and ``generate`` replaces it, so
+        this never generates over a key that exists: it logs in with the
+        stored username/password, reads the account's current key
+        (``GET /api/accounts/api-keys/``) and adopts it; only an account with
+        no key gets one minted (``POST …/generate/``). The key is then saved
+        and the pooled connection rebuilt around it. The password is left in
+        place — the user removes it when they are ready.
+        """
+        with self._db_factory() as conn:
+            settings = get_dispatcharr_settings(conn)
+            api_settings = get_all_settings(conn).api
+        if not settings.url or not settings.username or not settings.password:
+            return ApiKeyAdoptResult(
+                success=False, error="Save a Dispatcharr URL, username and password first"
+            )
+
+        client = DispatcharrClient(
+            base_url=settings.url,
+            username=settings.username,
+            password=settings.password,
+            timeout=float(api_settings.timeout),
+            max_retries=api_settings.retry_count,
+        )
+        try:
+            response = client.get("/api/accounts/api-keys/")
+            if response is None or response.status_code != 200:
+                return ApiKeyAdoptResult(
+                    success=False,
+                    error=(
+                        "Could not read the account's API key - check the username/password, "
+                        "and that Dispatcharr is 0.20.0 or later"
+                    ),
+                )
+            key = (response.json() or {}).get("key") or None
+            created = False
+            if not key:
+                response = client.post("/api/accounts/api-keys/generate/", {})
+                if response is None or response.status_code not in (200, 201):
+                    return ApiKeyAdoptResult(
+                        success=False, error="Dispatcharr refused to generate an API key"
+                    )
+                key = (response.json() or {}).get("key") or None
+                created = True
+            if not key:
+                return ApiKeyAdoptResult(success=False, error="Dispatcharr returned no API key")
+        except Exception as e:  # noqa: BLE001 — surfaced to the UI as a message
+            logger.warning("[DISPATCHARR] API key adoption failed: %s", e)
+            return ApiKeyAdoptResult(
+                success=False, error=f"{type(e).__name__} talking to Dispatcharr"
+            )
+        finally:
+            client.close()
+
+        from teamarr.database.settings import update_dispatcharr_settings
+
+        with self._db_factory() as conn:
+            update_dispatcharr_settings(conn, api_key=key)
+        self.reconnect()
+        logger.info(
+            "[DISPATCHARR] %s the account's API key; requests now authenticate with it",
+            "Generated" if created else "Adopted",
+        )
+        return ApiKeyAdoptResult(success=True, created=created)
+
     def _create_connection(self) -> DispatcharrConnection | None:
         """Create a new Dispatcharr connection.
 
@@ -429,6 +496,15 @@ class DispatcharrFactory:
             f"{settings.url}:{settings.username}:{settings.password}:"
             f"{settings.api_key}:{settings.enabled}"
         )
+
+
+@dataclass
+class ApiKeyAdoptResult:
+    """Result of switching the saved connection to an API key (#817)."""
+
+    success: bool
+    created: bool = False  # True = minted a new key; False = adopted the existing one
+    error: str | None = None
 
 
 @dataclass

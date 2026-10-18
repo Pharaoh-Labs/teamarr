@@ -28,6 +28,8 @@ Server URL and credentials for connecting to Dispatcharr.
 
 Use the **Test** button to verify your connection — a successful test reports the connected account's live counts (accounts, groups, channels) and says when it connected via the API key. A key typed into the field is tested as typed; a typed password is tested even when a key is saved.
 
+**Use an API key instead** appears under the field while a username and password are saved and no key is. It switches the connection in one click: Teamarr logs in with the saved password, adopts the key already on your Dispatcharr account, or generates one only when the account has none, and saves it. Your password stays saved until you clear it.
+
 **Why a key?** Dispatcharr keeps one API key per user, which you can revoke at any time from your profile without changing your password, and Teamarr then holds nothing that can log into Dispatcharr's web UI. Generating a new key on the profile page replaces the old one, so paste the new key here afterwards.
 
 ### Connection Status

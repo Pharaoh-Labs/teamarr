@@ -212,3 +212,76 @@ def test_settings_api_masks_keeps_and_removes_the_key(db_factory, monkeypatch):
     assert api.put("/api/v1/settings/dispatcharr", json={"api_key": ""}).json()["api_key"] is None
     with db_factory() as conn:
         assert get_dispatcharr_settings(conn).api_key is None
+
+
+# --- adopt-or-mint (kd5a.5) -------------------------------------------------
+
+
+def _adopt_client(existing_key, generated="minted-key", log=None):
+    log = log if log is not None else []
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            log.append(("init", k.get("api_key")))
+
+        def get(self, endpoint):
+            log.append(("get", endpoint))
+            return httpx.Response(200, json={"key": existing_key})
+
+        def post(self, endpoint, data=None):
+            log.append(("post", endpoint))
+            return httpx.Response(201, json={"key": generated, "user": {}})
+
+        def close(self):
+            pass
+
+    return FakeClient, log
+
+
+def test_adopt_takes_the_existing_key_and_never_generates(conn, monkeypatch):
+    update_dispatcharr_settings(conn, enabled=True, url=URL, username="u", password="pw")
+    fake, log = _adopt_client("already-there")
+    monkeypatch.setattr("teamarr.dispatcharr.factory.DispatcharrClient", fake)
+    factory = DispatcharrFactory(_factory(conn))
+    monkeypatch.setattr(factory, "reconnect", lambda: None)
+
+    result = factory.adopt_api_key()
+    assert (result.success, result.created) == (True, False)
+    assert get_dispatcharr_settings(conn).api_key == "already-there"
+    assert ("post", "/api/accounts/api-keys/generate/") not in log
+    assert get_dispatcharr_settings(conn).password == "pw"  # left for the user to clear
+
+
+def test_adopt_generates_only_when_the_account_has_no_key(conn, monkeypatch):
+    update_dispatcharr_settings(conn, enabled=True, url=URL, username="u", password="pw")
+    fake, log = _adopt_client(None)
+    monkeypatch.setattr("teamarr.dispatcharr.factory.DispatcharrClient", fake)
+    factory = DispatcharrFactory(_factory(conn))
+    monkeypatch.setattr(factory, "reconnect", lambda: None)
+
+    result = factory.adopt_api_key()
+    assert (result.success, result.created) == (True, True)
+    assert get_dispatcharr_settings(conn).api_key == "minted-key"
+    assert ("post", "/api/accounts/api-keys/generate/") in log
+
+
+def test_adopt_needs_a_saved_password_and_reports_a_failed_read(conn, monkeypatch):
+    update_dispatcharr_settings(conn, enabled=True, url=URL, username="u")
+    assert not DispatcharrFactory(_factory(conn)).adopt_api_key().success
+
+    update_dispatcharr_settings(conn, password="pw")
+
+    class Refusing:
+        def __init__(self, *a, **k):
+            pass
+
+        def get(self, endpoint):
+            return httpx.Response(401, json={"detail": "bad"})
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("teamarr.dispatcharr.factory.DispatcharrClient", Refusing)
+    result = DispatcharrFactory(_factory(conn)).adopt_api_key()
+    assert not result.success and "API key" in result.error
+    assert get_dispatcharr_settings(conn).api_key is None

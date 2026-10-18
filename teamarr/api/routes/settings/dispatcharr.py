@@ -11,6 +11,7 @@ from teamarr.dispatcharr.factory import DispatcharrFactory
 
 from .models import (
     MASKED_SECRET,
+    ApiKeyAdoptResponse,
     ConnectionTestRequest,
     ConnectionTestResponse,
     DispatcharrSettingsModel,
@@ -123,6 +124,22 @@ def test_dispatcharr_connection(request: ConnectionTestRequest | None = None):
         error=result.error,
         auth_method=result.auth_method,
     )
+
+
+@router.post("/dispatcharr/api-key/adopt", response_model=ApiKeyAdoptResponse)
+def adopt_dispatcharr_api_key():
+    """Switch the saved connection from username/password to an API key (#817).
+
+    Reads the account's existing key with the stored username/password and
+    saves it; generates one only when the account has none, because
+    Dispatcharr keeps one key per user and generating replaces it.
+    """
+    try:
+        factory = get_factory(get_db)
+    except RuntimeError:
+        factory = DispatcharrFactory(get_db)
+    result = factory.adopt_api_key()
+    return ApiKeyAdoptResponse(success=result.success, created=result.created, error=result.error)
 
 
 @router.get("/dispatcharr/status")

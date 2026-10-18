@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { toast } from "sonner"
-import { LoaderCircle, TestTube, CircleCheckBig, CircleX, TriangleAlert } from "lucide-react"
+import { LoaderCircle, TestTube, CircleCheckBig, CircleX, TriangleAlert, KeyRound } from "lucide-react"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import {
   useUpdateDispatcharrSettings,
+  useAdoptDispatcharrApiKey,
   useTestDispatcharrConnection,
   useDispatcharrStatus,
   useDispatcharrEPGSources,
@@ -22,6 +23,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
   const dispatcharrStatus = useDispatcharrStatus()
   const epgSourcesQuery = useDispatcharrEPGSources(dispatcharrStatus.data?.connected ?? false)
   const updateDispatcharr = useUpdateDispatcharrSettings()
+  const adoptApiKey = useAdoptDispatcharrApiKey()
   const testConnection = useTestDispatcharrConnection()
 
   const [dispatcharr, setDispatcharr] = useState<Partial<DispatcharrSettings>>({
@@ -63,6 +65,26 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
       toast.success("Dispatcharr settings saved")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save")
+    }
+  }
+
+  // One click from saved username/password to a key: the backend adopts the
+  // key already on the Dispatcharr account, or mints one only when there is
+  // none — Dispatcharr keeps one key per user and generating replaces it (#817).
+  const handleAdoptApiKey = async () => {
+    try {
+      const result = await adoptApiKey.mutateAsync()
+      if (result.success) {
+        toast.success(
+          result.created
+            ? "Generated an API key on your Dispatcharr account and saved it"
+            : "Adopted your Dispatcharr account's API key",
+        )
+      } else {
+        toast.error(result.error || "Could not switch to an API key")
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not switch to an API key")
     }
   }
 
@@ -196,6 +218,21 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
               Generate one on your Dispatcharr profile page (Dispatcharr 0.20.0 or later). When a key is saved,
               the username and password below are not used.
             </p>
+            {!initial.api_key && initial.username && initial.password && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAdoptApiKey}
+                disabled={adoptApiKey.isPending}
+              >
+                {adoptApiKey.isPending ? (
+                  <LoaderCircle className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <KeyRound className="h-4 w-4 mr-1" />
+                )}
+                Use an API key instead
+              </Button>
+            )}
           </div>
 
           {/* Credentials */}

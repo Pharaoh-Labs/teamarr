@@ -163,6 +163,15 @@ class ConnectionTestRequest(BaseModel):
     api_key: str | None = Field(None, description="Override API key (wins over a password)")
 
 
+class ApiKeyAdoptResponse(BaseModel):
+    """Result of switching the saved Dispatcharr connection to an API key (#817)."""
+
+    success: bool
+    # True = a new key was generated (the account had none); False = adopted the existing one
+    created: bool = False
+    error: str | None = None
+
+
 class ConnectionTestResponse(BaseModel):
     """Response from connection test."""
 
