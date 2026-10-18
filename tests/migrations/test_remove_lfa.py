@@ -40,10 +40,10 @@ def test_lfa_row_subscriptions_and_caches_go_other_leagues_stay(db_conn):
     _migrate_v102_remove_lfa(conn)  # idempotent
 
 
-def test_versioned_upgrade_lands_on_102_without_lfa(db_conn):
+def test_versioned_upgrade_lands_on_latest_without_lfa(db_conn):
     db_conn.execute("UPDATE settings SET schema_version = 101")
     _run_migrations(db_conn)
-    assert db_conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 102
+    assert db_conn.execute("SELECT schema_version FROM settings").fetchone()[0] >= 102
     assert (
         db_conn.execute("SELECT count(*) FROM leagues WHERE league_code = 'lfa'").fetchone()[0] == 0
     )

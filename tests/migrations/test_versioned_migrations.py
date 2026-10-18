@@ -219,7 +219,7 @@ class TestV73DeletesDuplicateLeagues:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 102
+        assert row["schema_version"] == 103
 
 
 class TestV73CleansTeamCache:
@@ -413,7 +413,7 @@ class TestV73MissingTablesGraceful:
         _run_migrations(conn)
 
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 102
+        assert row["schema_version"] == 103
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +444,7 @@ class TestFreshInstall:
         conn = sqlite3.connect(str(db_path))
         conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
-        assert row["schema_version"] == 102
+        assert row["schema_version"] == 103
 
 
 # ===========================================================================
@@ -1223,7 +1223,7 @@ class TestV82ChannelsDVRServersList:
         row = conn.execute(
             "SELECT schema_version, channelsdvr_servers FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 102
+        assert row["schema_version"] == 103
         servers = json.loads(row["channelsdvr_servers"])
         assert servers == [
             {
@@ -1242,7 +1242,7 @@ class TestV82ChannelsDVRServersList:
         row = conn.execute(
             "SELECT schema_version, channelsdvr_servers FROM settings WHERE id = 1"
         ).fetchone()
-        assert row["schema_version"] == 102
+        assert row["schema_version"] == 103
         assert row["channelsdvr_servers"] is None
 
     def test_settings_roundtrip_servers_list(self, db_conn):

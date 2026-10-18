@@ -440,6 +440,15 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 102
 
+    if current_version < 103:
+        _apply_migration(
+            conn,
+            103,
+            "disable pattern-only sources left without an M3U group by #1056",
+            _migrate_v103_disable_unbound_pattern_sources,
+        )
+        current_version = 103
+
 
 # =============================================================================
 # Migration helpers
@@ -2900,6 +2909,45 @@ def _migrate_v97_plugin_channel_identity(conn: sqlite3.Connection) -> None:
                             COALESCE(feed_team_id, ''), primary_stream_id)
         WHERE deleted_at IS NULL AND plugin_id IS NULL
     """)
+
+
+def _migrate_v103_disable_unbound_pattern_sources(conn: sqlite3.Connection) -> None:
+    """Disable sources that #1056 left reading every stream in Dispatcharr (#1089).
+
+    #1056 retired group-name pattern binding and let a pattern-bound source
+    fall back to its pinned ``m3u_group_id``. A source created pattern-only
+    never had one, and the fetcher's old no-group fallback then read the whole
+    of Dispatcharr for it on every run. Such a row is switched off here; the
+    columns themselves stay (reconciliation never drops a column) and a fresh
+    database never had them, so this is a no-op there. Discovery is the way
+    back to the live group.
+    """
+    table = "event_epg_groups"
+    if not _table_exists(conn, table) or not _column_exists(
+        conn, table, "m3u_group_name_pattern_enabled"
+    ):
+        return
+    channel_source = (
+        "AND COALESCE(is_channel_source, 0) = 0"
+        if _column_exists(conn, table, "is_channel_source")
+        else ""
+    )
+    cursor = conn.execute(
+        f"""
+        UPDATE {table}
+        SET enabled = 0
+        WHERE enabled = 1
+          AND m3u_group_id IS NULL
+          AND COALESCE(m3u_group_name_pattern_enabled, 0) = 1
+          {channel_source}
+        """
+    )
+    if cursor.rowcount:
+        logger.warning(
+            "[MIGRATION] v103: disabled %d pattern-only source(s) with no M3U group bound; "
+            "re-add them from Sources > Automation > Discover",
+            cursor.rowcount,
+        )
 
 
 def _migrate_v102_remove_lfa(conn: sqlite3.Connection) -> None:

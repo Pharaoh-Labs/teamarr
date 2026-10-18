@@ -146,12 +146,18 @@ class StreamFetcher:
         try:
             m3u_manager = self._dispatcharr_client.m3u
 
-            # Fetch streams filtered by M3U group if configured
-            if group.m3u_group_id:
-                streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
-            else:
-                # Fetch all streams if no group filter
-                streams = m3u_manager.list_streams()
+            # A source reads ONE M3U group. The old fallback here read every
+            # stream in Dispatcharr when no group was bound; a pattern-only
+            # source left unbound by #1056 did that four times a run on a real
+            # install (123k streams each, 2M failed-match rows a day) (#1089).
+            if not group.m3u_group_id:
+                logger.warning(
+                    "[EVENT_EPG] Source %r (id=%s) has no M3U group bound - nothing to read",
+                    group.name,
+                    group.id,
+                )
+                return []
+            streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
 
             # Convert to dicts for matcher (sorted by name for consistent order)
             account_names = self._account_names()

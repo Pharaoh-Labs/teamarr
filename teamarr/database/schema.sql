@@ -627,7 +627,7 @@ CREATE TABLE IF NOT EXISTS settings (
     plex_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 102
+    schema_version INTEGER DEFAULT 103
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
