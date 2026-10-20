@@ -87,6 +87,21 @@ logger = logging.getLogger(__name__)
 # no EPG stream (safe no-match) rather than a wrong-occurrence bind.
 ANCHOR_MATCH_TOLERANCE_SECONDS = 90 * 60
 
+
+def _anchor_distance_seconds(event: Event, anchor_dt: datetime) -> int:
+    """Seconds from the programme's instant to the nearest airing of ``event``.
+
+    A multi-day event (a Test match, a race weekend) airs once per session,
+    each on its own day at its own time, so the distance is to the nearest
+    session start — ``event.start_time`` alone is day 1, and a day-2
+    programme sat 24 h from it and was gated as a different occurrence
+    (#1098: every Test day after the first read "No candidate in window").
+    An event with no sessions measures to its start as before.
+    """
+    instants = [event.start_time] + [s.start_time for s in (event.sessions or [])]
+    return min(abs(int((instant - anchor_dt).total_seconds())) for instant in instants)
+
+
 # "All-Star(s)" token used to recognise All-Star pseudo-teams in event names.
 _ALL_STAR_TEAM_RE = re.compile(r"all[\s\-]?stars?", re.IGNORECASE)
 
@@ -1059,7 +1074,7 @@ class TeamMatcher:
             # EPG anchored matching (bead t5e): gate to the live occurrence near
             # the program's broadcast instant (excludes encores / wrong night).
             if anchor_dt is not None:
-                anchor_skew = abs((event.start_time - anchor_dt).total_seconds())
+                anchor_skew = _anchor_distance_seconds(event, anchor_dt)
                 if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     continue
             score, side = self._score_single_team_against_event(team_norm, event)
@@ -1199,7 +1214,7 @@ class TeamMatcher:
             # EPG anchored matching (bead t5e): gate to the live occurrence near
             # the program's broadcast instant.
             if anchor_dt is not None:
-                anchor_skew = abs((event.start_time - anchor_dt).total_seconds())
+                anchor_skew = _anchor_distance_seconds(event, anchor_dt)
                 if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     continue
             seen_event_ids.add(event.id)
@@ -1648,7 +1663,7 @@ class TeamMatcher:
             # the definitive, category-independent guard against encore binding.
             anchor_dist = 0
             if ctx.anchor_dt is not None:
-                anchor_dist = abs(int((event.start_time - ctx.anchor_dt).total_seconds()))
+                anchor_dist = _anchor_distance_seconds(event, ctx.anchor_dt)
                 if anchor_dist > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     gated_rejected += 1
                     continue

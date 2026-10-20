@@ -10,7 +10,7 @@ and the fixture gate must never veto the cricket league for its own fixture.
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -187,3 +187,45 @@ def test_without_a_format_word_the_rugby_game_can_win_the_same_day(db_factory):
         _ctx("Australia v South Africa"), [(RUGBY, RUGBY_MATCH), (TEST, TEST_MATCH)]
     )
     assert outcome.is_matched  # it matches something; which one the ranking decides
+
+
+# ---------------------------------------------------------------------------
+# EPG path (#1098): the anchor gate measures to the nearest session day.
+# ---------------------------------------------------------------------------
+
+
+def _anchored(stream_name: str, anchor_dt: datetime) -> MatchContext:
+    ctx = _ctx(stream_name)
+    ctx.anchor_dt = anchor_dt
+    ctx.target_date = anchor_dt.date()
+    return ctx
+
+
+@pytest.mark.parametrize("day", [2, 3, 5])
+def test_a_later_day_programme_clears_the_anchor_gate(db_factory, day):
+    """A day-N programme at that day's start is within tolerance of its session."""
+    matcher = make_team_matcher(db_factory=db_factory)
+    anchor = datetime(2026, 10, 8 + day, 7, 30, tzinfo=UTC)
+    outcome = matcher._match_against_events(
+        _anchored(f"Live 2nd Test Day {day}: SA v AUS", anchor), [TEST_MATCH], TEST
+    )
+    assert outcome.is_matched, outcome.failed_reason
+
+
+def test_a_programme_a_day_after_the_last_session_is_still_gated(db_factory):
+    """Nearest-session measuring widens to the sessions, not to the whole week."""
+    matcher = make_team_matcher(db_factory=db_factory)
+    anchor = datetime(2026, 10, 14, 7, 30, tzinfo=UTC)  # day 6 of a five-day Test
+    outcome = matcher._match_against_events(
+        _anchored("Live 2nd Test Day 6: SA v AUS", anchor), [TEST_MATCH], TEST
+    )
+    assert not outcome.is_matched
+
+
+def test_an_event_without_sessions_still_measures_to_its_start(db_factory):
+    matcher = make_team_matcher(db_factory=db_factory)
+    anchor = datetime(TODAY.year, TODAY.month, TODAY.day, 13, 30, tzinfo=UTC) + timedelta(days=1)
+    outcome = matcher._match_against_events(
+        _anchored("India v West Indies 2nd T20I", anchor), [T20_MATCH], T20I
+    )
+    assert not outcome.is_matched
