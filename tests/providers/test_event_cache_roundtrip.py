@@ -15,14 +15,25 @@ from teamarr.database.provider_cache import dict_to_event, event_to_dict
 
 def _event(**kw) -> Event:
     team = Team(
-        id="1", provider="espn", name="Boston Celtics", short_name="Celtics",
-        abbreviation="BOS", league="nba", sport="basketball",
+        id="1",
+        provider="espn",
+        name="Boston Celtics",
+        short_name="Celtics",
+        abbreviation="BOS",
+        league="nba",
+        sport="basketball",
     )
     base = dict(
-        id="e1", provider="espn", name="DET @ BOS", short_name="DET @ BOS",
+        id="e1",
+        provider="espn",
+        name="DET @ BOS",
+        short_name="DET @ BOS",
         start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=team, away_team=team, status=EventStatus(state="pre"),
-        league="nba", sport="basketball",
+        home_team=team,
+        away_team=team,
+        status=EventStatus(state="pre"),
+        league="nba",
+        sport="basketball",
         venue=Venue(name="TD Garden", city="Boston", state="MA"),
     )
     base.update(kw)
@@ -76,7 +87,8 @@ def test_combat_fields_survive_cache_roundtrip():
         Bout(fighter1="C. Champ", fighter2="D. Challenger", segment="main_card", order=1),
     ]
     ev = _event(
-        league="ufc", sport="mma",
+        league="ufc",
+        sport="mma",
         bouts=bouts,
         fight_result_method="ko/tko",
         finish_round=3,
@@ -99,11 +111,23 @@ def test_pre_upgrade_cache_entries_deserialize():
     """Entries written before these fields existed must still load."""
     data = event_to_dict(_event())
     for key in (
-        "neutral_site", "game_recap", "game_event_note", "soccer_match_note",
-        "game_preview", "series_summary", "home_last_five", "away_last_five",
+        "neutral_site",
+        "game_recap",
+        "game_event_note",
+        "soccer_match_note",
+        "game_preview",
+        "series_summary",
+        "home_last_five",
+        "away_last_five",
         "broadcast_markets",
-        "odds_data", "bouts", "fight_result_method", "finish_round",
-        "finish_time", "weight_class", "fighter1_scores", "fighter2_scores",
+        "odds_data",
+        "bouts",
+        "fight_result_method",
+        "finish_round",
+        "finish_time",
+        "weight_class",
+        "fighter1_scores",
+        "fighter2_scores",
     ):
         data.pop(key)
     back = dict_to_event(data)

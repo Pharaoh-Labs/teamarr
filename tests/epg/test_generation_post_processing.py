@@ -59,8 +59,9 @@ def test_dispatcharr_epg_preserves_timeout_cancellation_and_association_order(mo
     context = _context()
     calls = []
     context.lifecycle_service = SimpleNamespace(
-        associate_epg_with_channels=lambda epg_id: calls.append(("lifecycle", epg_id))
-        or {"core": 1}
+        associate_epg_with_channels=lambda epg_id: (
+            calls.append(("lifecycle", epg_id)) or {"core": 1}
+        )
     )
     context.team_channel_manager = SimpleNamespace(
         associate_epg=lambda epg_id: calls.append(("team", epg_id)) or {"team": 1}

@@ -51,9 +51,7 @@ def _run(service, streams, current_streams, matched, mode="consolidate"):
         patch("teamarr.database.channels.remove_stream_from_channel", remove),
         patch("teamarr.database.channels.update_stream_name"),
         patch("teamarr.database.channels.log_channel_history"),
-        patch(
-            "teamarr.database.channel_numbers.get_global_consolidation_mode", return_value=mode
-        ),
+        patch("teamarr.database.channel_numbers.get_global_consolidation_mode", return_value=mode),
     ):
         result = service.cleanup_deleted_streams(GROUP_ID, current_streams, matched_streams=matched)
     return result, remove

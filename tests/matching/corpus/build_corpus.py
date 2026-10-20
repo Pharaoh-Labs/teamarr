@@ -91,15 +91,18 @@ def build_cases(teams: list[list[str | None]]) -> list[dict]:
         names = sorted(by_league.get(league, []))
         for a, b in itertools.islice(itertools.combinations(names, 2), 40):
             cases.append(
-                {"side_a": a, "side_b": b, "league": league, "expect": "supported",
-                 "tag": f"real fixture in {league}"}
+                {
+                    "side_a": a,
+                    "side_b": b,
+                    "league": league,
+                    "expect": "supported",
+                    "tag": f"real fixture in {league}",
+                }
             )
 
     # NEGATIVES: same-city teams from different leagues. These are exactly the
     # pairs the old scorer accepted, so each one is a shipped-bug candidate.
-    pro_teams = [
-        (name, league) for name, _s, _a, league, _sp in teams if league in PRO_LEAGUES
-    ]
+    pro_teams = [(name, league) for name, _s, _a, league, _sp in teams if league in PRO_LEAGUES]
     for (n1, l1), (n2, l2) in itertools.combinations(pro_teams, 2):
         if l1 == l2:
             continue
@@ -108,8 +111,13 @@ def build_cases(teams: list[list[str | None]]) -> list[dict]:
         # n1 and n2 never meet, so BOTH leagues must be refused.
         for league in (l1, l2):
             cases.append(
-                {"side_a": n1, "side_b": n2, "league": league, "expect": "rejected",
-                 "tag": f"cross-league crosstalk {l1}/{l2}"}
+                {
+                    "side_a": n1,
+                    "side_b": n2,
+                    "league": league,
+                    "expect": "rejected",
+                    "tag": f"cross-league crosstalk {l1}/{l2}",
+                }
             )
 
     return cases
@@ -129,8 +137,7 @@ def main() -> None:
     supported = sum(1 for c in cases if c["expect"] == "supported")
     print(f"teams.json: {len(teams)} rows")
     print(
-        f"cases.json: {len(cases)} cases "
-        f"({supported} supported, {len(cases) - supported} rejected)"
+        f"cases.json: {len(cases)} cases ({supported} supported, {len(cases) - supported} rejected)"
     )
 
 

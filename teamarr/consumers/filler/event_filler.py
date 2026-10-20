@@ -359,9 +359,7 @@ class EventFillerGenerator:
             # Resolve art URL if present
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             icon = (
-                self._resolver.resolve_art(template.art_url, context)
-                if template.art_url
-                else None
+                self._resolver.resolve_art(template.art_url, context) if template.art_url else None
             )
 
             # Filler categories come from the template's xmltv_filler_categories

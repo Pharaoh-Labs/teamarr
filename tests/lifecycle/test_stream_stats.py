@@ -159,13 +159,17 @@ def test_empty_stats_list_returns_zero(db_conn, patch_client):
 
 def test_happy_path_persists_stats_as_json(db_conn, patch_client):
     install, _ = patch_client
-    install(_StubClient([
-        {
-            "id": 100,
-            "stream_stats": {"resolution": "1920x1080"},
-            "stream_stats_updated_at": "2026-06-16T00:00:00Z",
-        },
-    ]))
+    install(
+        _StubClient(
+            [
+                {
+                    "id": 100,
+                    "stream_stats": {"resolution": "1920x1080"},
+                    "stream_stats_updated_at": "2026-06-16T00:00:00Z",
+                },
+            ]
+        )
+    )
     cid = _insert_channel(db_conn)
     _insert_stream(db_conn, cid, 100)
     db_conn.commit()
@@ -178,10 +182,14 @@ def test_happy_path_persists_stats_as_json(db_conn, patch_client):
 
 def test_unprobed_stream_is_skipped(db_conn, patch_client):
     install, _ = patch_client
-    install(_StubClient([
-        {"id": 100, "stream_stats": None, "stream_stats_updated_at": None},
-        {"id": 101, "stream_stats": {"source_fps": 60}, "stream_stats_updated_at": "t"},
-    ]))
+    install(
+        _StubClient(
+            [
+                {"id": 100, "stream_stats": None, "stream_stats_updated_at": None},
+                {"id": 101, "stream_stats": {"source_fps": 60}, "stream_stats_updated_at": "t"},
+            ]
+        )
+    )
     cid = _insert_channel(db_conn)
     _insert_stream(db_conn, cid, 100)
     _insert_stream(db_conn, cid, 101)
@@ -343,9 +351,13 @@ def test_bulk_client_none_returns_zero(db_conn, patch_client):
 
 def test_bulk_writes_one_stream_onto_every_channel_holding_it(db_conn, patch_client):
     install, _ = patch_client
-    install(_StubClient([
-        {"id": 100, "stream_stats": {"alive": False}, "stream_stats_updated_at": "t"},
-    ]))
+    install(
+        _StubClient(
+            [
+                {"id": 100, "stream_stats": {"alive": False}, "stream_stats_updated_at": "t"},
+            ]
+        )
+    )
     first = _insert_channel(db_conn)
     second = _insert_channel(db_conn)
     _insert_stream(db_conn, first, 100)
@@ -386,10 +398,14 @@ def test_bulk_chunks_at_the_endpoint_page_size(db_conn, patch_client, monkeypatc
 
 def test_bulk_leaves_unprobed_streams_alone(db_conn, patch_client):
     install, _ = patch_client
-    install(_StubClient([
-        {"id": 100, "stream_stats": None, "stream_stats_updated_at": None},
-        {"id": 101, "stream_stats": {"alive": True}, "stream_stats_updated_at": "t"},
-    ]))
+    install(
+        _StubClient(
+            [
+                {"id": 100, "stream_stats": None, "stream_stats_updated_at": None},
+                {"id": 101, "stream_stats": {"alive": True}, "stream_stats_updated_at": "t"},
+            ]
+        )
+    )
     cid = _insert_channel(db_conn)
     _insert_stream(db_conn, cid, 100)
     _insert_stream(db_conn, cid, 101)
@@ -402,9 +418,13 @@ def test_bulk_leaves_unprobed_streams_alone(db_conn, patch_client):
 
 def test_bulk_skips_removed_rows(db_conn, patch_client):
     install, _ = patch_client
-    install(_StubClient([
-        {"id": 100, "stream_stats": {"alive": True}, "stream_stats_updated_at": "t"},
-    ]))
+    install(
+        _StubClient(
+            [
+                {"id": 100, "stream_stats": {"alive": True}, "stream_stats_updated_at": "t"},
+            ]
+        )
+    )
     cid = _insert_channel(db_conn)
     _insert_stream(db_conn, cid, 100, removed=True)
     db_conn.commit()

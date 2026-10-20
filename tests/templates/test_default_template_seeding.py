@@ -48,7 +48,6 @@ def _released_generations(name, spec):
     return [g for g in _prior_generations(name, spec) if g not in unreleased or g == spec]
 
 
-
 def _create_stock_legacy(conn, name, art=None):
     """A legacy seed row exactly as old installs carry it (post-v75 art form)."""
     return create_template(
@@ -439,8 +438,15 @@ def test_desc_only_edit_blocks_title_heal(db_conn):
     old = dict(specs["International Event (Starter)"])
     old["title_format"] = "{gracenote_category}"  # prior-generation title
     tid = create_template(db_conn, **old)
-    my_rows = [{"condition": None, "condition_value": None, "priority": 100,
-                "template": "My custom description", "label": "Mine"}]
+    my_rows = [
+        {
+            "condition": None,
+            "condition_value": None,
+            "priority": 100,
+            "template": "My custom description",
+            "label": "Mine",
+        }
+    ]
     update_template(db_conn, tid, conditional_descriptions=my_rows)
 
     seed_default_templates(db_conn)
@@ -525,8 +531,13 @@ def test_desc_edited_retired_row_not_deleted(db_conn):
         db_conn,
         tid,
         conditional_descriptions=[
-            {"condition": None, "condition_value": None, "priority": 100,
-             "template": "Mine", "label": "Mine"}
+            {
+                "condition": None,
+                "condition_value": None,
+                "priority": 100,
+                "template": "Mine",
+                "label": "Mine",
+            }
         ],
     )
 
@@ -609,8 +620,13 @@ def test_user_edited_filler_rows_block_healing(db_conn):
         db_conn,
         tid,
         postgame_conditional_rows=[
-            {"condition": "is_final", "condition_value": None, "priority": 50,
-             "template": "My custom final text", "label": "Mine"}
+            {
+                "condition": "is_final",
+                "condition_value": None,
+                "priority": 50,
+                "template": "My custom final text",
+                "label": "Mine",
+            }
         ],
     )
 
@@ -872,15 +888,18 @@ def test_event_starters_gain_no_pre_981_generation():
             assert _revert_team_parity(spec["name"], spec) is spec
 
 
-
 # --- #991: one style across every starter --------------------------------------
 
 ALL_STARTERS = tuple(s["name"] for s in DEFAULT_TEMPLATE_SET)
 
 # Provider or prose variables that close their own sentence.
 _SELF_PUNCTUATED = (
-    "{game_preview}", "{game_preview.next}", "{game_recap}", "{game_recap.last}",
-    "{tennis_result}", "{event_result_text}",
+    "{game_preview}",
+    "{game_preview.next}",
+    "{game_recap}",
+    "{game_recap.last}",
+    "{tennis_result}",
+    "{event_result_text}",
 )
 
 
@@ -990,9 +1009,7 @@ def test_the_pre_991_snapshot_is_frozen():
 
     from teamarr.database.starter_snapshots import PRE_STYLE_PASS
 
-    digest = hashlib.sha256(
-        json.dumps(PRE_STYLE_PASS, sort_keys=True).encode()
-    ).hexdigest()
+    digest = hashlib.sha256(json.dumps(PRE_STYLE_PASS, sort_keys=True).encode()).hexdigest()
     assert digest == "8b21f12d444434e6d9e68f4fff347ff5bf349fa44ed83f617bab3e5b78cecc52"
 
 
@@ -1054,7 +1071,8 @@ def test_college_conference_row_reads_with_or_without_a_name():
     or not a display name is known — "in Big Ten conference play" or just "in
     conference play", never "in Conference 5 play" or "in play"."""
     row = next(
-        r for r in _spec("College Team (Starter)")["conditional_descriptions"]
+        r
+        for r in _spec("College Team (Starter)")["conditional_descriptions"]
         if r["label"] == "Conference game"
     )
     assert "in {college_conference_abbrev} conference play at {venue}" in row["template"]

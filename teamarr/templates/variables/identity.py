@@ -359,7 +359,6 @@ def extract_sport(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not sport_code:
         return ""
 
-
     service = get_league_mapping_service()
     return service.get_sport_display_name(sport_code)
 

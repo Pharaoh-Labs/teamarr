@@ -211,7 +211,9 @@ def fetch_xtream_programs(
             tmp.replace(cache_file)
             logger.info(
                 "[XTREAM-EPG] fetched %s -> %s (%d bytes)",
-                url.split("?")[0], cache_file.name, cache_file.stat().st_size,
+                url.split("?")[0],
+                cache_file.name,
+                cache_file.stat().st_size,
             )
         except (httpx.HTTPError, OSError) as e:
             logger.warning("[XTREAM-EPG] fetch failed for %s: %s", url.split("?")[0], e)
@@ -224,7 +226,9 @@ def fetch_xtream_programs(
             result = parse_xmltv_programs(fh, wanted_tvg_ids, window_start, window_end)
         logger.info(
             "[XTREAM-EPG] parsed %d/%d wanted tvg_ids, %d programs in window",
-            len(result), len(wanted_tvg_ids), sum(len(v) for v in result.values()),
+            len(result),
+            len(wanted_tvg_ids),
+            sum(len(v) for v in result.values()),
         )
         return result
     except (ET.ParseError, OSError) as e:

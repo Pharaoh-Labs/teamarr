@@ -86,9 +86,7 @@ def test_ncaa_scoreboard_keeps_successful_group_when_another_is_empty(monkeypatc
 def test_ncaa_scoreboard_returns_none_when_every_group_is_empty(monkeypatch):
     client, _ = _client_with_responses(monkeypatch, {"90": None, "35": None})
 
-    result = client.get_scoreboard(
-        "college-football", "20260827", ("football", "college-football")
-    )
+    result = client.get_scoreboard("college-football", "20260827", ("football", "college-football"))
 
     assert result is None
 

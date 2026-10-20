@@ -272,9 +272,7 @@ def test_starter_set_is_espn_copy_first():
 def test_starter_set_does_not_opt_in_to_generated_preview():
     for spec in DEFAULT_TEMPLATE_SET:
         rows = spec["conditional_descriptions"] + spec["pregame_conditional_rows"]
-        assert all(row.get("condition") != "has_generated_preview" for row in rows), spec[
-            "name"
-        ]
+        assert all(row.get("condition") != "has_generated_preview" for row in rows), spec["name"]
         assert all("{generated_preview" not in row.get("template", "") for row in rows), spec[
             "name"
         ]

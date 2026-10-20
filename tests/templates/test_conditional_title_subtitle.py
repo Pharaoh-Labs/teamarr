@@ -35,8 +35,13 @@ def real_league_service(db_factory):
 
 def _team(name, abbrev, id_="1"):
     return Team(
-        id=id_, provider="espn", name=name, short_name=name,
-        abbreviation=abbrev, league="nba", sport="basketball",
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=name,
+        abbreviation=abbrev,
+        league="nba",
+        sport="basketball",
     )
 
 
@@ -44,11 +49,16 @@ def _ctx(is_home=True):
     home = _team("Boston Celtics", "BOS", "1")
     away = _team("Detroit Pistons", "DET", "2")
     event = Event(
-        id="e1", provider="espn", name="Detroit Pistons at Boston Celtics",
+        id="e1",
+        provider="espn",
+        name="Detroit Pistons at Boston Celtics",
         short_name="DET @ BOS",
         start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=home, away_team=away, status=EventStatus(state="pre"),
-        league="nba", sport="basketball",
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state="pre"),
+        league="nba",
+        sport="basketball",
         venue=Venue(name="TD Garden", city="Boston", state="MA"),
     )
     team = home if is_home else away
@@ -56,8 +66,11 @@ def _ctx(is_home=True):
     return TemplateContext(
         game_context=game_ctx,
         team_config=TeamChannelContext(
-            team_id=team.id, league="nba", sport="basketball",
-            team_name=team.name, team_abbrev=team.abbreviation,
+            team_id=team.id,
+            league="nba",
+            sport="basketball",
+            team_name=team.name,
+            team_abbrev=team.abbreviation,
         ),
         team_stats=None,
     )
@@ -73,9 +86,13 @@ class TestPerFieldSelection:
         sel = ConditionalDescriptionSelector()
         ctx = _ctx(is_home=True)
         options = [
-            {"condition": "is_home", "priority": 40,
-             "title": "T: {team_name}", "subtitle": "S: {opponent}",
-             "template": "D: home game"},
+            {
+                "condition": "is_home",
+                "priority": 40,
+                "title": "T: {team_name}",
+                "subtitle": "S: {opponent}",
+                "template": "D: home game",
+            },
             {"priority": 100, "template": "Default desc"},
         ]
         fields, trace = sel.select_fields_with_trace(options, ctx, ctx.game_context)
@@ -115,7 +132,11 @@ class TestPerFieldSelection:
         sel = ConditionalDescriptionSelector()
         ctx = _ctx(is_home=True)
         options = [
-            {"condition": "is_home", "priority": 30, "art_url": "https://art.example.com/legacy.png"},
+            {
+                "condition": "is_home",
+                "priority": 30,
+                "art_url": "https://art.example.com/legacy.png",
+            },
         ]
         fields, trace = sel.select_fields_with_trace(options, ctx, ctx.game_context)
         assert fields["program_art_url"] == "https://art.example.com/legacy.png"
@@ -225,8 +246,12 @@ class TestPreviewEndpoint:
                 "template_type": "team",
                 "fields": {},
                 "conditional_descriptions": [
-                    {"priority": 100, "title": "Conditional Title",
-                     "subtitle": "Conditional Sub", "template": "Conditional Desc"},
+                    {
+                        "priority": 100,
+                        "title": "Conditional Title",
+                        "subtitle": "Conditional Sub",
+                        "template": "Conditional Desc",
+                    },
                 ],
             },
         )
@@ -325,9 +350,14 @@ class TestRowFieldValidation:
 
     def test_clean_title_and_subtitle_produce_no_warnings(self):
         results = validate_conditional_descriptions(
-            [{"condition": "is_home", "title": "{team_name}",
-              "subtitle": "{opponent}", "template": "{team_name} hosts"}],
+            [
+                {
+                    "condition": "is_home",
+                    "title": "{team_name}",
+                    "subtitle": "{opponent}",
+                    "template": "{team_name} hosts",
+                }
+            ],
             is_event_template=False,
         )
         assert results == {}
-

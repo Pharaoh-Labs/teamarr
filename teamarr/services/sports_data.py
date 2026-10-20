@@ -473,9 +473,7 @@ class SportsDataService:
             get_events_cache_ttl(day, all_events_final=all_final),
         )
 
-    def _fetch_provider_day(
-        self, provider: SportsProvider, league: str, day: date
-    ) -> list[Event]:
+    def _fetch_provider_day(self, provider: SportsProvider, league: str, day: date) -> list[Event]:
         """One provider-day bucket, cached raw (pre-filter, timezone-free).
 
         Keyed by provider + league + provider-day, so it is independent of the

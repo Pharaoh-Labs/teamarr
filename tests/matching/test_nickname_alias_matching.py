@@ -128,9 +128,7 @@ class TestHonestDateMismatch:
     CFG = None
 
     def _iso_cfg(self, *sample_streams: str):
-        cfg = CustomRegexConfig(
-            date_pattern=r"(?P<date>\d{4}-\d{2}-\d{2})", date_enabled=True
-        )
+        cfg = CustomRegexConfig(date_pattern=r"(?P<date>\d{4}-\d{2}-\d{2})", date_enabled=True)
         # Mirror the pipeline: match_all learns the format from the batch
         # before matching — that's what makes a blob-pattern date trusted
         cfg.learn_date_format(list(sample_streams))
@@ -193,8 +191,6 @@ class TestAliasEndToEnd:
         }
         outcome = _match("Cardinals x D-backs", [_event()], matcher=matcher)
         assert outcome.category == ResultCategory.MATCHED
-
-
 
     def test_alias_for_wrong_team_does_not_help(self):
         # Canonical must actually be one of the event's teams

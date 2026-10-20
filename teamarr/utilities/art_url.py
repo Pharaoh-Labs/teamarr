@@ -52,7 +52,6 @@ def read_art_base_url(db_factory) -> str:
     resolvers at construction. Returns "" on any failure (no prefixing).
     """
     try:
-
         with db_factory() as conn:
             return get_epg_settings(conn).art_base_url or ""
     except Exception:

@@ -37,6 +37,7 @@ from teamarr.providers.tsdb import RateLimitStats, TSDBClient, TSDBProvider
 # =============================================================================
 # Factories inject dependencies from the registry at instantiation time.
 
+
 def reload_provider_request_policy() -> None:
     """Load the provider request policy without exposing database access to clients."""
     with get_db() as conn:
@@ -91,7 +92,6 @@ def _get_tsdb_api_key() -> str | None:
     passing to the provider layer (which should not access database).
     """
     try:
-
         with get_db() as conn:
             cursor = conn.execute("SELECT tsdb_api_key FROM settings WHERE id = 1")
             row = cursor.fetchone()

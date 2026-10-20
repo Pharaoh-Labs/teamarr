@@ -477,8 +477,7 @@ def _v74_make_db(
         """
     )
     conn.execute(
-        "INSERT INTO settings (id, epg_match_enabled, epg_channel_source_enabled) "
-        "VALUES (1, ?, ?)",
+        "INSERT INTO settings (id, epg_match_enabled, epg_channel_source_enabled) VALUES (1, ?, ?)",
         (int(global_on), channel_source),
     )
     conn.execute(
@@ -922,8 +921,7 @@ def test_old_check_rejects_direct():
     conn.execute(_OLD_TABLE)
     try:
         conn.execute(
-            "INSERT INTO stream_match_cache (fingerprint, match_method) "
-            "VALUES ('x', 'direct')"
+            "INSERT INTO stream_match_cache (fingerprint, match_method) VALUES ('x', 'direct')"
         )
         rejected = False
     except sqlite3.IntegrityError:
@@ -941,23 +939,20 @@ def test_rebuild_preserves_user_corrections_and_allows_direct():
     assert not conn.execute(
         "SELECT COUNT(*) FROM sqlite_master WHERE name='stream_match_cache'"
     ).fetchone()[0]
-    assert conn.execute(
-        "SELECT COUNT(*) FROM _stream_match_cache_backup"
-    ).fetchone()[0] == 1  # only the pinned row
+    assert (
+        conn.execute("SELECT COUNT(*) FROM _stream_match_cache_backup").fetchone()[0] == 1
+    )  # only the pinned row
 
     # executescript would recreate with the new CHECK
     conn.execute(_NEW_TABLE)
     _migrate_stream_match_cache_restore_if_needed(conn)
 
-    rows = conn.execute(
-        "SELECT fingerprint, user_corrected FROM stream_match_cache"
-    ).fetchall()
+    rows = conn.execute("SELECT fingerprint, user_corrected FROM stream_match_cache").fetchall()
     assert rows == [("fp-user", 1)]  # pinned survived, algo row discarded
 
     # 'direct' now inserts cleanly (the original failure mode)
     conn.execute(
-        "INSERT INTO stream_match_cache (fingerprint, match_method) "
-        "VALUES ('fp-direct', 'direct')"
+        "INSERT INTO stream_match_cache (fingerprint, match_method) VALUES ('fp-direct', 'direct')"
     )
     # backup cleaned up
     assert not conn.execute(
@@ -1058,9 +1053,7 @@ def test_v80_disabled_and_empty_produce_no_rows():
 def test_v80_idle_converts_independently():
     from teamarr.database.migrations import _migrate_v80_filler_conditionals_to_rows
 
-    conn = _v80_make_db(
-        idle_cond={"enabled": True, "description_final": "Last game recap line"}
-    )
+    conn = _v80_make_db(idle_cond={"enabled": True, "description_final": "Last game recap line"})
     _migrate_v80_filler_conditionals_to_rows(conn)
     assert _v80_rows(conn) == []  # postgame untouched
     idle_rows = _v80_rows(conn, "idle_conditional_rows")
@@ -1214,9 +1207,7 @@ def _make_v81_cdvr_db(tmp_path: Path, url, source, lineup) -> sqlite3.Connection
 
 class TestV82ChannelsDVRServersList:
     def test_scalar_settings_fold_into_servers_list(self, tmp_path):
-        conn = _make_v81_cdvr_db(
-            tmp_path, "http://cdvr:8089/", "Teamarr", "XMLTV-Teamarr"
-        )
+        conn = _make_v81_cdvr_db(tmp_path, "http://cdvr:8089/", "Teamarr", "XMLTV-Teamarr")
 
         _run_migrations(conn)
 
@@ -1255,10 +1246,18 @@ class TestV82ChannelsDVRServersList:
             db_conn,
             enabled=True,
             servers=[
-                {"name": "East", "url": "http://east:8089/", "source_name": "Teamarr",
-                 "lineup_id": "XMLTV-Teamarr"},
-                {"name": "West", "url": "http://west:8089", "source_name": "Teamarr",
-                 "lineup_id": None},
+                {
+                    "name": "East",
+                    "url": "http://east:8089/",
+                    "source_name": "Teamarr",
+                    "lineup_id": "XMLTV-Teamarr",
+                },
+                {
+                    "name": "West",
+                    "url": "http://west:8089",
+                    "source_name": "Teamarr",
+                    "lineup_id": None,
+                },
             ],
         )
 

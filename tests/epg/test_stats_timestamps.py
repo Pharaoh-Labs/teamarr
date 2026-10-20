@@ -83,9 +83,9 @@ def test_parse_db_timestamp_none():
 
 def test_create_run_stores_sqlite_canonical_utc(conn):
     run = create_run(conn, run_type="full_epg")
-    raw = conn.execute(
-        "SELECT started_at FROM processing_runs WHERE id = ?", (run.id,)
-    ).fetchone()["started_at"]
+    raw = conn.execute("SELECT started_at FROM processing_runs WHERE id = ?", (run.id,)).fetchone()[
+        "started_at"
+    ]
     assert "T" not in raw and "+" not in raw
     stored = datetime.fromisoformat(raw).replace(tzinfo=UTC)
     assert abs((stored - datetime.now(UTC)).total_seconds()) < 5

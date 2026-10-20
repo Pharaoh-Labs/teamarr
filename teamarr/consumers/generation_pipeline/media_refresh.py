@@ -338,9 +338,7 @@ def _channel_in_profile(raw_profile_ids: str | None, profile_id: int | str) -> b
     return 0 in ids or profile_id in ids or str(profile_id) in {str(i) for i in ids}
 
 
-def _plex_desired_channels(
-    conn: Any, profile_id: int | str | None, label: str
-) -> set[str]:
+def _plex_desired_channels(conn: Any, profile_id: int | str | None, label: str) -> set[str]:
     """Channel numbers Teamarr currently manages for this device's scope.
 
     Covers BOTH event channels (``managed_channels``) and managed team
@@ -507,16 +505,12 @@ def refresh_plex_server(
 
     with db_factory() as conn:
         desired = _plex_desired_channels(conn, profile_id, label)
-        previously_pushed = get_pushed_channels(
-            conn, server.url, server.device_key, profile_id
-        )
+        previously_pushed = get_pushed_channels(conn, server.url, server.device_key, profile_id)
 
     if problem := device_read_problem(device, expect_channels=bool(previously_pushed)):
         return fail(f"refusing to write: {problem}")
 
-    enabled, mapping = compute_channelmap_update(
-        device.channel_mapping, desired, previously_pushed
-    )
+    enabled, mapping = compute_channelmap_update(device.channel_mapping, desired, previously_pushed)
 
     carried = {m.device_identifier for m in device.channel_mapping}
     if not_carried := desired - carried:

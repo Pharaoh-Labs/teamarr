@@ -198,8 +198,11 @@ class TestScopedRules:
 class TestEPGMatch:
     def _epg_stream(self, match_method):
         return ManagedChannelStream(
-            id=1, managed_channel_id=1, dispatcharr_stream_id=1,
-            stream_name="ESPN", match_method=match_method,
+            id=1,
+            managed_channel_id=1,
+            dispatcharr_stream_id=1,
+            stream_name="ESPN",
+            match_method=match_method,
         )
 
     def test_epg_match_matches_epg_method(self):
@@ -228,8 +231,12 @@ class TestEPGMatch:
         assert svc.compute_priority(self._epg_stream("epg")) == NO_MATCH_PRIORITY
 
         team_epg = ManagedChannelStream(
-            id=1, managed_channel_id=1, dispatcharr_stream_id=1,
-            stream_name="ESPN", match_type="team", match_method="epg",
+            id=1,
+            managed_channel_id=1,
+            dispatcharr_stream_id=1,
+            stream_name="ESPN",
+            match_type="team",
+            match_method="epg",
         )
         svc = StreamOrderingService([StreamOrderingRule("stream_type", "team", 1)])
         assert svc.compute_priority(team_epg) == NO_MATCH_PRIORITY
@@ -251,8 +258,11 @@ class TestEPGMatch:
 class TestDispatcharrGroup:
     def _stream(self, dp_group):
         return ManagedChannelStream(
-            id=1, managed_channel_id=1, dispatcharr_stream_id=1,
-            stream_name="ESPN", dispatcharr_channel_group=dp_group,
+            id=1,
+            managed_channel_id=1,
+            dispatcharr_stream_id=1,
+            stream_name="ESPN",
+            dispatcharr_channel_group=dp_group,
         )
 
     def test_matches_dispatcharr_group_case_insensitive(self):
@@ -274,7 +284,9 @@ class TestDispatcharrChannelRule:
 
     def _stream(self, source_channel_id):
         return ManagedChannelStream(
-            id=1, managed_channel_id=1, dispatcharr_stream_id=1,
+            id=1,
+            managed_channel_id=1,
+            dispatcharr_stream_id=1,
             stream_name="FanDuel Sports Wisconsin",
             dispatcharr_source_channel_id=source_channel_id,
         )
@@ -308,16 +320,31 @@ class TestDispatcharrChannelRule:
 
         update_stream_ordering_rules(
             seeded_db,
-            [{"type": "dispatcharr_channel", "value": "412|FDSN WI", "priority": 99,
-              "mode": "score", "points": 500}],
+            [
+                {
+                    "type": "dispatcharr_channel",
+                    "value": "412|FDSN WI",
+                    "priority": 99,
+                    "mode": "score",
+                    "points": 500,
+                }
+            ],
         )
         seeded_db.commit()
 
         picked = compute_stream_priority_from_rules(
-            seeded_db, "FDSN WI", None, None, dispatcharr_source_channel_id=412,
+            seeded_db,
+            "FDSN WI",
+            None,
+            None,
+            dispatcharr_source_channel_id=412,
         )
         other = compute_stream_priority_from_rules(
-            seeded_db, "FDSN WI", None, None, dispatcharr_source_channel_id=7,
+            seeded_db,
+            "FDSN WI",
+            None,
+            None,
+            dispatcharr_source_channel_id=7,
         )
         assert picked == NO_MATCH_PRIORITY * BAND_STRIDE - 500
         assert other == NO_MATCH_PRIORITY * BAND_STRIDE
@@ -436,12 +463,10 @@ class TestTeamFeed:
 
     def test_legacy_integer_id_path(self, seeded_db):
         # The legacy team_feed path resolves integer IDs against the teams table.
-        tigers_id = seeded_db.execute(
-            "SELECT id FROM teams WHERE team_abbrev = 'DET'"
-        ).fetchone()[0]
-        svc = StreamOrderingService(
-            [StreamOrderingRule("team_feed", str(tigers_id), 1)], seeded_db
-        )
+        tigers_id = seeded_db.execute("SELECT id FROM teams WHERE team_abbrev = 'DET'").fetchone()[
+            0
+        ]
+        svc = StreamOrderingService([StreamOrderingRule("team_feed", str(tigers_id), 1)], seeded_db)
         assert svc.compute_priority(_stream("Cubs vs Tigers (Home)")) == 1
         assert svc.compute_priority(_stream("Cubs vs Pirates (Home)")) == NO_MATCH_PRIORITY
 
@@ -782,24 +807,41 @@ class TestAdditiveScoring:
         update_stream_ordering_rules(
             seeded_db,
             [
-                {"type": "dispatcharr_group", "value": "Sports CA", "priority": 99,
-                 "mode": "score", "points": 800},
-                {"type": "epg_match", "value": "", "priority": 99,
-                 "mode": "score", "points": 10},
-                {"type": "stream_type", "value": "team", "priority": 99,
-                 "mode": "score", "points": -50},
+                {
+                    "type": "dispatcharr_group",
+                    "value": "Sports CA",
+                    "priority": 99,
+                    "mode": "score",
+                    "points": 800,
+                },
+                {"type": "epg_match", "value": "", "priority": 99, "mode": "score", "points": 10},
+                {
+                    "type": "stream_type",
+                    "value": "team",
+                    "priority": 99,
+                    "mode": "score",
+                    "points": -50,
+                },
             ],
         )
         seeded_db.commit()
 
         epg_in_group = compute_stream_priority_from_rules(
-            seeded_db, "TSN4", None, None,
-            match_method="epg", dispatcharr_channel_group="Sports CA",
+            seeded_db,
+            "TSN4",
+            None,
+            None,
+            match_method="epg",
+            dispatcharr_channel_group="Sports CA",
         )
         assert epg_in_group == NO_MATCH_PRIORITY * BAND_STRIDE - 810
 
         team_stream = compute_stream_priority_from_rules(
-            seeded_db, "Pirates 24/7", None, None, match_type="team",
+            seeded_db,
+            "Pirates 24/7",
+            None,
+            None,
+            match_type="team",
         )
         assert team_stream == NO_MATCH_PRIORITY * BAND_STRIDE + 50
 
@@ -852,10 +894,7 @@ class TestTeamFeedResolved:
 
     def test_resolved_other_team_does_not_match(self, seeded_db):
         svc = StreamOrderingService([StreamOrderingRule("team_feed", self.KEY, 1)], seeded_db)
-        assert (
-            svc.compute_priority(_feed_stream("Cubs.TV", feed_team_id="16"))
-            == NO_MATCH_PRIORITY
-        )
+        assert svc.compute_priority(_feed_stream("Cubs.TV", feed_team_id="16")) == NO_MATCH_PRIORITY
 
     def test_resolution_is_authoritative_over_name(self, seeded_db):
         # Resolved to the Cubs: even a name the Pirates regex would match
@@ -881,21 +920,16 @@ class TestTeamFeedResolved:
         )
 
     def test_not_team_feed_matches_other_resolved_feed(self, seeded_db):
-        svc = StreamOrderingService(
-            [StreamOrderingRule("not_team_feed", self.KEY, 1)], seeded_db
-        )
+        svc = StreamOrderingService([StreamOrderingRule("not_team_feed", self.KEY, 1)], seeded_db)
         # Another team's resolved feed matches — no name indicator needed.
         assert svc.compute_priority(_feed_stream("Cubs.TV", feed_team_id="16")) == 1
         # The rule team's own resolved feed does not.
         assert (
-            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23"))
-            == NO_MATCH_PRIORITY
+            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23")) == NO_MATCH_PRIORITY
         )
 
     def test_not_team_feed_null_keeps_indicator_gate(self, seeded_db):
-        svc = StreamOrderingService(
-            [StreamOrderingRule("not_team_feed", self.KEY, 1)], seeded_db
-        )
+        svc = StreamOrderingService([StreamOrderingRule("not_team_feed", self.KEY, 1)], seeded_db)
         # Unresolved + no feed indicator → gated out (regex fallback semantics).
         assert svc.compute_priority(_feed_stream("Cubs.TV")) == NO_MATCH_PRIORITY
 
@@ -910,8 +944,7 @@ class TestTeamFeedResolved:
         )
         assert svc.compute_priority(_feed_stream("Tigers.TV", feed_team_id="8")) == 1
         assert (
-            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23"))
-            == NO_MATCH_PRIORITY
+            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23")) == NO_MATCH_PRIORITY
         )
 
     def test_keyed_format_needs_no_connection(self):
@@ -923,8 +956,7 @@ class TestTeamFeedResolved:
     def test_empty_rule_value_never_matches_resolved(self, seeded_db):
         svc = StreamOrderingService([StreamOrderingRule("team_feed", "", 1)], seeded_db)
         assert (
-            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23"))
-            == NO_MATCH_PRIORITY
+            svc.compute_priority(_feed_stream("Pirates.TV", feed_team_id="23")) == NO_MATCH_PRIORITY
         )
 
     def test_attach_time_priority_sees_feed_team(self, seeded_db):

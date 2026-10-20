@@ -22,17 +22,28 @@ from teamarr.consumers.racing_segments import expand_racing_segments
 from teamarr.core.types import Event, EventStatus, RacingSession, Team, Venue
 
 SERIES = Team(
-    id="irl", provider="espn", name="IndyCar", short_name="IndyCar",
-    abbreviation="IC", league="indycar", sport="racing",
+    id="irl",
+    provider="espn",
+    name="IndyCar",
+    short_name="IndyCar",
+    abbreviation="IC",
+    league="indycar",
+    sport="racing",
 )
 
 
 def _weekend(sessions):
     return Event(
-        id="202609061784", provider="espn", name="Grand Prix of Monterey",
-        short_name="Monterey", start_time=sessions[0].start_time,
-        home_team=SERIES, away_team=SERIES, status=EventStatus(state="scheduled"),
-        league="indycar", sport="racing",
+        id="202609061784",
+        provider="espn",
+        name="Grand Prix of Monterey",
+        short_name="Monterey",
+        start_time=sessions[0].start_time,
+        home_team=SERIES,
+        away_team=SERIES,
+        status=EventStatus(state="scheduled"),
+        league="indycar",
+        sport="racing",
         venue=Venue(name="WeatherTech Raceway Laguna Seca", city="Monterey", country="USA"),
         sessions=sessions,
     )
@@ -51,13 +62,25 @@ FULL = _weekend(
 RACE_ONLY = _weekend([RACE])
 
 F1_TEAM = Team(
-    id="f1", provider="espn", name="F1", short_name="F1",
-    abbreviation="F1", league="f1", sport="racing",
+    id="f1",
+    provider="espn",
+    name="F1",
+    short_name="F1",
+    abbreviation="F1",
+    league="f1",
+    sport="racing",
 )
 ITALIAN_GP = Event(
-    id="402", provider="espn", name="Pirelli Italian Grand Prix", short_name="Italian GP",
-    start_time=datetime(2026, 9, 4, 10, 30, tzinfo=UTC), home_team=F1_TEAM, away_team=F1_TEAM,
-    status=EventStatus(state="scheduled"), league="f1", sport="racing",
+    id="402",
+    provider="espn",
+    name="Pirelli Italian Grand Prix",
+    short_name="Italian GP",
+    start_time=datetime(2026, 9, 4, 10, 30, tzinfo=UTC),
+    home_team=F1_TEAM,
+    away_team=F1_TEAM,
+    status=EventStatus(state="scheduled"),
+    league="f1",
+    sport="racing",
     venue=Venue(name="Autodromo Nazionale Monza", city="Monza", country="Italy"),
     sessions=[
         RacingSession("fp1", "Practice 1", datetime(2026, 9, 4, 10, 30, tzinfo=UTC)),
@@ -83,8 +106,13 @@ class _Service:
 def _matcher(db_factory, by_league, leagues):
     racing = {"indycar", "f1"}
     matcher = StreamMatcher(
-        service=_Service(by_league), db_factory=db_factory, group_id=1,
-        search_leagues=leagues, user_tz=ZoneInfo("UTC"), generation=1, days_ahead=3,
+        service=_Service(by_league),
+        db_factory=db_factory,
+        group_id=1,
+        search_leagues=leagues,
+        user_tz=ZoneInfo("UTC"),
+        generation=1,
+        days_ahead=3,
         team_streams_enabled=True,
     )
     matcher._league_event_types = {

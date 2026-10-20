@@ -96,9 +96,7 @@ def _generate_channel_id(
         )
 
     if base_id not in used_ids:
-        row = conn.execute(
-            "SELECT 1 FROM teams WHERE channel_id = ?", (base_id,)
-        ).fetchone()
+        row = conn.execute("SELECT 1 FROM teams WHERE channel_id = ?", (base_id,)).fetchone()
         if not row:
             return base_id
 
@@ -128,9 +126,7 @@ def bulk_import_teams(conn: Connection, teams: list[ImportTeam]) -> ImportResult
     original_count = len(teams)
     teams = [t for t in teams if t.team_name.strip().lower() not in _TBD_NAMES]
     if len(teams) < original_count:
-        logger.info(
-            "[BULK_IMPORT] Filtered %d TBD placeholder teams", original_count - len(teams)
-        )
+        logger.info("[BULK_IMPORT] Filtered %d TBD placeholder teams", original_count - len(teams))
 
     imported = 0
     updated = 0

@@ -116,9 +116,7 @@ class TestCustomDateFormats:
         assert got == date(2026, 1, 14)
 
     def test_word_month_with_comma_year_parses(self):
-        got = self._extract(
-            r"(?P<date>[A-Za-z]+ \d{1,2},? \d{4})", "Boxing January 14, 2026 PPV"
-        )
+        got = self._extract(r"(?P<date>[A-Za-z]+ \d{1,2},? \d{4})", "Boxing January 14, 2026 PPV")
         assert got == date(2026, 1, 14)
 
     def test_dotted_european_date_parses(self):

@@ -169,9 +169,7 @@ class TestUpdateChannelmap:
         monkeypatch.setattr(httpx, "put", fake_put)
 
         client = PlexClient(base_url="http://plex:32400", token="abc")
-        result = client.update_channelmap(
-            "54", ["60", "301"], {"60": "60", "301": "301"}
-        )
+        result = client.update_channelmap("54", ["60", "301"], {"60": "60", "301": "301"})
 
         assert result["success"] is True
         assert captured["url"] == "http://plex:32400/media/grabbers/devices/54/channelmap"
@@ -250,9 +248,7 @@ class TestComputeChannelmapUpdate:
             PlexChannelMapping(device_identifier="101", enabled=True, lineup_identifier="101"),
             PlexChannelMapping(device_identifier="700", enabled=True, lineup_identifier="700"),
         ]
-        enabled, _ = compute_channelmap_update(
-            current, {"102"}, previously_pushed={"101"}
-        )
+        enabled, _ = compute_channelmap_update(current, {"102"}, previously_pushed={"101"})
         assert set(enabled) == {"102", "700"}
 
     def test_previously_pushed_cannot_remove_a_foreign_channel(self):
@@ -301,15 +297,15 @@ class TestParseEnabled:
 
 class TestDeviceReadProblem:
     def test_clean_read_is_fine(self):
-        dev = PlexDevice(key="54", channel_mapping=[
-            PlexChannelMapping(device_identifier="1", enabled=True)
-        ])
+        dev = PlexDevice(
+            key="54", channel_mapping=[PlexChannelMapping(device_identifier="1", enabled=True)]
+        )
         assert device_read_problem(dev, expect_channels=True) is None
 
     def test_null_device_identifier_is_refused(self):
-        dev = PlexDevice(key="54", channel_mapping=[
-            PlexChannelMapping(device_identifier="None", enabled=True)
-        ])
+        dev = PlexDevice(
+            key="54", channel_mapping=[PlexChannelMapping(device_identifier="None", enabled=True)]
+        )
         assert "deviceIdentifier" in device_read_problem(dev, expect_channels=False)
 
     def test_empty_mapping_refused_only_when_previously_populated(self):

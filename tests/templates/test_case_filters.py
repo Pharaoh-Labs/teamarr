@@ -59,26 +59,14 @@ class TestDoublesPairSeparator:
     """
 
     def test_pascal_keeps_pair(self):
-        assert (
-            filter_pascal("Isabelle Haverlag / Nika Radisic")
-            == "IsabelleHaverlag+NikaRadisic"
-        )
-        assert (
-            filter_pascal("Hugo Nys / Edouard Roger-Vasselin")
-            == "HugoNys+EdouardRogerVasselin"
-        )
+        assert filter_pascal("Isabelle Haverlag / Nika Radisic") == "IsabelleHaverlag+NikaRadisic"
+        assert filter_pascal("Hugo Nys / Edouard Roger-Vasselin") == "HugoNys+EdouardRogerVasselin"
 
     def test_slug_keeps_pair(self):
-        assert (
-            filter_slug("Serena Williams / Venus Williams")
-            == "serena-williams+venus-williams"
-        )
+        assert filter_slug("Serena Williams / Venus Williams") == "serena-williams+venus-williams"
 
     def test_accents_still_folded_per_side(self):
-        assert (
-            filter_pascal("Constantin Frantzén / Robin Haase")
-            == "ConstantinFrantzen+RobinHaase"
-        )
+        assert filter_pascal("Constantin Frantzén / Robin Haase") == "ConstantinFrantzen+RobinHaase"
 
     def test_singles_unchanged(self):
         assert filter_pascal("Serena Williams") == "SerenaWilliams"
@@ -92,9 +80,7 @@ class TestDoublesPairSeparator:
                 "home_team": "Leylah Fernandez / Janice Tjen",
             },
         )
-        assert rendered == (
-            "IsabelleHaverlag+NikaRadisic/LeylahFernandez+JaniceTjen/logo.png"
-        )
+        assert rendered == ("IsabelleHaverlag+NikaRadisic/LeylahFernandez+JaniceTjen/logo.png")
 
     def test_empty_side_does_not_leave_a_dangling_separator(self):
         assert filter_pascal("Nys / ") == "Nys"

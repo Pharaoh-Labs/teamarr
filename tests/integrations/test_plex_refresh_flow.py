@@ -29,8 +29,7 @@ def _device(key, channels, enabled_raw="1", carried_also=()):
         {"channelKey": c, "deviceIdentifier": c, "enabled": "0", "lineupIdentifier": c}
         for c in carried_also
     ]
-    return {"key": key, "uri": "http://dispatcharr:9191/hdhr/Sports",
-            "ChannelMapping": mapping}
+    return {"key": key, "uri": "http://dispatcharr:9191/hdhr/Sports", "ChannelMapping": mapping}
 
 
 def _dvrs_payload(devices):
@@ -62,9 +61,7 @@ class FakePlex:
         def fake_get(url, **kwargs):
             req = httpx.Request("GET", url)
             if "/livetv/dvrs" in url:
-                return httpx.Response(
-                    200, json=_dvrs_payload(self.devices), request=req
-                )
+                return httpx.Response(200, json=_dvrs_payload(self.devices), request=req)
             # Dispatcharr guide readiness probe
             return httpx.Response(200, content=b"<tv></tv>", request=req)
 
@@ -82,9 +79,7 @@ class FakePlex:
         monkeypatch.setattr(httpx, "put", fake_put)
 
     def last_enabled(self):
-        return set(
-            filter(None, self.puts[-1].get("channelsEnabled", "").split(","))
-        )
+        return set(filter(None, self.puts[-1].get("channelsEnabled", "").split(",")))
 
 
 @pytest.fixture
@@ -166,9 +161,7 @@ class Server:
 
 
 def _run(db_factory):
-    return refresh_plex_server(
-        Server(), "Test", db_factory, lambda _m: None, lambda: False
-    )
+    return refresh_plex_server(Server(), "Test", db_factory, lambda _m: None, lambda: False)
 
 
 class TestOwnership:
@@ -233,9 +226,7 @@ class TestRefusals:
         factory, path = db
         _seed(path, events=["101"])
         dev = _device("60", ["101"])
-        dev["ChannelMapping"].append(
-            {"channelKey": "x", "enabled": "1", "lineupIdentifier": "x"}
-        )
+        dev["ChannelMapping"].append({"channelKey": "x", "enabled": "1", "lineupIdentifier": "x"})
         plex = FakePlex([dev])
         plex.install(monkeypatch, httpx)
 
@@ -281,9 +272,7 @@ class TestWriteVerification:
         factory, path = db
         _seed(path, events=["101"])
         # 101 is on the tuner but disabled, so the write must change something.
-        plex = FakePlex(
-            [_device("60", ["700"], carried_also=["101"])], apply_writes=False
-        )
+        plex = FakePlex([_device("60", ["700"], carried_also=["101"])], apply_writes=False)
         plex.install(monkeypatch, httpx)
 
         result = _run(factory)
@@ -296,9 +285,7 @@ class TestWriteVerification:
 
         factory, path = db
         _seed(path, events=["101"])
-        plex = FakePlex(
-            [_device("60", ["700"], carried_also=["101"])], apply_writes=False
-        )
+        plex = FakePlex([_device("60", ["700"], carried_also=["101"])], apply_writes=False)
         plex.install(monkeypatch, httpx)
 
         _run(factory)

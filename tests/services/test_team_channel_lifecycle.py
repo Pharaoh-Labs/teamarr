@@ -244,7 +244,8 @@ def test_dormant_number_is_not_handed_to_another_team(conn, settings):
     _team(conn, team_id=2, name="Red")  # active
     sports = FakeSports()
     sports.get_team_schedule = lambda team_id, league, days_ahead=14: (
-        _in_window() if league == "nba" and sports.calls.append(1) is None and len(sports.calls) > 1
+        _in_window()
+        if league == "nba" and sports.calls.append(1) is None and len(sports.calls) > 1
         else _next_week()
     )
     channels = FakeChannels()
@@ -332,9 +333,7 @@ def test_team_whose_guide_errored_keeps_state(conn, settings):
     remote = _owned(conn)
     channels = FakeChannels([remote])
 
-    result = _manager(
-        conn, channels, FakeSports(_next_week()), unverified_team_ids={1}
-    ).sync()
+    result = _manager(conn, channels, FakeSports(_next_week()), unverified_team_ids={1}).sync()
 
     assert result == _ok(synced=1)
     assert channels.deleted == []

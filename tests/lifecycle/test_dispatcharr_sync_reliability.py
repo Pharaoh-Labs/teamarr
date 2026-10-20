@@ -1200,9 +1200,7 @@ class TestExistingChannelVerificationSafety:
         with (
             patch("teamarr.database.channels.mark_channel_deleted") as mock_del,
             patch("teamarr.database.channels.log_channel_history"),
-            patch.object(
-                service, "_sync_channel_settings", return_value=StreamProcessResult()
-            ),
+            patch.object(service, "_sync_channel_settings", return_value=StreamProcessResult()),
         ):
             result = service._handle_existing_channel(
                 conn=MagicMock(),

@@ -488,9 +488,7 @@ class TeamEPGGenerator:
             or options.template.program_art_url
         )
         if art_template:
-            icon = self._resolver.resolve_art(
-                art_template, context, variables=variables
-            )
+            icon = self._resolver.resolve_art(art_template, context, variables=variables)
         else:
             icon = logo_url or (event.home_team.logo_url if event.home_team else None)
 

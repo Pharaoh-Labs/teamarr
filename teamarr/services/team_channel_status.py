@@ -104,9 +104,7 @@ def find_next_live_window(
             }
         )
 
-    candidates.sort(
-        key=lambda item: item["start"] or datetime.max.replace(tzinfo=UTC)
-    )
+    candidates.sort(key=lambda item: item["start"] or datetime.max.replace(tzinfo=UTC))
     return candidates[0] if candidates else None
 
 

@@ -49,16 +49,12 @@ def test_supplied_service_reaches_the_processor_unchanged(isolated_db, monkeypat
             seen["progress_callback"] = progress_callback
             return "batch-result"
 
-    monkeypatch.setattr(
-        "teamarr.consumers.team_processor.TeamProcessor", _CapturingProcessor
-    )
+    monkeypatch.setattr("teamarr.consumers.team_processor.TeamProcessor", _CapturingProcessor)
 
     def callback(current, total, name):
         pass
 
-    out = process_all_teams(
-        db_factory=isolated_db, progress_callback=callback, service=sentinel
-    )
+    out = process_all_teams(db_factory=isolated_db, progress_callback=callback, service=sentinel)
 
     assert out == "batch-result"
     assert seen["service"] is sentinel
@@ -79,9 +75,7 @@ def test_omitting_the_service_still_builds_one(isolated_db, monkeypatch):
         "teamarr.consumers.team_processor.create_default_service",
         fake_create_default_service,
     )
-    monkeypatch.setattr(
-        "teamarr.consumers.team_processor.TeamEPGGenerator", lambda *a, **kw: None
-    )
+    monkeypatch.setattr("teamarr.consumers.team_processor.TeamEPGGenerator", lambda *a, **kw: None)
 
     seen: dict = {}
 
@@ -90,9 +84,7 @@ def test_omitting_the_service_still_builds_one(isolated_db, monkeypatch):
             seen["service"] = self._service
             return "batch-result"
 
-    monkeypatch.setattr(
-        "teamarr.consumers.team_processor.TeamProcessor", _CapturingProcessor
-    )
+    monkeypatch.setattr("teamarr.consumers.team_processor.TeamProcessor", _CapturingProcessor)
 
     out = process_all_teams(db_factory=isolated_db)
 
@@ -103,12 +95,8 @@ def test_omitting_the_service_still_builds_one(isolated_db, monkeypatch):
 
 def test_explicit_none_is_the_same_as_omitting_it(isolated_db, monkeypatch):
     """``service=None`` must not be mistaken for "use no service"."""
-    monkeypatch.setattr(
-        "teamarr.consumers.team_processor.create_default_service", _SentinelService
-    )
-    monkeypatch.setattr(
-        "teamarr.consumers.team_processor.TeamEPGGenerator", lambda *a, **kw: None
-    )
+    monkeypatch.setattr("teamarr.consumers.team_processor.create_default_service", _SentinelService)
+    monkeypatch.setattr("teamarr.consumers.team_processor.TeamEPGGenerator", lambda *a, **kw: None)
 
     seen: dict = {}
 
@@ -117,9 +105,7 @@ def test_explicit_none_is_the_same_as_omitting_it(isolated_db, monkeypatch):
             seen["service"] = self._service
             return "batch-result"
 
-    monkeypatch.setattr(
-        "teamarr.consumers.team_processor.TeamProcessor", _CapturingProcessor
-    )
+    monkeypatch.setattr("teamarr.consumers.team_processor.TeamProcessor", _CapturingProcessor)
 
     process_all_teams(db_factory=isolated_db, service=None)
 
@@ -192,12 +178,8 @@ def test_the_same_service_reaches_teams_groups_and_lifecycle(isolated_db, monkey
     original_lifecycle = consumers_mod.create_lifecycle_service
 
     monkeypatch.setattr(consumers_mod, "process_all_teams", fake_process_all_teams)
-    monkeypatch.setattr(
-        consumers_mod, "process_all_event_groups", fake_process_all_event_groups
-    )
-    monkeypatch.setattr(
-        consumers_mod, "create_lifecycle_service", fake_create_lifecycle_service
-    )
+    monkeypatch.setattr(consumers_mod, "process_all_event_groups", fake_process_all_event_groups)
+    monkeypatch.setattr(consumers_mod, "create_lifecycle_service", fake_create_lifecycle_service)
 
     result = run_full_generation(db_factory=isolated_db, dispatcharr_client=None)
 
@@ -233,8 +215,7 @@ def test_team_processing_no_longer_builds_its_own_service(isolated_db, monkeypat
     monkeypatch.setattr(
         team_processor_mod,
         "create_default_service",
-        lambda *a, **kw: team_services.append(original_team_create(*a, **kw))
-        or team_services[-1],
+        lambda *a, **kw: team_services.append(original_team_create(*a, **kw)) or team_services[-1],
     )
 
     result = run_full_generation(db_factory=isolated_db, dispatcharr_client=None)

@@ -152,9 +152,7 @@ def test_pregame_rows_evaluate_against_next_game():
     gen = _generator()
     config = FillerConfig(
         pregame_template=BASE,
-        pregame_rows=[
-            {"condition": "has_preview", "priority": 10, "template": "{game_preview}"}
-        ],
+        pregame_rows=[{"condition": "has_preview", "priority": 10, "template": "{game_preview}"}],
     )
     ctx = _filler_context(next_event=_event("pre", game_preview="Aces vs. Heat preview"))
     selected = gen._select_register_template(FillerType.PREGAME, config, ctx)
@@ -205,8 +203,11 @@ def test_the_chosen_row_is_rendered_from_the_refreshed_game(filler_type):
     fresh = _event("post", home_score=2, away_score=3)
     gen = _generator(refreshed_event=fresh)
     rows = [
-        {"condition": "is_final", "priority": 50,
-         "template": "{team_name} {result_text.last} {opponent.last} {final_score.last}"},
+        {
+            "condition": "is_final",
+            "priority": 50,
+            "template": "{team_name} {result_text.last} {opponent.last} {final_score.last}",
+        },
         {"condition": "is_not_final", "priority": 50, "template": "live text"},
     ]
     config = FillerConfig(

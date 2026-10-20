@@ -34,9 +34,7 @@ def test_counts_channels_per_group():
 
 def test_group_holding_only_teamarr_channels_reads_empty():
     # Teamarr's channels are OUTPUT — a group with nothing else is not a source.
-    counts = _manager([CURATED_A, MANAGED]).count_channels_by_group(
-        exclude_channel_ids={900}
-    )
+    counts = _manager([CURATED_A, MANAGED]).count_channels_by_group(exclude_channel_ids={900})
     assert counts == {1: 1}
     assert 3 not in counts
 

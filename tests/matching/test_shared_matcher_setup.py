@@ -66,9 +66,7 @@ def test_country_resolver_is_read_only_after_build():
 
 def test_a_fresh_resolver_still_works_standalone():
     """The class must remain usable directly — tests and tools construct it."""
-    assert CountryNameResolver().resolve("brasil") == get_country_resolver().resolve(
-        "brasil"
-    )
+    assert CountryNameResolver().resolve("brasil") == get_country_resolver().resolve("brasil")
 
 
 # --- identity index ---------------------------------------------------------
@@ -176,9 +174,7 @@ def test_resolution_is_unaffected_by_sharing(db_factory, name):
 
     from teamarr.consumers.matching.identity import TeamIdentityIndex
 
-    standalone = TeamIdentityIndex(
-        [("Boston Celtics", "Celtics", "BOS", "nba", "basketball")]
-    )
+    standalone = TeamIdentityIndex([("Boston Celtics", "Celtics", "BOS", "nba", "basketball")])
     assert {i.name for i in shared.resolve(name).identities} == {
         i.name for i in standalone.resolve(name).identities
     }

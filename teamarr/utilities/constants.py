@@ -636,62 +636,62 @@ EVENT_TYPE_KEYWORDS: dict[str, list[str]] = {
     # These keywords indicate event card format with fighters, rounds, etc.
     # =========================================================================
     "EVENT_CARD": [
-    # -------------------------------------------------------------------------
-    # MMA Organizations
-    # -------------------------------------------------------------------------
-    "ufc",
-    "bellator",
-    "pfl",
-    "one fc",
-    "one championship",
-    "cage warriors",
-    "invicta fc",
-    "lfa",  # Legacy Fighting Alliance
-    "bkfc",  # Bare Knuckle FC
-    # UFC-specific terms
-    "fight night",
-    "ufc fn",
-    "dana white",
-    "contender series",
-    "dwcs",
-    "the ultimate fighter",
-    "tuf",
-    # -------------------------------------------------------------------------
-    # Boxing Organizations & Promoters
-    # -------------------------------------------------------------------------
-    "boxing",
-    "premier boxing",
-    "pbc",  # Premier Boxing Champions
-    "top rank",
-    "matchroom",
-    "golden boy",
-    "showtime boxing",
-    "dazn boxing",
-    "espn boxing",
-    "triller",
-    # -------------------------------------------------------------------------
-    # Card Segments (shared across combat sports)
-    # -------------------------------------------------------------------------
-    "main card",
-    "main event",
-    "prelims",
-    "early prelims",
-    "undercard",
-    "co-main",
-    # -------------------------------------------------------------------------
-    # Generic Combat Sports Terms
-    # -------------------------------------------------------------------------
-    "mma",
-    "mixed martial arts",
-    "kickboxing",
-    "muay thai",
-    "title fight",
-    "title bout",
-    "championship fight",
-    "undisputed",
-    # -------------------------------------------------------------------------
-    # Boxing Sanctioning Bodies (indicates boxing event)
-    # -------------------------------------------------------------------------
+        # -------------------------------------------------------------------------
+        # MMA Organizations
+        # -------------------------------------------------------------------------
+        "ufc",
+        "bellator",
+        "pfl",
+        "one fc",
+        "one championship",
+        "cage warriors",
+        "invicta fc",
+        "lfa",  # Legacy Fighting Alliance
+        "bkfc",  # Bare Knuckle FC
+        # UFC-specific terms
+        "fight night",
+        "ufc fn",
+        "dana white",
+        "contender series",
+        "dwcs",
+        "the ultimate fighter",
+        "tuf",
+        # -------------------------------------------------------------------------
+        # Boxing Organizations & Promoters
+        # -------------------------------------------------------------------------
+        "boxing",
+        "premier boxing",
+        "pbc",  # Premier Boxing Champions
+        "top rank",
+        "matchroom",
+        "golden boy",
+        "showtime boxing",
+        "dazn boxing",
+        "espn boxing",
+        "triller",
+        # -------------------------------------------------------------------------
+        # Card Segments (shared across combat sports)
+        # -------------------------------------------------------------------------
+        "main card",
+        "main event",
+        "prelims",
+        "early prelims",
+        "undercard",
+        "co-main",
+        # -------------------------------------------------------------------------
+        # Generic Combat Sports Terms
+        # -------------------------------------------------------------------------
+        "mma",
+        "mixed martial arts",
+        "kickboxing",
+        "muay thai",
+        "title fight",
+        "title bout",
+        "championship fight",
+        "undisputed",
+        # -------------------------------------------------------------------------
+        # Boxing Sanctioning Bodies (indicates boxing event)
+        # -------------------------------------------------------------------------
         "wbc",  # World Boxing Council
         "wba",  # World Boxing Association
         "ibf",  # International Boxing Federation

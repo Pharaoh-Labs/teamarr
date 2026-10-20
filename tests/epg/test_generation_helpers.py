@@ -233,9 +233,7 @@ def _seed_live_channel(conn, *, live: bool):
         ],
     )
     rules = [{"type": "regex", "value": "(?i)720p", "priority": 1}]
-    conn.execute(
-        "UPDATE settings SET stream_ordering_rules = ? WHERE id = 1", (json.dumps(rules),)
-    )
+    conn.execute("UPDATE settings SET stream_ordering_rules = ? WHERE id = 1", (json.dumps(rules),))
     conn.commit()
     return channel_id
 
@@ -300,30 +298,33 @@ class _StatsStub:
 
 
 def _set_rules(conn, rules):
-    conn.execute(
-        "UPDATE settings SET stream_ordering_rules = ? WHERE id = 1", (json.dumps(rules),)
-    )
+    conn.execute("UPDATE settings SET stream_ordering_rules = ? WHERE id = 1", (json.dumps(rules),))
     conn.commit()
 
 
 def test_ordering_refreshes_stats_once_before_scoring(db_factory, db_conn, monkeypatch):
     _seed_channel_with_streams(db_conn)
-    _set_rules(db_conn, [
-        {
-            "type": "stats_metric",
-            "value": "ffmpeg_output_bitrate|>=|5000",
-            "priority": 99,
-            "mode": "score",
-            "points": 10,
-        }
-    ])
-    stub = _StatsStub([
-        {
-            "id": 100,
-            "stream_stats": {"ffmpeg_output_bitrate": 9000},
-            "stream_stats_updated_at": "t",
-        },
-    ])
+    _set_rules(
+        db_conn,
+        [
+            {
+                "type": "stats_metric",
+                "value": "ffmpeg_output_bitrate|>=|5000",
+                "priority": 99,
+                "mode": "score",
+                "points": 10,
+            }
+        ],
+    )
+    stub = _StatsStub(
+        [
+            {
+                "id": 100,
+                "stream_stats": {"ffmpeg_output_bitrate": 9000},
+                "stream_stats_updated_at": "t",
+            },
+        ]
+    )
     monkeypatch.setattr(streams_mod, "get_dispatcharr_client", lambda: stub)
 
     result = _apply_stream_ordering(db_factory, None, _noop_progress)
@@ -334,8 +335,7 @@ def test_ordering_refreshes_stats_once_before_scoring(db_factory, db_conn, monke
     # And the freshly pulled number is what got scored.
     assert json.loads(
         db_conn.execute(
-            "SELECT stream_stats FROM managed_channel_streams "
-            "WHERE dispatcharr_stream_id = 100"
+            "SELECT stream_stats FROM managed_channel_streams WHERE dispatcharr_stream_id = 100"
         ).fetchone()["stream_stats"]
     ) == {"ffmpeg_output_bitrate": 9000}
 
@@ -373,8 +373,10 @@ def _set_stats(conn, dispatcharr_stream_id, stats):
     """Cache stream_stats against a stream, as a refresh would have."""
     conn.execute(
         "UPDATE managed_channel_streams SET stream_stats = ? WHERE dispatcharr_stream_id = ?",
-        (stats if isinstance(stats, str) or stats is None else json.dumps(stats),
-         dispatcharr_stream_id),
+        (
+            stats if isinstance(stats, str) or stats is None else json.dumps(stats),
+            dispatcharr_stream_id,
+        ),
     )
     conn.commit()
 

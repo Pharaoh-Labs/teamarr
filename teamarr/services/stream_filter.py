@@ -30,6 +30,7 @@ def _has_league_hint(stream_name: str) -> bool:
     """
     return DetectionKeywordService.detect_league(stream_name) is not None
 
+
 # Try to import 'regex' module which supports advanced features
 try:
     import regex  # pyright: ignore[reportMissingModuleSource]

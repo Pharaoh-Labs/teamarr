@@ -405,8 +405,7 @@ def test_reset_refires_next_day(db):
 def test_reset_disabled_never_fires(db):
     _set_mode(db, "gap", gap=3)
     db.execute(
-        "UPDATE settings SET channel_daily_reset_time = '00:00', "
-        "channel_daily_reset_enabled = 0"
+        "UPDATE settings SET channel_daily_reset_time = '00:00', channel_daily_reset_enabled = 0"
     )
     db.commit()
     assert cn.should_run_channel_reset(db) is False
@@ -467,9 +466,7 @@ def test_reset_clears_armed_flag(db):
 
     cn.reassign_all_channels(db, force_reset=cn.should_run_channel_reset(db))
     assert cn.should_run_channel_reset(db) is False
-    row = db.execute(
-        "SELECT force_channel_relayout_pending FROM settings WHERE id = 1"
-    ).fetchone()
+    row = db.execute("SELECT force_channel_relayout_pending FROM settings WHERE id = 1").fetchone()
     assert not row[0]
 
 

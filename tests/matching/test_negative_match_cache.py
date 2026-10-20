@@ -14,7 +14,6 @@ Allowlist membership was measured over 24 consecutive production run pairs —
 see `_CACHEABLE_FAILED_REASONS` for the flip rates.
 """
 
-
 import pytest
 
 from teamarr.consumers.matching.matcher import (
@@ -34,9 +33,16 @@ def on(monkeypatch):
 def _matcher(db_factory, **kw):
     kw.setdefault("generation", 7)
     return StreamMatcher(
-        service=None, db_factory=db_factory, group_id=1, search_leagues=["mlb"],
-        include_leagues=["mlb"], include_final_events=False, sport_durations={},
-        shared_events={}, name_match_enabled=True, **kw,
+        service=None,
+        db_factory=db_factory,
+        group_id=1,
+        search_leagues=["mlb"],
+        include_leagues=["mlb"],
+        include_final_events=False,
+        sport_durations={},
+        shared_events={},
+        name_match_enabled=True,
+        **kw,
     )
 
 
@@ -84,8 +90,12 @@ class TestAllowlist:
 
     @pytest.mark.parametrize(
         "reason",
-        [FailedReason.DATE_MISMATCH, FailedReason.NO_EVENT_CARD_MATCH,
-         FailedReason.CANDIDATES_GATED, FailedReason.NO_RACING_MATCH],
+        [
+            FailedReason.DATE_MISMATCH,
+            FailedReason.NO_EVENT_CARD_MATCH,
+            FailedReason.CANDIDATES_GATED,
+            FailedReason.NO_RACING_MATCH,
+        ],
     )
     def test_churny_reasons_are_never_cached(self, on, db_factory, reason):
         """Measured flip rates 0.5-1.1% — these must keep re-matching."""
@@ -106,16 +116,17 @@ class TestWhatIsNotRemembered:
     def test_partial_fanout_match_is_not_cached(self, on, db_factory):
         """TEAM_ONLY fans out; one hit means the stream matched."""
         m = _matcher(db_factory)
-        m._remember_failure(
-            [_matched_outcome(), _failed(FailedReason.NO_EVENT_FOUND)], 1, "S")
+        m._remember_failure([_matched_outcome(), _failed(FailedReason.NO_EVENT_FOUND)], 1, "S")
         with db_factory() as c:
             assert c.execute("SELECT COUNT(*) FROM stream_match_cache").fetchone()[0] == 0
 
     def test_mixed_reasons_are_not_cached(self, on, db_factory):
         m = _matcher(db_factory)
         m._remember_failure(
-            [_failed(FailedReason.NO_EVENT_FOUND),
-             _failed(FailedReason.FIXTURE_NOT_IN_LEAGUE)], 1, "S")
+            [_failed(FailedReason.NO_EVENT_FOUND), _failed(FailedReason.FIXTURE_NOT_IN_LEAGUE)],
+            1,
+            "S",
+        )
         with db_factory() as c:
             assert c.execute("SELECT COUNT(*) FROM stream_match_cache").fetchone()[0] == 0
 
@@ -159,9 +170,9 @@ class TestReadBack:
             )
             assert got is not None, f"failure purged before generation {generation}"
             with db_factory() as c:
-                stamp = c.execute(
-                    "SELECT last_seen_generation FROM stream_match_cache"
-                ).fetchone()[0]
+                stamp = c.execute("SELECT last_seen_generation FROM stream_match_cache").fetchone()[
+                    0
+                ]
             assert stamp == generation
 
     def test_miss_returns_none(self, on, db_factory):
@@ -177,22 +188,33 @@ class TestReadBack:
     def test_a_reason_no_longer_allowlisted_is_re_matched(self, on, db_factory):
         """Written by an older build, or the allowlist shrank — don't trust it."""
         StreamMatchCache(db_factory).set_failed(
-            group_id=1, stream_id=1, stream_name="S", generation=7,
-            reason=FailedReason.DATE_MISMATCH.value)
+            group_id=1,
+            stream_id=1,
+            stream_name="S",
+            generation=7,
+            reason=FailedReason.DATE_MISMATCH.value,
+        )
         m = _matcher(db_factory)
         assert m._cached_failure(self._classified(), 1, "S") is None
 
     def test_a_reasonless_failed_row_is_re_matched(self, on, db_factory):
         """Rows from before this change carry no reason and must not be trusted."""
         StreamMatchCache(db_factory).set_failed(
-            group_id=1, stream_id=1, stream_name="S", generation=7)
+            group_id=1, stream_id=1, stream_name="S", generation=7
+        )
         m = _matcher(db_factory)
         assert m._cached_failure(self._classified(), 1, "S") is None
 
     def test_a_successful_match_row_is_not_read_as_a_failure(self, on, db_factory):
         StreamMatchCache(db_factory).set(
-            group_id=1, stream_id=1, stream_name="S", event_id="e1", league="mlb",
-            cached_data={"id": "e1"}, generation=7)
+            group_id=1,
+            stream_id=1,
+            stream_name="S",
+            event_id="e1",
+            league="mlb",
+            cached_data={"id": "e1"},
+            generation=7,
+        )
         m = _matcher(db_factory)
         assert m._cached_failure(self._classified(), 1, "S") is None
 

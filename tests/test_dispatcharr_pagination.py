@@ -35,8 +35,15 @@ def _client(get_impl) -> DispatcharrClient:
 class _Paged:
     """Serves `total` items as pages of `page_size`, honouring ?page=N."""
 
-    def __init__(self, total: int, page_size: int, fail_pages=(), status=500,
-                 count_field: bool = True, hold: threading.Event | None = None):
+    def __init__(
+        self,
+        total: int,
+        page_size: int,
+        fail_pages=(),
+        status=500,
+        count_field: bool = True,
+        hold: threading.Event | None = None,
+    ):
         self.total = total
         self.page_size = page_size
         self.fail_pages = set(fail_pages)
@@ -67,9 +74,7 @@ class _Paged:
             if page in self.fail_pages:
                 return _FakeResponse(None, status_code=self.status)
             start = (page - 1) * self.page_size
-            results = [
-                {"id": i} for i in range(start, min(start + self.page_size, self.total))
-            ]
+            results = [{"id": i} for i in range(start, min(start + self.page_size, self.total))]
             payload: dict = {"results": results}
             if self.count_field:
                 payload["count"] = self.total
@@ -137,6 +142,7 @@ def test_non_paginated_list_response_is_returned_whole():
 
 def test_page_size_is_measured_not_assumed():
     """An endpoint that ignores page_size must not be split into phantom pages."""
+
     def ignores_page_size(url: str):
         return _FakeResponse({"count": 300, "results": [{"id": i} for i in range(300)]})
 

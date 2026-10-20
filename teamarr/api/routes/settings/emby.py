@@ -41,9 +41,7 @@ def update_emby_settings(update: EmbySettingsUpdate):
     if update.servers is not None:
         with get_db() as conn:
             stored = get_emby_settings(conn).servers
-        servers = merge_masked_servers(
-            [s.model_dump() for s in update.servers], stored
-        )
+        servers = merge_masked_servers([s.model_dump() for s in update.servers], stored)
 
     with get_db() as conn:
         update_emby_settings(conn, enabled=update.enabled, servers=servers)
@@ -74,27 +72,19 @@ def test_emby_connection(
     # saved server matching the request URL (fallback: first server).
     first = saved.servers[0] if saved.servers else None
     if request:
-        match = next(
-            (s for s in saved.servers if s.url and s.url == request.url), first
-        )
+        match = next((s for s in saved.servers if s.url and s.url == request.url), first)
         if request.password == MASKED_SECRET:
             request.password = match.password if match else None
         if request.api_key == MASKED_SECRET:
             request.api_key = match.api_key if match else None
     url = (request.url if request and request.url else (first.url if first else None)) or ""
     username = (
-        request.username
-        if request and request.username
-        else (first.username if first else None)
+        request.username if request and request.username else (first.username if first else None)
     ) or ""
     password = (
-        request.password
-        if request and request.password
-        else (first.password if first else None)
+        request.password if request and request.password else (first.password if first else None)
     ) or ""
-    api_key = (
-        request.api_key if request and request.api_key else (first.api_key if first else None)
-    )
+    api_key = request.api_key if request and request.api_key else (first.api_key if first else None)
 
     if not url:
         return EmbyConnectionTestResponse(

@@ -12,6 +12,7 @@ We satisfy these by:
 - Setting SQUIGGLE_USER_AGENT in every request
 - Caching the season schedule in-process via TTLCache
 """
+
 import logging
 
 from teamarr.providers.base_client import BaseHTTPClient
@@ -27,8 +28,8 @@ _LOGO_FALLBACK_PATH = "/wp-content/themes/squiggle/assets/images/"
 USER_AGENT = "Teamarr/2 (https://github.com/Pharaoh-Labs/teamarr)"
 
 # Cache TTLs
-_TTL_GAMES = 60 * 60        # 1 hour — season schedule changes infrequently
-_TTL_TEAMS = 24 * 60 * 60   # 24 hours — 18 teams, never changes mid-season
+_TTL_GAMES = 60 * 60  # 1 hour — season schedule changes infrequently
+_TTL_TEAMS = 24 * 60 * 60  # 24 hours — 18 teams, never changes mid-season
 _TTL_STANDINGS = 6 * 60 * 60  # 6 hours — ladder updates once per round (~weekly)
 
 

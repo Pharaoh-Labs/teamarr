@@ -54,9 +54,7 @@ class TestBulkRegex:
             assert got["custom_regex_teams_enabled"] is True
 
     def test_clearing_a_pattern_also_disables_it(self, isolated_db):
-        gid = _make_group(
-            "A", stream_exclude_regex=r"\(ALT\)", stream_exclude_regex_enabled=True
-        )
+        gid = _make_group("A", stream_exclude_regex=r"\(ALT\)", stream_exclude_regex_enabled=True)
         assert _get(gid)["stream_exclude_regex_enabled"] is True
 
         resp = client.put(

@@ -30,11 +30,7 @@ def test_one_stream_many_results_counts_as_one_matched_stream():
 
 def test_coverage_never_exceeds_distinct_streams():
     # 3 streams: stream 1 fans out to 4 matched results, 2 unmatched, 3 matched once.
-    results = (
-        [_r(1, True) for _ in range(4)]
-        + [_r(2, False)]
-        + [_r(3, True)]
-    )
+    results = [_r(1, True) for _ in range(4)] + [_r(2, False)] + [_r(3, True)]
     batch = BatchMatchResult(results=results)
     assert batch.matched_count == 5  # volume (4 + 1)
     assert batch.matched_stream_count == 2  # distinct matched streams (1, 3)

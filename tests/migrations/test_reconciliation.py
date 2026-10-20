@@ -420,9 +420,7 @@ class TestConstraintPreservation:
     def test_check_constraint_preserved(self):
         conn = self._upgraded()
         with pytest.raises(sqlite3.IntegrityError):
-            conn.execute(
-                "INSERT INTO widgets (name, mode) VALUES ('bad', 'invalid-mode')"
-            )
+            conn.execute("INSERT INTO widgets (name, mode) VALUES ('bad', 'invalid-mode')")
         conn.close()
 
     def test_not_null_preserved(self):

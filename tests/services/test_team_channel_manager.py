@@ -116,9 +116,7 @@ class FakeChannels:
         """Shape of ChannelManager.apply_epg_associations (#855)."""
         from teamarr.dispatcharr.types import EpgAssociationOutcome
 
-        failed = [
-            cid for cid, eid in associations if not self.set_channel_epg(cid, eid).success
-        ]
+        failed = [cid for cid, eid in associations if not self.set_channel_epg(cid, eid).success]
         return EpgAssociationOutcome(
             applied=len(associations) - len(failed),
             failed_channel_ids=tuple(failed),
@@ -199,9 +197,7 @@ def settings(monkeypatch):
     import teamarr.services.team_channel_manager as module
 
     # Compact is the event channels' default; the sticky tests override it.
-    monkeypatch.setattr(
-        module, "get_channel_stability_settings", lambda _: {"mode": "compact"}
-    )
+    monkeypatch.setattr(module, "get_channel_stability_settings", lambda _: {"mode": "compact"})
     monkeypatch.setattr(
         module,
         "get_managed_team_channel_settings",
@@ -221,8 +217,16 @@ def settings(monkeypatch):
 
 
 def _ok(**overrides):
-    base = {"created": 0, "synced": 0, "deleted": 0, "conflicts": 0, "errors": 0,
-            "idle": 0, "hibernated": 0, "unavailable": False}
+    base = {
+        "created": 0,
+        "synced": 0,
+        "deleted": 0,
+        "conflicts": 0,
+        "errors": 0,
+        "idle": 0,
+        "hibernated": 0,
+        "unavailable": False,
+    }
     return {**base, **overrides}
 
 
@@ -232,9 +236,7 @@ def _ok(**overrides):
 
 
 def test_creates_owned_streamless_channel_with_requested_number(conn, settings):
-    conn.execute(
-        "INSERT INTO teams VALUES (1, 1, 1, 9100, 'team-blue', 'Blue', 'nba', NULL)"
-    )
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, 9100, 'team-blue', 'Blue', 'nba', NULL)")
     channels = FakeChannels()
 
     result = TeamChannelManager(_factory(conn), channels).sync()
@@ -242,8 +244,13 @@ def test_creates_owned_streamless_channel_with_requested_number(conn, settings):
     assert result == _ok(created=1)
     assert channels.created == [
         {
-            "name": "Blue", "channel_number": 9100, "stream_ids": [], "tvg_id": "team-blue",
-            "channel_group_id": None, "channel_profile_ids": [0], "stream_profile_id": 4,
+            "name": "Blue",
+            "channel_number": 9100,
+            "stream_ids": [],
+            "tvg_id": "team-blue",
+            "channel_group_id": None,
+            "channel_profile_ids": [0],
+            "stream_profile_id": 4,
         }
     ]
     mapping = get_managed_team_channel(conn, 1)
@@ -254,9 +261,7 @@ def test_creates_owned_streamless_channel_with_requested_number(conn, settings):
 def test_creation_uses_managed_output_and_uploads_resolved_template_logo(
     conn, settings, monkeypatch
 ):
-    conn.execute(
-        "INSERT INTO teams VALUES (1, 1, 1, 9100, 'team-blue', 'Blue', 'nba', 5)"
-    )
+    conn.execute("INSERT INTO teams VALUES (1, 1, 1, 9100, 'team-blue', 'Blue', 'nba', 5)")
     conn.execute("INSERT INTO leagues VALUES ('nba', NULL, 'National Basketball Association')")
     channels = FakeChannels()
     uploaded = []
@@ -286,10 +291,12 @@ def test_creation_uses_managed_output_and_uploads_resolved_template_logo(
     assert channels.created[0]["name"] == "National Basketball Association | Blue"
     assert channels.created[0]["logo_id"] == 42
     assert channels.updated == [(99, {"logo_id": 42})]
-    assert uploaded == [{
-        "name": "Blue Logo",
-        "url": "https://logos.example/nba/Blue.png",
-    }]
+    assert uploaded == [
+        {
+            "name": "Blue Logo",
+            "url": "https://logos.example/nba/Blue.png",
+        }
+    ]
 
 
 def test_relative_template_logo_without_art_base_is_not_uploaded(conn, settings, monkeypatch):
@@ -361,7 +368,13 @@ def test_existing_mapping_preserves_streams_and_is_removed_when_unmanaged(conn, 
         "INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL, NULL)"
     )
     owned = RemoteChannel(
-        10, "owned", "Old", "9000", tvg_id="team-blue", streams=(1,), stream_profile_id=4,
+        10,
+        "owned",
+        "Old",
+        "9000",
+        tvg_id="team-blue",
+        streams=(1,),
+        stream_profile_id=4,
     )
     channels = FakeChannels([owned])
     manager = TeamChannelManager(_factory(conn), channels)
@@ -383,9 +396,9 @@ def test_deactivating_a_team_keeps_its_channel(conn, settings):
     conn.execute(
         "INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL, NULL)"
     )
-    channels = FakeChannels([
-        RemoteChannel(10, "owned", "Blue", "9000", tvg_id="team-blue", stream_profile_id=4)
-    ])
+    channels = FakeChannels(
+        [RemoteChannel(10, "owned", "Blue", "9000", tvg_id="team-blue", stream_profile_id=4)]
+    )
 
     result = TeamChannelManager(_factory(conn), channels).sync()
 
@@ -476,10 +489,12 @@ def _two_out_of_order_teams(conn):
         "INSERT INTO managed_team_channels VALUES "
         "(2, 11, 'zulu-uuid', 9001, 'ready', NULL, NULL, NULL)"
     )
-    return FakeChannels([
-        RemoteChannel(10, "alpha-uuid", "Alpha", "9000", tvg_id="alpha", stream_profile_id=4),
-        RemoteChannel(11, "zulu-uuid", "Zulu", "9001", tvg_id="zulu", stream_profile_id=4),
-    ])
+    return FakeChannels(
+        [
+            RemoteChannel(10, "alpha-uuid", "Alpha", "9000", tvg_id="alpha", stream_profile_id=4),
+            RemoteChannel(11, "zulu-uuid", "Zulu", "9001", tvg_id="zulu", stream_profile_id=4),
+        ]
+    )
 
 
 def test_compact_mode_reflows_automatic_channels_every_run(conn, settings):
@@ -539,8 +554,11 @@ def test_new_channels_are_numbered_in_priority_order_into_free_slots(conn, setti
             self.created.append(kwargs)
             self.next_id += 1
             channel = RemoteChannel(
-                self.next_id, f"u{self.next_id}", kwargs["name"],
-                str(kwargs["channel_number"]), tvg_id=kwargs["tvg_id"],
+                self.next_id,
+                f"u{self.next_id}",
+                kwargs["name"],
+                str(kwargs["channel_number"]),
+                tvg_id=kwargs["tvg_id"],
             )
             self.channels[channel.id] = channel
             return SimpleNamespace(
@@ -553,7 +571,8 @@ def test_new_channels_are_numbered_in_priority_order_into_free_slots(conn, setti
     assert result["created"] == 2
     # Hockey sorts first and takes the first free number above the external 9000.
     assert [(c["name"], c["channel_number"]) for c in channels.created] == [
-        ("Zulu", 9001), ("Alpha", 9002),
+        ("Zulu", 9001),
+        ("Alpha", 9002),
     ]
 
 
@@ -565,7 +584,12 @@ def test_configured_profiles_are_compared_as_sets_and_all_profiles_is_never_push
         "INSERT INTO managed_team_channels VALUES (1, 10, 'owned', 9000, 'ready', NULL, NULL, NULL)"
     )
     remote = RemoteChannel(
-        10, "owned", "Blue", "9000", tvg_id="team-blue", stream_profile_id=4,
+        10,
+        "owned",
+        "Blue",
+        "9000",
+        tvg_id="team-blue",
+        stream_profile_id=4,
         channel_profile_ids=(2, 1),
     )
     channels = FakeChannels([remote])
@@ -581,7 +605,8 @@ def test_configured_profiles_are_compared_as_sets_and_all_profiles_is_never_push
         module,
         "get_dispatcharr_settings",
         lambda _: SimpleNamespace(
-            default_stream_profile_id=4, managed_team_channel_group_id=None,
+            default_stream_profile_id=4,
+            managed_team_channel_group_id=None,
             managed_team_channel_profile_ids=[1, "2"],
         ),
     )
@@ -592,7 +617,8 @@ def test_configured_profiles_are_compared_as_sets_and_all_profiles_is_never_push
         module,
         "get_dispatcharr_settings",
         lambda _: SimpleNamespace(
-            default_stream_profile_id=4, managed_team_channel_group_id=None,
+            default_stream_profile_id=4,
+            managed_team_channel_group_id=None,
             managed_team_channel_profile_ids=[3],
         ),
     )
@@ -729,8 +755,7 @@ def test_channel_group_falls_back_when_league_config_has_no_group_override(
 
     conn.execute("INSERT INTO teams VALUES (1, 1, 1, NULL, 'team-blue', 'Blue', 'nba', NULL)")
     conn.execute(
-        "INSERT INTO subscription_league_config (league_code, matchup_order) "
-        "VALUES ('nba', 'auto')"
+        "INSERT INTO subscription_league_config (league_code, matchup_order) VALUES ('nba', 'auto')"
     )
     channels = FakeChannels()
     monkeypatch.setattr(
@@ -761,7 +786,12 @@ def test_channel_group_per_league_override_sync_update(conn, settings, monkeypat
         "VALUES ('nba', 25, 'static')"
     )
     remote = RemoteChannel(
-        10, "owned", "Blue", "9000", tvg_id="team-blue", channel_group_id=15,
+        10,
+        "owned",
+        "Blue",
+        "9000",
+        tvg_id="team-blue",
+        channel_group_id=15,
     )
     channels = FakeChannels([remote])
     monkeypatch.setattr(
@@ -906,9 +936,7 @@ def _event(event_id, home, away, league="nhl", start=None, state="scheduled"):
 def _rows(database):
     return [
         dict(row)
-        for row in database.execute(
-            "SELECT * FROM managed_team_channel_streams ORDER BY id"
-        )
+        for row in database.execute("SELECT * FROM managed_team_channel_streams ORDER BY id")
     ]
 
 
@@ -917,8 +945,15 @@ def test_stream_memberships_attach_only_to_matching_owned_team():
     manager = TeamChannelManager(_factory(database), FakeChannels())
 
     result = manager.sync_stream_memberships(
-        [{"event": _event("game-1", "home", "away"), "stream": {"id": 55},
-          "source_group_id": 7, "match_method": "epg", "matched_side": "home"}]
+        [
+            {
+                "event": _event("game-1", "home", "away"),
+                "stream": {"id": 55},
+                "source_group_id": 7,
+                "match_method": "epg",
+                "matched_side": "home",
+            }
+        ]
     )
 
     assert result == {"memberships": 1, "channels": 0, "errors": 0}
@@ -934,8 +969,14 @@ def test_stream_memberships_do_not_cross_leagues_with_same_provider_team_id():
     manager = TeamChannelManager(_factory(database), FakeChannels())
 
     result = manager.sync_stream_memberships(
-        [{"event": _event("game-1", "21", "22", league="nfl"), "stream": {"id": 55},
-          "source_group_id": 7, "match_method": "epg"}]
+        [
+            {
+                "event": _event("game-1", "21", "22", league="nfl"),
+                "stream": {"id": 55},
+                "source_group_id": 7,
+                "match_method": "epg",
+            }
+        ]
     )
 
     assert result["memberships"] == 0
@@ -948,8 +989,14 @@ def test_stream_memberships_cover_every_league_the_team_plays_in():
     manager = TeamChannelManager(_factory(database), FakeChannels())
 
     result = manager.sync_stream_memberships(
-        [{"event": _event("cup-1", "9", "3", league="concacaf.leagues.cup"),
-          "stream": {"id": 55}, "source_group_id": 7, "match_method": "fuzzy"}]
+        [
+            {
+                "event": _event("cup-1", "9", "3", league="concacaf.leagues.cup"),
+                "stream": {"id": 55},
+                "source_group_id": 7,
+                "match_method": "fuzzy",
+            }
+        ]
     )
 
     assert result["memberships"] == 1
@@ -962,10 +1009,16 @@ def test_final_and_cancelled_games_never_attach():
 
     result = manager.sync_stream_memberships(
         [
-            {"event": _event("done", "home", "away", state="final"), "stream": {"id": 55},
-             "source_group_id": 7},
-            {"event": _event("off", "home", "away", state="cancelled"), "stream": {"id": 56},
-             "source_group_id": 7},
+            {
+                "event": _event("done", "home", "away", state="final"),
+                "stream": {"id": 55},
+                "source_group_id": 7,
+            },
+            {
+                "event": _event("off", "home", "away", state="cancelled"),
+                "stream": {"id": 56},
+                "source_group_id": 7,
+            },
         ]
     )
 
@@ -983,8 +1036,13 @@ def test_feed_side_comes_from_the_stream_not_the_recipient_team():
     manager.sync_stream_memberships(
         [
             # The away broadcast, attached to BOTH teams' channels.
-            {"event": event, "stream": {"id": 55}, "source_group_id": 7,
-             "feed_hint": "away", "matched_side": None},
+            {
+                "event": event,
+                "stream": {"id": 55},
+                "source_group_id": 7,
+                "feed_hint": "away",
+                "matched_side": None,
+            },
             # A national feed: no side is known.
             {"event": event, "stream": {"id": 56}, "source_group_id": 7},
         ]
@@ -1014,11 +1072,7 @@ def test_group_that_did_not_report_keeps_its_memberships():
     # Group 8 errored this run: group 7 reports nothing, group 8 is silent.
     manager.sync_stream_memberships([], completed_group_ids={7})
 
-    live = {
-        r["dispatcharr_stream_id"]
-        for r in _rows(database)
-        if r["removed_at"] is None
-    }
+    live = {r["dispatcharr_stream_id"] for r in _rows(database) if r["removed_at"] is None}
     assert live == {66}
     database.close()
 
@@ -1027,8 +1081,7 @@ def test_disabled_group_memberships_are_released_even_when_silent():
     database = _membership_db((1, "home", "Home", "nhl", '["nhl"]'))
     manager = TeamChannelManager(_factory(database), FakeChannels())
     manager.sync_stream_memberships(
-        [{"event": _event("game-1", "home", "away"), "stream": {"id": 66},
-          "source_group_id": 8}],
+        [{"event": _event("game-1", "home", "away"), "stream": {"id": 66}, "source_group_id": 8}],
         completed_group_ids={7, 8},
     )
     database.execute("UPDATE event_epg_groups SET enabled = 0 WHERE id = 8")
@@ -1245,38 +1298,124 @@ def _selection_db(rows):
 
 def test_soonest_active_game_wins_the_channel():
     """Not the lowest event id: yesterday's final must not beat tonight's game (#826)."""
-    database = _selection_db([
-        # Yesterday's game, lower id, window already closed.
-        (1, 55, '401000', 1, '2026-01-01 00:00:00', '2025-12-31 23:00:00', '2026-01-01 04:00:00'),
-        # Tonight's game, window open.
-        (2, 56, '401999', 1, '2026-01-02 00:00:00', '2026-01-01 23:00:00', '2026-01-02 04:00:00'),
-        # Next week's game, higher id but window not open yet.
-        (3, 57, '401001', 1, '2026-01-09 00:00:00', '2026-01-08 23:00:00', '2026-01-09 04:00:00'),
-    ])
+    database = _selection_db(
+        [
+            # Yesterday's game, lower id, window already closed.
+            (
+                1,
+                55,
+                "401000",
+                1,
+                "2026-01-01 00:00:00",
+                "2025-12-31 23:00:00",
+                "2026-01-01 04:00:00",
+            ),
+            # Tonight's game, window open.
+            (
+                2,
+                56,
+                "401999",
+                1,
+                "2026-01-02 00:00:00",
+                "2026-01-01 23:00:00",
+                "2026-01-02 04:00:00",
+            ),
+            # Next week's game, higher id but window not open yet.
+            (
+                3,
+                57,
+                "401001",
+                1,
+                "2026-01-09 00:00:00",
+                "2026-01-08 23:00:00",
+                "2026-01-09 04:00:00",
+            ),
+        ]
+    )
 
     assert active_stream_ids(database, 1, datetime(2026, 1, 2, 0, 30, tzinfo=UTC)) == [56]
     database.close()
 
 
 def test_overlapping_windows_pick_the_earlier_start():
-    database = _selection_db([
-        (1, 55, 'game-1', 2, '2026-01-01 12:00:00', '2026-01-01 11:00:00', '2026-01-01 15:30:00'),
-        (2, 56, 'game-1', 1, '2026-01-01 12:00:00', '2026-01-01 11:00:00', '2026-01-01 15:30:00'),
-        (3, 57, 'game-2', 1, '2026-01-01 13:30:00', '2026-01-01 12:30:00', '2026-01-01 17:00:00'),
-    ])
+    database = _selection_db(
+        [
+            (
+                1,
+                55,
+                "game-1",
+                2,
+                "2026-01-01 12:00:00",
+                "2026-01-01 11:00:00",
+                "2026-01-01 15:30:00",
+            ),
+            (
+                2,
+                56,
+                "game-1",
+                1,
+                "2026-01-01 12:00:00",
+                "2026-01-01 11:00:00",
+                "2026-01-01 15:30:00",
+            ),
+            (
+                3,
+                57,
+                "game-2",
+                1,
+                "2026-01-01 13:30:00",
+                "2026-01-01 12:30:00",
+                "2026-01-01 17:00:00",
+            ),
+        ]
+    )
 
     assert active_stream_ids(database, 1, datetime(2026, 1, 1, 13, tzinfo=UTC)) == [56, 55]
     database.close()
 
 
 def test_assigned_streams_deduplicate_active_event_memberships():
-    database = _selection_db([
-        # The same stream twice for one game (two EPG programme slots): one row.
-        (1, 55, 'game-1', 2, '2026-01-01 12:00:00', '2026-01-01 11:00:00', '2026-01-01 13:30:00'),
-        (2, 55, 'game-1', 1, '2026-01-01 12:00:00', '2026-01-01 10:00:00', '2026-01-01 13:30:00'),
-        (3, 56, 'game-1', 3, '2026-01-01 12:00:00', '2026-01-01 11:00:00', '2026-01-01 13:30:00'),
-        (4, 57, 'game-2', 1, '2026-01-01 13:30:00', '2026-01-01 12:30:00', '2026-01-01 16:00:00'),
-    ])
+    database = _selection_db(
+        [
+            # The same stream twice for one game (two EPG programme slots): one row.
+            (
+                1,
+                55,
+                "game-1",
+                2,
+                "2026-01-01 12:00:00",
+                "2026-01-01 11:00:00",
+                "2026-01-01 13:30:00",
+            ),
+            (
+                2,
+                55,
+                "game-1",
+                1,
+                "2026-01-01 12:00:00",
+                "2026-01-01 10:00:00",
+                "2026-01-01 13:30:00",
+            ),
+            (
+                3,
+                56,
+                "game-1",
+                3,
+                "2026-01-01 12:00:00",
+                "2026-01-01 11:00:00",
+                "2026-01-01 13:30:00",
+            ),
+            (
+                4,
+                57,
+                "game-2",
+                1,
+                "2026-01-01 13:30:00",
+                "2026-01-01 12:30:00",
+                "2026-01-01 16:00:00",
+            ),
+        ]
+    )
 
     streams = get_assigned_team_streams(database, 1, datetime(2026, 1, 1, 13, tzinfo=UTC))
 

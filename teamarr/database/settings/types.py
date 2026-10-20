@@ -144,9 +144,7 @@ class EPGSettings:
     epg_channel_source_groups: list[int] = field(default_factory=list)
     # Explicit stream-profile override targets. Current target_type is
     # 'dispatcharr_channel_group'; future source types can share this contract.
-    stream_profile_overrides: list[dict[str, int | str]] = field(
-        default_factory=list
-    )
+    stream_profile_overrides: list[dict[str, int | str]] = field(default_factory=list)
     epg_stream_pre_buffer_minutes: int = 60
     epg_stream_post_buffer_minutes: int = 60
     # Tennis: only match/attach grand-slam tournaments (#283 first slice) —
@@ -265,19 +263,34 @@ class StreamOrderingRule:
     condition: str = ""
 
 
-VALID_RULE_TYPES: frozenset[str] = frozenset({
-    "m3u", "group", "regex", "stream_type",
-    "team_feed", "not_team_feed", "epg_match", "dispatcharr_group",
-    "dispatcharr_channel", "home_feed", "away_feed",
-    "stats_metric", "catch_all",
-})
+VALID_RULE_TYPES: frozenset[str] = frozenset(
+    {
+        "m3u",
+        "group",
+        "regex",
+        "stream_type",
+        "team_feed",
+        "not_team_feed",
+        "epg_match",
+        "dispatcharr_group",
+        "dispatcharr_channel",
+        "home_feed",
+        "away_feed",
+        "stats_metric",
+        "catch_all",
+    }
+)
 VALID_RULE_MODES: frozenset[str] = frozenset({"priority", "score"})
 # "Only when" conditions (#539): facts about the channel's game, not the stream.
-VALID_RULE_CONDITIONS: frozenset[str] = frozenset({
-    "",
-    "no_local_broadcast",
-    "season:preseason", "season:regular", "season:postseason",
-})
+VALID_RULE_CONDITIONS: frozenset[str] = frozenset(
+    {
+        "",
+        "no_local_broadcast",
+        "season:preseason",
+        "season:regular",
+        "season:postseason",
+    }
+)
 # Legacy rows (pre epic teamarr-5ag) carry no 'mode'; they are hard priority rules.
 LEGACY_RULE_MODE: str = "priority"
 NO_VALUE_RULE_TYPES: frozenset[str] = frozenset(

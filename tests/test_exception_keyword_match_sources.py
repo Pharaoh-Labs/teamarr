@@ -354,8 +354,15 @@ class TestFailedGroupFetch:
         from teamarr.consumers.event_group_processor.stream_fetcher import StreamFetcher
 
         stream = SimpleNamespace(
-            id=42, name="Arsenal v Chelsea", tvg_id=None, tvg_name=None, url="",
-            channel_group=33, channel_group_id=None, m3u_account_id=1, is_stale=False,
+            id=42,
+            name="Arsenal v Chelsea",
+            tvg_id=None,
+            tvg_name=None,
+            url="",
+            channel_group=33,
+            channel_group_id=None,
+            m3u_account_id=1,
+            is_stale=False,
         )
         m3u = SimpleNamespace(
             list_streams=lambda **_: [stream],
@@ -374,9 +381,7 @@ class TestFailedGroupFetch:
         from teamarr.consumers.lifecycle.service import ChannelLifecycleService
 
         with db_factory() as conn:
-            TestEnforcer()._setup(
-                conn, on_keyword=True, m3u_group_id=33, m3u_group_name="ES| DAZN"
-            )
+            TestEnforcer()._setup(conn, on_keyword=True, m3u_group_id=33, m3u_group_name="ES| DAZN")
         # list_groups() returns [] when the request fails
         stream = self._fetch(groups=[], db_factory=db_factory)
         assert (stream["m3u_group_id"], stream["m3u_group_name"]) == (33, "ES| DAZN")

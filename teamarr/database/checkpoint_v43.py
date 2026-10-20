@@ -813,8 +813,7 @@ def _recreate_event_epg_groups_v42(conn: sqlite3.Connection, table_sql: str) -> 
     col_list = ", ".join(cols)
     sel_list = ", ".join(select_exprs)
     conn.execute(
-        f"INSERT INTO event_epg_groups_new ({col_list}) "
-        f"SELECT {sel_list} FROM event_epg_groups"
+        f"INSERT INTO event_epg_groups_new ({col_list}) SELECT {sel_list} FROM event_epg_groups"
     )
     conn.execute("DROP TABLE event_epg_groups")
     conn.execute("ALTER TABLE event_epg_groups_new RENAME TO event_epg_groups")

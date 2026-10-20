@@ -105,8 +105,7 @@ def test_editorial_text_strips_dateline_dash():
     # No shortLinkText → fall back to description with the AP em dash stripped.
     obj = {"description": "— Bo Bichette continued his hot streak with three hits."}
     assert (
-        ESPNProvider._editorial_text(obj)
-        == "Bo Bichette continued his hot streak with three hits."
+        ESPNProvider._editorial_text(obj) == "Bo Bichette continued his hot streak with three hits."
     )
 
 
@@ -185,54 +184,66 @@ def test_extractors_safe_without_event():
 
 
 def test_series_game_in_postseason():
-    ctx, gc = _ctx(_event(
-        season_type=SEASON_POSTSEASON,
-        game_event_note="AL Wild Card - Game 2",
-    ))
+    ctx, gc = _ctx(
+        _event(
+            season_type=SEASON_POSTSEASON,
+            game_event_note="AL Wild Card - Game 2",
+        )
+    )
     assert extract_series_game(ctx, gc) == "Game 2"
 
-    ctx2, gc2 = _ctx(_event(
-        season_type=SEASON_POSTSEASON,
-        game_event_note="Stanley Cup Final - Game 7",
-    ))
+    ctx2, gc2 = _ctx(
+        _event(
+            season_type=SEASON_POSTSEASON,
+            game_event_note="Stanley Cup Final - Game 7",
+        )
+    )
     assert extract_series_game(ctx2, gc2) == "Game 7"
 
 
 def test_series_game_empty_in_regular_season():
-    ctx, gc = _ctx(_event(
-        season_type=SEASON_REGULAR,
-        game_event_note="AL Wild Card - Game 2",
-    ))
+    ctx, gc = _ctx(
+        _event(
+            season_type=SEASON_REGULAR,
+            game_event_note="AL Wild Card - Game 2",
+        )
+    )
     assert extract_series_game(ctx, gc) == ""
 
 
 def test_series_game_empty_when_no_game_number():
-    ctx, gc = _ctx(_event(
-        season_type=SEASON_POSTSEASON,
-        game_event_note="Super Bowl LIX",
-    ))
+    ctx, gc = _ctx(
+        _event(
+            season_type=SEASON_POSTSEASON,
+            game_event_note="Super Bowl LIX",
+        )
+    )
     assert extract_series_game(ctx, gc) == ""
 
 
 def test_series_score_and_summary_short_postseason():
     # Away is A, Home is B
     set_global_matchup_order("auto")
-    ctx, gc = _ctx(_event(
-        season_type=SEASON_POSTSEASON,
-        sport="baseball",
-        series_summary="B leads 2-1",
-    ))
+    ctx, gc = _ctx(
+        _event(
+            season_type=SEASON_POSTSEASON,
+            sport="baseball",
+            series_summary="B leads 2-1",
+        )
+    )
     # In away-first (baseball auto): A (Away, 1 win) - B (Home, 2 wins) -> "1-2"
     assert extract_series_score(ctx, gc) == "1-2"
     assert extract_series_summary_short(ctx, gc) == "A 1 - B 2"
 
 
 def test_series_score_and_summary_short_tied():
-    ctx, gc = _ctx(_event(
-        season_type=SEASON_POSTSEASON,
-        sport="baseball",
-        series_summary="Series tied 1-1",
-    ))
+    ctx, gc = _ctx(
+        _event(
+            season_type=SEASON_POSTSEASON,
+            sport="baseball",
+            series_summary="Series tied 1-1",
+        )
+    )
     assert extract_series_score(ctx, gc) == "1-1"
     assert extract_series_summary_short(ctx, gc) == "Tied 1-1"
 
@@ -240,11 +251,13 @@ def test_series_score_and_summary_short_tied():
 def test_series_score_and_summary_short_home_first_localization():
     set_global_matchup_order("home_first")
     try:
-        ctx, gc = _ctx(_event(
-            season_type=SEASON_POSTSEASON,
-            sport="baseball",
-            series_summary="B leads 2-1",
-        ))
+        ctx, gc = _ctx(
+            _event(
+                season_type=SEASON_POSTSEASON,
+                sport="baseball",
+                series_summary="B leads 2-1",
+            )
+        )
         # In home-first: B (Home, 2 wins) - A (Away, 1 win) -> "2-1"
         assert extract_series_score(ctx, gc) == "2-1"
         assert extract_series_summary_short(ctx, gc) == "B 2 - A 1"
@@ -253,11 +266,13 @@ def test_series_score_and_summary_short_home_first_localization():
 
 
 def test_series_score_and_summary_short_empty_in_regular_season():
-    ctx, gc = _ctx(_event(
-        season_type=SEASON_REGULAR,
-        sport="baseball",
-        series_summary="B leads 2-1",
-    ))
+    ctx, gc = _ctx(
+        _event(
+            season_type=SEASON_REGULAR,
+            sport="baseball",
+            series_summary="B leads 2-1",
+        )
+    )
     assert extract_series_score(ctx, gc) == ""
     assert extract_series_summary_short(ctx, gc) == ""
 

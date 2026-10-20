@@ -38,9 +38,7 @@ def _run(processor, groups, channels, subscribed):
         ),
     ):
         processor._cleanup_unsubscribed_leagues(MagicMock(), lifecycle)
-    return [
-        call.args[1] for call in lifecycle.delete_managed_channel.call_args_list
-    ]
+    return [call.args[1] for call in lifecycle.delete_managed_channel.call_args_list]
 
 
 def test_unsubscribed_league_channel_deleted(processor):

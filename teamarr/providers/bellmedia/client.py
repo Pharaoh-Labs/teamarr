@@ -119,12 +119,7 @@ class BellMediaClient(BaseHTTPClient):
             label="schedule",
         )
         groups = data.values() if isinstance(data, dict) else []
-        events = [
-            event
-            for group in groups
-            for event in group
-            if isinstance(event, dict)
-        ]
+        events = [event for group in groups for event in group if isinstance(event, dict)]
         if events:
             self._cache.set(cache_key, events, _TTL_SCHEDULE)
         return events

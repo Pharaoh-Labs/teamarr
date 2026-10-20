@@ -86,8 +86,10 @@ def test_month_day_only_extracts(month_first=True):
     # #485: month/day-only configs were silently dead behind the date toggle
     resp = _run(
         ExtractionPatterns(
-            month_pattern=r"m(?P<month>\d{2})", month_enabled=True,
-            day_pattern=r"d(?P<day>\d{2})", day_enabled=True,
+            month_pattern=r"m(?P<month>\d{2})",
+            month_enabled=True,
+            day_pattern=r"d(?P<day>\d{2})",
+            day_enabled=True,
         ),
         ["Game m07 d16"],
     )

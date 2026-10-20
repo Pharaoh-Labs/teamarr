@@ -26,8 +26,12 @@ def db(tmp_path, monkeypatch):
             "VALUES ('eng.w.1', 'espn', 'English Women''s Super League', 'soccer', 14)"
         )
         ids = {}
-        for name, kind in (("Soccer", "event"), ("Hoops", "event"), ("Any", "event"),
-                           ("Club", "team")):
+        for name, kind in (
+            ("Soccer", "event"),
+            ("Hoops", "event"),
+            ("Any", "event"),
+            ("Club", "team"),
+        ):
             cur = conn.execute(
                 "INSERT INTO templates (name, template_type) VALUES (?, ?)", (name, kind)
             )
@@ -54,8 +58,9 @@ def _get(template_id=None):
 
 def _subscribe(*codes):
     with get_db() as conn:
-        conn.execute("UPDATE sports_subscription SET leagues = ? WHERE id = 1",
-                     (json.dumps(list(codes)),))
+        conn.execute(
+            "UPDATE sports_subscription SET leagues = ? WHERE id = 1", (json.dumps(list(codes)),)
+        )
         conn.commit()
 
 

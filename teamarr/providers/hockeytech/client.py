@@ -223,8 +223,7 @@ class HockeyTechClient(BaseHTTPClient):
         # ±1-day superset — `date_played` is the venue's calendar, not the
         # user's; exact membership is the service seam's job (#590).
         near = {
-            (target_date + timedelta(days=offset)).strftime("%Y-%m-%d")
-            for offset in (-1, 0, 1)
+            (target_date + timedelta(days=offset)).strftime("%Y-%m-%d") for offset in (-1, 0, 1)
         }
         return [game for game in schedule if game.get("date_played") in near]
 
@@ -254,11 +253,7 @@ class HockeyTechClient(BaseHTTPClient):
             return {}
 
         seasons = data.get("SiteKit", {}).get("Seasons", [])
-        info = {
-            str(s.get("season_id")): s
-            for s in seasons
-            if s.get("season_id") is not None
-        }
+        info = {str(s.get("season_id")): s for s in seasons if s.get("season_id") is not None}
         if info:
             self._cache.set(cache_key, info, CACHE_TTL_SEASONS)
 

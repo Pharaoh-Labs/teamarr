@@ -185,9 +185,7 @@ def check_exception_keyword(
         # was alphabetical: a Spanish 4K stream went to the 4K channel because
         # "4K" sorts before "Spanish", and a stream filed under an ignored M3U
         # group was kept whenever its name carried any other keyword.
-        ignored = _first_keyword_match(
-            [kw for kw in keywords if kw.behavior == "ignore"], *sources
-        )
+        ignored = _first_keyword_match([kw for kw in keywords if kw.behavior == "ignore"], *sources)
         if ignored is not None:
             winner = ignored
     return (winner.label, winner.behavior)

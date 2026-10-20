@@ -269,9 +269,7 @@ def create_subscription_template(request: TemplateAssignmentCreate):
     "/subscription-templates/{assignment_id}",
     response_model=TemplateAssignmentResponse,
 )
-def update_subscription_template_endpoint(
-    assignment_id: int, request: TemplateAssignmentUpdate
-):
+def update_subscription_template_endpoint(assignment_id: int, request: TemplateAssignmentUpdate):
     """Update a global template assignment."""
 
     with get_db() as conn:

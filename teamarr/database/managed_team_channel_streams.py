@@ -80,8 +80,12 @@ def reconcile_team_streams(
     ).fetchall()
     for row in existing:
         key = (
-            row["team_id"], row["dispatcharr_stream_id"], row["event_id"],
-            row["event_provider"], row["source_group_id"], row["attach_at"] or "",
+            row["team_id"],
+            row["dispatcharr_stream_id"],
+            row["event_id"],
+            row["event_provider"],
+            row["source_group_id"],
+            row["attach_at"] or "",
         )
         if key in desired:
             continue
@@ -121,14 +125,23 @@ def reconcile_team_streams(
                    removed_at = NULL,
                    updated_at = CURRENT_TIMESTAMP""",
             (
-                item["team_id"], item["dispatcharr_stream_id"], item["event_id"],
-                item["event_provider"], item["source_group_id"], item.get("stream_name"),
-                item.get("m3u_account_name"), item.get("match_method"),
-                item.get("match_type", "event"), item.get("feed_team_id"),
-                item.get("feed_side"), item.get("dispatcharr_channel_group"),
+                item["team_id"],
+                item["dispatcharr_stream_id"],
+                item["event_id"],
+                item["event_provider"],
+                item["source_group_id"],
+                item.get("stream_name"),
+                item.get("m3u_account_name"),
+                item.get("match_method"),
+                item.get("match_type", "event"),
+                item.get("feed_team_id"),
+                item.get("feed_side"),
+                item.get("dispatcharr_channel_group"),
                 item.get("dispatcharr_source_channel_id"),
-                item.get("priority", 999), item.get("event_start"),
-                item.get("attach_at") or "", item.get("detach_at"),
+                item.get("priority", 999),
+                item.get("event_start"),
+                item.get("attach_at") or "",
+                item.get("detach_at"),
             ),
         )
 

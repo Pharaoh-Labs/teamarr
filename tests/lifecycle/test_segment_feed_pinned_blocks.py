@@ -116,8 +116,11 @@ class TestKeyword:
         self._check(
             db_conn,
             "any",
-            [({}, False), ({"exception_keyword": PIT}, True),
-             ({"exception_keyword": "Spanish"}, True)],
+            [
+                ({}, False),
+                ({"exception_keyword": PIT}, True),
+                ({"exception_keyword": "Spanish"}, True),
+            ],
         )
 
     def test_driver(self, db_conn):
@@ -417,9 +420,7 @@ class TestStorage:
     def test_next_number_reads_new_inputs(self, db_conn):
         _pin(db_conn, start=1300, keyword="driver")
         assert (
-            cn.get_next_channel_number(
-                db_conn, "f1", sport="racing", exception_keyword=LECLERC
-            )
+            cn.get_next_channel_number(db_conn, "f1", sport="racing", exception_keyword=LECLERC)
             == 1300
         )
         assert cn.get_next_channel_number(db_conn, "f1", sport="racing") != 1300
@@ -447,7 +448,11 @@ class TestSegmentCodes:
     def test_unknown_segment_is_rejected(self, db_conn, seg):
         assert (
             ne.add_numbering_exception(
-                db_conn, scope="league", league_code="f1", sport="racing", start=1300,
+                db_conn,
+                scope="league",
+                league_code="f1",
+                sport="racing",
+                start=1300,
                 segments=[seg],
             )
             is None
@@ -459,7 +464,11 @@ class TestSegmentCodes:
             "race",
         ]
         mma = _pin(
-            db_conn, scope="sport", league_code=None, sport="mma", start=1400,
+            db_conn,
+            scope="sport",
+            league_code=None,
+            sport="mma",
+            start=1400,
             segments=["main_card"],
         )
         assert mma.segments == ["main_card"]
@@ -468,7 +477,11 @@ class TestSegmentCodes:
         # main_card is an MMA code, race is a racing code.
         assert (
             ne.add_numbering_exception(
-                db_conn, scope="league", league_code="f1", sport="racing", start=1300,
+                db_conn,
+                scope="league",
+                league_code="f1",
+                sport="racing",
+                start=1300,
                 segments=["main_card"],
             )
             is None
@@ -596,8 +609,12 @@ class TestApi:
         with patch.object(api, "get_db", lambda: self._db(db_conn)):
             made = api.create_numbering_exception(
                 api.NumberingExceptionCreate(
-                    scope="league", league_code="f1", sport="racing", start=1200,
-                    segments=["race", "sprint"], keyword="driver",
+                    scope="league",
+                    league_code="f1",
+                    sport="racing",
+                    start=1200,
+                    segments=["race", "sprint"],
+                    keyword="driver",
                 )
             )
             assert (made.segments, made.keyword) == (["race", "sprint"], "driver")
@@ -622,7 +639,10 @@ class TestApi:
             with pytest.raises(HTTPException) as err:
                 api.create_numbering_exception(
                     api.NumberingExceptionCreate(
-                        scope="league", league_code="f1", sport="racing", start=1200,
+                        scope="league",
+                        league_code="f1",
+                        sport="racing",
+                        start=1200,
                         segments=["qualy"],
                     )
                 )

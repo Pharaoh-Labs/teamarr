@@ -52,7 +52,7 @@ class TestGroupLookup:
         "name",
         [
             "Auto | Football | NCAAF | FBS",
-            "Auto | Football | NCAAF | FBS ",     # the reported failure
+            "Auto | Football | NCAAF | FBS ",  # the reported failure
             " Auto | Football | NCAAF | FBS",
             "\tAuto | Football | NCAAF | FBS\n",
             "auto | football | ncaaf | fbs ",

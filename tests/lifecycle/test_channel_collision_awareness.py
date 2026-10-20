@@ -196,6 +196,7 @@ class TestPinnedBlocksWithExternals:
         self._pin_nhl(conn)
         assert get_next_channel_number(conn, league="nba", sport="basketball") == 101
 
+
 class TestGlobalReassignWithExternals:
     """Test global reassignment skips external numbers."""
 

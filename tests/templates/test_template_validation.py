@@ -139,9 +139,7 @@ def test_validate_endpoint_conditional_descriptions():
         json={
             "template_type": "team",
             "fields": {},
-            "conditional_descriptions": [
-                {"condition": "is_bogus", "template": "{team_name}"}
-            ],
+            "conditional_descriptions": [{"condition": "is_bogus", "template": "{team_name}"}],
         },
     )
     assert resp.status_code == 200

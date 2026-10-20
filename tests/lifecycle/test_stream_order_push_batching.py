@@ -34,8 +34,15 @@ def _seed_channels(conn, spec: dict[int, tuple[list[int], list[int]]]):
                (id, event_id, event_provider, tvg_id, channel_name,
                 channel_number, dispatcharr_channel_id, dispatcharr_uuid)
                VALUES (?, ?, 'espn', ?, ?, ?, ?, ?)""",
-            (row, str(1000 + row), f"teamarr-event-{1000 + row}",
-             f"Channel {d_id}", str(5000 + row), d_id, f"uuid-{d_id}"),
+            (
+                row,
+                str(1000 + row),
+                f"teamarr-event-{1000 + row}",
+                f"Channel {d_id}",
+                str(5000 + row),
+                d_id,
+                f"uuid-{d_id}",
+            ),
         )
         for priority, stream_id in enumerate(db_streams):
             conn.execute(
@@ -62,9 +69,7 @@ def _manager(spec: dict[int, tuple[list[int], list[int]]], on_update=None):
     ]
     cm = MagicMock()
     cm.get_channels.return_value = channels
-    cm.update_channel.side_effect = on_update or (
-        lambda cid, data: OperationResult(success=True)
-    )
+    cm.update_channel.side_effect = on_update or (lambda cid, data: OperationResult(success=True))
     return cm
 
 

@@ -34,9 +34,7 @@ class TestRenderChannelId:
 
     def test_lowercase_template_is_slugified(self):
         assert (
-            render_channel_id(
-                "{team_name}-{league_id}", team_name="Chicago Cubs", league_id="mlb"
-            )
+            render_channel_id("{team_name}-{league_id}", team_name="Chicago Cubs", league_id="mlb")
             == "chicago-cubs-mlb"
         )
 

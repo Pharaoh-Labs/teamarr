@@ -91,8 +91,10 @@ class TestMonthDayOnlyGate:
     def test_month_day_only_sets_extracted_date(self):
         # #485: the pipeline gate now honors month/day-only configurations
         cfg = CustomRegexConfig(
-            month_pattern=r"m(?P<month>\d{2})", month_enabled=True,
-            day_pattern=r"d(?P<day>\d{2})", day_enabled=True,
+            month_pattern=r"m(?P<month>\d{2})",
+            month_enabled=True,
+            day_pattern=r"d(?P<day>\d{2})",
+            day_enabled=True,
         )
         classified = classify_stream("A vs B m07 d16", custom_regex=cfg)
         d = classified.normalized.extracted_date
@@ -103,9 +105,7 @@ class TestMonthDayOnlyGate:
 
 class TestLearnDateFormat:
     def test_blob_pattern_learns_and_trusts(self):
-        cfg = CustomRegexConfig(
-            date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True
-        )
+        cfg = CustomRegexConfig(date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True)
         cfg.learn_date_format(["A vs B 16/07/2026", "C vs D 05/07/2026"])
         assert cfg.learned_date_formats == ["%d/%m/%Y"]
 
@@ -114,9 +114,7 @@ class TestLearnDateFormat:
         assert trusted is True
 
     def test_blob_pattern_without_learning_is_untrusted(self):
-        cfg = CustomRegexConfig(
-            date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True
-        )
+        cfg = CustomRegexConfig(date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True)
         extracted, trusted = extract_date_with_custom_regex("C vs D 05/07/2026", cfg)
         assert extracted == date(2026, 5, 7)  # US-first guess
         assert trusted is False
@@ -186,9 +184,7 @@ def _match(stream_name: str, cfg: CustomRegexConfig | None, event: Event):
 
 
 def _cfg_learned(stream_names: list[str]) -> CustomRegexConfig:
-    cfg = CustomRegexConfig(
-        date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True
-    )
+    cfg = CustomRegexConfig(date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True)
     cfg.learn_date_format(stream_names)
     return cfg
 
@@ -197,9 +193,7 @@ class TestSoftDateFilter:
     def test_trusted_wrong_date_reports_date_mismatch(self):
         # Event 5 days from the stream's (trusted, learned) date → gated,
         # and the failure names the date instead of "no event found"
-        event_dt = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(
-            hour=19
-        )
+        event_dt = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(hour=19)
         stream_date = TODAY + timedelta(days=5)
         name = f"Tigers vs Twins {stream_date.strftime('%d/%m/%Y')}"
         proof = f"X vs Y {(TODAY + timedelta(days=13)).strftime('%d/%m/%Y')}"
@@ -211,9 +205,7 @@ class TestSoftDateFilter:
 
     def test_trusted_date_tolerates_one_day_boundary(self):
         # Provider labels a late game with the next day's date (tz boundary)
-        event_dt = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(
-            hour=23
-        )
+        event_dt = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(hour=23)
         stream_date = TODAY + timedelta(days=1)
         name = f"Tigers vs Twins {stream_date.strftime('%d/%m/%Y')}"
         proof = f"X vs Y {(TODAY + timedelta(days=13)).strftime('%d/%m/%Y')}"
@@ -226,12 +218,8 @@ class TestSoftDateFilter:
         # No learnable format (one ambiguous sample, no day>12 proof, dates
         # far from today) → untrusted guess; a wildly wrong date must not
         # zero out team matching
-        event_dt = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(
-            hour=19
-        )
-        cfg = CustomRegexConfig(
-            date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True
-        )
+        event_dt = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(hour=19)
+        cfg = CustomRegexConfig(date_pattern=r"(?P<date>\d{2}/\d{2}/\d{4})", date_enabled=True)
         name = "Tigers vs Twins 05/01/2026"  # parses months away from event
         classified = classify_stream(name, custom_regex=cfg)
         assert classified.normalized.extracted_date_trusted is False

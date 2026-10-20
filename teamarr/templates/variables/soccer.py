@@ -62,9 +62,7 @@ def extract_soccer_match_league(ctx: TemplateContext, game_ctx: GameContext | No
     suffix_rules=SuffixRules.ALL,
     description="Full league display name for THIS game (e.g., 'English Premier League')",
 )
-def extract_soccer_match_league_name(
-    ctx: TemplateContext, game_ctx: GameContext | None
-) -> str:
+def extract_soccer_match_league_name(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
     if not game_ctx or not game_ctx.event:
         return ""
     if not game_ctx.event.league:

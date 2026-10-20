@@ -233,9 +233,7 @@ class TokenManager:
 
             if response.status_code == 429:
                 wait_seconds = self._parse_retry_delay(response)
-                self._session["auth_retry_after"] = datetime.now() + timedelta(
-                    seconds=wait_seconds
-                )
+                self._session["auth_retry_after"] = datetime.now() + timedelta(seconds=wait_seconds)
                 logger.error("[AUTH] Throttled; retry after %.1fs", wait_seconds)
                 return False
 

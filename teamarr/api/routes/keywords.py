@@ -282,7 +282,6 @@ def create_keyword(request: ExceptionKeywordCreate):
     """Create a new exception keyword."""
     import sqlite3
 
-
     _require_source(request.match_terms, request)
     sources = request.source_kwargs()
     try:
@@ -315,7 +314,6 @@ def create_keyword(request: ExceptionKeywordCreate):
 def update_keyword(keyword_id: int, request: ExceptionKeywordUpdate):
     """Update an exception keyword."""
     import sqlite3
-
 
     try:
         with get_db() as conn:

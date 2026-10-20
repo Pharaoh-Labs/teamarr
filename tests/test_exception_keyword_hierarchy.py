@@ -122,9 +122,7 @@ class TestUserOrderBreaksTies:
         a = create_keyword(db_conn, label="ZzzA", match_terms="a")
         create_keyword(db_conn, label="ZzzB", match_terms="b")
         c = create_keyword(db_conn, label="ZzzC", match_terms="c")
-        db_conn.execute(
-            "DELETE FROM consolidation_exception_keywords WHERE label NOT LIKE 'Zzz%'"
-        )
+        db_conn.execute("DELETE FROM consolidation_exception_keywords WHERE label NOT LIKE 'Zzz%'")
 
         assert set_keyword_order(db_conn, [c, a]) == 2
 

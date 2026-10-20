@@ -20,18 +20,21 @@ from teamarr.providers.nascar.provider import NASCARProvider, _session_code_and_
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("event_name,run_type,expected_code,expected_name", [
-    ("Race", 3, "race", "Race"),
-    ("", 3, "race", "Race"),
-    ("Qualifying (Impound)", 2, "qualifying", "Qualifying (Impound)"),
-    ("Practice 1", 1, "fp1", "Practice 1"),
-    ("Practice 2", 1, "fp2", "Practice 2"),
-    ("Practice 3", 1, "fp3", "Practice 3"),
-    ("Practice 4", 1, "fp4", "Practice 4"),
-    ("Practice / Qualifying", 1, "practice", "Practice / Qualifying"),
-    ("Final Practice", 1, "practice", "Final Practice"),
-    ("", 1, "practice", "Practice"),
-])
+@pytest.mark.parametrize(
+    "event_name,run_type,expected_code,expected_name",
+    [
+        ("Race", 3, "race", "Race"),
+        ("", 3, "race", "Race"),
+        ("Qualifying (Impound)", 2, "qualifying", "Qualifying (Impound)"),
+        ("Practice 1", 1, "fp1", "Practice 1"),
+        ("Practice 2", 1, "fp2", "Practice 2"),
+        ("Practice 3", 1, "fp3", "Practice 3"),
+        ("Practice 4", 1, "fp4", "Practice 4"),
+        ("Practice / Qualifying", 1, "practice", "Practice / Qualifying"),
+        ("Final Practice", 1, "practice", "Final Practice"),
+        ("", 1, "practice", "Practice"),
+    ],
+)
 def test_session_code_and_name(event_name, run_type, expected_code, expected_name):
     code, name = _session_code_and_name(event_name, run_type)
     assert code == expected_code
@@ -41,6 +44,7 @@ def test_session_code_and_name(event_name, run_type, expected_code, expected_nam
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _s(name, run_type, utc):
     return {"event_name": name, "run_type": run_type, "start_time_utc": utc}
@@ -58,12 +62,12 @@ _DAYTONA_500 = {
     "stage_3_laps": 75,
     "schedule": [
         # run_type 0 = admin noise, must be skipped
-        _s("Haulers Enter",        0, "2026-02-11T11:00:00"),
-        _s("Practice 1",           1, "2026-02-11T15:00:00"),
+        _s("Haulers Enter", 0, "2026-02-11T11:00:00"),
+        _s("Practice 1", 1, "2026-02-11T15:00:00"),
         _s("Qualifying (Impound)", 2, "2026-02-12T01:15:00"),
-        _s("Practice 2",           1, "2026-02-13T22:35:00"),
-        _s("Practice 3",           1, "2026-02-14T20:00:00"),
-        _s("Race",                 3, "2026-02-15T18:30:00"),
+        _s("Practice 2", 1, "2026-02-13T22:35:00"),
+        _s("Practice 3", 1, "2026-02-14T20:00:00"),
+        _s("Race", 3, "2026-02-15T18:30:00"),
     ],
 }
 
@@ -73,7 +77,7 @@ _CLASH = {
     "track_name": "Bowman Gray Stadium",
     "schedule": [
         _s("Practice / Qualifying", 1, "2026-02-04T18:30:00"),
-        _s("Race",                  3, "2026-02-04T23:00:00"),
+        _s("Race", 3, "2026-02-04T23:00:00"),
     ],
 }
 
@@ -83,7 +87,7 @@ _XFINITY_RACE = {
     "track_name": "Daytona International Speedway",
     "schedule": [
         _s("Practice 1", 1, "2026-02-13T20:00:00"),
-        _s("Race",       3, "2026-02-14T17:00:00"),
+        _s("Race", 3, "2026-02-14T17:00:00"),
     ],
 }
 
@@ -93,7 +97,7 @@ _TRUCK_RACE = {
     "track_name": "Daytona International Speedway",
     "schedule": [
         _s("Practice 1", 1, "2026-02-13T22:30:00"),
-        _s("Race",       3, "2026-02-14T19:30:00"),
+        _s("Race", 3, "2026-02-14T19:30:00"),
     ],
 }
 
@@ -299,9 +303,12 @@ def test_fetch_failure_gives_empty_league():
 
 
 def test_race_without_sessions_is_skipped():
-    no_sessions = {**_DAYTONA_500, "schedule": [
-        _s("Haulers Enter", 0, "2026-02-11T11:00:00"),
-    ]}
+    no_sessions = {
+        **_DAYTONA_500,
+        "schedule": [
+            _s("Haulers Enter", 0, "2026-02-11T11:00:00"),
+        ],
+    }
     p = _provider_with_data(cup=[no_sessions])
     assert p._events_by_league.get("nascar-cup") == []
 
@@ -313,10 +320,13 @@ def test_race_missing_name_is_skipped():
 
 
 def test_malformed_start_time_skips_session():
-    bad_schedule = {**_DAYTONA_500, "schedule": [
-        _s("Practice 1", 1, "not-a-date"),
-        _s("Race",       3, "2026-02-15T18:30:00"),
-    ]}
+    bad_schedule = {
+        **_DAYTONA_500,
+        "schedule": [
+            _s("Practice 1", 1, "not-a-date"),
+            _s("Race", 3, "2026-02-15T18:30:00"),
+        ],
+    }
     p = _provider_with_data(cup=[bad_schedule])
     events = p._events_by_league.get("nascar-cup", [])
     assert len(events) == 1

@@ -59,8 +59,7 @@ class TestV83MediaServerLists:
         _run_migrations(conn)
 
         row = conn.execute(
-            "SELECT schema_version, emby_servers, jellyfin_servers "
-            "FROM settings WHERE id = 1"
+            "SELECT schema_version, emby_servers, jellyfin_servers FROM settings WHERE id = 1"
         ).fetchone()
         assert row["schema_version"] == 103
         emby = json.loads(row["emby_servers"])
@@ -83,8 +82,7 @@ class TestV83MediaServerLists:
             enabled=True,
             servers=[
                 {"name": "Den", "url": "http://emby1:8096/", "api_key": "k1"},
-                {"name": "Cabin", "url": "http://emby2:8096", "password": "p2",
-                 "username": "u2"},
+                {"name": "Cabin", "url": "http://emby2:8096", "password": "p2", "username": "u2"},
             ],
         )
         settings = get_emby_settings(db_conn)
@@ -99,8 +97,7 @@ class TestV83MediaServerLists:
 
 class TestMaskedSecretMerge:
     STORED = [
-        MediaServerEntry(name="A", url="http://a:8096", password="real-pass",
-                         api_key="real-key"),
+        MediaServerEntry(name="A", url="http://a:8096", password="real-pass", api_key="real-key"),
         MediaServerEntry(name="B", url="http://b:8096", api_key="b-key"),
     ]
 
@@ -108,10 +105,13 @@ class TestMaskedSecretMerge:
         merged = merge_masked_servers(
             [
                 # reordered: B first — must match by URL, not index
-                {"name": "B", "url": "http://b:8096", "password": None,
-                 "api_key": MASKED_SECRET},
-                {"name": "A", "url": "http://a:8096", "password": MASKED_SECRET,
-                 "api_key": MASKED_SECRET},
+                {"name": "B", "url": "http://b:8096", "password": None, "api_key": MASKED_SECRET},
+                {
+                    "name": "A",
+                    "url": "http://a:8096",
+                    "password": MASKED_SECRET,
+                    "api_key": MASKED_SECRET,
+                },
             ],
             self.STORED,
         )
@@ -121,8 +121,14 @@ class TestMaskedSecretMerge:
 
     def test_new_secret_passes_through(self):
         merged = merge_masked_servers(
-            [{"name": "A", "url": "http://a:8096", "password": "new-pass",
-              "api_key": MASKED_SECRET}],
+            [
+                {
+                    "name": "A",
+                    "url": "http://a:8096",
+                    "password": "new-pass",
+                    "api_key": MASKED_SECRET,
+                }
+            ],
             self.STORED,
         )
         assert merged[0]["password"] == "new-pass"
@@ -131,8 +137,7 @@ class TestMaskedSecretMerge:
     def test_new_row_with_masked_secret_gets_none(self):
         # A masked secret on an unknown URL has nothing to merge from
         merged = merge_masked_servers(
-            [{"name": "C", "url": "http://c:8096", "password": MASKED_SECRET,
-              "api_key": None}],
+            [{"name": "C", "url": "http://c:8096", "password": MASKED_SECRET, "api_key": None}],
             [],
         )
         assert merged[0]["password"] is None
@@ -163,15 +168,18 @@ class TestFreshCredentialSave:
         routes.update_emby_settings(
             EmbySettingsUpdate(
                 enabled=True,
-                servers=[{
-                    "name": "Den", "url": "http://emby:8096",
-                    "username": "u", "password": "fresh-pw", "api_key": "fresh-key",
-                }],
+                servers=[
+                    {
+                        "name": "Den",
+                        "url": "http://emby:8096",
+                        "username": "u",
+                        "password": "fresh-pw",
+                        "api_key": "fresh-key",
+                    }
+                ],
             )
         )
-        raw = db_conn.execute(
-            "SELECT emby_servers FROM settings WHERE id = 1"
-        ).fetchone()[0]
+        raw = db_conn.execute("SELECT emby_servers FROM settings WHERE id = 1").fetchone()[0]
         stored = json.loads(raw)[0]
         # The bug stored None here: model_dump() ran the masking serializer
         assert stored["password"] == "fresh-pw"
@@ -188,20 +196,34 @@ class TestFreshCredentialSave:
         routes = self._wire(db_conn, monkeypatch)
         routes.update_emby_settings(
             EmbySettingsUpdate(
-                servers=[{"name": "Den", "url": "http://emby:8096",
-                          "username": "u", "password": "fresh-pw", "api_key": None}],
+                servers=[
+                    {
+                        "name": "Den",
+                        "url": "http://emby:8096",
+                        "username": "u",
+                        "password": "fresh-pw",
+                        "api_key": None,
+                    }
+                ],
             )
         )
         # UI round-trip: GET shows masked; user saves without touching it
         routes.update_emby_settings(
             EmbySettingsUpdate(
-                servers=[{"name": "Den Renamed", "url": "http://emby:8096",
-                          "username": "u", "password": MASKED_SECRET, "api_key": None}],
+                servers=[
+                    {
+                        "name": "Den Renamed",
+                        "url": "http://emby:8096",
+                        "username": "u",
+                        "password": MASKED_SECRET,
+                        "api_key": None,
+                    }
+                ],
             )
         )
-        stored = json.loads(db_conn.execute(
-            "SELECT emby_servers FROM settings WHERE id = 1"
-        ).fetchone()[0])[0]
+        stored = json.loads(
+            db_conn.execute("SELECT emby_servers FROM settings WHERE id = 1").fetchone()[0]
+        )[0]
         assert stored["name"] == "Den Renamed"
         assert stored["password"] == "fresh-pw"
 
@@ -211,8 +233,15 @@ class TestFreshCredentialSave:
         routes = self._wire(db_conn, monkeypatch)
         routes.update_emby_settings(
             EmbySettingsUpdate(
-                servers=[{"name": "Den", "url": "http://emby:8096",
-                          "username": "u", "password": "fresh-pw", "api_key": None}],
+                servers=[
+                    {
+                        "name": "Den",
+                        "url": "http://emby:8096",
+                        "username": "u",
+                        "password": "fresh-pw",
+                        "api_key": None,
+                    }
+                ],
             )
         )
         resp = routes.get_emby_settings()

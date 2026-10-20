@@ -27,12 +27,34 @@ logger = logging.getLogger(__name__)
 # (option B — gaps surface only within categories relevant to the event).
 _SHAPE_IRRELEVANT_CATEGORIES: dict[str, frozenset[str]] = {
     "team": frozenset({"COMBAT", "MOTORSPORTS"}),
-    "combat": frozenset({"MOTORSPORTS", "SOCCER", "RANKINGS", "RECORDS",
-                         "CONFERENCE", "STANDINGS", "STREAKS", "STATISTICS",
-                         "SCORES", "HOME_AWAY"}),
-    "racing": frozenset({"COMBAT", "SOCCER", "RANKINGS", "RECORDS",
-                         "CONFERENCE", "STANDINGS", "STREAKS", "STATISTICS",
-                         "SCORES", "HOME_AWAY"}),
+    "combat": frozenset(
+        {
+            "MOTORSPORTS",
+            "SOCCER",
+            "RANKINGS",
+            "RECORDS",
+            "CONFERENCE",
+            "STANDINGS",
+            "STREAKS",
+            "STATISTICS",
+            "SCORES",
+            "HOME_AWAY",
+        }
+    ),
+    "racing": frozenset(
+        {
+            "COMBAT",
+            "SOCCER",
+            "RANKINGS",
+            "RECORDS",
+            "CONFERENCE",
+            "STANDINGS",
+            "STREAKS",
+            "STATISTICS",
+            "SCORES",
+            "HOME_AWAY",
+        }
+    ),
 }
 
 
@@ -54,6 +76,7 @@ def _relevant_keys(keys, shape: str) -> list[str]:
         if var_def is not None and var_def.category.name not in irrelevant:
             out.append(k)
     return out
+
 
 def _fetch_live_samples(league: str) -> dict[str, str] | None:
     """Resolve every variable against a real upcoming/recent event for a league.
@@ -223,9 +246,7 @@ def get_sample_leagues(template_id: int | None = None):
 
 
 @router.get("/variables/samples")
-def get_sample_data(
-    sport: str = "NBA", league: str | None = None, live: bool = False
-):
+def get_sample_data(sport: str = "NBA", league: str | None = None, live: bool = False):
     """Get sample data for template variable preview.
 
     Returns sample values for all variables, used for the live preview in the

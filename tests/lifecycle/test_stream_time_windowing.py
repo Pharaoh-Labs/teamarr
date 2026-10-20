@@ -71,9 +71,7 @@ def test_in_window_null_attach_always_active():
 
 def test_in_window_inside_slot():
     assert (
-        is_stream_in_window(
-            "2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 18:00:00"
-        )
+        is_stream_in_window("2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 18:00:00")
         is True
     )
 
@@ -81,27 +79,21 @@ def test_in_window_inside_slot():
 def test_in_window_before_slot_excluded():
     # The "Attach before" buffer: out-of-window before attach_at → inactive.
     assert (
-        is_stream_in_window(
-            "2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 16:59:00"
-        )
+        is_stream_in_window("2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 16:59:00")
         is False
     )
 
 
 def test_in_window_after_slot_excluded():
     assert (
-        is_stream_in_window(
-            "2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 21:00:00"
-        )
+        is_stream_in_window("2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 21:00:00")
         is False
     )
 
 
 def test_in_window_attach_boundary_inclusive():
     assert (
-        is_stream_in_window(
-            "2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 17:00:00"
-        )
+        is_stream_in_window("2026-06-01 17:00:00", "2026-06-01 21:00:00", now="2026-06-01 17:00:00")
         is True
     )
 
@@ -167,8 +159,13 @@ def test_attach_boundary_inclusive(conn):
 
 
 def test_removed_stream_never_active(conn):
-    _add(conn, 200, attach_at="2026-06-01 17:00:00", detach_at="2026-06-01 21:00:00",
-         removed_at="2026-06-01 17:30:00")
+    _add(
+        conn,
+        200,
+        attach_at="2026-06-01 17:00:00",
+        detach_at="2026-06-01 21:00:00",
+        removed_at="2026-06-01 17:30:00",
+    )
     assert get_ordered_stream_ids(conn, 1, now="2026-06-01 18:00:00") == []
 
 
@@ -242,35 +239,32 @@ def _window_of(conn, stream_id):
 def test_update_window_recomputes_after_buffer_change(conn):
     # Stream attached with an old (narrow) window; a buffer change widens it.
     _add(conn, 200, attach_at="2026-06-01 17:00:00", detach_at="2026-06-01 21:00:00")
-    changed = update_stream_window(
-        conn, 1, 200, "2026-06-01 16:00:00", "2026-06-01 22:00:00"
-    )
+    changed = update_stream_window(conn, 1, 200, "2026-06-01 16:00:00", "2026-06-01 22:00:00")
     assert changed is True
     assert _window_of(conn, 200) == ("2026-06-01 16:00:00", "2026-06-01 22:00:00")
 
 
 def test_update_window_noop_when_unchanged(conn):
     _add(conn, 200, attach_at="2026-06-01 17:00:00", detach_at="2026-06-01 21:00:00")
-    changed = update_stream_window(
-        conn, 1, 200, "2026-06-01 17:00:00", "2026-06-01 21:00:00"
-    )
+    changed = update_stream_window(conn, 1, 200, "2026-06-01 17:00:00", "2026-06-01 21:00:00")
     assert changed is False  # null-safe equality guard: no row touched
 
 
 def test_update_window_ignores_removed_stream(conn):
-    _add(conn, 200, attach_at="2026-06-01 17:00:00", detach_at="2026-06-01 21:00:00",
-         removed_at="2026-06-01 17:30:00")
-    changed = update_stream_window(
-        conn, 1, 200, "2026-06-01 16:00:00", "2026-06-01 22:00:00"
+    _add(
+        conn,
+        200,
+        attach_at="2026-06-01 17:00:00",
+        detach_at="2026-06-01 21:00:00",
+        removed_at="2026-06-01 17:30:00",
     )
+    changed = update_stream_window(conn, 1, 200, "2026-06-01 16:00:00", "2026-06-01 22:00:00")
     assert changed is False
 
 
 def test_update_window_can_set_from_null(conn):
     # A stream that was full-life (NULL) gains a real window on a later run.
     _add(conn, 200)
-    changed = update_stream_window(
-        conn, 1, 200, "2026-06-01 17:00:00", "2026-06-01 21:00:00"
-    )
+    changed = update_stream_window(conn, 1, 200, "2026-06-01 17:00:00", "2026-06-01 21:00:00")
     assert changed is True
     assert _window_of(conn, 200) == ("2026-06-01 17:00:00", "2026-06-01 21:00:00")

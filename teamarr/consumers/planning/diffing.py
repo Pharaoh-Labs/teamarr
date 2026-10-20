@@ -121,9 +121,7 @@ def compute_plan_diff(
             )
             if not reasons:
                 continue
-            kind: IntentionKind = (
-                "stream_order" if reasons == ("ordered_stream_ids",) else "update"
-            )
+            kind: IntentionKind = "stream_order" if reasons == ("ordered_stream_ids",) else "update"
             intentions.append(
                 PlanIntention(kind=kind, channel=wanted, existing=existing, reasons=reasons)
             )

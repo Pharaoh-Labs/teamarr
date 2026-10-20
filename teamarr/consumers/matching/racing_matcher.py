@@ -289,8 +289,7 @@ class RacingMatcher:
         # near the program's broadcast instant, not just sharing a date.
         if anchor_dt is not None:
             window_events = [
-                e for e in window_events
-                if self._covers_instant(e, anchor_dt, sport_durations)
+                e for e in window_events if self._covers_instant(e, anchor_dt, sport_durations)
             ]
             if not window_events:
                 return MatchOutcome.failed(
@@ -491,15 +490,12 @@ class RacingMatcher:
             and _single_event_evidence(ctx.stream_name)
             and self._stream_instant_covered(ctx, events[0])
         )
-        if (
-            len(events) == 1
-            and (
-                feed_evidence
-                or timed_evidence
-                or (
-                    best_score >= SINGLE_EVENT_SANITY_THRESHOLD
-                    and _single_event_evidence(ctx.stream_name)
-                )
+        if len(events) == 1 and (
+            feed_evidence
+            or timed_evidence
+            or (
+                best_score >= SINGLE_EVENT_SANITY_THRESHOLD
+                and _single_event_evidence(ctx.stream_name)
             )
         ):
             event = events[0]
@@ -541,8 +537,7 @@ class RacingMatcher:
         # events this window (e.g. a doubleheader weekend) stays ambiguous and
         # must not match.
         country_hits = [
-            (eid, score) for eid, score in country_scores.items()
-            if score >= RACING_MATCH_THRESHOLD
+            (eid, score) for eid, score in country_scores.items() if score >= RACING_MATCH_THRESHOLD
         ]
         if len(country_hits) == 1:
             event = next(e for e in events if e.id == country_hits[0][0])

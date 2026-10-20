@@ -677,9 +677,7 @@ def get_managed_channel_streams(channel_id: int):
                 s.stream_stats_updated_at is not None
                 and (
                     datetime.now(UTC)
-                    - datetime.fromisoformat(
-                        str(s.stream_stats_updated_at).replace("Z", "+00:00")
-                    )
+                    - datetime.fromisoformat(str(s.stream_stats_updated_at).replace("Z", "+00:00"))
                 ).total_seconds()
                 > 3600
             )

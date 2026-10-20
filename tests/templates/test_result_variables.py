@@ -24,18 +24,39 @@ def league_mapping_service():
 
 
 def _team(id_, name, league="nfl", sport="football"):
-    return Team(id=id_, provider="espn", name=name, short_name=name.split()[-1],
-                abbreviation=name[:3].upper(), league=league, sport=sport)
+    return Team(
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=name.split()[-1],
+        abbreviation=name[:3].upper(),
+        league=league,
+        sport=sport,
+    )
 
 
-def _game(home_score, away_score, state="post", league="nfl", sport="football",
-          home="Carolina Panthers", away="Detroit Lions"):
+def _game(
+    home_score,
+    away_score,
+    state="post",
+    league="nfl",
+    sport="football",
+    home="Carolina Panthers",
+    away="Detroit Lions",
+):
     event = Event(
-        id="1", provider="espn", name="x", short_name="x",
-        start_time=datetime(2026, 10, 5, 0, 20, tzinfo=UTC), league=league, sport=sport,
-        status=EventStatus(state=state), home_team=_team("29", home, league, sport),
+        id="1",
+        provider="espn",
+        name="x",
+        short_name="x",
+        start_time=datetime(2026, 10, 5, 0, 20, tzinfo=UTC),
+        league=league,
+        sport=sport,
+        status=EventStatus(state=state),
+        home_team=_team("29", home, league, sport),
         away_team=_team("8", away, league, sport),
-        home_score=home_score, away_score=away_score,
+        home_score=home_score,
+        away_score=away_score,
     )
     ctx = TemplateContext(
         game_context=GameContext(event=event),
@@ -88,8 +109,10 @@ def test_event_result_text_is_empty_until_final():
         ("Lions vs. Panthers", "Lions vs. Panthers"),
         ("spread of .5 points", "spread of .5 points"),
         # an article-aware name opening a later sentence takes its capital…
-        ("NBA Finals - Game 5. the Pistons and the Celtics meet.",
-         "NBA Finals - Game 5. The Pistons and the Celtics meet."),
+        (
+            "NBA Finals - Game 5. the Pistons and the Celtics meet.",
+            "NBA Finals - Game 5. The Pistons and the Celtics meet.",
+        ),
         # …but "vs." is a connector, not a sentence end
         ("Next game: vs. the Ottawa Senators", "Next game: vs. the Ottawa Senators"),
     ],
@@ -105,8 +128,9 @@ def test_default_event_line_drops_the_article_for_a_national_team():
 
     spec = next(s for s in DEFAULT_TEMPLATE_SET if s["name"] == "Default Event (Starter)")
     default_row = next(r for r in spec["conditional_descriptions"] if r["label"] == "Default")
-    ctx, _ = _game(None, None, state="pre", league="uefa.nations", sport="soccer",
-                   home="Cyprus", away="Latvia")
+    ctx, _ = _game(
+        None, None, state="pre", league="uefa.nations", sport="soccer", home="Cyprus", away="Latvia"
+    )
     assert TemplateResolver().resolve(default_row["template"], ctx) == "Cyprus host Latvia at."
 
     ctx, _ = _game(None, None, state="pre")
@@ -137,7 +161,9 @@ def test_select_series_skips_a_series_that_has_not_begun():
 
     assert select_series([{"type": "season", "summary": "Series starts 12/16"}]) is None
     chosen = select_series(
-        [{"type": "season", "summary": "Series starts 12/16"},
-         {"type": "season", "summary": "Series tied 1-1"}]
+        [
+            {"type": "season", "summary": "Series starts 12/16"},
+            {"type": "season", "summary": "Series tied 1-1"},
+        ]
     )
     assert chosen["summary"] == "Series tied 1-1"

@@ -96,7 +96,7 @@ class TestReportedProgramme:
         assert matcher._score_teams_against_event("1. FC Nürnberg", "Hannover 96", event)
 
     def test_builtin_alias_key_is_reachable(self, db_factory):
-        """"sevilla fc" was keyed untranslated while lookups arrive translated."""
+        """ "sevilla fc" was keyed untranslated while lookups arrive translated."""
         from tests.fakes import make_team_matcher
 
         matcher = make_team_matcher(db_factory=db_factory)

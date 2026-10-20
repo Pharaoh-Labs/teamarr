@@ -440,10 +440,14 @@ def _revert_conference_row(spec: dict) -> dict:
 _LITERAL_ARTICLE_REVERTS = (
     ("{home_team_the.next} (", "The {home_team.next} ("),
     ("host {away_team_the.next} (", "host the {away_team.next} ("),
-    ("{away_team_the} ({away_team_record}) and {home_team_the} (",
-     "The {away_team} ({away_team_record}) and the {home_team} ("),
-    ("{home_team_the} ({home_team_record}) host {away_team_the} (",
-     "The {home_team} ({home_team_record}) host the {away_team} ("),
+    (
+        "{away_team_the} ({away_team_record}) and {home_team_the} (",
+        "The {away_team} ({away_team_record}) and the {home_team} (",
+    ),
+    (
+        "{home_team_the} ({home_team_record}) host {away_team_the} (",
+        "The {home_team} ({home_team_record}) host the {away_team} (",
+    ),
 )
 
 
@@ -615,8 +619,7 @@ _PRO_HOST = (
 )
 # Nobody hosts a neutral-site or marquee game.
 _PRO_MEET = (
-    "{away_team_the} ({away_team_record}) and {home_team_the} ({home_team_record}) "
-    "meet at {venue}"
+    "{away_team_the} ({away_team_record}) and {home_team_the} ({home_team_record}) meet at {venue}"
 )
 # Team-channel result, winner's score first whoever won: "The Lions lost to
 # the Panthers, 32-26" (+ "in overtime").
@@ -1223,8 +1226,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "subtitle": "{team1} {at_vs} {team2}",
             "description": "{game_preview}",
             "description_fallback": (
-                "{home_team_the} face {away_team_the} at {venue} "
-                "{today_tonight} at {game_time}."
+                "{home_team_the} face {away_team_the} at {venue} {today_tonight} at {game_time}."
             ),
             "art_url": _EVENT_ART,
         },
@@ -1336,8 +1338,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             "subtitle": "{team1} {at_vs} {team2}",
             "description": "{game_preview}",
             "description_fallback": (
-                "{home_team_the} face {away_team_the} at {venue} "
-                "{today_tonight} at {game_time}."
+                "{home_team_the} face {away_team_the} at {venue} {today_tonight} at {game_time}."
             ),
             "art_url": _EVENT_ART,
         },
@@ -1481,9 +1482,7 @@ DEFAULT_TEMPLATE_SET: list[dict] = [
             {
                 "condition": "is_not_final",
                 "condition_value": None,
-                "template": (
-                    "{race_name} {session_name} has not yet ended as of the last update."
-                ),
+                "template": ("{race_name} {session_name} has not yet ended as of the last update."),
                 "priority": 50,
                 "label": "In progress",
             },
@@ -1674,9 +1673,7 @@ def seed_names_affected_by(name: str) -> set[str]:
 
 def record_seed_tombstones(conn: Connection, names: set[str]) -> None:
     for n in names:
-        conn.execute(
-            "INSERT OR IGNORE INTO deleted_default_templates (name) VALUES (?)", (n,)
-        )
+        conn.execute("INSERT OR IGNORE INTO deleted_default_templates (name) VALUES (?)", (n,))
 
 
 def get_seed_tombstones(conn: Connection) -> set[str]:

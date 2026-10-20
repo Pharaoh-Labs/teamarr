@@ -24,8 +24,11 @@ def _game(event_id="401", sport="baseball", league="mlb"):
 
 
 def _entry(stream_id, event, feed_team=None, segment=None):
-    entry = {"stream": {"id": stream_id, "name": f"s{stream_id}"}, "event": event,
-             "feed_team": feed_team}
+    entry = {
+        "stream": {"id": stream_id, "name": f"s{stream_id}"},
+        "event": event,
+        "feed_team": feed_team,
+    }
     if segment:
         entry["segment"] = segment
     return entry
@@ -48,9 +51,7 @@ def _ids(entries):
 class TestIgnorePolicy:
     def test_unlabelled_stream_is_dropped_when_the_game_has_a_feed(self):
         game = _game()
-        kept, dropped, _ = _drop(
-            [_entry(1, game, HOME), _entry(2, game, AWAY), _entry(3, game)]
-        )
+        kept, dropped, _ = _drop([_entry(1, game, HOME), _entry(2, game, AWAY), _entry(3, game)])
         assert _ids(kept) == [1, 2]
         assert _ids(dropped) == [3]
 
@@ -62,9 +63,7 @@ class TestIgnorePolicy:
 
     def test_only_the_game_with_feeds_is_affected(self):
         split, plain = _game("401"), _game("402")
-        kept, dropped, _ = _drop(
-            [_entry(1, split, HOME), _entry(2, split), _entry(3, plain)]
-        )
+        kept, dropped, _ = _drop([_entry(1, split, HOME), _entry(2, split), _entry(3, plain)])
         assert _ids(kept) == [1, 3]
         assert _ids(dropped) == [2]
 
@@ -131,9 +130,10 @@ class TestThirdChannelCleanup:
 
     def test_nothing_dropped_means_nothing_looked_up(self):
         with patch("teamarr.database.channels.get_managed_channels_for_group") as lookup:
-            assert StreamMatching()._cleanup_unlabelled_feed_channels(
-                FakeGroup(), MagicMock(), set()
-            ) == 0
+            assert (
+                StreamMatching()._cleanup_unlabelled_feed_channels(FakeGroup(), MagicMock(), set())
+                == 0
+            )
         lookup.assert_not_called()
 
 
@@ -161,8 +161,12 @@ def test_feed_event_ids_come_from_live_feed_channels_only(db_conn):
 
     def channel(event_id, feed):
         return create_managed_channel(
-            conn=db_conn, event_epg_group_id=group, event_id=event_id, event_provider="espn",
-            tvg_id=f"tvg-{event_id}-{feed}", channel_name=f"c-{event_id}-{feed}",
+            conn=db_conn,
+            event_epg_group_id=group,
+            event_id=event_id,
+            event_provider="espn",
+            tvg_id=f"tvg-{event_id}-{feed}",
+            channel_name=f"c-{event_id}-{feed}",
             feed_team_id=feed,
         )
 

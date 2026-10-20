@@ -33,12 +33,8 @@ _WARMUP_RE = re.compile(r"^warm[\s-]?up$", re.IGNORECASE)
 # MotoGP: "Qualifying 1" / "Qualifying 2" (#604); WEC: "Qualifying - LMP2".
 _NUMBERED_QUALIFYING_RE = re.compile(r"^qualifying\s*(\d)$", re.IGNORECASE)
 _SPRINT_RE = re.compile(r"^sprint(?:\s+race)?$", re.IGNORECASE)
-_QUALIFYING_RE = re.compile(
-    r"^(?:hyperpole\s+)?qualifying(?:\s*[-–]\s*(.+))?$", re.IGNORECASE
-)
-_HYPERPOLE_RE = re.compile(
-    r"^hyperpole\s*(\d*)\s*(?:[-–]\s*(.+))?$", re.IGNORECASE
-)
+_QUALIFYING_RE = re.compile(r"^(?:hyperpole\s+)?qualifying(?:\s*[-–]\s*(.+))?$", re.IGNORECASE)
+_HYPERPOLE_RE = re.compile(r"^hyperpole\s*(\d*)\s*(?:[-–]\s*(.+))?$", re.IGNORECASE)
 _PROLOGUE_RE = re.compile(r"prologue", re.IGNORECASE)
 
 
@@ -65,7 +61,7 @@ def _parse_session_label(event_name: str, race_name: str | None) -> tuple[str, s
         if match := _GRAND_PRIX_RE.match(race_name):
             base = match.group("base")
         if event_name.startswith(base):
-            label = event_name[len(base):].strip()
+            label = event_name[len(base) :].strip()
 
     if match := _FREE_PRACTICE_RE.match(label):
         num = match.group(1)

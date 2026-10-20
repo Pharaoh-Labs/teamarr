@@ -123,9 +123,7 @@ class TournamentParserMixin:
             elif sport == "tennis":
                 # Tennis expands to one Event per match (TennisParserMixin),
                 # not one placeholder Event per tournament
-                events.extend(
-                    self._parse_tennis_matches(event_data, league, sport, target_date)
-                )
+                events.extend(self._parse_tennis_matches(event_data, league, sport, target_date))
                 continue
             else:
                 event = self._parse_tournament_event(event_data, league, sport)
@@ -332,9 +330,7 @@ class TournamentParserMixin:
             data = self._client.get_scoreboard(league, f"{season}0101-{season}1231", sport_league)
             if not data:
                 continue
-            completed = [
-                e for e in data.get("events", []) if self._last_session_state(e) == "post"
-            ]
+            completed = [e for e in data.get("events", []) if self._last_session_state(e) == "post"]
             if not completed:
                 continue
             latest = max(completed, key=lambda e: e.get("date", ""))

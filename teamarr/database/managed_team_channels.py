@@ -200,8 +200,13 @@ def save_team_recording(
             updated_at = CURRENT_TIMESTAMP
         """,
         (
-            team_id, event_id, event_provider, dispatcharr_recording_id,
-            dispatcharr_channel_id, start_time, end_time,
+            team_id,
+            event_id,
+            event_provider,
+            dispatcharr_recording_id,
+            dispatcharr_channel_id,
+            start_time,
+            end_time,
         ),
     )
 

@@ -35,10 +35,10 @@ from teamarr.utilities.cache import TTLCache, make_cache_key
 logger = logging.getLogger(__name__)
 
 # Cache TTLs (seconds)
-CACHE_TTL_CREDENTIALS = 7 * 24 * 3600   # 7 days — Vite hash changes on deploy
-CACHE_TTL_TEAMS = 72 * 3600             # 72 hours
-CACHE_TTL_SCHEDULE = 30 * 60            # 30 minutes
-CACHE_TTL_GAMES = 5 * 60                # 5 minutes (live scores)
+CACHE_TTL_CREDENTIALS = 7 * 24 * 3600  # 7 days — Vite hash changes on deploy
+CACHE_TTL_TEAMS = 72 * 3600  # 72 hours
+CACHE_TTL_SCHEDULE = 30 * 60  # 30 minutes
+CACHE_TTL_GAMES = 5 * 60  # 5 minutes (live scores)
 
 SUPABASE_TIMEOUT = float(os.environ.get("SUPABASE_TIMEOUT", 10.0))
 SUPABASE_RETRY_COUNT = int(os.environ.get("SUPABASE_RETRY_COUNT", 3))
@@ -162,9 +162,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
     # Credential extraction
     # ------------------------------------------------------------------
 
-    def _get_credentials(
-        self, website_url: str, league: str
-    ) -> tuple[str, str] | None:
+    def _get_credentials(self, website_url: str, league: str) -> tuple[str, str] | None:
         """Return (supabase_url, api_key).
 
         Checks {LEAGUE_UPPER}_SUPABASE_URL / _API_KEY env vars first, then
@@ -248,22 +246,23 @@ class SupabaseLeagueClient(BaseHTTPClient):
         return None
 
     def _extract_supabase_url(self, bundle: str) -> str | None:
-        m = re.search(r'(https://[a-z0-9]+\.supabase\.co)', bundle)
+        m = re.search(r"(https://[a-z0-9]+\.supabase\.co)", bundle)
         return m.group(1) if m else None
 
     def _extract_api_key(self, bundle: str) -> str | None:
         # Try new publishable key format first
-        m = re.search(r'(sb_publishable_[A-Za-z0-9_-]+)', bundle)
+        m = re.search(r"(sb_publishable_[A-Za-z0-9_-]+)", bundle)
         if m:
             return m.group(1)
         # Fallback: JWT anon key (base64 middle segment must have "anon" role)
         for m in re.finditer(
-            r'(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)',
+            r"(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)",
             bundle,
         ):
             token = m.group(1)
             try:
                 import base64
+
                 payload_b64 = token.split(".")[1]
                 # Pad to multiple of 4
                 padding = 4 - len(payload_b64) % 4
@@ -306,7 +305,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
         """
         # Find any assignment of the form VARNAME={ALL_CAPS_KEY:var, ...}
         map_match = re.search(
-            r'[A-Za-z_$][A-Za-z0-9_$]*=\{((?:[A-Z]{3,}[A-Z0-9]*:[A-Za-z_$][A-Za-z0-9_$]*,?\s*){3,})\}',
+            r"[A-Za-z_$][A-Za-z0-9_$]*=\{((?:[A-Z]{3,}[A-Z0-9]*:[A-Za-z_$][A-Za-z0-9_$]*,?\s*){3,})\}",
             bundle,
         )
         if not map_match:
@@ -315,18 +314,18 @@ class SupabaseLeagueClient(BaseHTTPClient):
 
         map_body = map_match.group(1)
         # Parse TEAMID:VarName pairs
-        team_var_pairs = re.findall(r'([A-Z]{3,}[A-Z0-9]*):([A-Za-z_$][A-Za-z0-9_$]*)', map_body)
+        team_var_pairs = re.findall(r"([A-Z]{3,}[A-Z0-9]*):([A-Za-z_$][A-Za-z0-9_$]*)", map_body)
         if not team_var_pairs:
             return {}
 
         # Resolve variable names to asset paths in the region before the map
         map_start = map_match.start()
-        search_region = bundle[max(0, map_start - 5000): map_start]
+        search_region = bundle[max(0, map_start - 5000) : map_start]
 
         logo_map: dict[str, str] = {}
         for team_id, var_name in team_var_pairs:
             pattern = (
-                r'(?<![A-Za-z0-9_$])'
+                r"(?<![A-Za-z0-9_$])"
                 + re.escape(var_name)
                 + r'="(/assets/[^"]+\.(?:png|jpg|svg|webp))"'
             )
@@ -340,9 +339,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
     # Supabase REST
     # ------------------------------------------------------------------
 
-    def _supabase_get(
-        self, supabase_url: str, api_key: str, path: str
-    ) -> list[dict]:
+    def _supabase_get(self, supabase_url: str, api_key: str, path: str) -> list[dict]:
         """Make an authenticated Supabase REST GET request."""
         url = f"{supabase_url}/rest/v1/{path}"
         headers = {
@@ -354,9 +351,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
         if not resp:
             return []
         if resp.status_code != 200:
-            logger.warning(
-                "[SUPABASE] REST %s returned HTTP %d", path, resp.status_code
-            )
+            logger.warning("[SUPABASE] REST %s returned HTTP %d", path, resp.status_code)
             return []
         try:
             data = resp.json()
@@ -367,6 +362,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
 
     def _current_season_year(self) -> int:
         from datetime import datetime
+
         return datetime.now().year
 
     # ------------------------------------------------------------------
@@ -406,9 +402,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
             return cached
 
         path = (
-            f"schedule_game_overrides?select=*"
-            f"&season_year=eq.{year}"
-            f"&order=game_date_override.asc"
+            f"schedule_game_overrides?select=*&season_year=eq.{year}&order=game_date_override.asc"
         )
         data = self._supabase_get(supabase_url, api_key, path)
         if data:
@@ -486,13 +480,12 @@ class SupabaseLeagueClient(BaseHTTPClient):
         # ±1-day superset — `game_date_override` is the league's calendar,
         # not the user's; exact membership is the service seam's job (#590).
         near = {
-            (target_date + timedelta(days=offset)).strftime("%Y-%m-%d")
-            for offset in (-1, 0, 1)
+            (target_date + timedelta(days=offset)).strftime("%Y-%m-%d") for offset in (-1, 0, 1)
         }
         day_entries = [
-            g for g in schedule
-            if g.get("game_date_override") in near
-            and g.get("status") != "postponed"
+            g
+            for g in schedule
+            if g.get("game_date_override") in near and g.get("status") != "postponed"
         ]
         if not day_entries:
             return []
@@ -501,9 +494,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
         score_map = self.build_score_map(completed)
         return self._merge_scores(day_entries, score_map)
 
-    def get_team_schedule(
-        self, league: str, team_id: str, days_ahead: int = 14
-    ) -> list[dict]:
+    def get_team_schedule(self, league: str, team_id: str, days_ahead: int = 14) -> list[dict]:
         """Get schedule for a team, including DAYS_BACK past games."""
         teams = self.get_teams(league)
         city = ""
@@ -512,9 +503,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
                 city = (t.get("city") or "").lower()
                 break
         if not city:
-            logger.warning(
-                "[SUPABASE] Team %s not found in league %s", team_id, league
-            )
+            logger.warning("[SUPABASE] Team %s not found in league %s", team_id, league)
             return []
 
         today = date.today()
@@ -545,9 +534,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
         score_map = self.build_score_map(completed)
         return self._merge_scores(team_entries, score_map)
 
-    def _merge_scores(
-        self, entries: list[dict], score_map: dict[str, dict]
-    ) -> list[dict]:
+    def _merge_scores(self, entries: list[dict], score_map: dict[str, dict]) -> list[dict]:
         """Attach score data from score_map to each schedule entry.
 
         Joins on ``game_number`` first (exact, doubleheader-safe), falling back to

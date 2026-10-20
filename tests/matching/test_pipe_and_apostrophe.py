@@ -119,7 +119,7 @@ class TestPipeMetadataIsTrimmed:
         )
 
     def test_venue_suffix_still_matches_on_the_team(self):
-        """"Sacramento Kings | Golden 1 Center" — the leading segment is the
+        """ "Sacramento Kings | Golden 1 Center" — the leading segment is the
         team here too, so the documented pass-through case is unaffected."""
         from teamarr.consumers.matching.team_matcher import TeamMatcher
 

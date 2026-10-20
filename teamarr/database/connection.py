@@ -139,10 +139,12 @@ def init_db(db_path: Path | str | None = None) -> None:
             # Was previously defined but never wired, so fresh installs
             # shipped with zero templates.
             from teamarr.database.default_templates import seed_default_templates
+
             seed_default_templates(conn)
             # Seed the default language exception keywords — once per label per
             # install, so a deleted default never comes back (#726).
             from teamarr.database.exception_keywords import seed_default_exception_keywords
+
             seed_default_exception_keywords(conn)
 
             # Final verification: ensure settings table exists and is queryable
@@ -154,8 +156,7 @@ def init_db(db_path: Path | str | None = None) -> None:
                 "Move or delete the file and restart Teamarr to initialize a fresh database."
             )
             raise RuntimeError(
-                f"Invalid database file at '{path}'. "
-                "Move or delete the file and restart Teamarr."
+                f"Invalid database file at '{path}'. Move or delete the file and restart Teamarr."
             ) from e
         raise
 
@@ -179,8 +180,6 @@ def _seed_tsdb_cache_if_needed(conn: sqlite3.Connection) -> None:
             f"Seeded TSDB cache: {result.get('teams_added', 0)} teams, "
             f"{result.get('leagues_added', 0)} leagues"
         )
-
-
 
 
 def reset_db(db_path: Path | str | None = None) -> None:

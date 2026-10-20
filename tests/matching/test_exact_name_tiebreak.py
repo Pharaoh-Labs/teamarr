@@ -25,18 +25,29 @@ LEAGUE = "college-football"
 
 def _team(name, short, abbr):
     return Team(
-        id=name.lower().replace(" ", "-"), provider="espn", name=name,
-        short_name=short, abbreviation=abbr, league=LEAGUE, sport="football",
+        id=name.lower().replace(" ", "-"),
+        provider="espn",
+        name=name,
+        short_name=short,
+        abbreviation=abbr,
+        league=LEAGUE,
+        sport="football",
     )
 
 
 def _event(home, away, eid, hour=23):
     start = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(hour=hour)
     return Event(
-        id=eid, provider="espn", name=f"{away.name} at {home.name}",
-        short_name=f"{away.abbreviation} @ {home.abbreviation}", start_time=start,
-        home_team=home, away_team=away, status=EventStatus(state="scheduled"),
-        league=LEAGUE, sport="football",
+        id=eid,
+        provider="espn",
+        name=f"{away.name} at {home.name}",
+        short_name=f"{away.abbreviation} @ {home.abbreviation}",
+        start_time=start,
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state="scheduled"),
+        league=LEAGUE,
+        sport="football",
     )
 
 

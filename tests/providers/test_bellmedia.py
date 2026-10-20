@@ -301,8 +301,9 @@ def test_client_reads_hockey_daily_calendar_groups(monkeypatch):
     monkeypatch.setattr(
         client,
         "get_schedule_group",
-        lambda league, grouping, season: groups.append(grouping)
-        or [{"eventId": grouping}, {"eventId": grouping}],
+        lambda league, grouping, season: (
+            groups.append(grouping) or [{"eventId": grouping}, {"eventId": grouping}]
+        ),
     )
 
     events = client.get_events_between("ohl", date(2026, 9, 13), date(2026, 9, 14))

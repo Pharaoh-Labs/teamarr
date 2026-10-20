@@ -28,15 +28,26 @@ TSDB_LEAGUES = {"lg3", "lg7"}
 def _event(league: str, day: date, i: int) -> Event:
     def team(side: str) -> Team:
         return Team(
-            id=f"{league}-{i}-{side}", provider="espn", name=f"{league} {side}",
-            short_name=side, abbreviation=side[:3], league=league, sport="x",
+            id=f"{league}-{i}-{side}",
+            provider="espn",
+            name=f"{league} {side}",
+            short_name=side,
+            abbreviation=side[:3],
+            league=league,
+            sport="x",
         )
 
     return Event(
-        id=f"{league}-{day.isoformat()}-{i}", provider="espn", name="g", short_name="g",
+        id=f"{league}-{day.isoformat()}-{i}",
+        provider="espn",
+        name="g",
+        short_name="g",
         start_time=datetime(day.year, day.month, day.day, 20, tzinfo=UTC),
-        home_team=team("home"), away_team=team("away"), status="scheduled",
-        league=league, sport="x",
+        home_team=team("home"),
+        away_team=team("away"),
+        status="scheduled",
+        league=league,
+        sport="x",
     )
 
 
@@ -215,9 +226,7 @@ def test_a_failed_fetch_is_never_published_to_shared_events():
         for key, (events, was_cache_only) in shared.items()
         if key.startswith("lg1:") and not events and not was_cache_only
     ]
-    assert not poisoned, (
-        f"failed fetches were cached as authoritative empty days: {poisoned}"
-    )
+    assert not poisoned, f"failed fetches were cached as authoritative empty days: {poisoned}"
     # ...and the leagues that answered are still cached as normal.
     assert any(k.startswith("lg2:") for k in shared)
 

@@ -57,8 +57,7 @@ def test_override_survives_seed_reapply(db_conn):
     lm.get_league_mapping_service().reload()
 
     assert (
-        lm.get_league_mapping_service().get_gracenote_category("nascar-cup")
-        == "Stock Car Racing"
+        lm.get_league_mapping_service().get_gracenote_category("nascar-cup") == "Stock Car Racing"
     )
     state = get_gracenote_override_state("nascar-cup")
     assert state["override"] == "Stock Car Racing"
@@ -110,6 +109,5 @@ def test_discovered_league_accepted(db_conn):
     assert state["override"] == "National League Soccer"
     assert state["effective"] == "National League Soccer"
     assert (
-        lm.get_league_mapping_service().get_gracenote_category("eng.5")
-        == "National League Soccer"
+        lm.get_league_mapping_service().get_gracenote_category("eng.5") == "National League Soccer"
     )

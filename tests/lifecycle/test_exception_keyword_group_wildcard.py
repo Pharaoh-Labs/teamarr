@@ -55,9 +55,7 @@ class TestPatternToken:
 
     def test_patterns_without_token_ignore_keyword(self, resolver):
         assert (
-            resolver.resolve_channel_group(
-                "{sport}", 7, "rugby", None, exception_keyword="Spanish"
-            )
+            resolver.resolve_channel_group("{sport}", 7, "rugby", None, exception_keyword="Spanish")
             == "Rugby"
         )
 
@@ -68,9 +66,7 @@ class TestPatternToken:
 
     def test_profile_pattern_skipped_without_keyword(self, resolver):
         assert (
-            resolver.resolve_channel_profiles(
-                ["{exception_keyword} | {sport}"], "rugby", None
-            )
+            resolver.resolve_channel_profiles(["{exception_keyword} | {sport}"], "rugby", None)
             == []
         )
 
@@ -117,15 +113,26 @@ def _real_event():
 
     def team(id_, name, abbrev):
         return Team(
-            id=id_, provider="espn", name=name, short_name=name,
-            abbreviation=abbrev, league="eng.1", sport="soccer",
+            id=id_,
+            provider="espn",
+            name=name,
+            short_name=name,
+            abbreviation=abbrev,
+            league="eng.1",
+            sport="soccer",
         )
 
     return Event(
-        id="401", provider="espn", name="Arsenal at Chelsea", short_name="ARS @ CHE",
+        id="401",
+        provider="espn",
+        name="Arsenal at Chelsea",
+        short_name="ARS @ CHE",
         start_time=datetime(2026, 9, 26, 15, 0, tzinfo=UTC),
-        home_team=team("1", "Chelsea", "CHE"), away_team=team("2", "Arsenal", "ARS"),
-        status=EventStatus(state="pre"), league="eng.1", sport="soccer",
+        home_team=team("1", "Chelsea", "CHE"),
+        away_team=team("2", "Arsenal", "ARS"),
+        status=EventStatus(state="pre"),
+        league="eng.1",
+        sport="soccer",
     )
 
 
@@ -270,7 +277,10 @@ class TestSyncResolvesSameGroup:
 
         # What the creator resolves for the same keyword and settings
         created = resolver.resolve_channel_group(
-            "{exception_keyword}: {sport}", 7, "rugby", None,
+            "{exception_keyword}: {sport}",
+            7,
+            "rugby",
+            None,
             exception_keyword=keyword_display_value(stored_keyword, label),
         )
         assert created == expected

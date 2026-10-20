@@ -36,18 +36,29 @@ TODAY = datetime.now(UTC).date()
 
 def _team(name, short, abbr, league="mlb", sport="baseball"):
     return Team(
-        id=name.lower().replace(" ", "-"), provider="espn", name=name,
-        short_name=short, abbreviation=abbr, league=league, sport=sport,
+        id=name.lower().replace(" ", "-"),
+        provider="espn",
+        name=name,
+        short_name=short,
+        abbreviation=abbr,
+        league=league,
+        sport=sport,
     )
 
 
 def _event(home, away, eid="1", league=None):
     start = datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(hour=23)
     return Event(
-        id=eid, provider="espn", name=f"{away.name} at {home.name}",
-        short_name=f"{away.short_name} at {home.short_name}", start_time=start,
-        home_team=home, away_team=away, status=EventStatus(state="scheduled"),
-        league=league or home.league, sport=home.sport,
+        id=eid,
+        provider="espn",
+        name=f"{away.name} at {home.name}",
+        short_name=f"{away.short_name} at {home.short_name}",
+        start_time=start,
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state="scheduled"),
+        league=league or home.league,
+        sport=home.sport,
     )
 
 
@@ -131,9 +142,15 @@ def _ctx(name, category_source=None):
     from zoneinfo import ZoneInfo
 
     return MatchContext(
-        stream_name=name, stream_id=1, group_id=1, target_date=TODAY, generation=1,
-        user_tz=ZoneInfo("UTC"), classified=classified,
-        team1=classified.team1, team2=classified.team2,
+        stream_name=name,
+        stream_id=1,
+        group_id=1,
+        target_date=TODAY,
+        generation=1,
+        user_tz=ZoneInfo("UTC"),
+        classified=classified,
+        team1=classified.team1,
+        team2=classified.team2,
     )
 
 
@@ -200,7 +217,7 @@ class TestVerdictsUnchanged:
         [
             "Tampa Bay Rays vs Detroit Tigers",
             "New York Mets vs New York Yankees",
-            "Liverpool vs Everton",           # matches nothing either way
+            "Liverpool vs Everton",  # matches nothing either way
         ],
     )
     def test_same_verdict_with_flag_on_and_off(self, matcher, monkeypatch, name):
@@ -330,9 +347,7 @@ class TestMissingSplitSquadCandidates:
         assert out.event.id == "401923610"
 
     @pytest.mark.parametrize("token_index", [False, True])
-    def test_vs_uses_auto_matchup_order_for_missing_split_squad(
-        self, monkeypatch, token_index
-    ):
+    def test_vs_uses_auto_matchup_order_for_missing_split_squad(self, monkeypatch, token_index):
         wrong_orientation, correct_orientation = self._fixtures()
         service = MagicMock()
         service.get_team_schedule.return_value = [wrong_orientation, correct_orientation]

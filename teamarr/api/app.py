@@ -161,9 +161,7 @@ def _warn_if_tsdb_leagues_keyless(db_factory) -> None:
         if ProviderRegistry.get("tsdb") is not None:
             return  # key configured — nothing to warn about
         with db_factory() as conn:
-            row = conn.execute(
-                "SELECT leagues FROM sports_subscription WHERE id = 1"
-            ).fetchone()
+            row = conn.execute("SELECT leagues FROM sports_subscription WHERE id = 1").fetchone()
             subscribed = set(_json.loads(row["leagues"] or "[]")) if row else set()
             if not subscribed:
                 return
@@ -396,9 +394,7 @@ def create_app() -> FastAPI:
     app.include_router(channels.router, prefix="/api/v1/channels", tags=["Channels"])
     app.include_router(settings.router, prefix="/api/v1", tags=["Settings"])
     app.include_router(sort_priorities.router, prefix="/api/v1", tags=["Sort Priorities"])
-    app.include_router(
-        numbering_exceptions.router, prefix="/api/v1", tags=["Numbering Exceptions"]
-    )
+    app.include_router(numbering_exceptions.router, prefix="/api/v1", tags=["Numbering Exceptions"])
     app.include_router(stats.router, prefix="/api/v1/stats", tags=["Stats"])
     app.include_router(variables.router, prefix="/api/v1", tags=["Variables"])
     app.include_router(dispatcharr.router, prefix="/api/v1", tags=["Dispatcharr"])

@@ -72,9 +72,7 @@ def test_sample_candidates_single_range_call_no_date_filter():
     events = provider.get_sample_candidates("ufc")
 
     today = date.today()
-    assert client.requested_dates == [
-        _window(today - timedelta(days=7), today + timedelta(days=7))
-    ]
+    assert client.requested_dates == [_window(today - timedelta(days=7), today + timedelta(days=7))]
     assert sorted(e.id for e in events) == ["501", "502"]
 
 
@@ -104,15 +102,11 @@ def test_recent_final_returns_most_recent_finished_card():
     assert ev is not None
     assert ev.id == "504"  # most recent FINAL; scheduled 505 ignored
     today = date.today()
-    assert client.requested_dates == [
-        _window(today - timedelta(days=35), today)
-    ]
+    assert client.requested_dates == [_window(today - timedelta(days=35), today)]
 
 
 def test_recent_final_walks_back_when_first_window_empty():
-    final_payload = {
-        "events": [_card("506", "UFC 329", ["2026-05-30T21:00Z"], state="post")]
-    }
+    final_payload = {"events": [_card("506", "UFC 329", ["2026-05-30T21:00Z"], state="post")]}
     client = CapturingClient([{"events": []}, final_payload])
     provider = ESPNProvider(client=client)
 

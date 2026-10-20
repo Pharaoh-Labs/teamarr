@@ -66,9 +66,7 @@ def test_valid_plan_has_no_diagnostics(db_conn):
 
 
 def test_plan_for_another_plugin_is_rejected_wholesale(db_conn):
-    diagnostics = validate_plan(
-        _plan(), expected_plugin_id="other.plugin", conn=db_conn
-    )
+    diagnostics = validate_plan(_plan(), expected_plugin_id="other.plugin", conn=db_conn)
     assert [d.code for d in diagnostics] == ["plan.wrong_plugin"]
 
 
@@ -86,9 +84,7 @@ def test_programme_outside_channel_window_is_rejected(db_conn):
 
 
 def test_xmltv_id_owned_by_core_or_other_plugin_is_a_conflict(db_conn):
-    create_managed_channel(
-        db_conn, None, "core-1", "espn", "plan:p:lg:1", "Core Channel"
-    )
+    create_managed_channel(db_conn, None, "core-1", "espn", "plan:p:lg:1", "Core Channel")
     create_managed_channel(
         db_conn,
         None,

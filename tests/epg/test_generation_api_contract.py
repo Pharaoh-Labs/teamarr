@@ -313,9 +313,7 @@ def test_sse_duplicate_run_is_a_single_error_frame(isolated_db, monkeypatch):
         assert resp.status_code == 200
         body = "".join(resp.iter_text())
 
-    assert _sse_payloads(body) == [
-        {"status": "error", "message": "Generation already in progress"}
-    ]
+    assert _sse_payloads(body) == [{"status": "error", "message": "Generation already in progress"}]
     assert called == []
 
 

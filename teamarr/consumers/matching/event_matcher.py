@@ -309,10 +309,10 @@ class EventCardMatcher:
             # The promotion token must be stripped: every event in `events`
             # carries it, so leaving it in scores 100 against an arbitrary card.
             stream_norm_clean = re.sub(
-                r'\b(ufc|pfl|lfa|bellator|mma|boxing|prelims|main card|early prelims'
-                r'|live|event|ppv|pm|am|et|pt|ct|mt)\b',
-                '',
-                stream_norm
+                r"\b(ufc|pfl|lfa|bellator|mma|boxing|prelims|main card|early prelims"
+                r"|live|event|ppv|pm|am|et|pt|ct|mt)\b",
+                "",
+                stream_norm,
             ).strip()
 
             if stream_norm_clean and len(stream_norm_clean) > 3:

@@ -196,9 +196,7 @@ def test_baseball_renderer_includes_starter_and_exact_leader_fallbacks():
     assert "72-59 after going 3-2 in its last 5 games" in text
 
 
-def _named_team(
-    name: str, short_name: str, abbreviation: str, league: str, sport: str
-) -> Team:
+def _named_team(name: str, short_name: str, abbreviation: str, league: str, sport: str) -> Team:
     return Team(
         id=abbreviation,
         provider="espn",
@@ -214,26 +212,52 @@ def _named_team(
     ("sport", "league", "away", "home", "expected"),
     [
         # Clubs: short name is the full name, so no mascot and no article.
-        ("soccer", "eng.1", ("Arsenal", "Arsenal", "ARS"), ("Chelsea", "Chelsea", "CHE"),
-         "Arsenal visits Chelsea at Example Park."),
+        (
+            "soccer",
+            "eng.1",
+            ("Arsenal", "Arsenal", "ARS"),
+            ("Chelsea", "Chelsea", "CHE"),
+            "Arsenal visits Chelsea at Example Park.",
+        ),
         # Plural mascots take the article and a plural verb.
-        ("football", "nfl", ("Buffalo Bills", "Bills", "BUF"),
-         ("Miami Dolphins", "Dolphins", "MIA"),
-         "The Bills visit the Dolphins at Example Park for a Week 3 matchup."),
+        (
+            "football",
+            "nfl",
+            ("Buffalo Bills", "Bills", "BUF"),
+            ("Miami Dolphins", "Dolphins", "MIA"),
+            "The Bills visit the Dolphins at Example Park for a Week 3 matchup.",
+        ),
         # Singular mascots keep the full articleless name.
-        ("basketball", "nba", ("Miami Heat", "Heat", "MIA"), ("Utah Jazz", "Jazz", "UTA"),
-         "Miami Heat visits Utah Jazz at Example Park."),
-        ("basketball", "mens-college-basketball",
-         ("Green Bay Phoenix", "Phoenix", "GB"), ("Orlando Magic", "Magic", "ORL"),
-         "Green Bay Phoenix visits Orlando Magic at Example Park."),
+        (
+            "basketball",
+            "nba",
+            ("Miami Heat", "Heat", "MIA"),
+            ("Utah Jazz", "Jazz", "UTA"),
+            "Miami Heat visits Utah Jazz at Example Park.",
+        ),
+        (
+            "basketball",
+            "mens-college-basketball",
+            ("Green Bay Phoenix", "Phoenix", "GB"),
+            ("Orlando Magic", "Magic", "ORL"),
+            "Green Bay Phoenix visits Orlando Magic at Example Park.",
+        ),
         # Each side is decided independently.
-        ("basketball", "nba", ("Utah Jazz", "Jazz", "UTA"),
-         ("Boston Celtics", "Celtics", "BOS"),
-         "Utah Jazz visits the Celtics at Example Park."),
+        (
+            "basketball",
+            "nba",
+            ("Utah Jazz", "Jazz", "UTA"),
+            ("Boston Celtics", "Celtics", "BOS"),
+            "Utah Jazz visits the Celtics at Example Park.",
+        ),
         # Sox is the one plural mascot that does not end in s.
-        ("baseball", "mlb", ("Boston Red Sox", "Red Sox", "BOS"),
-         ("Chicago White Sox", "White Sox", "CHW"),
-         "The Red Sox visit the White Sox at Example Park."),
+        (
+            "baseball",
+            "mlb",
+            ("Boston Red Sox", "Red Sox", "BOS"),
+            ("Chicago White Sox", "White Sox", "CHW"),
+            "The Red Sox visit the White Sox at Example Park.",
+        ),
     ],
 )
 def test_base_sentence_uses_team_identity_for_articles_and_agreement(
@@ -274,10 +298,7 @@ def test_baseball_renderer_normalizes_series_summary_grammar():
         away_probable_starter="Payton Tolle (8-6, 3.08 ERA)",
     )
 
-    assert (
-        "with the Boston Red Sox leading the series 1-0."
-        in build_generated_preview(leading)
-    )
+    assert "with the Boston Red Sox leading the series 1-0." in build_generated_preview(leading)
     assert "with the series tied 1-1." in build_generated_preview(tied)
 
 
@@ -375,9 +396,7 @@ def test_secondary_leaders_render_when_primary_leader_is_missing():
         home_rebounds_leader="Kamilla Cardoso — 8.8 rebounds per game",
     )
 
-    assert "Josh Jacobs leads the team with 73 rushing yards" in (
-        build_generated_preview(football)
-    )
+    assert "Josh Jacobs leads the team with 73 rushing yards" in (build_generated_preview(football))
     assert "Kamilla Cardoso leads the team with 8.8 rebounds per game" in (
         build_generated_preview(basketball)
     )
@@ -519,9 +538,7 @@ def test_formatted_football_leader_is_not_given_a_duplicate_label():
     )
     payload = {
         "header": {"competitions": [_competition(event)]},
-        "leaders": [
-            _leader_block("7", [("passingLeader", "Bo Nix", "19/31, 181 YDS")])
-        ],
+        "leaders": [_leader_block("7", [("passingLeader", "Bo Nix", "19/31, 181 YDS")])],
     }
 
     apply_generated_preview_fields(payload, event)
@@ -624,8 +641,6 @@ def test_unsupported_sport_generates_only_generic_complete_matchup():
     )
     ctx, game = _context(event)
 
-    assert build_generated_preview(event) == (
-        "The Rangers visit the Bruins at TD Garden."
-    )
+    assert build_generated_preview(event) == ("The Rangers visit the Bruins at TD Garden.")
     assert ConditionEvaluator().evaluate("has_generated_preview", None, ctx, game)
     assert "44-22-8" not in build_generated_preview(event)

@@ -293,8 +293,13 @@ def preview_layout():
                 spills = True
             out.append(
                 LanePreviewModel(
-                    id=lane.id, label=label, start=lane.start, end=lane.end,
-                    channel_count=n, first_number=first, last_number=last,
+                    id=lane.id,
+                    label=label,
+                    start=lane.start,
+                    end=lane.end,
+                    channel_count=n,
+                    first_number=first,
+                    last_number=last,
                     spills_into_next=spills,
                 )
             )
@@ -323,9 +328,7 @@ def update(exception_id: int, data: NumberingExceptionUpdate):
                 exception_id,
                 start=data.start,
                 end=None if data.clear_end else (data.end if data.end is not None else ...),
-                label=None
-                if data.clear_label
-                else (data.label if data.label is not None else ...),
+                label=None if data.clear_label else (data.label if data.label is not None else ...),
                 enabled=data.enabled,
                 season_type=data.season_type if data.set_season_type else ...,
                 segments=data.segments if data.set_segments else ...,

@@ -32,7 +32,11 @@ def _o(server, ok, kind="emby", error=None):
 def test_emby_outcome_flattens_guide_result():
     o = _media_server_outcome("emby", "Emby", {"guide": {"success": False, "error": "refused"}})
     assert o == {
-        "kind": "emby", "server": "Emby", "success": False, "duration": 0.0, "error": "refused",
+        "kind": "emby",
+        "server": "Emby",
+        "success": False,
+        "duration": 0.0,
+        "error": "refused",
     }
 
 
@@ -48,7 +52,11 @@ def test_channelsdvr_outcome_needs_both_steps():
 def test_plex_outcome_flattens_guide_result():
     o = _media_server_outcome("plex", "Plex", {"guide": {"success": False, "error": "no token"}})
     assert o == {
-        "kind": "plex", "server": "Plex", "success": False, "duration": 0.0, "error": "no token",
+        "kind": "plex",
+        "server": "Plex",
+        "success": False,
+        "duration": 0.0,
+        "error": "no token",
     }
 
 

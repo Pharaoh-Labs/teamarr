@@ -34,9 +34,7 @@ def _event(league: str = "nba", sport: str = "basketball") -> Event:
 
 def _ctx(event: Event) -> tuple[TemplateContext, GameContext]:
     gc = GameContext(event=event)
-    tc = TeamChannelContext(
-        team_id="1", league=event.league, sport=event.sport, team_name="Home"
-    )
+    tc = TeamChannelContext(team_id="1", league=event.league, sport=event.sport, team_name="Home")
     return TemplateContext(game_context=gc, team_config=tc, team_stats=None), gc
 
 

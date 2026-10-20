@@ -102,9 +102,7 @@ def test_lifecycle_actions_are_refused(rows, method, path):
 
 
 def test_bulk_edit_skips_channel_sources(rows):
-    resp = client.put(
-        "/api/v1/groups/bulk", json={"group_ids": [rows[470]], "enabled": False}
-    )
+    resp = client.put("/api/v1/groups/bulk", json={"group_ids": [rows[470]], "enabled": False})
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["total_updated"] == 0 and body["total_failed"] == 1
@@ -182,9 +180,7 @@ def _save_selection(enabled, groups):
 
 def _source_rows():
     return {
-        g["dispatcharr_channel_group_id"]: g
-        for g in _listed().values()
-        if g["is_channel_source"]
+        g["dispatcharr_channel_group_id"]: g for g in _listed().values() if g["is_channel_source"]
     }
 
 

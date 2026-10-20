@@ -8,6 +8,7 @@ Configuration via environment variables:
     MLBSTATS_TIMEOUT: Request timeout in seconds (default: 15)
     MLBSTATS_RETRY_COUNT: Number of retry attempts (default: 3)
 """
+
 import logging
 import os
 from datetime import date

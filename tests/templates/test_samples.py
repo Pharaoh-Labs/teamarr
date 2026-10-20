@@ -109,8 +109,17 @@ def test_team_shape_has_no_real_team_leak():
     team shape. A substring-replace bug once leaked 'Detroit Pistons' into the
     .next/.last matchups when the override keys got corrupted."""
     blob = " ".join(str(v) for v in get_all_sample_data_for_league("nba", "basketball").values())
-    for token in ("Pistons", "Bucks", "Cavaliers", "Lakers", "Bulls",
-                  "Detroit", "Milwaukee", "Cleveland", "Bally Sports"):
+    for token in (
+        "Pistons",
+        "Bucks",
+        "Cavaliers",
+        "Lakers",
+        "Bulls",
+        "Detroit",
+        "Milwaukee",
+        "Cleveland",
+        "Bally Sports",
+    ):
         assert token not in blob, f"real-team leak in team sample: {token!r}"
 
 
@@ -122,7 +131,8 @@ def test_live_preview_surfaces_gaps(monkeypatch):
 
     monkeypatch.setattr(v, "lookup_league_fields", lambda league: ("basketball", "espn"))
     monkeypatch.setattr(
-        v, "_fetch_live_samples",
+        v,
+        "_fetch_live_samples",
         lambda league: {"home_team": "Real Live Team", "score": "10-7"},
     )
     resp = v.get_sample_data(league="nba", live=True)
@@ -156,13 +166,31 @@ def test_static_preview_has_no_gaps():
 @pytest.mark.parametrize(
     "code,sport,must_fill",
     [
-        ("nba", "basketball", ["home_team", "away_team", "score", "team_record",
-                               "team_rank", "pro_conference", "college_conference",
-                               "venue", "streak"]),
-        ("ufc", "mma", ["fighter1", "fighter2", "weight_class", "fight_card",
-                        "event_title", "venue"]),
-        ("f1", "racing", ["race_winner", "pole_position", "circuit_name",
-                          "podium", "grid", "venue"]),
+        (
+            "nba",
+            "basketball",
+            [
+                "home_team",
+                "away_team",
+                "score",
+                "team_record",
+                "team_rank",
+                "pro_conference",
+                "college_conference",
+                "venue",
+                "streak",
+            ],
+        ),
+        (
+            "ufc",
+            "mma",
+            ["fighter1", "fighter2", "weight_class", "fight_card", "event_title", "venue"],
+        ),
+        (
+            "f1",
+            "racing",
+            ["race_winner", "pole_position", "circuit_name", "podium", "grid", "venue"],
+        ),
     ],
 )
 def test_each_shape_fills_its_native_variables(code, sport, must_fill):
@@ -201,9 +229,7 @@ def league_records(tmp_path_factory) -> list[tuple[str, str, str]]:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
-        rows = conn.execute(
-            "SELECT league_code, provider, sport FROM leagues"
-        ).fetchall()
+        rows = conn.execute("SELECT league_code, provider, sport FROM leagues").fetchall()
     finally:
         conn.close()
     return [(r["league_code"], r["provider"], r["sport"]) for r in rows]
@@ -277,9 +303,7 @@ def test_resolve_shape_covers_combat_and_racing(league_records):
     Guards against a regression where every league collapses onto "team" (which
     would silently break combat/racing previews).
     """
-    shapes_seen = {
-        resolve_shape(sport) for _code, _provider, sport in league_records
-    }
+    shapes_seen = {resolve_shape(sport) for _code, _provider, sport in league_records}
     assert "combat" in shapes_seen, "no league resolves to the combat shape"
     assert "racing" in shapes_seen, "no league resolves to the racing shape"
 
@@ -295,17 +319,28 @@ NOW = datetime.now(UTC)
 
 def _team(name: str) -> Team:
     return Team(
-        id=name, provider="espn", name=name, short_name=name,
-        abbreviation=name[:3].upper(), league="nba", sport="basketball",
+        id=name,
+        provider="espn",
+        name=name,
+        short_name=name,
+        abbreviation=name[:3].upper(),
+        league="nba",
+        sport="basketball",
     )
 
 
 def _sample_event(eid: str, start: datetime, state: str, *, away: bool = True) -> Event:
     return Event(
-        id=eid, provider="espn", name=eid, short_name=eid, start_time=start,
+        id=eid,
+        provider="espn",
+        name=eid,
+        short_name=eid,
+        start_time=start,
         home_team=_team("Home_" + eid),
         away_team=_team("Away_" + eid) if away else None,  # type: ignore[arg-type]
-        status=EventStatus(state=state), league="nba", sport="basketball",
+        status=EventStatus(state=state),
+        league="nba",
+        sport="basketball",
     )
 
 

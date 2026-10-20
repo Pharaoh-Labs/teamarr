@@ -24,17 +24,19 @@ logger = logging.getLogger(__name__)
 # suffix should be skipped to avoid duplication like "Pirates Feed (Pirates)".
 # Excludes feed_team_logo (URL field, not visible in channel name) and the
 # directional booleans which are typically used in conditions, not naming.
-FEED_TEMPLATE_VARS = frozenset({
-    "feed_team",
-    "feed_team_short",
-    "feed_team_abbrev",
-    "feed_team_abbrev_lower",  # retired alias (#484), may linger in old templates
-    "feed_home_away",
-    "broadcast_feed",
-    "broadcast_feed_team",
-    "broadcast_feed_team_short",
-    "broadcast_feed_team_abbrev",
-})
+FEED_TEMPLATE_VARS = frozenset(
+    {
+        "feed_team",
+        "feed_team_short",
+        "feed_team_abbrev",
+        "feed_team_abbrev_lower",  # retired alias (#484), may linger in old templates
+        "feed_home_away",
+        "broadcast_feed",
+        "broadcast_feed_team",
+        "broadcast_feed_team_short",
+        "broadcast_feed_team_abbrev",
+    }
+)
 
 
 class ChannelNaming(_LifecycleHost):
@@ -117,8 +119,11 @@ class ChannelNaming(_LifecycleHost):
         # Resolve using full template engine with extra variables
         # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
         base_name = self._resolve_template(
-            name_format, event, extra_vars,
-            card_segment=segment, feed_team=feed_team,
+            name_format,
+            event,
+            extra_vars,
+            card_segment=segment,
+            feed_team=feed_team,
         )
 
         # Clean up empty wrappers when {exception_keyword} resolves to ""
@@ -132,9 +137,7 @@ class ChannelNaming(_LifecycleHost):
         # Auto-append feed label when feed_team is present and the template
         # didn't already place a feed variable
         if feed_team and feed_label_style and not template_uses_feed_var:
-            feed_label = self._build_feed_label(
-                feed_team, event, feed_label_style
-            )
+            feed_label = self._build_feed_label(feed_team, event, feed_label_style)
             if feed_label:
                 base_name = f"{base_name} ({feed_label})"
 
@@ -290,7 +293,10 @@ class ChannelNaming(_LifecycleHost):
                     "exception_keyword": keyword_display_value(exception_keyword, untagged_label),
                 }
                 resolved = self._resolve_template(
-                    logo_url, event, extra_vars, card_segment=segment,
+                    logo_url,
+                    event,
+                    extra_vars,
+                    card_segment=segment,
                     feed_team=feed_team,
                 )
             else:

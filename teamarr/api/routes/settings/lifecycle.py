@@ -176,7 +176,6 @@ def update_scheduler_settings(update: SchedulerSettingsUpdate):
 
     # Restart channel reset sub-scheduler if its settings changed
     if update.channel_reset_enabled is not None or update.channel_reset_cron is not None:
-
         restart_scheduler_sub_task("channel_reset")
 
     if update.source_discovery_mode is not None:

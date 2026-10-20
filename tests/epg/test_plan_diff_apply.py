@@ -257,11 +257,7 @@ def test_diff_blocks_ambiguous_adoption_without_any_intention(db_path):
         )
         diff = compute_plan_diff(
             conn,
-            _plan(
-                channels=[
-                    _channel(logical_key="event:p:lg:new", xmltv_channel_id="plan:new")
-                ]
-            ),
+            _plan(channels=[_channel(logical_key="event:p:lg:new", xmltv_channel_id="plan:new")]),
             plugin_id=PLUGIN,
         )
         assert not diff.actionable
@@ -272,9 +268,7 @@ def test_diff_blocks_ambiguous_adoption_without_any_intention(db_path):
 
 def test_diff_rejects_plan_belonging_to_another_plugin(db_path):
     with get_connection(db_path) as conn:
-        diff = compute_plan_diff(
-            conn, _plan(), plugin_id="other.plugin"
-        )
+        diff = compute_plan_diff(conn, _plan(), plugin_id="other.plugin")
         assert not diff.actionable
         assert diff.blocked[0].code == "plan.wrong_plugin"
 
@@ -285,9 +279,7 @@ def test_diff_rejects_plan_belonging_to_another_plugin(db_path):
 def test_dry_run_reports_the_diff_without_writing(db_path, db_factory):
     manager = FakeChannelManager()
     with get_connection(db_path) as conn:
-        _seed_plugin_channel(
-            conn, logical_key="event:p:lg:gone", adoption_key="slot:p:lg:gone"
-        )
+        _seed_plugin_channel(conn, logical_key="event:p:lg:gone", adoption_key="slot:p:lg:gone")
 
     outcome = _applier(db_factory, manager).apply(
         _plan(channels=[_channel(logical_key="event:p:lg:new", xmltv_channel_id="plan:new")]),
@@ -344,9 +336,7 @@ def test_apply_creates_channels_with_ownership_streams_and_history(db_path, db_f
         assert kinds == [("created", "lifecycle")]
 
 
-def test_apply_compensates_remote_create_when_local_insert_fails(
-    db_path, db_factory, monkeypatch
-):
+def test_apply_compensates_remote_create_when_local_insert_fails(db_path, db_factory, monkeypatch):
     manager = FakeChannelManager()
     import teamarr.consumers.planning.applier as applier_module
 
@@ -375,9 +365,7 @@ def test_failed_plan_never_runs_a_deletion_diff(db_path, db_factory):
         status="failed",
         diagnostics=[PlanDiagnostic(code="provider.outage", message="ESPN unreachable")],
     )
-    outcome = _applier(db_factory, manager).apply(
-        failed, plugin_id=PLUGIN, plan_generation=2
-    )
+    outcome = _applier(db_factory, manager).apply(failed, plugin_id=PLUGIN, plan_generation=2)
 
     assert not outcome.ok
     assert outcome.failures[0].code == "plan.not_complete"
@@ -390,9 +378,7 @@ def test_failed_plan_never_runs_a_deletion_diff(db_path, db_factory):
 def test_validation_failure_blocks_all_mutation(db_path, db_factory):
     manager = FakeChannelManager()
     with get_connection(db_path) as conn:
-        create_managed_channel(
-            conn, None, "core-1", "espn", "plan:p:lg:1", "Core Channel"
-        )
+        create_managed_channel(conn, None, "core-1", "espn", "plan:p:lg:1", "Core Channel")
 
     outcome = _applier(db_factory, manager).apply(
         _plan(channels=[_channel()], programmes=[_programme()]),
@@ -417,11 +403,7 @@ def test_apply_adopts_by_adoption_key_with_remote_rename_first(db_path, db_facto
         )
 
     outcome = _applier(db_factory, manager).apply(
-        _plan(
-            channels=[
-                _channel(display_name="Canonical Name", xmltv_channel_id="plan:p:lg:1")
-            ]
-        ),
+        _plan(channels=[_channel(display_name="Canonical Name", xmltv_channel_id="plan:p:lg:1")]),
         plugin_id=PLUGIN,
         plan_generation=4,
     )
@@ -522,9 +504,7 @@ def test_retire_keeps_row_when_remote_delete_fails(db_path, db_factory):
     manager = FakeChannelManager()
     manager.fail_delete = True
     with get_connection(db_path) as conn:
-        _seed_plugin_channel(
-            conn, logical_key="event:p:lg:1", adoption_key="slot:p:lg:1"
-        )
+        _seed_plugin_channel(conn, logical_key="event:p:lg:1", adoption_key="slot:p:lg:1")
 
     outcome = _applier(db_factory, manager).apply(_plan(), plugin_id=PLUGIN, plan_generation=8)
 
@@ -537,9 +517,7 @@ def test_retire_keeps_row_when_remote_delete_fails(db_path, db_factory):
 def test_retire_deletes_remotely_then_soft_deletes_locally(db_path, db_factory):
     manager = FakeChannelManager()
     with get_connection(db_path) as conn:
-        _seed_plugin_channel(
-            conn, logical_key="event:p:lg:1", adoption_key="slot:p:lg:1"
-        )
+        _seed_plugin_channel(conn, logical_key="event:p:lg:1", adoption_key="slot:p:lg:1")
 
     outcome = _applier(db_factory, manager).apply(_plan(), plugin_id=PLUGIN, plan_generation=8)
 
@@ -597,9 +575,7 @@ def test_retire_treats_remote_not_found_as_already_retired(db_path, db_factory):
     manager = FakeChannelManager()
     manager.delete_not_found = True
     with get_connection(db_path) as conn:
-        _seed_plugin_channel(
-            conn, logical_key="event:p:lg:1", adoption_key="slot:p:lg:1"
-        )
+        _seed_plugin_channel(conn, logical_key="event:p:lg:1", adoption_key="slot:p:lg:1")
 
     outcome = _applier(db_factory, manager).apply(_plan(), plugin_id=PLUGIN, plan_generation=2)
 
@@ -618,7 +594,10 @@ def test_stream_order_follows_dispatcharr_when_local_rows_match(db_path, db_fact
     manager = FakeChannelManager()
     manager.remote_channels = [
         DispatcharrChannel(
-            id=777, uuid="dp-uuid", name="Feature Event", channel_number="501",
+            id=777,
+            uuid="dp-uuid",
+            name="Feature Event",
+            channel_number="501",
             streams=(12, 8),
         )
     ]
@@ -649,7 +628,10 @@ def test_no_stream_push_when_remote_order_already_matches(db_path, db_factory):
     manager = FakeChannelManager()
     manager.remote_channels = [
         DispatcharrChannel(
-            id=777, uuid="dp-uuid", name="Feature Event", channel_number="501",
+            id=777,
+            uuid="dp-uuid",
+            name="Feature Event",
+            channel_number="501",
             streams=(8, 12),
         )
     ]
@@ -702,9 +684,7 @@ def test_diff_blocks_a_logical_key_resolved_twice(db_path):
     assert diff.intentions == ()
 
 
-def test_adopt_refusal_surfaces_as_adoption_conflict_diagnostic(
-    db_path, db_factory, monkeypatch
-):
+def test_adopt_refusal_surfaces_as_adoption_conflict_diagnostic(db_path, db_factory, monkeypatch):
     # The repository can refuse an adoption the diff could not see (the rows
     # changed underneath it); that refusal must arrive as its own verdict,
     # not a generic intention failure (#1036).

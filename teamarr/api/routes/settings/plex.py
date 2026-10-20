@@ -135,9 +135,7 @@ def list_plex_dvrs(request: PlexConnectionTestRequest | None = None):
                     device_id=device.device_id,
                     uri=device.uri,
                     profile_hint=device.profile_hint,
-                    channel_count=len(
-                        [m for m in device.channel_mapping if m.enabled]
-                    ),
+                    channel_count=len([m for m in device.channel_mapping if m.enabled]),
                 )
                 for device in dvr.devices
             ],

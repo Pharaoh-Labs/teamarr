@@ -106,10 +106,19 @@ def test_guide_and_dispatcharr_resolve_the_same_name(conn, monkeypatch):
     monkeypatch.setattr(templates, "get_template", lambda *_: template)
 
     team_config = TeamConfig(
-        id=1, provider="espn", provider_team_id="8", primary_league="nfl", leagues=["nfl"],
-        sport="football", team_name="Detroit Lions", team_abbrev="DET",
-        team_logo_url=TEAM["team_logo_url"], channel_id="DetroitLions.nfl",
-        channel_logo_url=None, template_id=5, active=True,
+        id=1,
+        provider="espn",
+        provider_team_id="8",
+        primary_league="nfl",
+        leagues=["nfl"],
+        sport="football",
+        team_name="Detroit Lions",
+        team_abbrev="DET",
+        team_logo_url=TEAM["team_logo_url"],
+        channel_id="DetroitLions.nfl",
+        channel_logo_url=None,
+        template_id=5,
+        active=True,
     )
     options = SimpleNamespace(template=template, art_base_url="")
 
