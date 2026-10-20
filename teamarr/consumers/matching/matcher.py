@@ -1075,6 +1075,14 @@ class StreamMatcher:
             # rather than trust a verdict this build no longer stands behind.
             return None
 
+        # A replayed failure is a sighting like any other (#1101). Every
+        # success-hit path refreshes last_seen_generation through touch(); this
+        # path did not, so a failed row kept the stamp it was written with,
+        # purge_stale dropped it PURGE_FAILED_AFTER_GENERATIONS runs later and
+        # every never-matching stream was re-scored on a fixed three-run cycle
+        # (~800 streams on a real install, visible as streams_cached swinging
+        # ~1,200 / ~1,200 / ~500).
+        self._cache.touch(self._group_id, stream_id, stream_name, self._generation)
         # from_cache=True is what BatchMatchResult counts; no separate tally.
         return [
             MatchedStreamResult(
