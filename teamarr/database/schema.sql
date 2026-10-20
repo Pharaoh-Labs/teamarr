@@ -545,6 +545,9 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Global Channel Mode (replaces per-group channel_assignment_mode)
     -- 'auto': Sequential numbering from channel_range_start by sort priority
     -- 'manual': Per-league starting channel numbers from league_channel_starts
+    -- Retired with manual mode (v88, #333). The columns stay: the v88 migration
+    -- reads them, the settings registry binds them, and the UI still posts
+    -- global_channel_mode='auto'. Nothing in the app reads them any more (#1106).
     global_channel_mode TEXT DEFAULT 'auto'
         CHECK(global_channel_mode IN ('auto', 'manual')),
 

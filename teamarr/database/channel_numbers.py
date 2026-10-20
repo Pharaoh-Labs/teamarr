@@ -13,7 +13,6 @@ migrated to league-scoped pinned blocks. See
 docs/reference/architecture/channel-numbering.md.
 """
 
-import json
 import logging
 import sqlite3
 from datetime import datetime
@@ -52,44 +51,6 @@ def get_global_channel_range(conn: Connection) -> tuple[int, int | None]:
     if not row:
         return 101, None
     return row["channel_range_start"] or 101, row["channel_range_end"]
-
-
-def get_global_channel_mode(conn: Connection) -> str:
-    """Get the global channel numbering mode.
-
-    Always 'auto' after the v88 migration (manual mode retired, #333); the
-    column is kept one release for rollback.
-    # TODO: PRUNE — remove with the global_channel_mode column after v88 settles.
-
-    Returns:
-        'auto' or 'manual'
-    """
-    cursor = conn.execute("SELECT global_channel_mode FROM settings WHERE id = 1")
-    row = cursor.fetchone()
-    if not row or not row["global_channel_mode"]:
-        return "auto"
-    mode = row["global_channel_mode"]
-    return mode if mode in ("auto", "manual") else "auto"
-
-
-def get_league_channel_starts(conn: Connection) -> dict[str, int]:
-    """Get per-league starting channel numbers (legacy MANUAL mode).
-
-    Read only by the v88 migration, which converts these into league-scoped
-    pinned blocks. # TODO: PRUNE — remove with the league_channel_starts column.
-
-    Returns:
-        Dict mapping league_code → starting channel number.
-    """
-    cursor = conn.execute("SELECT league_channel_starts FROM settings WHERE id = 1")
-    row = cursor.fetchone()
-    if not row or not row["league_channel_starts"]:
-        return {}
-    try:
-        starts = json.loads(row["league_channel_starts"])
-        return {k: int(v) for k, v in starts.items()} if isinstance(starts, dict) else {}
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return {}
 
 
 def get_global_consolidation_mode(conn: Connection) -> str:
@@ -185,8 +146,6 @@ def should_run_channel_reset(conn: Connection) -> bool:
     first generation at/after the configured local reset time today. This is
     how the reset "fits into generation windows" — no separate scheduler.
     """
-    if get_global_channel_mode(conn) == "manual":
-        return False
     settings = get_channel_stability_settings(conn)
     if settings["mode"] == "compact":
         return False

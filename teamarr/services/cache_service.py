@@ -140,7 +140,6 @@ class CacheService:
         sport: str | None = None,
         provider: str | None = None,
         import_enabled_only: bool = False,
-        configured_only: bool = False,
     ) -> list[LeagueInfo]:
         """Get all leagues from cache.
 
@@ -148,7 +147,6 @@ class CacheService:
             sport: Optional sport filter
             provider: Optional provider filter
             import_enabled_only: Only return import-enabled leagues
-            configured_only: Only return enabled configured leagues
 
         Returns:
             List of LeagueInfo
@@ -160,7 +158,6 @@ class CacheService:
             sport=sport,
             provider=provider,
             import_enabled_only=import_enabled_only,
-            configured_only=configured_only,
         )
 
         return [

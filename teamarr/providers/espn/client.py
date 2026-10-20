@@ -38,7 +38,6 @@ ESPN_CORE_URL = "http://sports.core.api.espn.com/v2/sports"
 ESPN_USER_AGENT = "curl/8.7.1"
 
 # UFC athlete endpoint (for fighter profiles)
-ESPN_UFC_ATHLETE_URL = "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/athletes"
 
 # ESPN's ungrouped NCAA scoreboards can omit entire divisions. Fetch the root
 # groups and merge their slates so a canonical Teamarr league covers all NCAA
@@ -192,7 +191,6 @@ class ESPNClient(BaseHTTPClient):
         self._cricket_panel_cache: dict[str, tuple[float, dict]] = {}
         self._cricket_season_cache = TTLCache(default_ttl_seconds=300, max_size=64)
         self._cricket_season_lock = threading.Lock()
-        self._ufc_athlete_url = ESPN_UFC_ATHLETE_URL
 
     def _request(self, url: str, params: dict | None = None) -> dict | None:
         label = url.split("/sports/")[-1] if "/sports/" in url else url
@@ -537,29 +535,3 @@ class ESPNClient(BaseHTTPClient):
         url = f"{self._base_url}/mma/{espn_league}/scoreboard"
         params: dict = {"dates": date_str} if date_str else {}
         return self._request(url, params)
-
-    # TODO: PRUNE — get_fighter/get_fighter_record have no callers anywhere in
-    # teamarr/ or tests/; fighter records ride on the scoreboard competitors.
-    def get_fighter(self, fighter_id: str) -> dict | None:
-        """Fetch UFC fighter profile.
-
-        Args:
-            fighter_id: ESPN fighter/athlete ID
-
-        Returns:
-            Raw ESPN response or None on error
-        """
-        url = f"{self._ufc_athlete_url}/{fighter_id}"
-        return self._request(url)
-
-    def get_fighter_record(self, fighter_id: str) -> dict | None:
-        """Fetch UFC fighter record (W-L-D with breakdown).
-
-        Args:
-            fighter_id: ESPN fighter/athlete ID
-
-        Returns:
-            Raw ESPN response with record data or None on error
-        """
-        url = f"{self._ufc_athlete_url}/{fighter_id}/records"
-        return self._request(url)

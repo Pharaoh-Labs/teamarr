@@ -445,23 +445,3 @@ class TestGlobalConsolidationMode:
 
         v59_db.execute("UPDATE settings SET global_consolidation_mode = 'separate' WHERE id = 1")
         assert get_global_consolidation_mode(v59_db) == "separate"
-
-
-# ==========================================================================
-# Global channel mode behavior tests
-# ==========================================================================
-
-
-class TestGlobalChannelMode:
-    """Test get_global_channel_mode function."""
-
-    def test_returns_auto_default(self, v59_db):
-        from teamarr.database.channel_numbers import get_global_channel_mode
-
-        assert get_global_channel_mode(v59_db) == "auto"
-
-    def test_returns_manual_when_set(self, v59_db):
-        from teamarr.database.channel_numbers import get_global_channel_mode
-
-        v59_db.execute("UPDATE settings SET global_channel_mode = 'manual' WHERE id = 1")
-        assert get_global_channel_mode(v59_db) == "manual"
