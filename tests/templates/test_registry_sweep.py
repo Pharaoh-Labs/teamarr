@@ -385,6 +385,13 @@ def soccer():
         venue=Venue(name="Stamford Bridge", city="London", country="England"),
         soccer_match_note="FA Cup, Semifinal",
         broadcasts=["Peacock"],
+        # Cup tie facts (#916): a decided second leg.
+        knockout_round="Semifinals",
+        match_leg=2,
+        match_legs_total=2,
+        aggregate_home=3,
+        aggregate_away=1,
+        tie_winner="home",
     )
     game = GameContext(
         event=ev, is_home=True, team=home, opponent=away, opponent_stats=_stats(record="12-3-2")
@@ -831,6 +838,8 @@ CONDITION_CASES: dict[str, tuple[str | None, str, str]] = {
     "has_structured_preview": (None, "us_pro_rich", "sparse"),
     "has_event_note": (None, "us_pro_rich", "sparse"),
     "has_match_note": (None, "soccer", "us_pro_rich"),
+    "has_knockout_round": (None, "soccer", "us_pro_rich"),
+    "match_leg": ("2", "soccer", "us_pro_rich"),
     "is_neutral_site": (None, "us_pro_away_today", "us_pro_rich"),
     "opponent_name_contains": ("Pistons", "us_pro_rich", "college"),
     "league_is": ("nba", "us_pro_rich", "soccer"),

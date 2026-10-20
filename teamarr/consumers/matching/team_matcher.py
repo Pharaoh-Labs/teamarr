@@ -58,6 +58,7 @@ from teamarr.consumers.stream_match_cache import (
 from teamarr.core.naming import matchup_home_first
 from teamarr.core.types import (
     GENERATED_PREVIEW_FIELDS,
+    KNOCKOUT_FIELDS,
     Event,
     EventStatus,
     RacingResult,
@@ -3142,6 +3143,12 @@ class TeamMatcher:
                 game_event_note=cached_data.get("game_event_note", ""),
                 soccer_match_note=cached_data.get("soccer_match_note", ""),
                 game_preview=cached_data.get("game_preview", ""),
+                **{
+                    field_name: cached_data.get(
+                        field_name, Event.__dataclass_fields__[field_name].default
+                    )
+                    for field_name in KNOCKOUT_FIELDS
+                },
                 **{
                     field_name: cached_data.get(
                         field_name, Event.__dataclass_fields__[field_name].default

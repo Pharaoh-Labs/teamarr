@@ -426,6 +426,19 @@ def get_conditions(template_type: str = "team"):
             "providers": "espn",
         },
         {
+            "name": "has_knockout_round",
+            "description": "Soccer cup knockout stage is known ('Round of 16', 'Final')",
+            "requires_value": False,
+            "providers": "espn",
+        },
+        {
+            "name": "match_leg",
+            "description": "Match is leg N of a two-legged cup tie (1 or 2)",
+            "requires_value": True,
+            "value_type": "number",
+            "providers": "espn",
+        },
+        {
             "name": "is_neutral_site",
             "description": "Game is at a neutral site (bowls, CFP/NCAA tournament rounds)",
             "requires_value": False,

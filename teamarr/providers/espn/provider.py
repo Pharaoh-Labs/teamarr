@@ -1004,6 +1004,16 @@ class ESPNProvider(
             notes = competition.get("notes") or []
             game_event_note = (notes[0].get("headline") if notes else "") or ""
             soccer_match_note = competition.get("altGameNote") or ""
+            # Cup ties (#916): round, leg and aggregate, soccer only — an NHL
+            # series block carries a title too, but {knockout_round} is a
+            # soccer contract like {soccer_match_note}.
+            knockout: dict = {}
+            if sport == "soccer":
+                from teamarr.providers.espn.knockout import parse_knockout
+
+                knockout = parse_knockout(
+                    competition, data.get("season"), home_data.get("id"), away_data.get("id")
+                )
             neutral_site = bool(competition.get("neutralSite"))
             # ESPN states an unannounced start time outright, on the competition
             # (scoreboard, schedule) or the event wrapper; the timestamp it sends
@@ -1084,6 +1094,7 @@ class ESPNProvider(
                 game_recap=game_recap,
                 game_event_note=game_event_note,
                 soccer_match_note=soccer_match_note,
+                **knockout,
                 neutral_site=neutral_site,
                 time_tbd=time_tbd,
                 broadcast_markets=broadcast_markets,
@@ -1171,9 +1182,12 @@ class ESPNProvider(
         """Parse status data into EventStatus."""
         type_data = status_data.get("type", {})
         espn_status = type_data.get("name")
-        if espn_status:
-            state = STATUS_MAP.get(espn_status, "scheduled")
-        else:
+        state = STATUS_MAP.get(espn_status) if espn_status else None
+        if state is None:
+            # No name, or a name the map does not know (STATUS_FINAL_PEN was
+            # one for years — every penalty shootout parsed as scheduled, #916):
+            # ESPN's own pre/in/post state is the honest answer, never
+            # 'scheduled' by default.
             state = self._state_without_type_name(type_data, status_data.get("summary"))
 
         return EventStatus(
@@ -1308,6 +1322,11 @@ class ESPNProvider(
         "semifinals": SEASON_POSTSEASON,
         "final": SEASON_POSTSEASON,
         "group-stage": SEASON_REGULAR,
+        # UCL/UEL since 2024-25 (#916): the league phase replaced the group
+        # stage and a playoff round sits before the round of 16.
+        "league-phase": SEASON_REGULAR,
+        "knockout-round-playoffs": SEASON_POSTSEASON,
+        "round-of-32": SEASON_POSTSEASON,
     }
 
     # ESPN integer season_type values (US sports only; soccer uses opaque IDs).

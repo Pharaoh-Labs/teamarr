@@ -10,7 +10,7 @@ redirect_from:
 
 # Template Variables
 
-Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 271 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
+Templates use variables enclosed in curly braces that get replaced with real data when EPG is generated. Teamarr provides 274 variables across 20 categories, plus [filters](#filters-transforming-variable-values) that transform any variable's value.
 
 ## Team vs Event Templates
 
@@ -567,9 +567,15 @@ Soccer-specific variables for teams that play in multiple competitions.
 | `{soccer_match_league_id}` | League ID for THIS game (e.g., 'uefa.champions') | base, .next, .last | `` |
 | `{soccer_match_league_logo}` | Logo URL for THIS game's league | base, .next, .last | `` |
 | `{soccer_match_note}` | Provider's competition note for the match, untouched — competition name plus group/stage where present | base, .next, .last | `FIFA World Cup, Group J` |
+| `{knockout_round}` | Cup knockout stage for this match (`Knockout Round Playoffs`, `Round of 16`, `Quarterfinals`, `Semifinals`, `Final`). Empty for league-phase, group and domestic-league games | base, .next, .last | `Round of 16` |
+| `{match_leg}` | Which leg of a two-legged tie this match is. Empty for one-off finals and non-knockout games, so a leg badge never lands where there is no leg | base, .next, .last | `2nd Leg` |
+| `{aggregate_score}` | Aggregate score once the tie is decided, in matchup order (home first for soccer unless overridden). Empty before the second leg is final; a tie level on aggregate shows the level score, never the shootout | base, .next, .last | `3-1` |
 
 {: .note }
 Unlike `{soccer_match_league_name}` (which Teamarr builds from its league cache), `{soccer_match_note}` is the provider's raw value and carries group-level detail. It's soccer-only and empty otherwise.
+
+{: .note }
+The knockout variables read ESPN's structured leg and series data (UEFA Champions League, Europa League and other cups ESPN describes that way), not the North American playoff-series notes: `{series_game}` stays empty on a soccer leg, and `{match_leg}` stays empty on an NHL series game. A second leg still in play has no aggregate yet; ESPN publishes it when the tie is decided. See [Game Thumbs](game-thumbs#cup-tie-leg-badges-opt-in) for a leg badge.
 
 {: .note }
 Soccer teams often play in multiple competitions (domestic league, cups, Champions League). The `soccer_match_league` variables tell you which competition a specific game is in, while `soccer_primary_league` is the team's home league.
