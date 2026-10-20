@@ -26,6 +26,12 @@ A read-only strip across the top shows system health at a glance:
 {: .note }
 During a generation run, the channel and match-rate values show a spinner until fresh numbers land.
 
+## Getting Started
+
+On a new install, a **Getting Started** card sits under the status strip with six steps, numbered to match the menu: connect Dispatcharr, add a source, subscribe to leagues, check matching, generate the EPG, see your channels. Each step reads its state from the install itself and ticks off as you go; the next step to do carries a **Start** button that opens the right page. Dispatcharr is assumed — the first step is connecting it.
+
+The card disappears on its own once a generation has completed and created at least one channel. **Dismiss** closes it early for this install (it is a setting, not a browser preference). To bring it back, call `POST /api/v1/setup/getting-started/restore`; it still hides once setup is complete.
+
 ## Generation History
 
 A table of recent full-pipeline runs (matching, channels, and EPG). Five show by default; **Show more** expands to the ten most recent.
