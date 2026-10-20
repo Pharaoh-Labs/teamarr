@@ -86,7 +86,7 @@ On first startup, Teamarr will:
 2. Refresh the league and team directory from providers (a startup overlay shows progress — usually well under a minute)
 3. Start the web UI on port 9195
 
-The navigation bar numbers the setup flow (first-run guidance — each number disappears once you've visited that step): **Settings (0) → Sources (1) → Subscriptions (2) → Matching (3) → EPG (4) → Channels (5)**, with the **Generate** button at the end. Work left to right; the [User Guide index](./) mirrors the same order. Start with [Dispatcharr Integration](dispatcharr-integration).
+The navigation bar numbers the setup flow (first-run guidance — each number disappears once you've visited that step): **Settings (0) → Sources (1) → Subscriptions (2) → Matching (3) → EPG (4) → Channels (5)**, with the **Generate** button at the end. Work left to right; the [User Guide index](./) mirrors the same order, and the Dashboard's **Getting Started** card tracks the same steps from real state and disappears once a generation has created a channel. Start with [Dispatcharr Integration](dispatcharr-integration).
 
 ## Updating
 

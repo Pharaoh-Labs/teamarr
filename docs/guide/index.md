@@ -8,7 +8,7 @@ has_children: true
 
 Step-by-step guides for using Teamarr.
 
-The app's navigation is numbered to walk you through setup in order (the numbers appear on first run and drop off as you visit each step). Follow the same order here:
+The app's navigation is numbered to walk you through setup in order (the numbers appear on first run and drop off as you visit each step), and a **Getting Started** card on the [Dashboard](dashboard#getting-started) ticks the same six steps off from real state until your first generation has created a channel. Follow the same order here:
 
 ![Numbered navigation steps in the top bar](../assets/images/nav-steps.png)
 
