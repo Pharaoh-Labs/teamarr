@@ -16,7 +16,7 @@ from dataclasses import asdict
 from sqlite3 import Connection
 from typing import Any
 
-from teamarr.dispatcharr import ChannelManager, EPGManager, LogoManager
+from teamarr.dispatcharr import ChannelManager, EPGManager, LogoManager, M3UManager
 from teamarr.dispatcharr.factory import DispatcharrConnection
 
 from .service import ChannelLifecycleService
@@ -177,6 +177,7 @@ def create_lifecycle_service(
     channel_manager = None
     logo_manager = None
     epg_manager = None
+    m3u_manager = None
 
     if dispatcharr_client and settings.get("enabled"):
 
@@ -190,6 +191,7 @@ def create_lifecycle_service(
         channel_manager = ChannelManager(raw_client)
         logo_manager = LogoManager(raw_client)
         epg_manager = EPGManager(raw_client)
+        m3u_manager = M3UManager(raw_client)
 
     return ChannelLifecycleService(
         db_factory=db_factory,
@@ -197,6 +199,7 @@ def create_lifecycle_service(
         channel_manager=channel_manager,
         logo_manager=logo_manager,
         epg_manager=epg_manager,
+        m3u_manager=m3u_manager,
         create_timing=lifecycle["create_timing"],
         delete_timing=lifecycle["delete_timing"],
         pre_buffer_minutes=lifecycle["pre_buffer_minutes"],

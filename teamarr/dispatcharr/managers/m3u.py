@@ -463,10 +463,38 @@ class M3UManager:
         what the channel already tells us", so partial is strictly better
         than nothing here.
         """
+        streams, _complete = self._fetch_streams_by_ids(stream_ids, chunk_size)
+        return streams
+
+    def known_stream_ids(
+        self,
+        stream_ids: Iterable[int],
+        chunk_size: int = _IDS_CHUNK_SIZE,
+    ) -> set[int] | None:
+        """Which of ``stream_ids`` Dispatcharr's stream catalog still holds.
+
+        The answer a destructive caller needs (#1097): a stream the catalog
+        does not know is a phantom; a stream it knows is real whatever any
+        one channel's stream list says about it. Returns ``None`` when any
+        chunk failed, because an id missing from a partial answer is not
+        evidence of anything — the caller must then purge nothing.
+        """
+        streams, complete = self._fetch_streams_by_ids(stream_ids, chunk_size)
+        if not complete:
+            return None
+        return {s.id for s in streams}
+
+    def _fetch_streams_by_ids(
+        self,
+        stream_ids: Iterable[int],
+        chunk_size: int,
+    ) -> tuple[list[DispatcharrStream], bool]:
+        """Chunked ``?ids=`` lookup; the flag says whether every chunk answered."""
         ids = sorted({int(i) for i in stream_ids})
         if not ids:
-            return []
+            return [], True
         streams: list[DispatcharrStream] = []
+        complete = True
         for start in range(0, len(ids), chunk_size):
             chunk = ids[start : start + chunk_size]
             url = "/api/channels/streams/?ids=" + ",".join(map(str, chunk))
@@ -477,6 +505,7 @@ class M3UManager:
                     len(chunk),
                     response.status_code if response else "No response",
                 )
+                complete = False
                 continue
             data = response.json()
             raw_list = data.get("results", []) if isinstance(data, dict) else data
@@ -484,7 +513,7 @@ class M3UManager:
                 if "name" in raw:
                     raw["name"] = _fix_double_encoded_utf8(raw["name"])
                 streams.append(DispatcharrStream.from_api(raw))
-        return streams
+        return streams, complete
 
     def get_group_with_streams(
         self,
