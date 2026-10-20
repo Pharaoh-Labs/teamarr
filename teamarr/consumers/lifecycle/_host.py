@@ -30,6 +30,7 @@ class _LifecycleHost:
         _db_factory: Any
         _sports_service: Any
         _channel_manager: Any
+        _m3u_manager: Any
         _logo_manager: Any
         _epg_manager: Any
         _timing_manager: Any

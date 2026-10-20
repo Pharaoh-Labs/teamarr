@@ -127,6 +127,7 @@ class ChannelLifecycleService(
         channel_manager: Any = None,
         logo_manager: Any = None,
         epg_manager: Any = None,
+        m3u_manager: Any = None,
         create_timing: CreateTiming = "same_day",
         delete_timing: DeleteTiming = "same_day",
         pre_buffer_minutes: int = 60,
@@ -146,6 +147,7 @@ class ChannelLifecycleService(
             channel_manager: ChannelManager instance for Dispatcharr operations
             logo_manager: LogoManager instance for logo operations
             epg_manager: EPGManager instance for EPG operations
+            m3u_manager: M3UManager for stream-catalog lookups (phantom validation, #1097)
             create_timing: When to create channels ('same_day' or 'before_event')
             delete_timing: When to delete channels ('same_day' or 'after_event')
             pre_buffer_minutes: Minutes before event start for before_event mode
@@ -168,6 +170,7 @@ class ChannelLifecycleService(
         self._channel_manager = channel_manager
         self._logo_manager = logo_manager
         self._epg_manager = epg_manager
+        self._m3u_manager = m3u_manager
         self._timezone = timezone
 
         # Timing manager for create/delete decisions

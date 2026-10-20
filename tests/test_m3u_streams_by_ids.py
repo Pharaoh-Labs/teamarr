@@ -45,3 +45,21 @@ def test_failed_chunk_is_skipped_not_fatal():
     client = _Client(fail_urls={"/api/channels/streams/?ids=1,2"})
     streams = M3UManager(client).get_streams_by_ids([1, 2, 3], chunk_size=2)
     assert [s.id for s in streams] == [3]
+
+
+def test_known_stream_ids_answers_the_catalog_membership():
+    client = _Client()
+    known = M3UManager(client).known_stream_ids([3, 1, 2], chunk_size=2)
+    assert known == {1, 2, 3}
+
+
+def test_known_stream_ids_is_none_when_any_chunk_fails():
+    """A partial answer is not evidence of absence (#1097)."""
+    client = _Client(fail_urls={"/api/channels/streams/?ids=1,2"})
+    assert M3UManager(client).known_stream_ids([1, 2, 3], chunk_size=2) is None
+
+
+def test_known_stream_ids_empty_input_makes_no_request():
+    client = _Client()
+    assert M3UManager(client).known_stream_ids([]) == set()
+    assert client.urls == []

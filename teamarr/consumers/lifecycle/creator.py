@@ -565,6 +565,110 @@ class ChannelCreator(_LifecycleHost):
                 }
             )
 
+    def _purge_phantom_streams(
+        self,
+        conn: Connection,
+        existing: Any,
+        ordered_streams: list[int],
+        on_channel: set[int],
+    ) -> list[int]:
+        """Soft-remove streams Dispatcharr's catalog no longer holds (#1097).
+
+        A stream in our DB but absent from the channel's Dispatcharr stream
+        list is only a *candidate*: the channel list is not the catalog. Two
+        kinds of candidate are real and must stay:
+
+        - A time-windowed stream (``attach_at`` set — EPG channel-source
+          time-sharing) whose window has just opened. The ordering phase's
+          window sync pushes it later in the same run, so in the first run
+          after the window opens the channel list does not have it yet. On a
+          real install every "phantom" purged over eight days was one of
+          these (444 removals, 22 channels, 0 real phantoms); the stream was
+          re-added on the next run and nothing was ever logged for the user.
+        - Any other stream the catalog still knows: the list was stale, and
+          the push below restores it.
+
+        Only an id the stream catalog does not know is purged, each with a
+        ``stream_removed`` history entry. Without a catalog answer (lookup
+        failed, or no M3U manager) nothing is purged — a phantom costs one
+        more rejected push, a purge costs the user a stream.
+        """
+        from teamarr.database.channels import (
+            get_channel_streams,
+            log_channel_history,
+            remove_stream_from_channel,
+        )
+
+        candidates = [s for s in ordered_streams if s not in on_channel]
+        if not candidates:
+            return []
+
+        windowed = {
+            row.dispatcharr_stream_id
+            for row in get_channel_streams(conn, existing.id)
+            if row.attach_at is not None
+        }
+        held_back = [s for s in candidates if s in windowed]
+        candidates = [s for s in candidates if s not in windowed]
+        if held_back:
+            logger.info(
+                "[STREAM_AUDIT] ch='%s' (db_id=%d): %d windowed stream(s) not yet on "
+                "the channel are pending window sync, not phantoms: %s",
+                existing.channel_name,
+                existing.id,
+                len(held_back),
+                held_back,
+            )
+        if not candidates:
+            return []
+
+        known = self._m3u_manager.known_stream_ids(candidates) if self._m3u_manager else None
+        if known is None:
+            logger.warning(
+                "[STREAM_AUDIT] ch='%s' (db_id=%d): could not verify %d stream(s) "
+                "against the Dispatcharr catalog; purging nothing: %s",
+                existing.channel_name,
+                existing.id,
+                len(candidates),
+                candidates,
+            )
+            return []
+
+        phantoms = [s for s in candidates if s not in known]
+        stale_list = [s for s in candidates if s in known]
+        if stale_list:
+            logger.info(
+                "[STREAM_AUDIT] ch='%s' (db_id=%d): %d stream(s) missing from the "
+                "channel still exist in Dispatcharr; re-pushing: %s",
+                existing.channel_name,
+                existing.id,
+                len(stale_list),
+                stale_list,
+            )
+        for pid in phantoms:
+            remove_stream_from_channel(
+                conn,
+                existing.id,
+                pid,
+                reason="phantom: not in Dispatcharr",
+            )
+            log_channel_history(
+                conn=conn,
+                managed_channel_id=existing.id,
+                change_type="stream_removed",
+                change_source="lifecycle",
+                notes=f"Stream {pid} purged: no longer exists in Dispatcharr",
+            )
+        if phantoms:
+            logger.warning(
+                "[STREAM_AUDIT] purged %d phantom stream(s) from ch='%s' (db_id=%d): %s",
+                len(phantoms),
+                existing.channel_name,
+                existing.id,
+                phantoms,
+            )
+        return phantoms
+
     def _handle_existing_channel(
         self,
         conn: Connection,
@@ -741,24 +845,13 @@ class ChannelCreator(_LifecycleHost):
                     # no longer knows about (e.g. after M3U re-import).
                     # Sending them causes "Invalid pk" and blocks ALL updates.
                     if disp_channel:
-                        valid_ids = set(disp_channel.streams) | {stream_id}
-                        phantoms = [s for s in ordered_streams if s not in valid_ids]
+                        phantoms = self._purge_phantom_streams(
+                            conn,
+                            existing,
+                            ordered_streams,
+                            set(disp_channel.streams) | {stream_id},
+                        )
                         if phantoms:
-                            for pid in phantoms:
-                                remove_stream_from_channel(
-                                    conn,
-                                    existing.id,
-                                    pid,
-                                    reason="phantom: not in Dispatcharr",
-                                )
-                            logger.warning(
-                                "[STREAM_AUDIT] purged %d phantom stream(s) from ch='%s' "
-                                "(db_id=%d): %s",
-                                len(phantoms),
-                                existing.channel_name,
-                                existing.id,
-                                phantoms,
-                            )
                             ordered_streams = [s for s in ordered_streams if s not in phantoms]
 
                     # Live-event #1 pin (#232): a stream that arrives while the
