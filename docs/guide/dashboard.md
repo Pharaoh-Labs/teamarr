@@ -28,6 +28,8 @@ During a generation run, the channel and match-rate values show a spinner until 
 
 ## Getting Started
 
+![Getting Started card — six steps matching the numbered navigation](../assets/images/getting-started.png)
+
 On a new install, a **Getting Started** card sits under the status strip with six steps, numbered to match the menu: connect Dispatcharr, add a source, subscribe to leagues, check matching, generate the EPG, see your channels. Each step reads its state from the install itself and ticks off as you go; the next step to do carries a **Start** button that opens the right page. Dispatcharr is assumed — the first step is connecting it.
 
 The card disappears on its own once a generation has completed and created at least one channel. **Dismiss** closes it early for this install (it is a setting, not a browser preference). To bring it back, call `POST /api/v1/setup/getting-started/restore`; it still hides once setup is complete.
