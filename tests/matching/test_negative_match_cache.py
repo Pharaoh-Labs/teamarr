@@ -32,10 +32,11 @@ def on(monkeypatch):
 
 
 def _matcher(db_factory, **kw):
+    kw.setdefault("generation", 7)
     return StreamMatcher(
         service=None, db_factory=db_factory, group_id=1, search_leagues=["mlb"],
         include_leagues=["mlb"], include_final_events=False, sport_durations={},
-        generation=7, shared_events={}, name_match_enabled=True, **kw,
+        shared_events={}, name_match_enabled=True, **kw,
     )
 
 
@@ -141,6 +142,27 @@ class TestReadBack:
         assert got[0].failed_reason is FailedReason.FIXTURE_NOT_IN_LEAGUE
         assert got[0].matched is False
         assert got[0].from_cache is True
+
+    def test_a_replayed_failure_is_a_sighting_and_survives_the_purge(self, on, db_factory):
+        """A hit refreshes last_seen_generation like a success hit does (#1101).
+
+        Without the touch, a failure written at generation N kept that stamp
+        through every replay, purge_stale dropped it at N + 3, and every
+        never-matching stream was re-scored on a fixed three-run cycle.
+        """
+        _matcher(db_factory)._remember_failure([_failed(FailedReason.NO_EVENT_FOUND)], 1, "S")
+        cache = StreamMatchCache(db_factory)
+        for generation in range(8, 8 + 3 * StreamMatchCache.PURGE_FAILED_AFTER_GENERATIONS):
+            cache.purge_stale(generation)  # what every run does first
+            got = _matcher(db_factory, generation=generation)._cached_failure(
+                self._classified(), 1, "S"
+            )
+            assert got is not None, f"failure purged before generation {generation}"
+            with db_factory() as c:
+                stamp = c.execute(
+                    "SELECT last_seen_generation FROM stream_match_cache"
+                ).fetchone()[0]
+            assert stamp == generation
 
     def test_miss_returns_none(self, on, db_factory):
         m = _matcher(db_factory)
