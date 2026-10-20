@@ -17,7 +17,14 @@ from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast, overload
 
-from teamarr.core import GENERATED_PREVIEW_FIELDS, Event, SportsProvider, Team, TeamStats
+from teamarr.core import (
+    GENERATED_PREVIEW_FIELDS,
+    KNOCKOUT_FIELDS,
+    Event,
+    SportsProvider,
+    Team,
+    TeamStats,
+)
 from teamarr.database import get_db
 from teamarr.database.provider_cache import (
     dict_to_event,
@@ -717,6 +724,10 @@ class SportsDataService:
         "game_preview",
         "series_summary",
         *GENERATED_PREVIEW_FIELDS,
+        # Cup tie facts (#916): the aggregate and the tie winner only exist
+        # once the second leg is final, so they must overlay from the fresh
+        # fetch; the generic branch below is additive (empty never clobbers).
+        *KNOCKOUT_FIELDS,
     )
 
     def refresh_event_status(self, event: Event) -> Event:

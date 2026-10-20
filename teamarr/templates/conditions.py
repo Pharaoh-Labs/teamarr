@@ -30,6 +30,8 @@ Condition Types:
 - has_structured_preview: Recent-form data available (days-ahead)
 - has_event_note: Marquee/playoff note available ('NBA Finals - Game 5')
 - has_match_note: Soccer competition note available ('FIFA World Cup, Group C')
+- has_knockout_round: Soccer cup knockout stage known ('Round of 16', 'Final') (#916)
+- match_leg: Match is leg N of a two-legged tie (value = 1 or 2; empty = any leg)
 - opponent_name_contains: Opponent name contains string
 - league_is: Event's league is one of the given codes (value = "cfb" or "cfb,nfl")
 - sport_is: Event's sport is one of the given codes (value = "football,basketball")
@@ -385,6 +387,31 @@ class ConditionEvaluator:
         ('FIFA World Cup, Group C'). Soccer-only; empty otherwise."""
         event = game_ctx.event
         return bool(event and event.soccer_match_note)
+
+    def _eval_has_knockout_round(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """A cup knockout stage is known for this match ('Round of 16',
+        'Final'). Soccer-only (#916); league-phase and group games are False."""
+        event = game_ctx.event
+        return bool(event and event.knockout_round)
+
+    def _eval_match_leg(
+        self, value: str | None, ctx: TemplateContext, game_ctx: GameContext
+    ) -> bool:
+        """This match is a leg of a two-legged tie. Value '1' or '2' names the
+        leg; an empty value matches either leg. One-off finals and league-phase
+        games carry no leg and are False whatever the value (#916)."""
+        event = game_ctx.event
+        leg = getattr(event, "match_leg", None) if event else None
+        if leg not in (1, 2):
+            return False
+        if not value or not str(value).strip():
+            return True
+        try:
+            return int(str(value).strip()) == leg
+        except ValueError:
+            return False
 
     # =========================================================================
     # Opponent conditions

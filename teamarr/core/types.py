@@ -18,6 +18,17 @@ SEASON_POSTSEASON = "postseason"
 SEASON_OFFSEASON = "offseason"
 
 
+# Cup knockout fields (#916) — cache, refresh and the matcher's cached-event
+# reconstruction all iterate this tuple, so adding a field cannot omit it.
+KNOCKOUT_FIELDS = (
+    "knockout_round",
+    "match_leg",
+    "match_legs_total",
+    "aggregate_home",
+    "aggregate_away",
+    "tie_winner",
+)
+
 # Canonical Event fields that form the generated-preview snapshot. Cache,
 # refresh, rendering, and registry parity all derive from this tuple so adding
 # a field cannot silently omit it from one of those paths.
@@ -198,6 +209,17 @@ class Event:
     # outranks a completed regular-season one; also populated from scoreboard
     # competition.series for paths that never hit the summary endpoint.
     series_summary: str = ""  # e.g. "Series tied 1-1"
+    # Cup knockout ties (#916): structured round/leg/aggregate from ESPN's
+    # competition.leg / competition.series (soccer only; see
+    # providers/espn/knockout.py). The summary's seasonseries is head-to-head
+    # history and is never read. KNOCKOUT_FIELDS carries these through the
+    # provider cache, the match cache and the refresh overlay.
+    knockout_round: str = ""  # 'Round of 16', 'Final'; empty outside a knockout stage
+    match_leg: int | None = None  # 1 or 2; None for one-off finals and league phase
+    match_legs_total: int | None = None  # series.totalCompetitions (2 for a tie)
+    aggregate_home: int | None = None  # only once the tie is decided
+    aggregate_away: int | None = None
+    tie_winner: str = ""  # 'home' | 'away' once decided (penalties included)
     # Structured preview (tvnk.15): recent form from summary lastFiveGames —
     # W-L over each team's last five ("4-1"). Available days ahead, unlike
     # preview prose which only populates ~T-0/T-1.

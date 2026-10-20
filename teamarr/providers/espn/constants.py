@@ -10,7 +10,11 @@ STATUS_MAP = {
     "STATUS_FINAL_OT": "final",
     "STATUS_FULL_TIME": "final",  # Soccer
     "STATUS_FULL_TIME_ET": "final",  # Soccer extra time
-    "STATUS_FULL_PEN": "final",  # Soccer penalties
+    # Soccer penalties: ESPN's real name is STATUS_FINAL_PEN (type id 47,
+    # 'Final Score - After Penalties'; 2026 UCL final, UEL R16 — #916). The
+    # STATUS_FULL_PEN entry was a guess that never matched; kept harmlessly.
+    "STATUS_FINAL_PEN": "final",
+    "STATUS_FULL_PEN": "final",
     "STATUS_ABANDONED": "cancelled",  # Soccer
     "STATUS_POSTPONED": "postponed",
     "STATUS_CANCELED": "cancelled",

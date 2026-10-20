@@ -1,0 +1,839 @@
+{
+ "r16_leg1": {
+  "league": "uefa.champions",
+  "event": {
+   "id": "401862667",
+   "name": "Liverpool at Galatasaray",
+   "shortName": "LIV @ GAL",
+   "date": "2026-03-10T17:45Z",
+   "season": {
+    "year": 2025,
+    "type": 13680,
+    "slug": "round-of-16"
+   },
+   "status": {
+    "clock": 5400.0,
+    "displayClock": "90'+6'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401862667",
+     "date": "2026-03-10T17:45Z",
+     "neutralSite": null,
+     "leg": {
+      "value": 1,
+      "displayValue": "1st Leg"
+     },
+     "series": {
+      "competitors": [
+       {
+        "id": "432",
+        "winner": false,
+        "aggregateScore": null
+       },
+       {
+        "id": "364",
+        "winner": false,
+        "aggregateScore": null
+       }
+      ],
+      "completed": false,
+      "title": "Round of 16",
+      "totalCompetitions": 2
+     },
+     "notes": [
+      {
+       "text": "1st Leg",
+       "headline": "1st Leg",
+       "type": "event"
+      }
+     ],
+     "altGameNote": "UEFA Champions League, Round of 16",
+     "status": {
+      "clock": 5400.0,
+      "displayClock": "90'+6'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "432",
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "shootoutScore": null,
+       "team": {
+        "id": "432",
+        "name": "Galatasaray",
+        "abbreviation": "GAL",
+        "displayName": "Galatasaray",
+        "shortDisplayName": "Galatasaray",
+        "location": "Galatasaray"
+       }
+      },
+      {
+       "id": "364",
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "shootoutScore": null,
+       "team": {
+        "id": "364",
+        "name": "Liverpool",
+        "abbreviation": "LIV",
+        "displayName": "Liverpool",
+        "shortDisplayName": "Liverpool",
+        "location": "Liverpool"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "r16_leg2_aggregate": {
+  "league": "uefa.champions",
+  "event": {
+   "id": "401862582",
+   "name": "Newcastle United at Barcelona",
+   "shortName": "NEW @ BAR",
+   "date": "2026-03-18T17:45Z",
+   "season": {
+    "year": 2025,
+    "type": 13680,
+    "slug": "round-of-16"
+   },
+   "status": {
+    "clock": 5400.0,
+    "displayClock": "90'+1'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401862582",
+     "date": "2026-03-18T17:45Z",
+     "neutralSite": null,
+     "leg": {
+      "value": 2,
+      "displayValue": "2nd Leg"
+     },
+     "series": {
+      "competitors": [
+       {
+        "id": "83",
+        "winner": true,
+        "aggregateScore": 8.0
+       },
+       {
+        "id": "361",
+        "winner": false,
+        "aggregateScore": 3.0
+       }
+      ],
+      "completed": true,
+      "title": "Round of 16",
+      "totalCompetitions": 2
+     },
+     "notes": [
+      {
+       "text": "2nd Leg - Barcelona advance 8-3 on aggregate",
+       "headline": "2nd Leg - Barcelona advance 8-3 on aggregate",
+       "type": "event"
+      }
+     ],
+     "altGameNote": "UEFA Champions League, Round of 16",
+     "status": {
+      "clock": 5400.0,
+      "displayClock": "90'+1'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "83",
+       "homeAway": "home",
+       "score": "7",
+       "winner": true,
+       "shootoutScore": null,
+       "team": {
+        "id": "83",
+        "name": "Barcelona",
+        "abbreviation": "BAR",
+        "displayName": "Barcelona",
+        "shortDisplayName": "Barcelona",
+        "location": "Barcelona"
+       }
+      },
+      {
+       "id": "361",
+       "homeAway": "away",
+       "score": "2",
+       "winner": false,
+       "shootoutScore": null,
+       "team": {
+        "id": "361",
+        "name": "Newcastle United",
+        "abbreviation": "NEW",
+        "displayName": "Newcastle United",
+        "shortDisplayName": "Newcastle",
+        "location": "Newcastle United"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "qf_leg2_aggregate_1_0": {
+  "league": "uefa.champions",
+  "event": {
+   "id": "401862890",
+   "name": "Sporting CP at Arsenal",
+   "shortName": "SCP @ ARS",
+   "date": "2026-04-15T19:00Z",
+   "season": {
+    "year": 2025,
+    "type": 13679,
+    "slug": "quarterfinals"
+   },
+   "status": {
+    "clock": 5400.0,
+    "displayClock": "90'+5'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401862890",
+     "date": "2026-04-15T19:00Z",
+     "neutralSite": null,
+     "leg": {
+      "value": 2,
+      "displayValue": "2nd Leg"
+     },
+     "series": {
+      "competitors": [
+       {
+        "id": "359",
+        "winner": true,
+        "aggregateScore": 1.0
+       },
+       {
+        "id": "2250",
+        "winner": false,
+        "aggregateScore": 0.0
+       }
+      ],
+      "completed": true,
+      "title": "Quarterfinals",
+      "totalCompetitions": 2
+     },
+     "notes": [
+      {
+       "text": "2nd Leg - Arsenal advance 1-0 on aggregate",
+       "headline": "2nd Leg - Arsenal advance 1-0 on aggregate",
+       "type": "event"
+      }
+     ],
+     "altGameNote": "UEFA Champions League, Quarterfinals",
+     "status": {
+      "clock": 5400.0,
+      "displayClock": "90'+5'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "359",
+       "homeAway": "home",
+       "score": "0",
+       "winner": true,
+       "shootoutScore": null,
+       "team": {
+        "id": "359",
+        "name": "Arsenal",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal"
+       }
+      },
+      {
+       "id": "2250",
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "shootoutScore": null,
+       "team": {
+        "id": "2250",
+        "name": "Sporting CP",
+        "abbreviation": "SCP",
+        "displayName": "Sporting CP",
+        "shortDisplayName": "Sporting",
+        "location": "Sporting CP"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "final_penalties": {
+  "league": "uefa.champions",
+  "event": {
+   "id": "401862897",
+   "name": "Arsenal at Paris Saint-Germain",
+   "shortName": "ARS @ PSG",
+   "date": "2026-05-30T16:00Z",
+   "season": {
+    "year": 2025,
+    "type": 13677,
+    "slug": "final"
+   },
+   "status": {
+    "clock": 7200.0,
+    "displayClock": "120'",
+    "period": 5,
+    "type": {
+     "id": "47",
+     "name": "STATUS_FINAL_PEN",
+     "state": "post",
+     "completed": true,
+     "description": "Final Score - After Penalties",
+     "detail": "FT-Pens",
+     "shortDetail": "FT-Pens"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401862897",
+     "date": "2026-05-30T16:00Z",
+     "neutralSite": null,
+     "leg": null,
+     "series": null,
+     "notes": [
+      {
+       "text": "Paris Saint-Germain win 4-3 on penalties",
+       "headline": "Paris Saint-Germain win 4-3 on penalties",
+       "type": "event"
+      }
+     ],
+     "altGameNote": "UEFA Champions League, Final",
+     "status": {
+      "clock": 7200.0,
+      "displayClock": "120'",
+      "period": 5,
+      "type": {
+       "id": "47",
+       "name": "STATUS_FINAL_PEN",
+       "state": "post",
+       "completed": true,
+       "description": "Final Score - After Penalties",
+       "detail": "FT-Pens",
+       "shortDetail": "FT-Pens"
+      }
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "160",
+       "homeAway": "home",
+       "score": "1",
+       "winner": true,
+       "shootoutScore": 4,
+       "team": {
+        "id": "160",
+        "name": "Paris Saint-Germain",
+        "abbreviation": "PSG",
+        "displayName": "Paris Saint-Germain",
+        "shortDisplayName": "PSG",
+        "location": "Paris Saint-Germain"
+       }
+      },
+      {
+       "id": "359",
+       "homeAway": "away",
+       "score": "1",
+       "winner": false,
+       "shootoutScore": 3,
+       "team": {
+        "id": "359",
+        "name": "Arsenal",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "knockout_round_playoffs_leg1": {
+  "league": "uefa.champions",
+  "event": {
+   "id": "401858736",
+   "name": "Newcastle United at FK Qarabag",
+   "shortName": "NEW @ QAR",
+   "date": "2026-02-18T17:45Z",
+   "season": {
+    "year": 2025,
+    "type": 13681,
+    "slug": "knockout-round-playoffs"
+   },
+   "status": {
+    "clock": 5400.0,
+    "displayClock": "90'+4'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401858736",
+     "date": "2026-02-18T17:45Z",
+     "neutralSite": null,
+     "leg": {
+      "value": 1,
+      "displayValue": "1st Leg"
+     },
+     "series": {
+      "competitors": [
+       {
+        "id": "10414",
+        "winner": false,
+        "aggregateScore": null
+       },
+       {
+        "id": "361",
+        "winner": false,
+        "aggregateScore": null
+       }
+      ],
+      "completed": false,
+      "title": "Knockout Round Playoffs",
+      "totalCompetitions": 2
+     },
+     "notes": [
+      {
+       "text": "1st Leg",
+       "headline": "1st Leg",
+       "type": "event"
+      }
+     ],
+     "altGameNote": "UEFA Champions League, Knockout Round Playoffs",
+     "status": {
+      "clock": 5400.0,
+      "displayClock": "90'+4'",
+      "period": 2,
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "10414",
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "shootoutScore": null,
+       "team": {
+        "id": "10414",
+        "name": "FK Qarabag",
+        "abbreviation": "QAR",
+        "displayName": "FK Qarabag",
+        "shortDisplayName": "FK Qarabag",
+        "location": "FK Qarabag"
+       }
+      },
+      {
+       "id": "361",
+       "homeAway": "away",
+       "score": "6",
+       "winner": true,
+       "shootoutScore": null,
+       "team": {
+        "id": "361",
+        "name": "Newcastle United",
+        "abbreviation": "NEW",
+        "displayName": "Newcastle United",
+        "shortDisplayName": "Newcastle",
+        "location": "Newcastle United"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "league_phase_scheduled": {
+  "league": "uefa.champions",
+  "event": {
+   "id": "401915395",
+   "name": "Manchester United at Como",
+   "shortName": "MAN @ COMO",
+   "date": "2026-10-21T16:45Z",
+   "season": {
+    "year": 2026,
+    "type": 14534,
+    "slug": "league-phase"
+   },
+   "status": {
+    "clock": 0.0,
+    "displayClock": "0'",
+    "type": {
+     "id": "1",
+     "name": "STATUS_SCHEDULED",
+     "state": "pre",
+     "completed": false,
+     "description": "Scheduled",
+     "detail": "Wed, October 21st at 12:45 PM EDT",
+     "shortDetail": "Scheduled"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401915395",
+     "date": "2026-10-21T16:45Z",
+     "neutralSite": null,
+     "leg": null,
+     "series": null,
+     "notes": [],
+     "altGameNote": "UEFA Champions League, League Phase",
+     "status": {
+      "clock": 0.0,
+      "displayClock": "0'",
+      "type": {
+       "id": "1",
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "description": "Scheduled",
+       "detail": "Wed, October 21st at 12:45 PM EDT",
+       "shortDetail": "Scheduled"
+      }
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "2572",
+       "homeAway": "home",
+       "score": "0",
+       "winner": false,
+       "shootoutScore": null,
+       "team": {
+        "id": "2572",
+        "name": "Como",
+        "abbreviation": "COMO",
+        "displayName": "Como",
+        "shortDisplayName": "Como",
+        "location": "Como"
+       }
+      },
+      {
+       "id": "360",
+       "homeAway": "away",
+       "score": "0",
+       "winner": false,
+       "shootoutScore": null,
+       "team": {
+        "id": "360",
+        "name": "Manchester United",
+        "abbreviation": "MAN",
+        "displayName": "Manchester United",
+        "shortDisplayName": "Man United",
+        "location": "Manchester United"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "uel_r16_leg2_tied_penalties": {
+  "league": "uefa.europa",
+  "event": {
+   "id": "401862875",
+   "name": "Nottingham Forest at FC Midtjylland",
+   "shortName": "NFO @ MID",
+   "date": "2026-03-19T17:45Z",
+   "season": {
+    "year": 2025,
+    "type": 13686,
+    "slug": "round-of-16"
+   },
+   "status": {
+    "clock": 7200.0,
+    "displayClock": "120'",
+    "period": 5,
+    "type": {
+     "id": "47",
+     "name": "STATUS_FINAL_PEN",
+     "state": "post",
+     "completed": true,
+     "description": "Final Score - After Penalties",
+     "detail": "FT-Pens",
+     "shortDetail": "FT-Pens"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401862875",
+     "date": "2026-03-19T17:45Z",
+     "neutralSite": null,
+     "leg": {
+      "value": 2,
+      "displayValue": "2nd Leg"
+     },
+     "series": {
+      "competitors": [
+       {
+        "id": "572",
+        "winner": false,
+        "aggregateScore": 2.0
+       },
+       {
+        "id": "393",
+        "winner": true,
+        "aggregateScore": 2.0
+       }
+      ],
+      "completed": true,
+      "title": "Round of 16",
+      "totalCompetitions": 2
+     },
+     "notes": [
+      {
+       "text": "2nd Leg - Tied on aggregate - Nottingham Forest advance 3-0 on penalties",
+       "headline": "2nd Leg - Tied on aggregate - Nottingham Forest advance 3-0 on penalties",
+       "type": "event"
+      }
+     ],
+     "altGameNote": "UEFA Europa League, Round of 16",
+     "status": {
+      "clock": 7200.0,
+      "displayClock": "120'",
+      "period": 5,
+      "type": {
+       "id": "47",
+       "name": "STATUS_FINAL_PEN",
+       "state": "post",
+       "completed": true,
+       "description": "Final Score - After Penalties",
+       "detail": "FT-Pens",
+       "shortDetail": "FT-Pens"
+      }
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "572",
+       "homeAway": "home",
+       "score": "1",
+       "winner": false,
+       "shootoutScore": 0,
+       "team": {
+        "id": "572",
+        "name": "FC Midtjylland",
+        "abbreviation": "MID",
+        "displayName": "FC Midtjylland",
+        "shortDisplayName": "Midtjylland",
+        "location": "FC Midtjylland"
+       }
+      },
+      {
+       "id": "393",
+       "homeAway": "away",
+       "score": "2",
+       "winner": true,
+       "shootoutScore": 3,
+       "team": {
+        "id": "393",
+        "name": "Nottingham Forest",
+        "abbreviation": "NFO",
+        "displayName": "Nottingham Forest",
+        "shortDisplayName": "Nottm Forest",
+        "location": "Nottingham Forest"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "summary_header_r16_leg2": {
+  "league": "uefa.champions",
+  "header": {
+   "id": "401862582",
+   "season": {
+    "year": 2025,
+    "current": false,
+    "type": 13680,
+    "name": "2025-26 UEFA Champions League, Round of 16"
+   },
+   "competitions": [
+    {
+     "id": "401862582",
+     "date": "2026-03-18T17:45Z",
+     "neutralSite": false,
+     "leg": {
+      "value": 2,
+      "displayValue": "2nd Leg"
+     },
+     "series": [
+      {
+       "title": "Round of 16",
+       "completed": true,
+       "leg": 2,
+       "totalCompetitions": 2,
+       "competitors": [
+        {
+         "id": "83",
+         "winner": true,
+         "aggregateScore": 8
+        },
+        {
+         "id": "361",
+         "winner": false,
+         "aggregateScore": 3
+        }
+       ]
+      }
+     ],
+     "notes": [
+      {
+       "type": "event",
+       "headline": "2nd Leg - Barcelona advance 8-3 on aggregate"
+      },
+      {
+       "type": "event-ingest-note",
+       "date": "2026-03-20T12:32Z",
+       "text": "Barcelona advances.",
+       "source": "38"
+      }
+     ],
+     "altGameNote": "UEFA Champions League, Round of 16",
+     "status": {
+      "type": {
+       "id": "28",
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "description": "Full Time",
+       "detail": "FT",
+       "shortDetail": "FT"
+      }
+     },
+     "timeValid": null,
+     "competitors": [
+      {
+       "id": "83",
+       "homeAway": "home",
+       "score": "7",
+       "winner": true,
+       "team": {
+        "id": "83",
+        "name": "Barcelona",
+        "abbreviation": "BAR",
+        "displayName": "Barcelona",
+        "shortDisplayName": "Barcelona",
+        "location": "Barcelona"
+       }
+      },
+      {
+       "id": "361",
+       "homeAway": "away",
+       "score": "2",
+       "winner": false,
+       "team": {
+        "id": "361",
+        "name": "Newcastle United",
+        "abbreviation": "NEW",
+        "displayName": "Newcastle United",
+        "shortDisplayName": "Newcastle",
+        "location": "Newcastle United"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "seasonseries": [
+   {
+    "type": "head-to-head",
+    "title": "Barcelona vs. Newcastle United",
+    "summary": "BAR leads series 3-0-1",
+    "completed": false
+   }
+  ]
+ }
+}

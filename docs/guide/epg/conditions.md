@@ -255,6 +255,8 @@ These shine in [filler condition rows](#filler-condition-rows), where the refere
 | `has_structured_preview` | - | Recent-form data is available (populates days ahead) |
 | `has_event_note` | - | Marquee/playoff note is available (`NBA Finals - Game 5`, `CFP Quarterfinal at the Cotton Bowl Classic`); empty for ordinary games |
 | `has_match_note` | - | Soccer competition note is available (`FIFA World Cup, Group C`); soccer only |
+| `has_knockout_round` | - | Soccer cup knockout stage is known (`Round of 16`, `Final`); league-phase and group games do not match |
+| `match_leg` | `1` or `2` | Match is that leg of a two-legged cup tie; one-off finals never match |
 
 Use these to prefer ESPN's editorial copy and fall back to constructed prose
 when it isn't published yet — the pattern the starter templates ship with:

@@ -3,6 +3,7 @@
 from teamarr.core.interfaces import LeagueMapping, LeagueMappingSource, SportsProvider
 from teamarr.core.types import (
     GENERATED_PREVIEW_FIELDS,
+    KNOCKOUT_FIELDS,
     SEASON_OFFSEASON,
     SEASON_POSTSEASON,
     SEASON_PRESEASON,
@@ -24,6 +25,7 @@ __all__ = [
     "Event",
     "EventStatus",
     "GENERATED_PREVIEW_FIELDS",
+    "KNOCKOUT_FIELDS",
     "LeagueMapping",
     "LeagueMappingSource",
     "Programme",

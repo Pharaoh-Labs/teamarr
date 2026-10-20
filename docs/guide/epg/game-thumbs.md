@@ -78,6 +78,24 @@ not automatically changed to use custom badges, so existing channel art keeps
 working when Game Thumbs runs with its default configuration. The guide's
 `LIVE`/`UPCOMING` labels are displayed by the viewing app, not by Game Thumbs.
 
+### Cup tie leg badges (opt-in)
+
+Two-legged cup ties (UEFA Champions League and Europa League knockouts, and any
+cup ESPN describes the same way) are not series games, so `{series_game}` stays
+empty on them. Use `{match_leg}` instead, on a row with **Condition = Match is
+leg N of a two-legged cup tie** (`match_leg`, value `1` or `2`) or
+**Soccer cup knockout stage is known** (`has_knockout_round`):
+
+```text
+{league_code}/{away_team|pascal}/{home_team|pascal}/thumb.png?aspect=16-9&style=6&logo=true&fallback=true&badge={match_leg|url}
+```
+
+That renders `1ST LEG` / `2ND LEG`. `{knockout_round}` (`Round of 16`) and
+`{aggregate_score}` (`3-1`, only once the tie is decided) work the same way in
+a subtitle or description. A one-off final carries no leg, so a
+`has_knockout_round` row with `badge={knockout_round|url}` is the one that
+fires there. The same `ALLOW_CUSTOM_BADGES=true` requirement applies.
+
 ## Resources
 
 - **Documentation**: [game-thumbs-docs.swvn.io](https://game-thumbs-docs.swvn.io)

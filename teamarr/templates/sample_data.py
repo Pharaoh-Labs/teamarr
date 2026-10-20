@@ -1546,6 +1546,9 @@ _SHAPE_OVERRIDES: dict[str, dict[str, str]] = {
         "game_event_note.next": "Placeholder Premier League Finals - Game 5",
         "game_event_note.last": "Placeholder Premier League Semifinals - Game 7",
         "soccer_match_note": "Placeholder Premier League, Group Z",
+        "knockout_round": "Round of 16",
+        "match_leg": "2nd Leg",
+        "aggregate_score": "3-1",
         "game_preview": "The Tropics look to close out the series against the Mean Time.",
         "game_preview.next": "Flint visits the Pinchy Crabs to open the next round.",
         "generated_preview": (
