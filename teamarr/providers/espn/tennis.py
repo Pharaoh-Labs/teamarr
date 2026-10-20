@@ -22,9 +22,7 @@ from teamarr.core.naming import surnames
 logger = logging.getLogger(__name__)
 
 
-def _tennis_event_id(
-    tournament_id: str, start_time: datetime, first: Team, second: Team
-) -> str:
+def _tennis_event_id(tournament_id: str, start_time: datetime, first: Team, second: Team) -> str:
     """Deterministic match id: (tournament, UTC date, player pair).
 
     ESPN's tennis competition ids are UNSTABLE — the same match resurfaces
@@ -37,6 +35,7 @@ def _tennis_event_id(
     pair = "|".join(sorted((first.id, second.id)))
     digest = hashlib.sha1(pair.encode()).hexdigest()[:10]
     return f"{tournament_id}-{start_time.strftime('%Y%m%d')}-{digest}"
+
 
 # Draw types (grouping slugs) each tennis league keeps. Grand slams appear
 # verbatim on BOTH the atp and wta endpoints with all five groupings, so the
@@ -186,9 +185,7 @@ class TennisParserMixin:
                         broadcasts.append(bname)
 
             round_data = competition.get("round") or {}
-            round_name = (
-                round_data.get("displayName") if isinstance(round_data, dict) else None
-            )
+            round_name = round_data.get("displayName") if isinstance(round_data, dict) else None
 
             # Final-match result line, e.g. "Piros (HUN) bt Ivanov (BUL) 6-2 6-2"
             game_recap = ""
@@ -224,9 +221,7 @@ class TennisParserMixin:
             logger.warning("[ESPN_TENNIS] Failed to parse match: %s", e)
             return None
 
-    def _parse_tennis_player(
-        self, competitor: dict, league: str, sport: str
-    ) -> Team | None:
+    def _parse_tennis_player(self, competitor: dict, league: str, sport: str) -> Team | None:
         """Convert a tennis competitor (athlete or doubles roster) to a Team.
 
         ESPN scoreboard athlete ids are null, so the id is a name-derived

@@ -201,8 +201,7 @@ def _drop_unknown_league_codes(conn: Connection, codes: list[str]) -> list[str]:
         return codes
     known = {row[0].lower() for row in cache_rows}
     known.update(
-        row[0].lower()
-        for row in conn.execute("SELECT league_code FROM leagues").fetchall()
+        row[0].lower() for row in conn.execute("SELECT league_code FROM leagues").fetchall()
     )
     kept = [c for c in codes if c and c.lower() in known]
     dropped = [c for c in codes if c and c.lower() not in known]
@@ -252,9 +251,7 @@ def update_subscription(
 
     if soccer_followed_teams is not ...:
         updates.append("soccer_followed_teams = ?")
-        params.append(
-            json.dumps(soccer_followed_teams) if soccer_followed_teams else None
-        )
+        params.append(json.dumps(soccer_followed_teams) if soccer_followed_teams else None)
 
     if auto_source_leagues is not ...:
         updates.append("auto_source_leagues = ?")
@@ -322,9 +319,7 @@ def get_template_scope(conn: Connection, template_id: int) -> tuple[list[str], l
     return leagues, sports
 
 
-def get_subscription_template(
-    conn: Connection, assignment_id: int
-) -> SubscriptionTemplate | None:
+def get_subscription_template(conn: Connection, assignment_id: int) -> SubscriptionTemplate | None:
     """Get a single subscription template assignment by ID."""
     row = conn.execute(
         """SELECT st.*, t.name as template_name
@@ -425,9 +420,7 @@ def delete_subscription_template(conn: Connection, assignment_id: int) -> bool:
     Returns:
         True if deleted
     """
-    cursor = conn.execute(
-        "DELETE FROM subscription_templates WHERE id = ?", (assignment_id,)
-    )
+    cursor = conn.execute("DELETE FROM subscription_templates WHERE id = ?", (assignment_id,))
     conn.commit()
     if cursor.rowcount > 0:
         logger.debug("[SUBSCRIPTION] Deleted template assignment %d", assignment_id)
@@ -466,8 +459,7 @@ def get_subscription_template_for_event(
         return None
 
     logger.debug(
-        "[SUBSCRIPTION] Resolving template for sport=%r, league=%r, "
-        "templates=%s",
+        "[SUBSCRIPTION] Resolving template for sport=%r, league=%r, templates=%s",
         event_sport,
         event_league,
         [(t.template_id, t.sports, t.leagues) for t in templates],
@@ -478,9 +470,7 @@ def get_subscription_template_for_event(
 
     # 1. Check for league match (most specific, case-insensitive)
     for t in templates:
-        if t.leagues and event_league_lower in [
-            lg.lower() for lg in t.leagues
-        ]:
+        if t.leagues and event_league_lower in [lg.lower() for lg in t.leagues]:
             logger.debug(
                 "[SUBSCRIPTION] Resolved template %d (league=%r match in %s)",
                 t.template_id,
@@ -491,9 +481,7 @@ def get_subscription_template_for_event(
 
     # 2. Check for sport match (case-insensitive)
     for t in templates:
-        if t.sports and event_sport_lower in [
-            s.lower() for s in t.sports
-        ]:
+        if t.sports and event_sport_lower in [s.lower() for s in t.sports]:
             logger.debug(
                 "[SUBSCRIPTION] Resolved template %d (sport=%r match in %s)",
                 t.template_id,
@@ -529,15 +517,11 @@ def get_league_configs(
     conn: Connection,
 ) -> list[SubscriptionLeagueConfig]:
     """Get all per-league config overrides."""
-    rows = conn.execute(
-        "SELECT * FROM subscription_league_config ORDER BY league_code"
-    ).fetchall()
+    rows = conn.execute("SELECT * FROM subscription_league_config ORDER BY league_code").fetchall()
     return [_build_league_config(row) for row in rows]
 
 
-def get_league_config(
-    conn: Connection, league_code: str
-) -> SubscriptionLeagueConfig | None:
+def get_league_config(conn: Connection, league_code: str) -> SubscriptionLeagueConfig | None:
     """Get config for a specific league."""
     row = conn.execute(
         "SELECT * FROM subscription_league_config WHERE league_code = ?",
@@ -580,9 +564,7 @@ def upsert_league_config(
         """,
         (
             league_code,
-            json.dumps(channel_profile_ids)
-            if channel_profile_ids is not None
-            else None,
+            json.dumps(channel_profile_ids) if channel_profile_ids is not None else None,
             channel_group_id,
             channel_group_mode,
             matchup_order,

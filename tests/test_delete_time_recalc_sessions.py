@@ -32,7 +32,7 @@ def db(tmp_path, monkeypatch):
     with get_db() as conn:
         conn.execute(
             "INSERT INTO event_epg_groups (id, name, leagues) "
-            'VALUES (999992, \'test-recalc\', \'["f1"]\')'
+            "VALUES (999992, 'test-recalc', '[\"f1\"]')"
         )
         conn.commit()
     yield

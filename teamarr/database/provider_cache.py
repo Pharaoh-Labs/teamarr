@@ -196,9 +196,7 @@ def dict_to_event(data: dict) -> Event:
         soccer_match_note=data.get("soccer_match_note", ""),
         game_preview=data.get("game_preview", ""),
         **{
-            field_name: data.get(
-                field_name, Event.__dataclass_fields__[field_name].default
-            )
+            field_name: data.get(field_name, Event.__dataclass_fields__[field_name].default)
             for field_name in GENERATED_PREVIEW_FIELDS
         },
         # Betting odds (#366) — absent in pre-upgrade cache entries

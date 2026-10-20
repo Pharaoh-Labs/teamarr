@@ -77,10 +77,18 @@ STREAMS = {
 
 def _stream_matcher(db_factory, group_id=GROUP, **kw):
     matcher = StreamMatcher(
-        service=None, db_factory=db_factory, group_id=group_id, search_leagues=["nhl"],
-        include_leagues=["nhl"], include_final_events=False, sport_durations={},
-        generation=7, shared_events={}, name_match_enabled=True,
-        team_streams_enabled=True, **kw,
+        service=None,
+        db_factory=db_factory,
+        group_id=group_id,
+        search_leagues=["nhl"],
+        include_leagues=["nhl"],
+        include_final_events=False,
+        sport_durations={},
+        generation=7,
+        shared_events={},
+        name_match_enabled=True,
+        team_streams_enabled=True,
+        **kw,
     )
     # Anything that reaches routing is, for these tests, a stream that was matched
     matcher.routed = []
@@ -185,15 +193,11 @@ def test_removing_the_skip_takes_effect_on_the_next_batch(db_factory):
         ),
         (
             "F1: Singapore Grand Prix",
-            lambda cache, base: RacingMatcher(None, cache)._check_cache(
-                RacingMatchContext(**base)
-            ),
+            lambda cache, base: RacingMatcher(None, cache)._check_cache(RacingMatchContext(**base)),
         ),
         (
             "US Open: Sinner vs Alcaraz",
-            lambda cache, base: TennisMatcher(None, cache)._check_cache(
-                TennisMatchContext(**base)
-            ),
+            lambda cache, base: TennisMatcher(None, cache)._check_cache(TennisMatchContext(**base)),
         ),
     ],
     ids=["event card", "racing", "tennis"],
@@ -203,8 +207,13 @@ def test_a_matcher_never_deletes_the_users_row(db_factory, name, check):
     cache = StreamMatchCache(db_factory)
     cache.set_user_correction(GROUP, 7, name, None, None, {})
     base = dict(
-        stream_name=name, stream_id=7, group_id=GROUP, target_date=date.today(),
-        generation=1, user_tz=ZoneInfo("UTC"), classified=classify_stream(name),
+        stream_name=name,
+        stream_id=7,
+        group_id=GROUP,
+        target_date=date.today(),
+        generation=1,
+        user_tz=ZoneInfo("UTC"),
+        classified=classify_stream(name),
     )
 
     assert check(cache, base) is None

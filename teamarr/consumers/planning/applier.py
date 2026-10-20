@@ -135,9 +135,7 @@ class PlanApplier:
         external_occupied: set[int] | None = None
         if snapshot is not None:
             remote_orders = {channel.id: list(channel.streams) for channel in snapshot}
-            external_occupied = compute_external_occupied(
-                self._db_factory, self._channel_manager
-            )
+            external_occupied = compute_external_occupied(self._db_factory, self._channel_manager)
 
         with self._db_factory() as conn:
             diagnostics = validate_plan(
@@ -405,9 +403,7 @@ class PlanApplier:
         )
         conn.commit()
         outcome.adopted.append(wanted.logical_key)
-        reasons = plan_field_reasons(
-            conn, wanted, adopted, remote_stream_orders=remote_orders
-        )
+        reasons = plan_field_reasons(conn, wanted, adopted, remote_stream_orders=remote_orders)
         if "delete_at" in reasons:
             update_managed_channel(
                 conn, adopted.id, {"scheduled_delete_at": wanted.delete_at.isoformat()}

@@ -188,9 +188,7 @@ def _cfb_event(team_id: str):
 def test_resolve_pattern_replaces_conference():
     resolver = DynamicResolver()
     assert (
-        resolver.resolve_pattern(
-            "NCAA | {conference}", "football", CFB, "Southeastern Conference"
-        )
+        resolver.resolve_pattern("NCAA | {conference}", "football", CFB, "Southeastern Conference")
         == "NCAA | Southeastern Conference"
     )
 

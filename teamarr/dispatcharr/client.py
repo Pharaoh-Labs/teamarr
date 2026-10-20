@@ -342,6 +342,7 @@ class DispatcharrClient:
         Returns:
             List of all items from all pages
         """
+
         def fetch(url: str) -> dict | list | None:
             """One page. ``None`` means the request failed — never an empty page."""
             response = self.get(url)
@@ -376,6 +377,7 @@ class DispatcharrClient:
         channel sync recreates channels it cannot see) need failure and empty
         told apart; ``[]`` from ``paginated_get`` conflates them (#826).
         """
+
         def fetch(url: str) -> dict | list | None:
             """One page. ``None`` means the request failed — never an empty page."""
             response = self.get(url)
@@ -458,7 +460,9 @@ class DispatcharrClient:
             if page_items is None:
                 logger.error(
                     "[DISPATCHARR] Truncating %s at page %d of %d (page failed)",
-                    error_context, page_no, pages,
+                    error_context,
+                    page_no,
+                    pages,
                 )
                 return all_items
             all_items.extend(page_items)

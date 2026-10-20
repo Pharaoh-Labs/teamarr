@@ -55,6 +55,5 @@ def test_unparseable_event_date_is_never_live():
 
 def test_datetime_inputs_accepted():
     assert (
-        is_channel_event_live(NOW - timedelta(hours=1), NOW + timedelta(hours=1), now=NOW)
-        is True
+        is_channel_event_live(NOW - timedelta(hours=1), NOW + timedelta(hours=1), now=NOW) is True
     )

@@ -28,8 +28,7 @@ def test_put_and_get_score_rule_round_trips():
         STREAM_ORDERING,
         json={
             "rules": [
-                {"type": "regex", "value": ".*4K.*", "priority": 99,
-                 "mode": "score", "points": 25},
+                {"type": "regex", "value": ".*4K.*", "priority": 99, "mode": "score", "points": 25},
             ]
         },
     )
@@ -54,8 +53,11 @@ def test_omitted_mode_defaults_to_priority():
 def test_negative_points_accepted():
     resp = client.put(
         STREAM_ORDERING,
-        json={"rules": [{"type": "regex", "value": ".*SD.*", "priority": 99,
-                         "mode": "score", "points": -50}]},
+        json={
+            "rules": [
+                {"type": "regex", "value": ".*SD.*", "priority": 99, "mode": "score", "points": -50}
+            ]
+        },
     )
     assert resp.status_code == 200
     assert client.get(STREAM_ORDERING).json()["rules"][0]["points"] == -50
@@ -72,8 +74,17 @@ def test_invalid_mode_rejected():
 def test_points_out_of_range_rejected():
     resp = client.put(
         STREAM_ORDERING,
-        json={"rules": [{"type": "regex", "value": ".*x.*", "priority": 99,
-                         "mode": "score", "points": 10_000_000}]},
+        json={
+            "rules": [
+                {
+                    "type": "regex",
+                    "value": ".*x.*",
+                    "priority": 99,
+                    "mode": "score",
+                    "points": 10_000_000,
+                }
+            ]
+        },
     )
     assert resp.status_code == 422
 
@@ -81,8 +92,11 @@ def test_points_out_of_range_rejected():
 def test_combined_settings_carries_mode_and_points():
     client.put(
         STREAM_ORDERING,
-        json={"rules": [{"type": "regex", "value": ".*HD.*", "priority": 99,
-                         "mode": "score", "points": 10}]},
+        json={
+            "rules": [
+                {"type": "regex", "value": ".*HD.*", "priority": 99, "mode": "score", "points": 10}
+            ]
+        },
     )
     combined = client.get("/api/v1/settings").json()
     rules = combined["stream_ordering"]["rules"]

@@ -78,37 +78,162 @@ INSERT INTO team_cache (provider, provider_team_id, team_name, sport, league) VA
 
 # id, name, number, locked, date, event_id, sport, league, home, away, keyword
 CHANNELS = [
-    (1, "Lions @ Packers", None, 0, "2026-09-13 17:00:00", "nfl1", "football", "nfl",
-     "Green Bay Packers", "Detroit Lions", None),
-    (2, "Lions @ Packers [HOME]", None, 0, "2026-09-13 17:00:00", "nfl1", "football", "nfl",
-     "Green Bay Packers", "Detroit Lions", None),
-    (3, "Bears @ Vikings", None, 0, "2026-09-13 20:00:00", "nfl2", "football", "nfl",
-     "Minnesota Vikings", "Chicago Bears", None),
-    (4, "Bears @ Vikings ES", None, 0, "2026-09-13 20:00:00", "nfl2", "football", "nfl",
-     "Minnesota Vikings", "Chicago Bears", "spanish"),
-    (5, "Pistons @ Bulls", None, 0, "2026-09-13 19:00:00", "nba1", "basketball", "nba",
-     "Chicago Bulls", "Detroit Pistons", None),
-    (6, "Celtics @ Heat", None, 0, "2026-09-14 19:00:00", "nba2", "basketball", "nba",
-     "Miami Heat", "Boston Celtics", None),
-    (7, "Red Wings @ Leafs", None, 0, "2026-09-13 19:00:00", "nhl1", "hockey", "nhl",
-     "Toronto Maple Leafs", "Detroit Red Wings", None),
-    (8, "Tigers @ Yankees", None, 0, "2026-09-13 13:00:00", "mlb1", "baseball", "mlb",
-     "New York Yankees", "Detroit Tigers", None),
-    (9, "Tigers @ Yankees G2", None, 0, "2026-09-13 18:00:00", "mlb2", "baseball", "mlb",
-     "New York Yankees", "Detroit Tigers", None),
-    (10, "Michigan @ Ohio State", None, 0, "2026-09-12 12:00:00", "cfb1", "football", "ncaaf",
-     "Ohio State Buckeyes", "Michigan Wolverines", None),
-    (11, "World Cup: USA v MEX", None, 0, "2026-09-15 15:00:00", "wc1", "soccer", "fifa.world",
-     "USA", "Mexico", None),
+    (
+        1,
+        "Lions @ Packers",
+        None,
+        0,
+        "2026-09-13 17:00:00",
+        "nfl1",
+        "football",
+        "nfl",
+        "Green Bay Packers",
+        "Detroit Lions",
+        None,
+    ),
+    (
+        2,
+        "Lions @ Packers [HOME]",
+        None,
+        0,
+        "2026-09-13 17:00:00",
+        "nfl1",
+        "football",
+        "nfl",
+        "Green Bay Packers",
+        "Detroit Lions",
+        None,
+    ),
+    (
+        3,
+        "Bears @ Vikings",
+        None,
+        0,
+        "2026-09-13 20:00:00",
+        "nfl2",
+        "football",
+        "nfl",
+        "Minnesota Vikings",
+        "Chicago Bears",
+        None,
+    ),
+    (
+        4,
+        "Bears @ Vikings ES",
+        None,
+        0,
+        "2026-09-13 20:00:00",
+        "nfl2",
+        "football",
+        "nfl",
+        "Minnesota Vikings",
+        "Chicago Bears",
+        "spanish",
+    ),
+    (
+        5,
+        "Pistons @ Bulls",
+        None,
+        0,
+        "2026-09-13 19:00:00",
+        "nba1",
+        "basketball",
+        "nba",
+        "Chicago Bulls",
+        "Detroit Pistons",
+        None,
+    ),
+    (
+        6,
+        "Celtics @ Heat",
+        None,
+        0,
+        "2026-09-14 19:00:00",
+        "nba2",
+        "basketball",
+        "nba",
+        "Miami Heat",
+        "Boston Celtics",
+        None,
+    ),
+    (
+        7,
+        "Red Wings @ Leafs",
+        None,
+        0,
+        "2026-09-13 19:00:00",
+        "nhl1",
+        "hockey",
+        "nhl",
+        "Toronto Maple Leafs",
+        "Detroit Red Wings",
+        None,
+    ),
+    (
+        8,
+        "Tigers @ Yankees",
+        None,
+        0,
+        "2026-09-13 13:00:00",
+        "mlb1",
+        "baseball",
+        "mlb",
+        "New York Yankees",
+        "Detroit Tigers",
+        None,
+    ),
+    (
+        9,
+        "Tigers @ Yankees G2",
+        None,
+        0,
+        "2026-09-13 18:00:00",
+        "mlb2",
+        "baseball",
+        "mlb",
+        "New York Yankees",
+        "Detroit Tigers",
+        None,
+    ),
+    (
+        10,
+        "Michigan @ Ohio State",
+        None,
+        0,
+        "2026-09-12 12:00:00",
+        "cfb1",
+        "football",
+        "ncaaf",
+        "Ohio State Buckeyes",
+        "Michigan Wolverines",
+        None,
+    ),
+    (
+        11,
+        "World Cup: USA v MEX",
+        None,
+        0,
+        "2026-09-15 15:00:00",
+        "wc1",
+        "soccer",
+        "fifa.world",
+        "USA",
+        "Mexico",
+        None,
+    ),
 ]
 PRIORITIES = [
-    ("football", None, 0), ("basketball", None, 1), ("hockey", None, 2),
-    ("football", "nfl", 0), ("football", "ncaaf", 1),
+    ("football", None, 0),
+    ("basketball", None, 1),
+    ("hockey", None, 2),
+    ("football", "nfl", 0),
+    ("football", "ncaaf", 1),
 ]
 
 
-def build(mode="auto", stab="compact", gap=1, starts=None, range_start=101, range_end=None,
-          locked=None):
+def build(
+    mode="auto", stab="compact", gap=1, starts=None, range_start=101, range_end=None, locked=None
+):
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.executescript(SCHEMA)
@@ -156,20 +281,97 @@ def pin(c, scope, start, **kw):
 # ---------------------------------------------------------------------------
 
 GOLDEN = {
-    "auto_compact": {1: 101, 2: 102, 3: 103, 4: 104, 5: 106, 6: 107, 7: 108, 8: 109, 9: 110,
-                     10: 105, 11: 111},
-    "auto_compact_ext": {1: 500, 2: 503, 3: 504, 4: 505, 5: 508, 6: 509, 7: 510, 8: 511,
-                         9: 512, 10: 506, 11: 513},
-    "gap_first_placement": {1: 101, 2: 102, 3: 105, 4: 106, 5: 112, 6: 115, 7: 118, 8: 121,
-                            9: 124, 10: 109, 11: 127},
-    "gap_sticky_anchors": {1: 101, 2: 102, 3: 105, 4: 106, 5: 120, 6: 123, 7: 126, 8: 129,
-                           9: 132, 10: 109, 11: 135},
-    "gap_reset": {1: 101, 2: 102, 3: 105, 4: 106, 5: 112, 6: 115, 7: 118, 8: 121, 9: 124,
-                  10: 109, 11: 127},
-    "strict_sticky_anchors": {1: 101, 2: 102, 3: 104, 4: 105, 5: 103, 6: 107, 7: 108, 8: 109,
-                              9: 110, 10: 106, 11: 111},
-    "strict_reset": {1: 101, 2: 102, 3: 103, 4: 104, 5: 106, 6: 107, 7: 108, 8: 109, 9: 110,
-                     10: 105, 11: 111},
+    "auto_compact": {
+        1: 101,
+        2: 102,
+        3: 103,
+        4: 104,
+        5: 106,
+        6: 107,
+        7: 108,
+        8: 109,
+        9: 110,
+        10: 105,
+        11: 111,
+    },
+    "auto_compact_ext": {
+        1: 500,
+        2: 503,
+        3: 504,
+        4: 505,
+        5: 508,
+        6: 509,
+        7: 510,
+        8: 511,
+        9: 512,
+        10: 506,
+        11: 513,
+    },
+    "gap_first_placement": {
+        1: 101,
+        2: 102,
+        3: 105,
+        4: 106,
+        5: 112,
+        6: 115,
+        7: 118,
+        8: 121,
+        9: 124,
+        10: 109,
+        11: 127,
+    },
+    "gap_sticky_anchors": {
+        1: 101,
+        2: 102,
+        3: 105,
+        4: 106,
+        5: 120,
+        6: 123,
+        7: 126,
+        8: 129,
+        9: 132,
+        10: 109,
+        11: 135,
+    },
+    "gap_reset": {
+        1: 101,
+        2: 102,
+        3: 105,
+        4: 106,
+        5: 112,
+        6: 115,
+        7: 118,
+        8: 121,
+        9: 124,
+        10: 109,
+        11: 127,
+    },
+    "strict_sticky_anchors": {
+        1: 101,
+        2: 102,
+        3: 104,
+        4: 105,
+        5: 103,
+        6: 107,
+        7: 108,
+        8: 109,
+        9: 110,
+        10: 106,
+        11: 111,
+    },
+    "strict_reset": {
+        1: 101,
+        2: 102,
+        3: 103,
+        4: 104,
+        5: 106,
+        6: 107,
+        7: 108,
+        8: 109,
+        9: 110,
+        10: 105,
+        11: 111,
+    },
 }
 
 
@@ -314,10 +516,10 @@ def test_team_pin_covers_both_sides_and_feeds():
 def test_detroit_example_layout():
     """The motivating layout from #333: four team pins + a big-events group + default."""
     c = build(range_start=8000)
-    pin(c, "team", 800, provider="espn", provider_team_id="8")   # Lions
+    pin(c, "team", 800, provider="espn", provider_team_id="8")  # Lions
     pin(c, "team", 810, provider="espn", provider_team_id="20")  # Pistons
     pin(c, "team", 820, provider="espn", provider_team_id="17")  # Red Wings
-    pin(c, "team", 830, provider="espn", provider_team_id="6")   # Tigers
+    pin(c, "team", 830, provider="espn", provider_team_id="6")  # Tigers
     pin(c, "league", 850, league_code="fifa.world", label="Big events")
     pin(c, "league", 1700, league_code="nfl")
     cn.reassign_all_channels(c)
@@ -347,9 +549,9 @@ def test_precedence_team_beats_league_beats_sport():
     pin(c, "team", 800, provider="espn", provider_team_id="8")
     cn.reassign_all_channels(c)
     got = numbers(c)
-    assert got[1] == 800          # Lions game → team pin
-    assert got[3] == 500          # other NFL game → league pin
-    assert got[10] == 300         # ncaaf → sport pin
+    assert got[1] == 800  # Lions game → team pin
+    assert got[3] == 500  # other NFL game → league pin
+    assert got[10] == 300  # ncaaf → sport pin
 
 
 def test_group_rows_share_one_lane():
@@ -366,12 +568,12 @@ def test_group_rows_share_one_lane():
 
 def test_spill_forward_into_next_block():
     c = build(range_start=5000)
-    pin(c, "league", 100, league_code="nfl")   # 4 channels: 100-103
-    pin(c, "league", 102, league_code="nba")   # would start inside NFL's spill
+    pin(c, "league", 100, league_code="nfl")  # 4 channels: 100-103
+    pin(c, "league", 102, league_code="nba")  # would start inside NFL's spill
     cn.reassign_all_channels(c)
     got = numbers(c)
     assert [got[i] for i in (1, 2, 3, 4)] == [100, 101, 102, 103]
-    assert (got[5], got[6]) == (104, 105)      # skipped over the spill, no collision
+    assert (got[5], got[6]) == (104, 105)  # skipped over the spill, no collision
 
 
 def test_bounded_block_overflows_to_default():
@@ -431,9 +633,12 @@ def test_next_channel_uses_lane():
     c = build()
     pin(c, "team", 800, provider="espn", provider_team_id="8")
     cn.reassign_all_channels(c)
-    assert cn.get_next_channel_number(
-        c, league="nfl", sport="football", home_team="Detroit Lions", away_team="X"
-    ) == 802
+    assert (
+        cn.get_next_channel_number(
+            c, league="nfl", sport="football", home_team="Detroit Lions", away_team="X"
+        )
+        == 802
+    )
     assert cn.get_next_channel_number(c, league="nfl", sport="football") == 110
 
 
@@ -465,8 +670,12 @@ def test_add_team_pin_resolves_from_cache_and_rejects_unknown():
     c = build()
     exc = pin(c, "team", 800, provider="espn", provider_team_id="8")
     assert (exc.team_name, exc.sport, exc.scope) == ("Detroit Lions", "football", "team")
-    assert ne.add_numbering_exception(c, scope="team", start=810, provider="espn",
-                                      provider_team_id="nope") is None
+    assert (
+        ne.add_numbering_exception(
+            c, scope="team", start=810, provider="espn", provider_team_id="nope"
+        )
+        is None
+    )
 
 
 def test_add_league_pin_resolves_sport():
@@ -492,16 +701,17 @@ def test_league_pin_display_name_spans_both_tables():
 
     c = build()
     assert _display_name(c, pin(c, "league", 500, league_code="nfl")) == "NFL"
-    assert _display_name(c, pin(c, "league", 520, league_code="arg.2")) == (
-        "Argentine Nacional B"
-    )
+    assert _display_name(c, pin(c, "league", 520, league_code="arg.2")) == ("Argentine Nacional B")
 
 
-@pytest.mark.parametrize("kw", [
-    dict(scope="bogus", start=1, sport="football"),
-    dict(scope="sport", start=0, sport="football"),
-    dict(scope="sport", start=10, end=5, sport="football"),
-])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        dict(scope="bogus", start=1, sport="football"),
+        dict(scope="sport", start=0, sport="football"),
+        dict(scope="sport", start=10, end=5, sport="football"),
+    ],
+)
 def test_validation_rejects(kw):
     c = build()
     assert ne.add_numbering_exception(c, **kw) is None

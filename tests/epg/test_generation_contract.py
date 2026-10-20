@@ -518,9 +518,7 @@ def test_full_run_has_twelve_cancellation_checkpoints(isolated_db, monkeypatch):
         ),
     ],
 )
-def test_cancellation_stops_at_the_checkpoint(
-    isolated_db, monkeypatch, stop_at, expected_timings
-):
+def test_cancellation_stops_at_the_checkpoint(isolated_db, monkeypatch, stop_at, expected_timings):
     """Cancelling at checkpoint N leaves exactly the stages before it timed."""
     import teamarr.consumers.generation_status as status_mod
 
@@ -692,9 +690,7 @@ def test_concurrent_runs_produce_one_row(isolated_db):
 
     def worker():
         barrier.wait()
-        results.append(
-            run_full_generation(db_factory=isolated_db, dispatcharr_client=None)
-        )
+        results.append(run_full_generation(db_factory=isolated_db, dispatcharr_client=None))
 
     threads = [threading.Thread(target=worker) for _ in range(2)]
     for thread in threads:

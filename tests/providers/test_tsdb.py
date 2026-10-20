@@ -31,8 +31,14 @@ from tests.helpers import SCHEMA_PATH
 
 
 def _event(
-    event_id, name, date_str, time_str, round_,
-    season="2026", venue="Circuit de la Sarthe", country="France",
+    event_id,
+    name,
+    date_str,
+    time_str,
+    round_,
+    season="2026",
+    venue="Circuit de la Sarthe",
+    country="France",
 ):
     return {
         "idEvent": event_id,
@@ -55,12 +61,18 @@ WEC_ROUND = [
     _event("2", "24 Hours of Le Mans Free Practice 2", "2026-06-10", "20:00:00", "3"),
     _event("3", "24 Hours of Le Mans Free Practice 3", "2026-06-11", "12:45:00", "3"),
     _event(
-        "4", "24 Hours of Le Mans Hyperpole Qualifying – LMP2 & LMGT3",
-        "2026-06-10", "16:45:00", "3",
+        "4",
+        "24 Hours of Le Mans Hyperpole Qualifying – LMP2 & LMGT3",
+        "2026-06-10",
+        "16:45:00",
+        "3",
     ),
     _event(
-        "5", "24 Hours of Le Mans Hyperpole Qualifying – Hypercar",
-        "2026-06-10", "17:30:00", "3",
+        "5",
+        "24 Hours of Le Mans Hyperpole Qualifying – Hypercar",
+        "2026-06-10",
+        "17:30:00",
+        "3",
     ),
     _event("6", "24 Hours of Le Mans Hyperpole 1 - LMP2 & LMGT3", "2026-06-11", "18:00:00", "3"),
     _event("7", "24 Hours of Le Mans Hyperpole 1 - Hypercar", "2026-06-11", "19:05:00", "3"),
@@ -71,20 +83,35 @@ WEC_ROUND = [
 # event in the group qualifies as "the race".
 WEC_PROLOGUE = [
     _event(
-        "10", "Imola Prologue Morning Session", "2026-04-14", "07:00:00", "500",
-        venue="Imola Circuit", country="Italy",
+        "10",
+        "Imola Prologue Morning Session",
+        "2026-04-14",
+        "07:00:00",
+        "500",
+        venue="Imola Circuit",
+        country="Italy",
     ),
     _event(
-        "11", "Imola Prologue Afternoon Session", "2026-04-14", "12:00:00", "500",
-        venue="Imola Circuit", country="Italy",
+        "11",
+        "Imola Prologue Afternoon Session",
+        "2026-04-14",
+        "12:00:00",
+        "500",
+        venue="Imola Circuit",
+        country="Italy",
     ),
 ]
 
 # IMSA: one event per round, no session suffix.
 IMSA_ROUND = [
     _event(
-        "20", "Rolex 24 At DAYTONA", "2026-01-25", "00:00:00", "1",
-        venue="Daytona International Speedway", country="USA",
+        "20",
+        "Rolex 24 At DAYTONA",
+        "2026-01-25",
+        "00:00:00",
+        "1",
+        venue="Daytona International Speedway",
+        country="USA",
     ),
 ]
 
@@ -526,17 +553,13 @@ class TestFighterParsing:
 
     def test_single_v(self):
         p = self._provider()
-        home, away = p._parse_fighters_from_event_name(
-            "Fury v Usyk", "3", "boxing", "boxing"
-        )
+        home, away = p._parse_fighters_from_event_name("Fury v Usyk", "3", "boxing", "boxing")
         assert home.name == "Fury"
         assert away.name == "Usyk"
 
     def test_unparseable_falls_back_to_tbd(self):
         p = self._provider()
-        home, away = p._parse_fighters_from_event_name(
-            "Zuffa Boxing 9", "4", "boxing", "boxing"
-        )
+        home, away = p._parse_fighters_from_event_name("Zuffa Boxing 9", "4", "boxing", "boxing")
         assert home.name == "Zuffa Boxing 9"
         assert away.name == "TBD"
 
@@ -568,6 +591,8 @@ def test_transport_error_log_excludes_api_key(caplog):
     assert "sensitive-key" not in caplog.text
     assert "endpoint lookupleague.php (ConnectError)" in caplog.text
     client.close()
+
+
 def test_fresh_schema_seeds_no_tsdb_tier():
     """#676: schema.sql seeds NULL for the retired tsdb_tier column."""
     conn = _db()
@@ -582,7 +607,5 @@ def test_v92_clears_existing_tiers():
     conn = _db()
     conn.execute("UPDATE leagues SET tsdb_tier = 'premium' WHERE league_code = 'ipl'")
     _migrate_v92_retire_tsdb_tier(conn)
-    row = conn.execute(
-        "SELECT tsdb_tier FROM leagues WHERE league_code = 'ipl'"
-    ).fetchone()
+    row = conn.execute("SELECT tsdb_tier FROM leagues WHERE league_code = 'ipl'").fetchone()
     assert row[0] is None

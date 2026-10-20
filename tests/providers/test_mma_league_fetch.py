@@ -99,9 +99,7 @@ def test_lfa_fetches_its_own_espn_slug():
 def test_parsed_events_carry_the_requested_league():
     """The card is PFL's, not UFC's — league rides through the parser (#756)."""
     payload = {
-        "events": [
-            _card("600056964", "PFL Dubai: Nurmagomedov vs. Davis", ["2026-02-07T17:00Z"])
-        ]
+        "events": [_card("600056964", "PFL Dubai: Nurmagomedov vs. Davis", ["2026-02-07T17:00Z"])]
     }
     events = _provider(CapturingClient(payload), LEAGUES).get_events("pfl", date(2026, 2, 7))
 
@@ -224,7 +222,7 @@ class TestMainEventSelection:
         }
 
     def test_nameless_card_falls_back_to_the_last_bout(self):
-        """"PFL Dubai" / "UFC 335" name no fighters — pre-#756 behavior stands."""
+        """ "PFL Dubai" / "UFC 335" name no fighters — pre-#756 behavior stands."""
         payload = {
             "events": [
                 self._event(

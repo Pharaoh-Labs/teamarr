@@ -384,9 +384,7 @@ def _dump_server_list(value: Any) -> str:
 
 
 _URL_HOOK = {"url": {"dump": _dump_url}}
-_MEDIA_SERVERS_HOOK = {
-    "servers": {"parse": _parse_media_servers, "dump": _dump_server_list}
-}
+_MEDIA_SERVERS_HOOK = {"servers": {"parse": _parse_media_servers, "dump": _dump_server_list}}
 
 
 # ---------------------------------------------------------------------------

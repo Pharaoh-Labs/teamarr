@@ -46,9 +46,7 @@ def _event(home: Team, away: Team, eid: str = "evt-1") -> Event:
         provider="espn",
         name=f"{home.name} vs {away.name}",
         short_name=f"{home.short_name} vs {away.short_name}",
-        start_time=datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(
-            hour=19
-        ),
+        start_time=datetime.combine(TODAY, datetime.min.time(), tzinfo=UTC).replace(hour=19),
         home_team=home,
         away_team=away,
         status=EventStatus(state="scheduled"),
@@ -165,9 +163,7 @@ class TestCommonWordAbbreviations:
         dayton = _team("Dayton Flyers", "DAY", "womens-college-volleyball")
         south_florida = _team("South Florida Bulls", "USF", "womens-college-volleyball")
         event = _event(south_florida, dayton, "evt-day")
-        outcome = _match(
-            f"DAZN CA 16: MLTT - Week 1, Day 1 @ {TODAY_DAY_MON} 03:00 PM ET", event
-        )
+        outcome = _match(f"DAZN CA 16: MLTT - Week 1, Day 1 @ {TODAY_DAY_MON} 03:00 PM ET", event)
         # Dated to the event's own day so the rejection can only come from the
         # DAY stopword — a stale date would pass this test for free, which is
         # exactly how it rotted (#813). Pinning the reason keeps it honest.

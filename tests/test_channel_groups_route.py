@@ -21,9 +21,7 @@ def _conn(groups: list[DispatcharrChannelGroup], counts: dict[int, int], seen: d
 
     return SimpleNamespace(
         m3u=SimpleNamespace(list_groups=list_groups),
-        channels=SimpleNamespace(
-            count_channels_by_group=lambda exclude_channel_ids=None: counts
-        ),
+        channels=SimpleNamespace(count_channels_by_group=lambda exclude_channel_ids=None: counts),
     )
 
 

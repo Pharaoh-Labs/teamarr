@@ -29,9 +29,7 @@ def has_generated_preview_detail(event: Event | None) -> bool:
         return False
     if event.sport not in SUPPORTED_SPORTS:
         return bool(event.away_team.name and event.home_team.name)
-    return bool(
-        any(getattr(event, field, None) for field in _DETAIL_FIELDS)
-    )
+    return bool(any(getattr(event, field, None) for field in _DETAIL_FIELDS))
 
 
 def has_generated_preview_enrichment(event: Event | None) -> bool:
@@ -173,20 +171,22 @@ def _football_leader_prose(value: str, role: str) -> str:
         elif yards:
             expanded.append(f"{yards.group(1)} {role} yards")
         elif touchdowns:
-            expanded.append(
-                _count_phrase(touchdowns.group(1), f"{role} touchdown")
-            )
+            expanded.append(_count_phrase(touchdowns.group(1), f"{role} touchdown"))
         else:
             expanded.append(part)
 
-    if len(expanded) >= 2 and (
-        expanded[0].endswith(" completion")
-        or expanded[0].endswith(" completions")
-        or expanded[0].endswith(" carry")
-        or expanded[0].endswith(" carries")
-        or expanded[0].endswith(" reception")
-        or expanded[0].endswith(" receptions")
-    ) and expanded[1].endswith(f"{role} yards"):
+    if (
+        len(expanded) >= 2
+        and (
+            expanded[0].endswith(" completion")
+            or expanded[0].endswith(" completions")
+            or expanded[0].endswith(" carry")
+            or expanded[0].endswith(" carries")
+            or expanded[0].endswith(" reception")
+            or expanded[0].endswith(" receptions")
+        )
+        and expanded[1].endswith(f"{role} yards")
+    ):
         detail = f"{expanded[0]} for {expanded[1]}"
         if expanded[2:]:
             detail += f" and {_join_phrases(expanded[2:])}"
@@ -349,6 +349,4 @@ def build_generated_preview(event: Event | None) -> str:
         "football": _football_sentence,
         "basketball": _basketball_sentence,
     }[event.sport]
-    return " ".join(
-        (_base_sentence(event), render(event, "away"), render(event, "home"))
-    )
+    return " ".join((_base_sentence(event), render(event, "away"), render(event, "home")))

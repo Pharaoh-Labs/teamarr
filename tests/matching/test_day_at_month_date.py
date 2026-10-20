@@ -27,9 +27,7 @@ class TestDayAtMonthDate:
 
     def test_month_named_team_not_eaten_by_date(self):
         # "Marauders" must not be read as "Mar" + day 30.
-        norm = normalize_stream(
-            "Daytona Tortugas at Bradenton Marauders 30 @ Jun 06:30 PM ET"
-        )
+        norm = normalize_stream("Daytona Tortugas at Bradenton Marauders 30 @ Jun 06:30 PM ET")
         assert norm.extracted_date == date(date.today().year, 6, 30)
 
     def test_full_milb_stream_classifies_correctly(self):

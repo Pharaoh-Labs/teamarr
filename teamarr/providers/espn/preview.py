@@ -95,9 +95,7 @@ def _format_probable(probable: dict) -> str:
     name = athlete.get("displayName") or ""
     if not name:
         return ""
-    stats = _stat_map(
-        ((probable.get("statistics") or {}).get("splits") or {}).get("categories")
-    )
+    stats = _stat_map(((probable.get("statistics") or {}).get("splits") or {}).get("categories"))
     details = []
     if stats.get("wins") and stats.get("losses"):
         details.append(f"{stats['wins']}-{stats['losses']}")
@@ -161,9 +159,7 @@ def select_series(series_list: list[dict], event_id: str | None = None) -> dict 
     7. First candidate with a non-empty summary
     """
     non_preseason = [
-        item
-        for item in series_list
-        if isinstance(item, dict) and item.get("type") != "preseason"
+        item for item in series_list if isinstance(item, dict) and item.get("type") != "preseason"
     ]
 
     if event_id:
@@ -177,9 +173,7 @@ def select_series(series_list: list[dict], event_id: str | None = None) -> dict 
             return False
 
         containing = [item for item in non_preseason if _has_event(item)]
-        matched = next(
-            (item for item in containing if is_series_state(item.get("summary"))), None
-        )
+        matched = next((item for item in containing if is_series_state(item.get("summary"))), None)
         if matched:
             return matched
         if containing:
@@ -188,9 +182,7 @@ def select_series(series_list: list[dict], event_id: str | None = None) -> dict 
             # callers resolve its non-state summary to empty (#teamarr-4sfj).
             return containing[0]
 
-    candidates = [
-        item for item in non_preseason if is_series_state(item.get("summary"))
-    ]
+    candidates = [item for item in non_preseason if is_series_state(item.get("summary"))]
     if not candidates:
         return None
 

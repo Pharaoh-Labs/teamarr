@@ -96,8 +96,12 @@ class TestStorage:
     def test_invalid_season_is_rejected(self, db_conn):
         assert (
             ne.add_numbering_exception(
-                db_conn, scope="league", league_code="nba", sport="basketball",
-                start=900, season_type="playoffs",
+                db_conn,
+                scope="league",
+                league_code="nba",
+                sport="basketball",
+                start=900,
+                season_type="playoffs",
             )
             is None
         )
@@ -297,7 +301,11 @@ class TestBlockRowDisplay:
 
         nba = _pin(db_conn, start=900, label="Priority", season_type="postseason")
         mlb = _pin(
-            db_conn, start=900, label="Priority", league_code="mlb", sport="baseball",
+            db_conn,
+            start=900,
+            label="Priority",
+            league_code="mlb",
+            sport="baseball",
             season_type="postseason",
         )
         group = create_group(db_conn, name="G", leagues=["mlb", "nba"])

@@ -38,9 +38,9 @@ _RUN_RACE = 3
 # League code → (url_suffix, series_key_in_response)
 # None series_key means the response is a plain list (Cup).
 _LEAGUE_CONFIG: dict[str, tuple[str, str | None]] = {
-    "nascar-cup":      ("1/race_list_basic.json", None),
-    "nascar-xfinity":  ("race_list_basic.json",   "series_2"),
-    "nascar-truck":    ("race_list_basic.json",    "series_3"),
+    "nascar-cup": ("1/race_list_basic.json", None),
+    "nascar-xfinity": ("race_list_basic.json", "series_2"),
+    "nascar-truck": ("race_list_basic.json", "series_3"),
 }
 
 
@@ -120,7 +120,8 @@ class NASCARProvider(BaseHTTPClient, SportsProvider):
         # ±1-day superset by UTC session date; exact membership is decided by
         # the user-day window at the service seam (#590).
         return [
-            e for e in self._events_by_league.get(league, [])
+            e
+            for e in self._events_by_league.get(league, [])
             if any(abs((s.start_time.date() - target_date).days) <= 1 for s in e.sessions)
         ]
 
@@ -271,6 +272,8 @@ class NASCARProvider(BaseHTTPClient, SportsProvider):
         except Exception as e:
             logger.warning(
                 "[NASCAR] Failed to parse race %r for %s: %s",
-                data.get("race_id"), league, e,
+                data.get("race_id"),
+                league,
+                e,
             )
             return None

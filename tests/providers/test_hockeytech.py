@@ -101,6 +101,7 @@ def test_schema_seeds_bellmedia_hockey_mappings(db_conn, league_code, provider_l
 # EVENT survives a broadcaster field of any shape.
 # ---------------------------------------------------------------------------
 
+
 def _provider() -> HockeyTechProvider:
     """Provider instance without touching __init__'s client wiring."""
     return HockeyTechProvider.__new__(HockeyTechProvider)
@@ -109,12 +110,12 @@ def _provider() -> HockeyTechProvider:
 @pytest.mark.parametrize(
     "shape,expected",
     [
-        ({}, []),                                              # no broadcasters, dict form
-        ([], []),                                              # no broadcasters, LIST form (#752)
-        (None, []),                                            # key present but null
-        ("Sportsnet", []),                                     # scalar — not a mapping
-        ({"home": []}, []),                                    # mapping, empty side
-        ({"home": "CBC"}, []),                                 # side is a scalar, not a list
+        ({}, []),  # no broadcasters, dict form
+        ([], []),  # no broadcasters, LIST form (#752)
+        (None, []),  # key present but null
+        ("Sportsnet", []),  # scalar — not a mapping
+        ({"home": []}, []),  # mapping, empty side
+        ({"home": "CBC"}, []),  # side is a scalar, not a list
         ({"home": [{"name": "TSN"}]}, ["TSN"]),
         ({"national": ["Sportsnet"]}, ["Sportsnet"]),
         ({"home": [{"short_name": "TSN2"}]}, ["TSN2"]),

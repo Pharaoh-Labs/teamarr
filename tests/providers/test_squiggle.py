@@ -258,8 +258,16 @@ def test_get_league_teams():
 
 def test_get_team_stats_record_and_averages():
     standings = [
-        {"id": 1, "wins": 10, "losses": 4, "draws": 0, "played": 14,
-         "for": 1400, "against": 1120, "rank": 3},
+        {
+            "id": 1,
+            "wins": 10,
+            "losses": 4,
+            "draws": 0,
+            "played": 14,
+            "for": 1400,
+            "against": 1120,
+            "rank": 3,
+        },
     ]
     stats = _provider(standings=standings).get_team_stats("1", "afl")
     assert stats.record == "10-4"
@@ -270,8 +278,16 @@ def test_get_team_stats_record_and_averages():
 
 def test_get_team_stats_includes_draws_in_record():
     standings = [
-        {"id": 1, "wins": 9, "losses": 4, "draws": 1, "played": 14,
-         "for": 700, "against": 700, "rank": 5},
+        {
+            "id": 1,
+            "wins": 9,
+            "losses": 4,
+            "draws": 1,
+            "played": 14,
+            "for": 700,
+            "against": 700,
+            "rank": 5,
+        },
     ]
     assert _provider(standings=standings).get_team_stats("1", "afl").record == "9-4-1"
 

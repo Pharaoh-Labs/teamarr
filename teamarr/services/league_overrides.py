@@ -71,9 +71,7 @@ def set_gracenote_override(league_code: str, value: str | None) -> dict:
     value = (value or "").strip() or None
     with get_db() as conn:
         if value is None:
-            conn.execute(
-                "DELETE FROM league_overrides WHERE league_code = ?", (league_code,)
-            )
+            conn.execute("DELETE FROM league_overrides WHERE league_code = ?", (league_code,))
         else:
             conn.execute(
                 """

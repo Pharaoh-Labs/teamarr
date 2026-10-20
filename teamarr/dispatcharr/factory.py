@@ -188,13 +188,9 @@ class DispatcharrFactory:
                 try:
                     # Smallest page the API will answer; we only care that it
                     # answers at all with a usable token.
-                    response = connection.client.get(
-                        "/api/channels/channels/?page=1&page_size=1"
-                    )
+                    response = connection.client.get("/api/channels/channels/?page=1&page_size=1")
                 except Exception as e:  # noqa: BLE001 — a probe never raises
-                    result = ConnectionTestResult(
-                        success=False, url=settings.url, error=str(e)
-                    )
+                    result = ConnectionTestResult(success=False, url=settings.url, error=str(e))
                 else:
                     if response is None:
                         result = ConnectionTestResult(

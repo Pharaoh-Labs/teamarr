@@ -104,12 +104,24 @@ def test_select_series_event_match_outranks_stateful_fallback():
     # The containing series must win — callers resolve its empty summary to
     # no series data instead of borrowing "MIL wins series 4-3" (#teamarr-4sfj).
     series_list = [
-        {"type": "preseason", "summary": "Series tied 1-1", "completed": True,
-         "events": ["401833127", "401833228"]},
-        {"type": "season", "summary": "MIL wins series 4-3", "completed": True,
-         "events": ["401815450", "401816515"]},
-        {"type": "playoff", "summary": "", "completed": False,
-         "events": ["401908030", "401908031", "401908032"]},
+        {
+            "type": "preseason",
+            "summary": "Series tied 1-1",
+            "completed": True,
+            "events": ["401833127", "401833228"],
+        },
+        {
+            "type": "season",
+            "summary": "MIL wins series 4-3",
+            "completed": True,
+            "events": ["401815450", "401816515"],
+        },
+        {
+            "type": "playoff",
+            "summary": "",
+            "completed": False,
+            "events": ["401908030", "401908031", "401908032"],
+        },
     ]
     chosen = select_series(series_list, event_id="401908030")
     assert chosen is not None
@@ -122,10 +134,18 @@ def test_select_series_event_match_with_start_note_does_not_leak():
     # is the right entry but not a state; callers filter it, so make sure the
     # stateful regular-season entry is not silently substituted here either.
     series_list = [
-        {"type": "season", "summary": "MIL wins series 4-3", "completed": True,
-         "events": ["401815450"]},
-        {"type": "playoff", "summary": "Series starts 10/11", "completed": False,
-         "events": ["401908030"]},
+        {
+            "type": "season",
+            "summary": "MIL wins series 4-3",
+            "completed": True,
+            "events": ["401815450"],
+        },
+        {
+            "type": "playoff",
+            "summary": "Series starts 10/11",
+            "completed": False,
+            "events": ["401908030"],
+        },
     ]
     chosen = select_series(series_list, event_id="401908030")
     assert chosen is not None
@@ -244,23 +264,36 @@ def test_parse_event_series_list_uses_containment_match():
                     {
                         "id": "19",
                         "homeAway": "home",
-                        "team": {"id": "19", "displayName": "Milwaukee Brewers",
-                                 "abbreviation": "MIL"},
+                        "team": {
+                            "id": "19",
+                            "displayName": "Milwaukee Brewers",
+                            "abbreviation": "MIL",
+                        },
                     },
                     {
                         "id": "8",
                         "homeAway": "away",
-                        "team": {"id": "8", "displayName": "Los Angeles Dodgers",
-                                 "abbreviation": "LAD"},
+                        "team": {
+                            "id": "8",
+                            "displayName": "Los Angeles Dodgers",
+                            "abbreviation": "LAD",
+                        },
                     },
                 ],
                 "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
                 "series": [
-                    {"type": "season", "summary": "MIL wins series 4-3",
-                     "completed": True, "events": ["401815450"]},
-                    {"type": "playoff", "summary": "MIL leads series 2-1",
-                     "completed": False,
-                     "events": ["401908030", "401908031", "401908032"]},
+                    {
+                        "type": "season",
+                        "summary": "MIL wins series 4-3",
+                        "completed": True,
+                        "events": ["401815450"],
+                    },
+                    {
+                        "type": "playoff",
+                        "summary": "MIL leads series 2-1",
+                        "completed": False,
+                        "events": ["401908030", "401908031", "401908032"],
+                    },
                 ],
             }
         ],
@@ -287,22 +320,31 @@ def test_parse_event_series_list_game1_renders_empty():
                     {
                         "id": "19",
                         "homeAway": "home",
-                        "team": {"id": "19", "displayName": "Milwaukee Brewers",
-                                 "abbreviation": "MIL"},
+                        "team": {
+                            "id": "19",
+                            "displayName": "Milwaukee Brewers",
+                            "abbreviation": "MIL",
+                        },
                     },
                     {
                         "id": "8",
                         "homeAway": "away",
-                        "team": {"id": "8", "displayName": "Los Angeles Dodgers",
-                                 "abbreviation": "LAD"},
+                        "team": {
+                            "id": "8",
+                            "displayName": "Los Angeles Dodgers",
+                            "abbreviation": "LAD",
+                        },
                     },
                 ],
                 "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
                 "series": [
-                    {"type": "season", "summary": "MIL wins series 4-3",
-                     "completed": True, "events": ["401815450"]},
-                    {"type": "playoff", "summary": "", "completed": False,
-                     "events": ["401908030"]},
+                    {
+                        "type": "season",
+                        "summary": "MIL wins series 4-3",
+                        "completed": True,
+                        "events": ["401815450"],
+                    },
+                    {"type": "playoff", "summary": "", "completed": False, "events": ["401908030"]},
                 ],
             }
         ],
@@ -380,12 +422,24 @@ def _nlcs_game1_summary_payload(playoff_summary=""):
                     "id": "401908030",
                     "date": "2026-10-12T00:00Z",
                     "competitors": [
-                        {"id": "19", "homeAway": "home",
-                         "team": {"id": "19", "displayName": "Milwaukee Brewers",
-                                  "abbreviation": "MIL"}},
-                        {"id": "8", "homeAway": "away",
-                         "team": {"id": "8", "displayName": "Los Angeles Dodgers",
-                                  "abbreviation": "LAD"}},
+                        {
+                            "id": "19",
+                            "homeAway": "home",
+                            "team": {
+                                "id": "19",
+                                "displayName": "Milwaukee Brewers",
+                                "abbreviation": "MIL",
+                            },
+                        },
+                        {
+                            "id": "8",
+                            "homeAway": "away",
+                            "team": {
+                                "id": "8",
+                                "displayName": "Los Angeles Dodgers",
+                                "abbreviation": "LAD",
+                            },
+                        },
                     ],
                     "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
                 }
@@ -393,12 +447,24 @@ def _nlcs_game1_summary_payload(playoff_summary=""):
             "season": {"year": 2026, "type": 3},
         },
         "seasonseries": [
-            {"type": "preseason", "summary": "Series tied 1-1", "completed": True,
-             "events": ["401833127", "401833228"]},
-            {"type": "season", "summary": "MIL wins series 4-3", "completed": True,
-             "events": ["401815450", "401816515", "401816530", "401816545", "401816560"]},
-            {"type": "playoff", "summary": playoff_summary, "completed": False,
-             "events": ["401908030", "401908031", "401908032", "401908033"]},
+            {
+                "type": "preseason",
+                "summary": "Series tied 1-1",
+                "completed": True,
+                "events": ["401833127", "401833228"],
+            },
+            {
+                "type": "season",
+                "summary": "MIL wins series 4-3",
+                "completed": True,
+                "events": ["401815450", "401816515", "401816530", "401816545", "401816560"],
+            },
+            {
+                "type": "playoff",
+                "summary": playoff_summary,
+                "completed": False,
+                "events": ["401908030", "401908031", "401908032", "401908033"],
+            },
         ],
     }
 
@@ -456,4 +522,3 @@ def test_apply_generated_preview_fields_playoff_game1_leaves_summary_empty():
     )
     apply_generated_preview_fields(_nlcs_game1_summary_payload(playoff_summary=""), event)
     assert event.series_summary == ""
-

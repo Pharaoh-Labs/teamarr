@@ -74,7 +74,6 @@ def list_m3u_groups(account_id: int) -> list[dict]:
     ]
 
 
-
 @router.get("/m3u-accounts/{account_id}/groups/{group_id}/streams")
 def list_group_streams(account_id: int, group_id: int) -> list[dict]:
     """List streams in a specific M3U group.
@@ -287,5 +286,3 @@ def list_stream_profiles() -> list[dict]:
         }
         for p in profiles
     ]
-
-

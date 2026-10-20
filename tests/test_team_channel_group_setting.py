@@ -33,9 +33,10 @@ def client(tmp_path, monkeypatch):
 
 
 def test_api_reports_and_updates_the_setting(client):
-    assert client.get("/api/v1/settings/dispatcharr").json()[
-        "managed_team_channel_league_groups"
-    ] is False
+    assert (
+        client.get("/api/v1/settings/dispatcharr").json()["managed_team_channel_league_groups"]
+        is False
+    )
 
     resp = client.put(
         "/api/v1/settings/dispatcharr", json={"managed_team_channel_league_groups": True}

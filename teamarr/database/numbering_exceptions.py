@@ -72,6 +72,7 @@ def known_segment_codes() -> dict[str, tuple[str, ...]]:
 
     return {"racing": tuple(SESSION_ORDER), "mma": tuple(MMA_SEGMENTS)}
 
+
 # Precedence rank per scope — lower wins. Team pins are split by which side
 # matched so a home-team pin beats an away-team pin when both are pinned.
 _RANK_TEAM_HOME = 0
@@ -133,7 +134,7 @@ class NumberingException:
 
 
 _COLUMNS = (
-    'id, scope, sport, league_code, team_name, provider, provider_team_id, '
+    "id, scope, sport, league_code, team_name, provider, provider_team_id, "
     'start, "end", label, sort_order, enabled, created_at, updated_at, '
     "season_type, channel_group_id, channel_group_mode, segments, keyword"
 )
@@ -452,7 +453,9 @@ def add_numbering_exception(
         if lookup is None:
             logger.warning(
                 "[NUMBERING_EXC] No team_cache row for provider=%s team_id=%s league=%s",
-                provider, provider_team_id, team_league,
+                provider,
+                provider_team_id,
+                team_league,
             )
             return None
         if _is_racing_team(conn, lookup["sport"], lookup["league"]):
@@ -509,11 +512,21 @@ def add_numbering_exception(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            scope, sport, league_code, team_name, provider, provider_team_id,
-            int(start), int(end) if end is not None else None,
-            (label or "").strip() or None, _next_sort_order(conn),
-            season_type, channel_group_id, (channel_group_mode or "").strip() or None,
-            ",".join(segment_codes) if segment_codes else None, keyword,
+            scope,
+            sport,
+            league_code,
+            team_name,
+            provider,
+            provider_team_id,
+            int(start),
+            int(end) if end is not None else None,
+            (label or "").strip() or None,
+            _next_sort_order(conn),
+            season_type,
+            channel_group_id,
+            (channel_group_mode or "").strip() or None,
+            ",".join(segment_codes) if segment_codes else None,
+            keyword,
         ),
     )
     _arm_relayout(conn)
@@ -521,7 +534,9 @@ def add_numbering_exception(
     created = get_numbering_exception(conn, cursor.lastrowid)
     logger.info(
         "[NUMBERING_EXC] Added %s pin → %d (%s)",
-        scope, start, team_name or league_code or sport,
+        scope,
+        start,
+        team_name or league_code or sport,
     )
     return created
 
@@ -560,15 +575,18 @@ def update_numbering_exception(
     if segments is ...:
         new_segments = current.segments
     else:
-        new_segments = normalize_segments(
-            segments if isinstance(segments, (str, list)) else None
-        )
+        new_segments = normalize_segments(segments if isinstance(segments, (str, list)) else None)
     if keyword is ...:
         new_keyword = current.keyword
     else:
         new_keyword = normalize_keyword(keyword) if isinstance(keyword, str) else None
     err = _validate(
-        current.scope, new_start, new_end, new_season, new_segments, new_keyword,
+        current.scope,
+        new_start,
+        new_end,
+        new_season,
+        new_segments,
+        new_keyword,
         sport=current.sport,
     )
     if err:
@@ -601,9 +619,16 @@ def update_numbering_exception(
         WHERE id = ?
         """,
         (
-            new_start, new_end, new_label, int(new_enabled),
-            new_season, new_group_id, new_group_mode,
-            ",".join(new_segments) if new_segments else None, new_keyword, exception_id,
+            new_start,
+            new_end,
+            new_label,
+            int(new_enabled),
+            new_season,
+            new_group_id,
+            new_group_mode,
+            ",".join(new_segments) if new_segments else None,
+            new_keyword,
+            exception_id,
         ),
     )
     _arm_relayout(conn)
@@ -712,8 +737,13 @@ class LaneResolver:
     ) -> Lane:
         """Most-specific-wins lane for one channel; default when nothing matches."""
         e = self.match(
-            sport, league, home_team, away_team, season_type,
-            segment=segment, exception_keyword=exception_keyword,
+            sport,
+            league,
+            home_team,
+            away_team,
+            season_type,
+            segment=segment,
+            exception_keyword=exception_keyword,
         )
         return self.lane_for(e) if e is not None else self.default
 

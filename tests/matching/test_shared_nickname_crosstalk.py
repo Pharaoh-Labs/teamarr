@@ -123,16 +123,15 @@ class TestTeamVsTeamScoring:
     def test_sf_giants_matchup_does_not_score_an_nfl_event(self):
         matcher = make_team_matcher()
         nfl = _event(NYG, MIN, "nfl-1", "nfl", "football")
-        assert matcher._score_teams_against_event(
-            "Colorado Rockies", "San Francisco Giants", nfl
-        ) is None
+        assert (
+            matcher._score_teams_against_event("Colorado Rockies", "San Francisco Giants", nfl)
+            is None
+        )
 
     def test_sf_giants_matchup_scores_its_own_event(self):
         matcher = make_team_matcher()
         mlb = _event(SFG, COL, "mlb-1", "mlb", "baseball")
-        result = matcher._score_teams_against_event(
-            "Colorado Rockies", "San Francisco Giants", mlb
-        )
+        result = matcher._score_teams_against_event("Colorado Rockies", "San Francisco Giants", mlb)
         assert result is not None
         assert result[1] >= 85
 
@@ -159,17 +158,13 @@ class TestSharedCityCrosstalk:
     def test_sounders_stream_still_matches_its_own_event(self):
         matcher = make_team_matcher()
         mls = _event(SOUNDERS, ATX, "mls-1", "usa.1", "soccer")
-        score, side = matcher._score_single_team_against_event(
-            "us seattle sounders a", mls
-        )
+        score, side = matcher._score_single_team_against_event("us seattle sounders a", mls)
         assert score is not None
         assert side == "home"
 
     def test_mariners_stream_skips_the_mls_event(self):
         matcher = make_team_matcher()
         mls = _event(SOUNDERS, ATX, "mls-1", "usa.1", "soccer")
-        score, side = matcher._score_single_team_against_event(
-            "us seattle mariners a", mls
-        )
+        score, side = matcher._score_single_team_against_event("us seattle mariners a", mls)
         assert score is None
         assert side is None

@@ -58,8 +58,13 @@ class TestRankedWithArticle:
 
 def _team(name, abbrev, id_, league="mens-college-basketball", sport="basketball"):
     return Team(
-        id=id_, provider="espn", name=name, short_name=name,
-        abbreviation=abbrev, league=league, sport=sport,
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=name,
+        abbreviation=abbrev,
+        league=league,
+        sport=sport,
     )
 
 
@@ -70,11 +75,16 @@ AWAY = _team("Texas A&M Aggies", "TAMU", "2")
 def _ctx(team_rank=None, opponent_rank=None, our_team=HOME):
     """Context where 'our team' is HOME by default; ranks via TeamStats."""
     event = Event(
-        id="e1", provider="espn", name="Texas A&M Aggies at Arkansas Razorbacks",
+        id="e1",
+        provider="espn",
+        name="Texas A&M Aggies at Arkansas Razorbacks",
         short_name="TAMU @ ARK",
         start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=HOME, away_team=AWAY, status=EventStatus(state="pre"),
-        league="mens-college-basketball", sport="basketball",
+        home_team=HOME,
+        away_team=AWAY,
+        status=EventStatus(state="pre"),
+        league="mens-college-basketball",
+        sport="basketball",
     )
     game_ctx = GameContext(
         event=event,
@@ -84,8 +94,11 @@ def _ctx(team_rank=None, opponent_rank=None, our_team=HOME):
     return TemplateContext(
         game_context=game_ctx,
         team_config=TeamChannelContext(
-            team_id=our_team.id, league=event.league, sport=event.sport,
-            team_name=our_team.name, team_abbrev=our_team.abbreviation,
+            team_id=our_team.id,
+            league=event.league,
+            sport=event.sport,
+            team_name=our_team.name,
+            team_abbrev=our_team.abbreviation,
         ),
         team_stats=TeamStats(record="12-1", rank=team_rank) if team_rank else None,
     )
@@ -128,9 +141,7 @@ class TestTeamPerspectiveRankedThe:
 
     def test_opponent_ranked(self):
         ctx = _ctx(opponent_rank=14)
-        assert extract_opponent_ranked_the(ctx, ctx.game_context) == (
-            "the No. 14 Texas A&M Aggies"
-        )
+        assert extract_opponent_ranked_the(ctx, ctx.game_context) == ("the No. 14 Texas A&M Aggies")
 
     def test_opponent_unranked(self):
         ctx = _ctx()

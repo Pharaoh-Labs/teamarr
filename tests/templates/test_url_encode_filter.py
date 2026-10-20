@@ -32,9 +32,7 @@ def test_urlencode_encodes_spaces():
 
 def test_url_alias_matches_urlencode():
     variables = {"race_name": "Grand Prix & Co"}
-    assert _resolve("{race_name|url}", variables) == _resolve(
-        "{race_name|urlencode}", variables
-    )
+    assert _resolve("{race_name|url}", variables) == _resolve("{race_name|urlencode}", variables)
 
 
 def test_urlencode_leaves_literal_url_structure_untouched():

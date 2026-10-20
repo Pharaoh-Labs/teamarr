@@ -60,7 +60,7 @@ def add_stream_to_channel(
         "dispatcharr_source_channel_id",  # DP channel read from; dispatcharr_channel rule (#971)
         "m3u_group_id",  # the stream's M3U group; exception keyword sources (#893)
         "m3u_group_name",
-        "attach_at",   # time-windowed membership (183.5); None = full-life
+        "attach_at",  # time-windowed membership (183.5); None = full-life
         "detach_at",
     ]
 
@@ -971,8 +971,7 @@ def clear_stream_stats(conn: Connection, group_id: int | None = None) -> int:
         Number of stream rows whose stats were cleared
     """
     where = (
-        "removed_at IS NULL "
-        "AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)"
+        "removed_at IS NULL AND (stream_stats IS NOT NULL OR stream_stats_updated_at IS NOT NULL)"
     )
     params: tuple = ()
     if group_id is not None:
@@ -1072,9 +1071,7 @@ def get_ordered_stream_ids(
         List of dispatcharr_stream_id values in priority order
     """
     now_expr = "datetime('now')" if now is None else "?"
-    params: tuple = (
-        (managed_channel_id,) if now is None else (managed_channel_id, now, now)
-    )
+    params: tuple = (managed_channel_id,) if now is None else (managed_channel_id, now, now)
     cursor = conn.execute(
         f"""SELECT dispatcharr_stream_id FROM managed_channel_streams
            WHERE managed_channel_id = ? AND removed_at IS NULL

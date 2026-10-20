@@ -68,41 +68,43 @@ ALTERNATE_TEAM_CODES: dict[str, str] = {
 # writes it as one (upper-case token, or the whole side), which is the rule
 # the #705/#788 measurements were approximating. Do not extend this list —
 # a prose word that trips a code is a case-rule bug, not a missing stopword.
-ABBREVIATION_STOPWORDS: frozenset[str] = frozenset({
-    "the",
-    "and",
-    "for",
-    "with",
-    "all",
-    "not",
-    "out",
-    "but",
-    "are",
-    "was",
-    "one",
-    "two",
-    "our",
-    "its",
-    "who",
-    "how",
-    "any",
-    # Second measured pass (#788), over 9,608 distinct live stream names.
-    # Each word below is a real team abbreviation (DAY=Dayton, SUN=Sunderland,
-    # RED=Redwoods, OLD=Oldham, MAY=Mayer, BIG=Biggleswade, TOP=TOP Oss,
-    # PAY=Paysandu, RUN=Runcorn) with many lowercase/prose occurrences and
-    # zero legitimate standalone code usage: DAY alone accounted for ~40
-    # confidence-1.0 false matches ("US Open: Day #13", "MLTT - Week 1,
-    # Day 1", "America's Day at the Races" -> a Dayton volleyball game).
-    # Deliberately NOT added despite prose presence, because their codes are
-    # in active legitimate use: can (222 uppercase uses, Canada), van (40,
-    # Vancouver), new (18, Newcastle), sea (8, Seattle), ten (8, Tennessee).
-    "day",
-    "sun",
-    "red",
-    "old",
-    "may",
-    "big",
-    "top",
-    "pay",
-    "run",
-})
+ABBREVIATION_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "the",
+        "and",
+        "for",
+        "with",
+        "all",
+        "not",
+        "out",
+        "but",
+        "are",
+        "was",
+        "one",
+        "two",
+        "our",
+        "its",
+        "who",
+        "how",
+        "any",
+        # Second measured pass (#788), over 9,608 distinct live stream names.
+        # Each word below is a real team abbreviation (DAY=Dayton, SUN=Sunderland,
+        # RED=Redwoods, OLD=Oldham, MAY=Mayer, BIG=Biggleswade, TOP=TOP Oss,
+        # PAY=Paysandu, RUN=Runcorn) with many lowercase/prose occurrences and
+        # zero legitimate standalone code usage: DAY alone accounted for ~40
+        # confidence-1.0 false matches ("US Open: Day #13", "MLTT - Week 1,
+        # Day 1", "America's Day at the Races" -> a Dayton volleyball game).
+        # Deliberately NOT added despite prose presence, because their codes are
+        # in active legitimate use: can (222 uppercase uses, Canada), van (40,
+        # Vancouver), new (18, Newcastle), sea (8, Seattle), ten (8, Tennessee).
+        "day",
+        "sun",
+        "red",
+        "old",
+        "may",
+        "big",
+        "top",
+        "pay",
+        "run",
+    }
+)

@@ -59,9 +59,7 @@ def test_registry_covers_dataclass_fields_exactly():
 
 def test_registry_groups_match_all_settings():
     group_fields = {
-        f.name
-        for f in dataclasses.fields(AllSettings)
-        if dataclasses.is_dataclass(f.type)
+        f.name for f in dataclasses.fields(AllSettings) if dataclasses.is_dataclass(f.type)
     }
     assert set(GROUPS) == group_fields
 

@@ -60,7 +60,5 @@ def test_get_team_schedule_skips_past_games_for_player_ids(monkeypatch):
 
     monkeypatch.setattr(provider, "_get_past_games_from_schedule", _boom)
     monkeypatch.setattr(provider, "_get_sport_league_from_db", lambda league: None)
-    monkeypatch.setattr(
-        provider, "_scan_scoreboard_for_team", lambda *a, **k: []
-    )
+    monkeypatch.setattr(provider, "_scan_scoreboard_for_team", lambda *a, **k: [])
     assert provider.get_team_schedule("player_taylor_fritz", "atp") == []

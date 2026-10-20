@@ -370,9 +370,7 @@ def update_channel_numbering_settings(
             cur_gap = int((cur["channel_gap_size"] if cur else None) or 3)
             new_mode = channel_stability_mode or cur_mode
             gap_changed = channel_gap_size is not None and int(channel_gap_size) != cur_gap
-            mode_changed = (
-                channel_stability_mode is not None and channel_stability_mode != cur_mode
-            )
+            mode_changed = channel_stability_mode is not None and channel_stability_mode != cur_mode
             # A new order (#934) is a layout change like any other: in the
             # sticky modes locked channels keep their numbers until re-laid out.
             cur_order = (
@@ -579,9 +577,7 @@ def update_feed_separation_settings(
     if sports:
         # An unknown code would never match a real event, silently disabling
         # separation everywhere rather than failing visibly (#732).
-        known = {
-            row["sport_code"] for row in conn.execute("SELECT sport_code FROM sports")
-        }
+        known = {row["sport_code"] for row in conn.execute("SELECT sport_code FROM sports")}
         unknown = sorted(set(sports) - known)
         if unknown:
             logger.warning(

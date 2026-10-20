@@ -133,11 +133,7 @@ def valid_condition_names() -> set[str]:
     """
 
     prefix = "_eval_"
-    return {
-        name[len(prefix):]
-        for name in dir(ConditionEvaluator)
-        if name.startswith(prefix)
-    }
+    return {name[len(prefix) :] for name in dir(ConditionEvaluator) if name.startswith(prefix)}
 
 
 def validate_conditional_descriptions(
@@ -183,9 +179,7 @@ def validate_conditional_descriptions(
             text = _get(entry, field)
             if not text:
                 continue
-            field_warnings = validate_template(
-                text, valid_names, base_names, is_event_template
-            )
+            field_warnings = validate_template(text, valid_names, base_names, is_event_template)
             if field_warnings:
                 results[f"conditional_descriptions[{i}].{field}"] = field_warnings
 

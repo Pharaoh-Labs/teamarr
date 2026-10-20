@@ -51,9 +51,7 @@ def get_keyword(conn: Connection, keyword_id: int) -> dict | None:
     Returns:
         Keyword row dict, or None if not found
     """
-    row = conn.execute(
-        "SELECT * FROM detection_keywords WHERE id = ?", (keyword_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM detection_keywords WHERE id = ?", (keyword_id,)).fetchone()
     return dict(row) if row else None
 
 
@@ -101,9 +99,7 @@ def create_keyword(
         keyword,
     )
 
-    row = conn.execute(
-        "SELECT * FROM detection_keywords WHERE id = ?", (keyword_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM detection_keywords WHERE id = ?", (keyword_id,)).fetchone()
     return dict(row)
 
 
@@ -183,9 +179,7 @@ def update_keyword(
         conn.commit()
         logger.info("[DETECTION_KW] Updated keyword id=%d", keyword_id)
 
-    row = conn.execute(
-        "SELECT * FROM detection_keywords WHERE id = ?", (keyword_id,)
-    ).fetchone()
+    row = conn.execute("SELECT * FROM detection_keywords WHERE id = ?", (keyword_id,)).fetchone()
     return dict(row)
 
 

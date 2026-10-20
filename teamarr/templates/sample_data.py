@@ -5,6 +5,7 @@ Used for live preview in the UI.
 
 Organization: Variables grouped by category, with base/.next/.last variants together.
 """
+
 from teamarr.config import get_show_timezone, get_time_format, get_user_timezone_str
 from teamarr.templates.variables import get_registry
 from teamarr.templates.variables.identity import construct_league_abbrev

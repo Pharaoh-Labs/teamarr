@@ -133,7 +133,7 @@ class SupabaseProvider(SportsProvider):
         logo_map = self._client.get_logo_map(league)
         sport = self._client.get_sport(league)
 
-        primary: dict[str, Team] = {}   # exact city matches
+        primary: dict[str, Team] = {}  # exact city matches
         fallback: dict[str, Team] = {}  # first-component / first-word
 
         for t in teams_data:
@@ -209,8 +209,7 @@ class SupabaseProvider(SportsProvider):
             home_team = teams_by_city.get(home_city)
             if not away_team or not home_team:
                 logger.debug(
-                    "[SUPABASE] Could not resolve teams for event %s "
-                    "(away=%s, home=%s)",
+                    "[SUPABASE] Could not resolve teams for event %s (away=%s, home=%s)",
                     event_id,
                     away_city,
                     home_city,

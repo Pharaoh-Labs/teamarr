@@ -220,8 +220,12 @@ def resolve_program_tvg_ids(
 
     resolution: dict[str, str] = {}
     stats = {
-        "channel": 0, "loopback": 0, "direct": 0, "name": 0,
-        "unresolved": 0, "ambiguous_name": 0,
+        "channel": 0,
+        "loopback": 0,
+        "direct": 0,
+        "name": 0,
+        "unresolved": 0,
+        "ambiguous_name": 0,
     }
 
     for s in streams:
@@ -273,7 +277,12 @@ def resolve_program_tvg_ids(
     logger.info(
         "[EPG-RESOLVE] resolved %d stream tvg_ids (channel=%d loopback=%d direct=%d "
         "name=%d ambiguous_name=%d unresolved=%d)",
-        len(resolution), stats["channel"], stats["loopback"], stats["direct"],
-        stats["name"], stats["ambiguous_name"], stats["unresolved"],
+        len(resolution),
+        stats["channel"],
+        stats["loopback"],
+        stats["direct"],
+        stats["name"],
+        stats["ambiguous_name"],
+        stats["unresolved"],
     )
     return resolution, stats

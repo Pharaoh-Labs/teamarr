@@ -621,9 +621,7 @@ class ChannelManager:
             data = {}
         return OperationResult(success=True, data=data if isinstance(data, dict) else {})
 
-    def apply_epg_associations(
-        self, associations: list[tuple[int, int]]
-    ) -> EpgAssociationOutcome:
+    def apply_epg_associations(self, associations: list[tuple[int, int]]) -> EpgAssociationOutcome:
         """Make each ``(channel_id, epg_data_id)`` mapping true, touching only what changed.
 
         Every run used to call ``set-epg`` on every managed channel. On the

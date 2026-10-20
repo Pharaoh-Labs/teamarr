@@ -60,20 +60,24 @@ def validate_plan(
     if resolve_stream_ids is not None:
         diagnostics.extend(_unknown_streams(plan.channels, resolve_stream_ids))
     if resolve_group_hints is not None:
-        diagnostics.extend(_unknown_hints(
-            {c.group_hint for c in plan.channels if c.group_hint},
-            resolve_group_hints,
-            "plan.unknown_group_hint",
-            "group hint is not a known channel group",
-        ))
+        diagnostics.extend(
+            _unknown_hints(
+                {c.group_hint for c in plan.channels if c.group_hint},
+                resolve_group_hints,
+                "plan.unknown_group_hint",
+                "group hint is not a known channel group",
+            )
+        )
     if resolve_profile_hints is not None:
         mentioned = {hint for c in plan.channels for hint in c.profile_hints}
-        diagnostics.extend(_unknown_hints(
-            mentioned,
-            resolve_profile_hints,
-            "plan.unknown_profile_hint",
-            "profile hint is not a known stream profile",
-        ))
+        diagnostics.extend(
+            _unknown_hints(
+                mentioned,
+                resolve_profile_hints,
+                "plan.unknown_profile_hint",
+                "profile hint is not a known stream profile",
+            )
+        )
     diagnostics.sort(key=lambda d: (d.code, d.item_key or ""))
     return diagnostics
 
@@ -162,8 +166,7 @@ def _unknown_streams(
         PlanDiagnostic(
             code="plan.unknown_stream",
             message=(
-                f"stream {sid} on channel {channel.logical_key} is not in the "
-                "host stream catalog"
+                f"stream {sid} on channel {channel.logical_key} is not in the host stream catalog"
             ),
             item_key=channel.logical_key,
         )

@@ -35,16 +35,30 @@ def user_tz(request):
 
 
 def _team(id_, name):
-    return Team(id=id_, provider="espn", name=name, short_name=name, abbreviation=name[:3],
-                league="college-football", sport="football")
+    return Team(
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=name,
+        abbreviation=name[:3],
+        league="college-football",
+        sport="football",
+    )
 
 
 def _event(start, time_tbd):
     return Event(
-        id="401858490", provider="espn", name="x", short_name="x", start_time=start,
-        league="college-football", sport="football", status=EventStatus(state="pre"),
+        id="401858490",
+        provider="espn",
+        name="x",
+        short_name="x",
+        start_time=start,
+        league="college-football",
+        sport="football",
+        status=EventStatus(state="pre"),
         home_team=_team("130", "Michigan Wolverines"),
-        away_team=_team("213", "Penn State Nittany Lions"), time_tbd=time_tbd,
+        away_team=_team("213", "Penn State Nittany Lions"),
+        time_tbd=time_tbd,
     )
 
 
@@ -54,20 +68,34 @@ def _scoreboard_event(time_valid):
         "name": "Penn State Nittany Lions at Michigan Wolverines",
         "shortName": "PSU @ MICH",
         "date": "2026-10-17T04:00Z",
-        "competitions": [{
-            "id": "401858490",
-            "date": "2026-10-17T04:00Z",
-            "timeValid": time_valid,
-            "competitors": [
-                {"id": "130", "homeAway": "home",
-                 "team": {"id": "130", "displayName": "Michigan Wolverines",
-                          "abbreviation": "MICH"}},
-                {"id": "213", "homeAway": "away",
-                 "team": {"id": "213", "displayName": "Penn State Nittany Lions",
-                          "abbreviation": "PSU"}},
-            ],
-            "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
-        }],
+        "competitions": [
+            {
+                "id": "401858490",
+                "date": "2026-10-17T04:00Z",
+                "timeValid": time_valid,
+                "competitors": [
+                    {
+                        "id": "130",
+                        "homeAway": "home",
+                        "team": {
+                            "id": "130",
+                            "displayName": "Michigan Wolverines",
+                            "abbreviation": "MICH",
+                        },
+                    },
+                    {
+                        "id": "213",
+                        "homeAway": "away",
+                        "team": {
+                            "id": "213",
+                            "displayName": "Penn State Nittany Lions",
+                            "abbreviation": "PSU",
+                        },
+                    },
+                ],
+                "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED"}},
+            }
+        ],
     }
 
 
@@ -125,10 +153,12 @@ def test_the_channel_outlives_the_placeholder_day(user_tz):
 
 
 def _ctx(stated_time):
-    normalized = SimpleNamespace(extracted_date=datetime(2026, 10, 17).date(),
-                                 extracted_time=stated_time)
-    return SimpleNamespace(classified=SimpleNamespace(normalized=normalized),
-                           stream_tz=ZoneInfo("America/New_York"))
+    normalized = SimpleNamespace(
+        extracted_date=datetime(2026, 10, 17).date(), extracted_time=stated_time
+    )
+    return SimpleNamespace(
+        classified=SimpleNamespace(normalized=normalized), stream_tz=ZoneInfo("America/New_York")
+    )
 
 
 def test_a_stated_time_is_not_measured_against_the_placeholder():

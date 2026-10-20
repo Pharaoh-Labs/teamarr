@@ -28,13 +28,26 @@ def _processor():
 
 def _event():
     def team(id_, name):
-        return Team(id=id_, provider="espn", name=name, short_name=name, abbreviation=name[:3],
-                    league="nfl", sport="football")
+        return Team(
+            id=id_,
+            provider="espn",
+            name=name,
+            short_name=name,
+            abbreviation=name[:3],
+            league="nfl",
+            sport="football",
+        )
 
     return Event(
-        id="401872978", provider="espn", name="Lions at Panthers", short_name="DET @ CAR",
-        start_time=datetime(2026, 10, 5, 0, 20, tzinfo=UTC), league="nfl", sport="football",
-        status=EventStatus(state="pre"), home_team=team("29", "Panthers"),
+        id="401872978",
+        provider="espn",
+        name="Lions at Panthers",
+        short_name="DET @ CAR",
+        start_time=datetime(2026, 10, 5, 0, 20, tzinfo=UTC),
+        league="nfl",
+        sport="football",
+        status=EventStatus(state="pre"),
+        home_team=team("29", "Panthers"),
         away_team=team("8", "Lions"),
     )
 
@@ -47,8 +60,14 @@ def _windows(processor, clock_readings):
         seen.append((kwargs["options"].epg_start, kwargs["options"].epg_end))
         return EventFillerResult(programmes=[], pregame_count=0, postgame_count=0)
 
-    stream = {"event": _event(), "feed_team": None, "_exception_keyword": None,
-              "segment": None, "segment_start": None, "segment_end": None}
+    stream = {
+        "event": _event(),
+        "feed_team": None,
+        "_exception_keyword": None,
+        "segment": None,
+        "segment_start": None,
+        "segment_end": None,
+    }
     module = "teamarr.consumers.event_group_processor.xmltv"
     with (
         patch(f"{module}.EventFillerGenerator") as generator,
@@ -94,9 +113,12 @@ def test_identical_edge_programmes_collapse_in_the_merge():
 
     def source_guide(start):
         programme = Programme(
-            channel_id="teamarr-event-401872978", title="Coming up",
-            start=start, stop=datetime(2026, 10, 4, 22, 0, tzinfo=UTC),
-            description="", filler_type="pregame",
+            channel_id="teamarr-event-401872978",
+            title="Coming up",
+            start=start,
+            stop=datetime(2026, 10, 4, 22, 0, tzinfo=UTC),
+            description="",
+            filler_type="pregame",
         )
         channels = [{"id": programme.channel_id, "name": "NFL | DET/CAR", "icon": None}]
         return programmes_to_xmltv([programme], channels)

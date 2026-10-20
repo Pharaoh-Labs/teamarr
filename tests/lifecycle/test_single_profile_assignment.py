@@ -82,11 +82,10 @@ class TestCreateChannelProfileSentinel:
             patch.object(service, "_generate_channel_name", return_value="Test Channel"),
             patch.object(service, "_get_next_channel_number", return_value="5001"),
             patch.object(service, "_resolve_logo_url", return_value=None),
-            patch.object(
-                service._timing_manager, "calculate_delete_time", return_value=None
-            ),
-            patch("teamarr.database.channels.create_managed_channel", return_value=1)
-            as mock_create_db,
+            patch.object(service._timing_manager, "calculate_delete_time", return_value=None),
+            patch(
+                "teamarr.database.channels.create_managed_channel", return_value=1
+            ) as mock_create_db,
             patch("teamarr.database.channels.add_stream_to_channel"),
         ):
             result = service._create_channel(
@@ -220,4 +219,3 @@ class TestProfileCreatedMidRun:
         service, cm = self._service(cached={1, 2}, live={1, 2})
         assert service._validate_profile_ids([1, 2]) == [1, 2]
         cm.list_profiles.assert_not_called()
-

@@ -43,7 +43,6 @@ def _load_user_keywords(category: str) -> list[dict]:
         List of keyword dicts with keys: keyword, is_regex, target_value, priority
     """
     try:
-
         with get_db() as conn:
             rows = conn.execute(
                 """SELECT keyword, is_regex, target_value, priority

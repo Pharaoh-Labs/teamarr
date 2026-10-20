@@ -427,7 +427,7 @@ class TestOneSidedStreamsAreNotVetoed:
 
 
 class TestBareAbbreviationPairs:
-    """"TB vs DET" is a valid fixture in BOTH mlb and nhl (#821).
+    """ "TB vs DET" is a valid fixture in BOTH mlb and nhl (#821).
 
     The identity-index property is also asserted directly in
     tests/matching/test_fixture_corpus.py; this drives it end to end now that

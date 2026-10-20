@@ -21,9 +21,7 @@ class FakeUFCEvent:
     name: str = "UFC 329: A vs B"
     sport: str = "mma"
     league: str = "ufc"
-    start_time: datetime = field(
-        default_factory=lambda: datetime(2026, 7, 11, 22, 0, tzinfo=UTC)
-    )
+    start_time: datetime = field(default_factory=lambda: datetime(2026, 7, 11, 22, 0, tzinfo=UTC))
     segment_times: dict | None = None
     main_card_start: datetime | None = None
 

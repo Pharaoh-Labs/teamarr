@@ -26,16 +26,28 @@ def slate(db_conn):
     db_conn.execute("DELETE FROM channel_sort_priorities")
     db_conn.executemany(
         "INSERT INTO channel_sort_priorities (sport, league_code, sort_priority) VALUES (?, ?, ?)",
-        [("football", None, 0), ("football", "nfl", 1), ("basketball", None, 2),
-         ("basketball", "nba", 3)],
+        [
+            ("football", None, 0),
+            ("football", "nfl", 1),
+            ("basketball", None, 2),
+            ("basketball", "nba", 3),
+        ],
     )
 
     def channel(event_id, sport, league, start, keyword=None, home="A", away="B"):
         return create_managed_channel(
-            conn=db_conn, event_epg_group_id=group, event_id=event_id, event_provider="espn",
-            tvg_id=f"tvg-{event_id}-{keyword}", channel_name=f"{league}-{event_id}-{keyword}",
-            sport=sport, league=league, home_team=home, away_team=away,
-            event_date=start, exception_keyword=keyword,
+            conn=db_conn,
+            event_epg_group_id=group,
+            event_id=event_id,
+            event_provider="espn",
+            tvg_id=f"tvg-{event_id}-{keyword}",
+            channel_name=f"{league}-{event_id}-{keyword}",
+            sport=sport,
+            league=league,
+            home_team=home,
+            away_team=away,
+            event_date=start,
+            exception_keyword=keyword,
         )
 
     ids = {
@@ -72,8 +84,9 @@ def test_switching_back_restores_the_old_order(db_conn, slate):
 
 
 def test_everything_priority_team_still_leads(db_conn, slate):
-    db_conn.execute("UPDATE managed_channels SET home_team = 'Detroit Lions' WHERE id = ?",
-                    (slate["nfl_late"],))
+    db_conn.execute(
+        "UPDATE managed_channels SET home_team = 'Detroit Lions' WHERE id = ?", (slate["nfl_late"],)
+    )
     db_conn.execute(
         "INSERT INTO channel_priority_teams "
         "(provider, provider_team_id, team_name, league, sport, scope) "
@@ -88,9 +101,13 @@ def test_numbers_follow_the_order(db_conn, slate):
     db_conn.commit()
     cn.reassign_all_channels(db_conn)
     numbers = {
-        name: int(float(db_conn.execute(
-            "SELECT channel_number FROM managed_channels WHERE id = ?", (cid,)
-        ).fetchone()[0]))
+        name: int(
+            float(
+                db_conn.execute(
+                    "SELECT channel_number FROM managed_channels WHERE id = ?", (cid,)
+                ).fetchone()[0]
+            )
+        )
         for name, cid in slate.items()
     }
     ordered = ["nba_early", "nba_early_4k", "nfl_late", "nba_late"]
@@ -117,6 +134,4 @@ def test_saving_the_same_order_does_not_queue_a_relayout(db_conn):
     update_channel_numbering_settings(db_conn, channel_stability_mode="gap")
     db_conn.execute("UPDATE settings SET force_channel_relayout_pending = 0")
     update_channel_numbering_settings(db_conn, channel_order_mode="sport_league")
-    assert not db_conn.execute(
-        "SELECT force_channel_relayout_pending FROM settings"
-    ).fetchone()[0]
+    assert not db_conn.execute("SELECT force_channel_relayout_pending FROM settings").fetchone()[0]

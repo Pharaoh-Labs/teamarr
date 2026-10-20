@@ -55,9 +55,7 @@ class TestCuratedSeeds:
             ("concacaf.nations.league", "CONCACAF Nations League"),
         ],
     )
-    def test_international_tournaments_have_no_sport_suffix(
-        self, service, league, expected
-    ):
+    def test_international_tournaments_have_no_sport_suffix(self, service, league, expected):
         """Real Gracenote is branded + year ('FIFA World Cup 2026'), never
         'FIFA World Cup Soccer'. The year is template-composed, not seeded."""
         assert service.get_gracenote_category(league) == expected

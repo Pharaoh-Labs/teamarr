@@ -21,8 +21,7 @@ logger = logging.getLogger(__name__)
 # sends it in ``X-Emby-Authorization``; Jellyfin sends it in the standard
 # ``Authorization`` header (see JellyfinClient, #749).
 MEDIABROWSER_AUTH_HEADER = (
-    'MediaBrowser Client="Teamarr", Device="Server",'
-    ' DeviceId="teamarr", Version="1.0"'
+    'MediaBrowser Client="Teamarr", Device="Server", DeviceId="teamarr", Version="1.0"'
 )
 
 
@@ -97,9 +96,7 @@ class EmbyClient:
                 logger.debug("[%s] Authenticated via API key", self.SERVER_LABEL)
                 return True
             except httpx.HTTPError as e:
-                logger.warning(
-                    "[%s] API key authentication failed: %s", self.SERVER_LABEL, e
-                )
+                logger.warning("[%s] API key authentication failed: %s", self.SERVER_LABEL, e)
                 self._access_token = None
                 return False
 
@@ -120,9 +117,7 @@ class EmbyClient:
             user = data.get("User", {})
             self._user_id = user.get("Id")
             if self._access_token:
-                logger.debug(
-                    "[%s] Authenticated as %s", self.SERVER_LABEL, self.username
-                )
+                logger.debug("[%s] Authenticated as %s", self.SERVER_LABEL, self.username)
                 return True
             logger.warning("[%s] Auth response missing AccessToken", self.SERVER_LABEL)
             return False
@@ -230,9 +225,7 @@ class EmbyClient:
         if not guide_task:
             return {
                 "success": False,
-                "message": (
-                    f"RefreshGuide task not found on {self.SERVER_LABEL.title()} server"
-                ),
+                "message": (f"RefreshGuide task not found on {self.SERVER_LABEL.title()} server"),
                 "duration": 0,
             }
 
@@ -246,9 +239,7 @@ class EmbyClient:
                 timeout=self.timeout,
             )
             resp.raise_for_status()
-            logger.info(
-                "[%s] Triggered guide refresh (task %s)", self.SERVER_LABEL, task_id
-            )
+            logger.info("[%s] Triggered guide refresh (task %s)", self.SERVER_LABEL, task_id)
         except httpx.HTTPError as e:
             return {
                 "success": False,
@@ -304,9 +295,7 @@ class EmbyClient:
                         "duration": duration,
                     }
                 elif status == "Failed":
-                    error_msg = last_result.get(
-                        "ErrorMessage", "Unknown error"
-                    )
+                    error_msg = last_result.get("ErrorMessage", "Unknown error")
                     return {
                         "success": False,
                         "message": f"Guide refresh failed: {error_msg}",

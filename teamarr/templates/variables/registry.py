@@ -156,9 +156,7 @@ class VariableRegistry:
         """Get all variables in a category."""
         return [v for v in self._variables.values() if v.category == category]
 
-    def filter_by_template_type(
-        self, template_type: str | None
-    ) -> list[VariableDefinition]:
+    def filter_by_template_type(self, template_type: str | None) -> list[VariableDefinition]:
         """Return variables valid for the given template type.
 
         Args:
@@ -231,9 +229,7 @@ def register_variable(
     """
 
     def decorator(func: Extractor) -> Extractor:
-        VariableRegistry().register(
-            name, category, suffix_rules, func, description, scope, sample
-        )
+        VariableRegistry().register(name, category, suffix_rules, func, description, scope, sample)
         return func
 
     return decorator

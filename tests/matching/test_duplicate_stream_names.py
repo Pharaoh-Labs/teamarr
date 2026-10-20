@@ -58,9 +58,7 @@ def test_identically_named_streams_each_produce_matched_entry():
 def test_name_fallback_still_works_without_stream_id():
     event = SimpleNamespace(id="401234", name="Yankees vs Red Sox")
     streams = [{"name": "MLB: Yankees vs Red Sox"}]  # no id key
-    match_result = BatchMatchResult(
-        results=[_result(0, "MLB: Yankees vs Red Sox", event)]
-    )
+    match_result = BatchMatchResult(results=[_result(0, "MLB: Yankees vs Red Sox", event)])
 
     proc = _make_processor()
     matched = proc._build_matched_stream_list(streams, match_result)

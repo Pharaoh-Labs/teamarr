@@ -119,24 +119,34 @@ def test_surnames():
 
 def _team(name, league="nba", sport="basketball", id_="1"):
     return Team(
-        id=id_, provider="espn", name=name, short_name=name,
-        abbreviation=name[:3].upper(), league=league, sport=sport,
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=name,
+        abbreviation=name[:3].upper(),
+        league=league,
+        sport=sport,
     )
 
 
 def _ctx(home, away, league="nba", sport="basketball", team_is_home=True, **event_kw):
     event = Event(
-        id="1", provider="espn", name=f"{away.name} at {home.name}",
-        short_name="x", start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=home, away_team=away, status=EventStatus(state="pre"),
-        league=league, sport=sport, **event_kw,
+        id="1",
+        provider="espn",
+        name=f"{away.name} at {home.name}",
+        short_name="x",
+        start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state="pre"),
+        league=league,
+        sport=sport,
+        **event_kw,
     )
     us = home if team_is_home else away
     them = away if team_is_home else home
     gc = GameContext(event=event, is_home=team_is_home, team=us, opponent=them)
-    tc = TeamChannelContext(
-        team_id=us.id, league=league, sport=sport, team_name=us.name
-    )
+    tc = TeamChannelContext(team_id=us.id, league=league, sport=sport, team_name=us.name)
     return TemplateContext(game_context=gc, team_config=tc, team_stats=None), gc
 
 

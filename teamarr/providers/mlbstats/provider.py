@@ -144,9 +144,7 @@ class MLBStatsProvider(SportsProvider):
 
         data = self._client.get_teams(sport_id)
         if not data:
-            logger.warning(
-                "[MLBSTATS] No team data for league=%s sport_id=%s", league, sport_id
-            )
+            logger.warning("[MLBSTATS] No team data for league=%s sport_id=%s", league, sport_id)
             return []
 
         teams: list[Team] = []
@@ -183,11 +181,7 @@ class MLBStatsProvider(SportsProvider):
             or self._team_abbrev_cache.get(team_id, "")
             or team_name[:3].upper()
         )
-        short_name = (
-            team_name
-            or self._team_short_name_cache.get(team_id, "")
-            or full_name
-        )
+        short_name = team_name or self._team_short_name_cache.get(team_id, "") or full_name
 
         return Team(
             id=team_id,
@@ -219,8 +213,8 @@ class MLBStatsProvider(SportsProvider):
         away_info = teams_info.get("away", {})
         home_info = teams_info.get("home", {})
 
-        away_team_raw = (away_info.get("team") or {})
-        home_team_raw = (home_info.get("team") or {})
+        away_team_raw = away_info.get("team") or {}
+        home_team_raw = home_info.get("team") or {}
 
         away_team = self._parse_team(away_team_raw, league)
         home_team = self._parse_team(home_team_raw, league)

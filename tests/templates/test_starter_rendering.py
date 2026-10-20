@@ -46,8 +46,13 @@ def resolver():
 
 def _team(name, abbrev, league, sport, id_="1", short=None):
     return Team(
-        id=id_, provider="espn", name=name, short_name=short or name,
-        abbreviation=abbrev, league=league, sport=sport,
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=short or name,
+        abbreviation=abbrev,
+        league=league,
+        sport=sport,
     )
 
 
@@ -56,11 +61,18 @@ _VENUE = Venue(name="The Palace", city="Auburn Hills", state="MI")
 
 def _event(home, away, league, sport, *, state="pre", venue=_VENUE, **kw):
     return Event(
-        id="e1", provider="espn", name=f"{away.name} at {home.name}",
+        id="e1",
+        provider="espn",
+        name=f"{away.name} at {home.name}",
         short_name=f"{away.abbreviation} @ {home.abbreviation}",
         start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=home, away_team=away, status=EventStatus(state=state),
-        league=league, sport=sport, venue=venue, **kw,
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state=state),
+        league=league,
+        sport=sport,
+        venue=venue,
+        **kw,
     )
 
 
@@ -76,8 +88,11 @@ def _ctx(event, *, team=None, team_stats=None, opponent_stats=None, **kw):
     return TemplateContext(
         game_context=game_ctx,
         team_config=TeamChannelContext(
-            team_id=team.id, league=event.league, sport=event.sport,
-            team_name=team.name, team_abbrev=team.abbreviation,
+            team_id=team.id,
+            league=event.league,
+            sport=event.sport,
+            team_name=team.name,
+            team_abbrev=team.abbreviation,
         ),
         team_stats=team_stats,
         next_game=game_ctx,
@@ -91,46 +106,90 @@ def _ctx(event, *, team=None, team_stats=None, opponent_stats=None, **kw):
 def _nba_ctx(**kw):
     home = _team("Boston Celtics", "BOS", "nba", "basketball", "1")
     away = _team("Detroit Pistons", "DET", "nba", "basketball", "2")
-    ev = _event(home, away, "nba", "basketball",
-                home_last_five="4-1", away_last_five="2-3",
-                series_summary="Series tied 1-1", **kw)
-    return _ctx(ev, team_stats=TeamStats(record="10-2"),
-                opponent_stats=TeamStats(record="8-4"))
+    ev = _event(
+        home,
+        away,
+        "nba",
+        "basketball",
+        home_last_five="4-1",
+        away_last_five="2-3",
+        series_summary="Series tied 1-1",
+        **kw,
+    )
+    return _ctx(ev, team_stats=TeamStats(record="10-2"), opponent_stats=TeamStats(record="8-4"))
 
 
 def _soccer_club_ctx(**kw):
     home = _team("Chelsea", "CHE", "eng.1", "soccer", "1")
     away = _team("Arsenal", "ARS", "eng.1", "soccer", "2")
-    ev = _event(home, away, "eng.1", "soccer",
-                venue=Venue(name="Stamford Bridge", city="London"),
-                home_last_five="3-2", away_last_five="4-1", **kw)
-    return _ctx(ev, team_stats=TeamStats(record="10-2-5"),
-                opponent_stats=TeamStats(record="12-3-2"))
+    ev = _event(
+        home,
+        away,
+        "eng.1",
+        "soccer",
+        venue=Venue(name="Stamford Bridge", city="London"),
+        home_last_five="3-2",
+        away_last_five="4-1",
+        **kw,
+    )
+    return _ctx(
+        ev, team_stats=TeamStats(record="10-2-5"), opponent_stats=TeamStats(record="12-3-2")
+    )
 
 
 def _national_ctx(**kw):
     home = _team("Spain", "ESP", "fifa.world", "soccer", "1")
     away = _team("Belgium", "BEL", "fifa.world", "soccer", "2")
-    ev = _event(home, away, "fifa.world", "soccer",
-                venue=Venue(name="MetLife Stadium", city="East Rutherford"),
-                home_last_five="4-1", away_last_five="3-2", **kw)
+    ev = _event(
+        home,
+        away,
+        "fifa.world",
+        "soccer",
+        venue=Venue(name="MetLife Stadium", city="East Rutherford"),
+        home_last_five="4-1",
+        away_last_five="3-2",
+        **kw,
+    )
     return _ctx(ev)
 
 
-def _college_ctx(*, home_rank=None, away_rank=None, conference=None,
-                 conference_abbrev=None, conference_id=None, **kw):
+def _college_ctx(
+    *,
+    home_rank=None,
+    away_rank=None,
+    conference=None,
+    conference_abbrev=None,
+    conference_id=None,
+    **kw,
+):
     home = _team("Arkansas Razorbacks", "ARK", "mens-college-basketball", "basketball", "1")
     away = _team("Texas A&M Aggies", "TAMU", "mens-college-basketball", "basketball", "2")
-    ev = _event(home, away, "mens-college-basketball", "basketball",
-                venue=Venue(name="Bud Walton Arena", city="Fayetteville", state="AR"),
-                home_last_five="4-1", away_last_five="3-2", **kw)
+    ev = _event(
+        home,
+        away,
+        "mens-college-basketball",
+        "basketball",
+        venue=Venue(name="Bud Walton Arena", city="Fayetteville", state="AR"),
+        home_last_five="4-1",
+        away_last_five="3-2",
+        **kw,
+    )
     return _ctx(
         ev,
-        team_stats=TeamStats(record="20-7", rank=home_rank, conference=conference,
-                             conference_abbrev=conference_abbrev, conference_id=conference_id),
-        opponent_stats=TeamStats(record="19-8", rank=away_rank, conference=conference,
-                                 conference_abbrev=conference_abbrev,
-                                 conference_id=conference_id),
+        team_stats=TeamStats(
+            record="20-7",
+            rank=home_rank,
+            conference=conference,
+            conference_abbrev=conference_abbrev,
+            conference_id=conference_id,
+        ),
+        opponent_stats=TeamStats(
+            record="19-8",
+            rank=away_rank,
+            conference=conference,
+            conference_abbrev=conference_abbrev,
+            conference_id=conference_id,
+        ),
     )
 
 
@@ -138,28 +197,48 @@ def _combat_ctx(**kw):
     f1 = _team("Alexander Volkanovski", "VOL", "ufc", "mma", "1")
     f2 = _team("Diego Lopes", "LOP", "ufc", "mma", "2")
     ev = Event(
-        id="e1", provider="espn", name="UFC 325: Volkanovski vs Lopes",
-        short_name="UFC 325", start_time=datetime(2026, 7, 10, 22, 0, tzinfo=UTC),
-        home_team=f1, away_team=f2, status=EventStatus(state="pre"),
-        league="ufc", sport="mma", venue=Venue(name="T-Mobile Arena", city="Las Vegas"),
+        id="e1",
+        provider="espn",
+        name="UFC 325: Volkanovski vs Lopes",
+        short_name="UFC 325",
+        start_time=datetime(2026, 7, 10, 22, 0, tzinfo=UTC),
+        home_team=f1,
+        away_team=f2,
+        status=EventStatus(state="pre"),
+        league="ufc",
+        sport="mma",
+        venue=Venue(name="T-Mobile Arena", city="Las Vegas"),
     )
     game_ctx = GameContext(event=ev, is_home=True, card_segment="main_card", **kw)
     return TemplateContext(
         game_context=game_ctx,
         team_config=TeamChannelContext(
-            team_id="1", league="ufc", sport="mma", team_name=f1.name,
+            team_id="1",
+            league="ufc",
+            sport="mma",
+            team_name=f1.name,
         ),
-        team_stats=None, next_game=game_ctx, last_game=game_ctx,
+        team_stats=None,
+        next_game=game_ctx,
+        last_game=game_ctx,
     )
 
 
 def _tennis_ctx(**kw):
     p1 = _team("Carlos Alcaraz", "ALC", "atp", "tennis", "1")
     p2 = _team("Jannik Sinner", "SIN", "atp", "tennis", "2")
-    ev = _event(p1, p2, "atp", "tennis",
-                venue=Venue(name="Centre Court", city="London"),
-                tournament_name="Wimbledon", round_name="Final",
-                draw_type="Men's Singles", is_major=True, **kw)
+    ev = _event(
+        p1,
+        p2,
+        "atp",
+        "tennis",
+        venue=Venue(name="Centre Court", city="London"),
+        tournament_name="Wimbledon",
+        round_name="Final",
+        draw_type="Men's Singles",
+        is_major=True,
+        **kw,
+    )
     return _ctx(ev)
 
 
@@ -169,28 +248,44 @@ def _racing_ctx(**kw):
     # racing_segments expansion.
     car = _team("Navy 250", "N250", "nascar-cup", "racing", "1")
     ev = Event(
-        id="e1", provider="nascar", name="Navy 250", short_name="Navy 250",
+        id="e1",
+        provider="nascar",
+        name="Navy 250",
+        short_name="Navy 250",
         start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=car, away_team=car, status=EventStatus(state="pre"),
-        league="nascar-cup", sport="racing",
+        home_team=car,
+        away_team=car,
+        status=EventStatus(state="pre"),
+        league="nascar-cup",
+        sport="racing",
         venue=Venue(name="Nashville Superspeedway", city="Lebanon", state="TN"),
         circuit_name="Nashville Superspeedway",
         sessions=[
-            RacingSession(code="fp1", name="Practice 1",
-                          start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC)),
-            RacingSession(code="qualifying", name="Qualifying",
-                          start_time=datetime(2026, 7, 11, 17, 0, tzinfo=UTC)),
-            RacingSession(code="race", name="Race",
-                          start_time=datetime(2026, 7, 12, 19, 0, tzinfo=UTC)),
+            RacingSession(
+                code="fp1", name="Practice 1", start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC)
+            ),
+            RacingSession(
+                code="qualifying",
+                name="Qualifying",
+                start_time=datetime(2026, 7, 11, 17, 0, tzinfo=UTC),
+            ),
+            RacingSession(
+                code="race", name="Race", start_time=datetime(2026, 7, 12, 19, 0, tzinfo=UTC)
+            ),
         ],
     )
     game_ctx = GameContext(event=ev, is_home=True, card_segment="fp1", **kw)
     return TemplateContext(
         game_context=game_ctx,
         team_config=TeamChannelContext(
-            team_id="1", league="nascar-cup", sport="racing", team_name=car.name,
+            team_id="1",
+            league="nascar-cup",
+            sport="racing",
+            team_name=car.name,
         ),
-        team_stats=None, next_game=game_ctx, last_game=game_ctx,
+        team_stats=None,
+        next_game=game_ctx,
+        last_game=game_ctx,
     )
 
 
@@ -198,8 +293,7 @@ def _milb_ctx(**kw):
     home = _team("Sugar Land Space Cowboys", "SUG", "milb-aaa", "baseball", "1")
     away = _team("Albuquerque Isotopes", "ABQ", "milb-aaa", "baseball", "2")
     ev = _event(home, away, "milb-aaa", "baseball", **kw)
-    return _ctx(ev, team_stats=TeamStats(record="40-30"),
-                opponent_stats=TeamStats(record="35-35"))
+    return _ctx(ev, team_stats=TeamStats(record="40-30"), opponent_stats=TeamStats(record="35-35"))
 
 
 _CTX_FOR_TEMPLATE = {
@@ -250,9 +344,7 @@ def test_starter_renders_every_surface_clean(name, resolver):
         assert "{" not in out, f"{name} {label}: unresolved token in {out!r}"
         assert "  " not in out, f"{name} {label}: double space in {out!r}"
         assert not out.startswith("the "), f"{name} {label}: uncapitalized article: {out!r}"
-        assert " ." not in out and " ," not in out, (
-            f"{name} {label}: orphan punctuation in {out!r}"
-        )
+        assert " ." not in out and " ," not in out, f"{name} {label}: orphan punctuation in {out!r}"
 
 
 # --- family registers ------------------------------------------------------
@@ -319,8 +411,9 @@ def test_college_one_ranked_team_shows_only_that_rank(resolver):
 
 def test_college_conference_game_names_the_conference(resolver):
     spec = SPECS["College Team (Starter)"]
-    ctx = _college_ctx(conference="Southeastern Conference", conference_abbrev="SEC",
-                       conference_id="8")
+    ctx = _college_ctx(
+        conference="Southeastern Conference", conference_abbrev="SEC", conference_id="8"
+    )
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert "in SEC conference play at" in out
 
@@ -352,8 +445,9 @@ def test_marquee_note_leads_us_pro_description(resolver):
 def test_marquee_note_leads_college_description(resolver):
     """Bowls/CFP rounds lead the college register when the note exists."""
     spec = SPECS["College Event (Starter)"]
-    ctx = _college_ctx(home_rank=20, away_rank=15,
-                       game_event_note="CFP Quarterfinal at the Cotton Bowl Classic")
+    ctx = _college_ctx(
+        home_rank=20, away_rank=15, game_event_note="CFP Quarterfinal at the Cotton Bowl Classic"
+    )
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert out == (
         "CFP Quarterfinal at the Cotton Bowl Classic. No. 15 Texas A&M Aggies "
@@ -387,8 +481,7 @@ def test_neutral_site_college_keeps_ranks(resolver):
     ctx = _college_ctx(home_rank=7, neutral_site=True)
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert out.startswith(
-        "Texas A&M Aggies (19-8) and No. 7 Arkansas Razorbacks (20-7) meet at "
-        "Bud Walton Arena."
+        "Texas A&M Aggies (19-8) and No. 7 Arkansas Razorbacks (20-7) meet at Bud Walton Arena."
     )
 
 
@@ -403,8 +496,10 @@ def test_match_note_leads_soccer_description(resolver):
 def test_provider_preview_still_beats_marquee_note(resolver):
     """ESPN-copy-first holds: the preview blurb outranks the note row."""
     spec = SPECS["Default Event (Starter)"]
-    ctx = _nba_ctx(game_event_note="NBA Finals - Game 5",
-                   game_preview="Pistons look to even the series in Boston.")
+    ctx = _nba_ctx(
+        game_event_note="NBA Finals - Game 5",
+        game_preview="Pistons look to even the series in Boston.",
+    )
     out = resolver.resolve_conditional(spec["conditional_descriptions"], ctx)
     assert out == "Pistons look to even the series in Boston."
 
@@ -500,9 +595,7 @@ def test_soccer_idle_uses_match_register(resolver):
     ]
     for label, val in surfaces:
         prose = re.sub(r"\{[^}]+\}", "", val)  # 'game' inside {vars} is fine
-        assert "game" not in prose.lower(), (
-            f"{label} uses the US 'game' register: {val!r}"
-        )
+        assert "game" not in prose.lower(), f"{label} uses the US 'game' register: {val!r}"
 
 
 def test_soccer_channel_name_uses_v_connector(resolver):

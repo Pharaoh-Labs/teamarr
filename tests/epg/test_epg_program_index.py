@@ -143,8 +143,8 @@ def test_lookup_returns_only_overlapping_programs():
     mgr = _epg_mgr()
     base = datetime(2026, 6, 1, 0, tzinfo=UTC)
     mgr.search_programs.return_value = [
-        _prog(1, "espn", base + timedelta(hours=1), base + timedelta(hours=3)),   # 01-03
-        _prog(2, "espn", base + timedelta(hours=4), base + timedelta(hours=6)),   # 04-06
+        _prog(1, "espn", base + timedelta(hours=1), base + timedelta(hours=3)),  # 01-03
+        _prog(2, "espn", base + timedelta(hours=4), base + timedelta(hours=6)),  # 04-06
         _prog(3, "espn", base + timedelta(hours=8), base + timedelta(hours=11)),  # 08-11
     ]
     idx = EPGProgramIndex.build(mgr, {"espn": "espn"}, base, base + timedelta(days=1))
@@ -193,7 +193,10 @@ def test_lookup_unknown_tvg_id_returns_empty():
 
 def test_categories_parsed_from_custom_properties():
     p = _prog(
-        1, "espn", datetime(2026, 6, 1, tzinfo=UTC), datetime(2026, 6, 1, 3, tzinfo=UTC),
+        1,
+        "espn",
+        datetime(2026, 6, 1, tzinfo=UTC),
+        datetime(2026, 6, 1, 3, tzinfo=UTC),
         custom_properties={"categories": ["Sports", "Sports event", "Baseball"]},
     )
     assert p.categories == ("Sports", "Sports event", "Baseball")

@@ -26,8 +26,13 @@ LONDON = ZoneInfo("Europe/London")
 
 def _team(name, short, abbr):
     return Team(
-        id=abbr.lower(), provider="espn", name=name, short_name=short,
-        abbreviation=abbr, league="mlb", sport="baseball",
+        id=abbr.lower(),
+        provider="espn",
+        name=name,
+        short_name=short,
+        abbreviation=abbr,
+        league="mlb",
+        sport="baseball",
     )
 
 
@@ -37,9 +42,16 @@ PHILLIES = _team("Philadelphia Phillies", "Phillies", "PHI")
 
 def _game(eid, start):
     return Event(
-        id=eid, provider="espn", name="Tampa Bay Rays at Philadelphia Phillies",
-        short_name="TB @ PHI", start_time=start, home_team=PHILLIES, away_team=RAYS,
-        status=EventStatus(state="scheduled"), league="mlb", sport="baseball",
+        id=eid,
+        provider="espn",
+        name="Tampa Bay Rays at Philadelphia Phillies",
+        short_name="TB @ PHI",
+        start_time=start,
+        home_team=PHILLIES,
+        away_team=RAYS,
+        status=EventStatus(state="scheduled"),
+        league="mlb",
+        sport="baseball",
     )
 
 

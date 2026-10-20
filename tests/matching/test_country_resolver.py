@@ -27,11 +27,11 @@ class TestLocalizedResolution:
     @pytest.mark.parametrize(
         "name,expected",
         [
-            ("brasil", "brazil"),        # Portuguese/Spanish
-            ("Marruecos", "morocco"),    # Spanish
-            ("Suiza", "switzerland"),    # Spanish
-            ("Catar", "qatar"),          # Spanish
-            ("Inglaterra", "england"),   # Spanish (FIFA override)
+            ("brasil", "brazil"),  # Portuguese/Spanish
+            ("Marruecos", "morocco"),  # Spanish
+            ("Suiza", "switzerland"),  # Spanish
+            ("Catar", "qatar"),  # Spanish
+            ("Inglaterra", "england"),  # Spanish (FIFA override)
         ],
     )
     def test_resolves_localized_names(self, resolver, name, expected):
@@ -52,10 +52,10 @@ class TestFifaOverrides:
     @pytest.mark.parametrize(
         "name,expected",
         [
-            ("escocia", "scotland"),      # Spanish
-            ("Écosse", "scotland"),       # French (accented)
-            ("turkey", "turkiye"),        # ESPN uses "Türkiye"
-            ("Turquía", "turkiye"),       # Spanish, accented
+            ("escocia", "scotland"),  # Spanish
+            ("Écosse", "scotland"),  # French (accented)
+            ("turkey", "turkiye"),  # ESPN uses "Türkiye"
+            ("Turquía", "turkiye"),  # Spanish, accented
             ("kosovo", "kosovo"),
             ("taiwan", "chinese taipei"),  # FIFA name
         ],
@@ -71,10 +71,10 @@ class TestAbbreviations:
         "name,expected",
         [
             ("EE. UU.", "united states"),  # Spanish, with periods + space
-            ("EE.UU.", "united states"),   # no space
-            ("EE UU", "united states"),    # space only
-            ("eeuu", "united states"),     # collapsed
-            ("EUA", "united states"),      # Portuguese
+            ("EE.UU.", "united states"),  # no space
+            ("EE UU", "united states"),  # space only
+            ("eeuu", "united states"),  # collapsed
+            ("EUA", "united states"),  # Portuguese
             ("USA", "united states"),
         ],
     )

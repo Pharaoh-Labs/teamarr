@@ -73,4 +73,3 @@ def test_an_empty_mode_still_falls_back_to_the_static_group():
     r, created = _naming_resolver()
     assert r.resolve_channel_group("", 10, "football", "nfl") == 10
     assert created == []
-

@@ -172,7 +172,6 @@ def generate_epg(
         match_rate=0.0,
     )
     if result.run_id:
-
         with get_db() as conn:
             stats = get_match_stats_summary(conn, run_id=result.run_id)
             totals = stats.get("totals", {})
@@ -309,7 +308,6 @@ def generate_epg_stream():
                 # Fetch match stats from database
                 match_stats = {}
                 if result.run_id:
-
                     with get_db() as conn:
                         stats = get_match_stats_summary(conn, run_id=result.run_id)
                         totals = stats.get("totals", {})
@@ -400,7 +398,6 @@ def get_xmltv():
 
     from fastapi.responses import FileResponse
 
-
     with get_db() as conn:
         epg_settings = get_epg_settings(conn)
 
@@ -445,7 +442,6 @@ def _get_combined_xmltv() -> str:
     guaranteeing consistency between preview and actual output.
     """
     from pathlib import Path
-
 
     with get_db() as conn:
         epg_settings = get_epg_settings(conn)

@@ -108,22 +108,35 @@ class FrozenService:
 
 def _team(name, abbrev, league, sport, id_="1", short=None):
     return Team(
-        id=id_, provider="espn", name=name, short_name=short or name,
-        abbreviation=abbrev, league=league, sport=sport,
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=short or name,
+        abbreviation=abbrev,
+        league=league,
+        sport=sport,
     )
 
 
 _VENUE = Venue(name="The Palace", city="Auburn Hills", state="MI")
 
 
-def _event(home, away, league, sport, *, id_="e1", state="pre",
-           start=EVENT_START, venue=_VENUE, **kw):
+def _event(
+    home, away, league, sport, *, id_="e1", state="pre", start=EVENT_START, venue=_VENUE, **kw
+):
     return Event(
-        id=id_, provider="espn", name=f"{away.name} at {home.name}",
+        id=id_,
+        provider="espn",
+        name=f"{away.name} at {home.name}",
         short_name=f"{away.abbreviation} @ {home.abbreviation}",
-        start_time=start, home_team=home, away_team=away,
-        status=EventStatus(state=state), league=league, sport=sport,
-        venue=venue, **kw,
+        start_time=start,
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state=state),
+        league=league,
+        sport=sport,
+        venue=venue,
+        **kw,
     )
 
 
@@ -135,9 +148,16 @@ def _nba_teams():
 
 def _nba_event(**kw):
     home, away = _nba_teams()
-    return _event(home, away, "nba", "basketball",
-                  home_last_five="4-1", away_last_five="2-3",
-                  series_summary="Series tied 1-1", **kw)
+    return _event(
+        home,
+        away,
+        "nba",
+        "basketball",
+        home_last_five="4-1",
+        away_last_five="2-3",
+        series_summary="Series tied 1-1",
+        **kw,
+    )
 
 
 NBA_STATS = {"1": TeamStats(record="10-2"), "2": TeamStats(record="8-4")}
@@ -151,43 +171,81 @@ def _soccer_teams():
 
 def _soccer_event(**kw):
     home, away = _soccer_teams()
-    return _event(home, away, "eng.1", "soccer",
-                  venue=Venue(name="Stamford Bridge", city="London"),
-                  home_last_five="3-2", away_last_five="4-1", **kw)
+    return _event(
+        home,
+        away,
+        "eng.1",
+        "soccer",
+        venue=Venue(name="Stamford Bridge", city="London"),
+        home_last_five="3-2",
+        away_last_five="4-1",
+        **kw,
+    )
 
 
 SOCCER_STATS = {"1": TeamStats(record="10-2-5"), "2": TeamStats(record="12-3-2")}
 
 
 def _college_teams():
-    home = _team("Arkansas Razorbacks", "ARK", "mens-college-basketball",
-                 "basketball", "1", short="Razorbacks")
-    away = _team("Texas A&M Aggies", "TAMU", "mens-college-basketball",
-                 "basketball", "2", short="Aggies")
+    home = _team(
+        "Arkansas Razorbacks",
+        "ARK",
+        "mens-college-basketball",
+        "basketball",
+        "1",
+        short="Razorbacks",
+    )
+    away = _team(
+        "Texas A&M Aggies", "TAMU", "mens-college-basketball", "basketball", "2", short="Aggies"
+    )
     return home, away
 
 
 def _college_event(**kw):
     home, away = _college_teams()
-    return _event(home, away, "mens-college-basketball", "basketball",
-                  venue=Venue(name="Bud Walton Arena", city="Fayetteville", state="AR"),
-                  home_last_five="4-1", away_last_five="3-2", **kw)
+    return _event(
+        home,
+        away,
+        "mens-college-basketball",
+        "basketball",
+        venue=Venue(name="Bud Walton Arena", city="Fayetteville", state="AR"),
+        home_last_five="4-1",
+        away_last_five="3-2",
+        **kw,
+    )
 
 
 COLLEGE_STATS = {
-    "1": TeamStats(record="20-7", rank=20, conference="Southeastern Conference",
-                   conference_abbrev="SEC", conference_id="8"),
-    "2": TeamStats(record="19-8", rank=15, conference="Southeastern Conference",
-                   conference_abbrev="SEC", conference_id="8"),
+    "1": TeamStats(
+        record="20-7",
+        rank=20,
+        conference="Southeastern Conference",
+        conference_abbrev="SEC",
+        conference_id="8",
+    ),
+    "2": TeamStats(
+        record="19-8",
+        rank=15,
+        conference="Southeastern Conference",
+        conference_abbrev="SEC",
+        conference_id="8",
+    ),
 }
 
 
 def _national_event(**kw):
     home = _team("Spain", "ESP", "fifa.world", "soccer", "1")
     away = _team("Belgium", "BEL", "fifa.world", "soccer", "2")
-    return _event(home, away, "fifa.world", "soccer",
-                  venue=Venue(name="MetLife Stadium", city="East Rutherford"),
-                  home_last_five="4-1", away_last_five="3-2", **kw)
+    return _event(
+        home,
+        away,
+        "fifa.world",
+        "soccer",
+        venue=Venue(name="MetLife Stadium", city="East Rutherford"),
+        home_last_five="4-1",
+        away_last_five="3-2",
+        **kw,
+    )
 
 
 def _combat_event():
@@ -196,9 +254,16 @@ def _combat_event():
     start = datetime(2026, 7, 10, 22, 0, tzinfo=UTC)
     main_card = datetime(2026, 7, 11, 1, 0, tzinfo=UTC)
     return Event(
-        id="e1", provider="espn", name="UFC 325: Volkanovski vs Lopes",
-        short_name="UFC 325", start_time=start, home_team=f1, away_team=f2,
-        status=EventStatus(state="pre"), league="ufc", sport="mma",
+        id="e1",
+        provider="espn",
+        name="UFC 325: Volkanovski vs Lopes",
+        short_name="UFC 325",
+        start_time=start,
+        home_team=f1,
+        away_team=f2,
+        status=EventStatus(state="pre"),
+        league="ufc",
+        sport="mma",
         venue=Venue(name="T-Mobile Arena", city="Las Vegas"),
         main_card_start=main_card,
         segment_times={"prelims": start, "main_card": main_card},
@@ -208,27 +273,45 @@ def _combat_event():
 def _tennis_event(**kw):
     p1 = _team("Carlos Alcaraz", "ALC", "atp", "tennis", "1")
     p2 = _team("Jannik Sinner", "SIN", "atp", "tennis", "2")
-    return _event(p1, p2, "atp", "tennis",
-                  venue=Venue(name="Centre Court", city="London"),
-                  tournament_name="Wimbledon", round_name="Final",
-                  draw_type="Men's Singles", is_major=True, **kw)
+    return _event(
+        p1,
+        p2,
+        "atp",
+        "tennis",
+        venue=Venue(name="Centre Court", city="London"),
+        tournament_name="Wimbledon",
+        round_name="Final",
+        draw_type="Men's Singles",
+        is_major=True,
+        **kw,
+    )
 
 
 def _racing_event():
     car = _team("Navy 250", "N250", "nascar-cup", "racing", "1")
     return Event(
-        id="e1", provider="nascar", name="Navy 250", short_name="Navy 250",
-        start_time=EVENT_START, home_team=car, away_team=car,
-        status=EventStatus(state="pre"), league="nascar-cup", sport="racing",
+        id="e1",
+        provider="nascar",
+        name="Navy 250",
+        short_name="Navy 250",
+        start_time=EVENT_START,
+        home_team=car,
+        away_team=car,
+        status=EventStatus(state="pre"),
+        league="nascar-cup",
+        sport="racing",
         venue=Venue(name="Nashville Superspeedway", city="Lebanon", state="TN"),
         circuit_name="Nashville Superspeedway",
         sessions=[
-            RacingSession(code="fp1", name="Practice 1",
-                          start_time=EVENT_START),
-            RacingSession(code="qualifying", name="Qualifying",
-                          start_time=datetime(2026, 7, 11, 17, 0, tzinfo=UTC)),
-            RacingSession(code="race", name="Race",
-                          start_time=datetime(2026, 7, 12, 19, 0, tzinfo=UTC)),
+            RacingSession(code="fp1", name="Practice 1", start_time=EVENT_START),
+            RacingSession(
+                code="qualifying",
+                name="Qualifying",
+                start_time=datetime(2026, 7, 11, 17, 0, tzinfo=UTC),
+            ),
+            RacingSession(
+                code="race", name="Race", start_time=datetime(2026, 7, 12, 19, 0, tzinfo=UTC)
+            ),
         ],
     )
 
@@ -240,8 +323,9 @@ def _sport_durations(conn):
     return asdict(get_all_settings(conn).durations)
 
 
-def _render_event_starter(conn, name, event, stats=None, *,
-                          segment=None, segment_start=None, segment_end=None):
+def _render_event_starter(
+    conn, name, event, stats=None, *, segment=None, segment_start=None, segment_end=None
+):
     """Seeded template row → EventEPGGenerator → event filler → XMLTV."""
     template = get_template_by_name(conn, name)
     assert template is not None, f"starter {name!r} not seeded"
@@ -253,8 +337,7 @@ def _render_event_starter(conn, name, event, stats=None, *,
     )
     match = {"stream": {"name": f"{event.name} HD"}, "event": event}
     if segment:
-        match.update(segment=segment, segment_start=segment_start,
-                     segment_end=segment_end)
+        match.update(segment=segment, segment_start=segment_start, segment_end=segment_end)
     generator = EventEPGGenerator(service)
     programmes, channels = generator.generate_for_matched_streams([match], options)
     assert len(programmes) == 1 and len(channels) == 1
@@ -287,14 +370,13 @@ def _render_event_starter(conn, name, event, stats=None, *,
         programmes.extend(result.programmes)
         programmes.sort(key=lambda p: (p.channel_id, p.start))
 
-    channel_dicts = [
-        {"id": ch.channel_id, "name": ch.name, "icon": ch.icon} for ch in channels
-    ]
+    channel_dicts = [{"id": ch.channel_id, "name": ch.name, "icon": ch.icon} for ch in channels]
     return merge_xmltv_content([programmes_to_xmltv(programmes, channel_dicts)])
 
 
-def _render_team_starter(conn, name, *, schedule, stats,
-                         team_id="1", league, team_name, team_abbrev):
+def _render_team_starter(
+    conn, name, *, schedule, stats, team_id="1", league, team_name, team_abbrev
+):
     """Seeded template row → TeamEPGGenerator (programmes + filler) → XMLTV."""
     template = get_template_by_name(conn, name)
     assert template is not None, f"starter {name!r} not seeded"
@@ -326,13 +408,23 @@ def _schedule_around_now(current, *, last_opponent, next_opponent):
     """Last-final / current / next-scheduled triple for .last/.next vars."""
     home = current.home_team
     last = _event(
-        home, last_opponent, current.league, current.sport,
-        id_="e0", state="final", start=EVENT_START - timedelta(days=2),
-        home_score=112, away_score=104,
+        home,
+        last_opponent,
+        current.league,
+        current.sport,
+        id_="e0",
+        state="final",
+        start=EVENT_START - timedelta(days=2),
+        home_score=112,
+        away_score=104,
     )
     nxt = _event(
-        home, next_opponent, current.league, current.sport,
-        id_="e2", start=EVENT_START + timedelta(days=2),
+        home,
+        next_opponent,
+        current.league,
+        current.sport,
+        id_="e2",
+        start=EVENT_START + timedelta(days=2),
     )
     return [last, current, nxt]
 
@@ -341,24 +433,23 @@ def _schedule_around_now(current, *, last_opponent, next_opponent):
 
 
 def _case_default_event(conn):
-    return _render_event_starter(conn, "Default Event (Starter)",
-                                 _nba_event(), NBA_STATS)
+    return _render_event_starter(conn, "Default Event (Starter)", _nba_event(), NBA_STATS)
 
 
 def _case_college_event(conn):
-    return _render_event_starter(conn, "College Event (Starter)",
-                                 _college_event(), COLLEGE_STATS)
+    return _render_event_starter(conn, "College Event (Starter)", _college_event(), COLLEGE_STATS)
 
 
 def _case_soccer_club_event(conn):
-    return _render_event_starter(conn, "Soccer Club Event (Starter)",
-                                 _soccer_event(), SOCCER_STATS)
+    return _render_event_starter(conn, "Soccer Club Event (Starter)", _soccer_event(), SOCCER_STATS)
 
 
 def _case_combat_event(conn):
     event = _combat_event()
     return _render_event_starter(
-        conn, "Combat Event (Starter)", event,
+        conn,
+        "Combat Event (Starter)",
+        event,
         segment="main_card",
         segment_start=event.main_card_start,
         segment_end=event.main_card_start + timedelta(hours=3),
@@ -366,8 +457,7 @@ def _case_combat_event(conn):
 
 
 def _case_international_event(conn):
-    return _render_event_starter(conn, "International Event (Starter)",
-                                 _national_event())
+    return _render_event_starter(conn, "International Event (Starter)", _national_event())
 
 
 def _case_tennis_event(conn):
@@ -377,7 +467,9 @@ def _case_tennis_event(conn):
 def _case_racing_event(conn):
     event = _racing_event()
     return _render_event_starter(
-        conn, "Racing Event (Starter)", event,
+        conn,
+        "Racing Event (Starter)",
+        event,
         segment="fp1",
         segment_start=EVENT_START,
         segment_end=EVENT_START + timedelta(hours=2),
@@ -391,11 +483,13 @@ def _case_default_team(conn):
     stats = dict(NBA_STATS)
     stats.update({"3": TeamStats(record="6-6"), "4": TeamStats(record="7-5")})
     return _render_team_starter(
-        conn, "Default Team (Starter)",
-        schedule=_schedule_around_now(current, last_opponent=knicks,
-                                      next_opponent=bulls),
-        stats=stats, league="nba",
-        team_name="Boston Celtics", team_abbrev="BOS",
+        conn,
+        "Default Team (Starter)",
+        schedule=_schedule_around_now(current, last_opponent=knicks, next_opponent=bulls),
+        stats=stats,
+        league="nba",
+        team_name="Boston Celtics",
+        team_abbrev="BOS",
     )
 
 
@@ -406,33 +500,48 @@ def _case_soccer_team(conn):
     stats = dict(SOCCER_STATS)
     stats.update({"3": TeamStats(record="9-4-4"), "4": TeamStats(record="13-2-2")})
     return _render_team_starter(
-        conn, "Soccer Team (Starter)",
-        schedule=_schedule_around_now(current, last_opponent=spurs,
-                                      next_opponent=liverpool),
-        stats=stats, league="eng.1",
-        team_name="Chelsea", team_abbrev="CHE",
+        conn,
+        "Soccer Team (Starter)",
+        schedule=_schedule_around_now(current, last_opponent=spurs, next_opponent=liverpool),
+        stats=stats,
+        league="eng.1",
+        team_name="Chelsea",
+        team_abbrev="CHE",
     )
 
 
 def _case_college_team(conn):
     current = _college_event()
-    lsu = _team("LSU Tigers", "LSU", "mens-college-basketball",
-                "basketball", "3", short="Tigers")
-    kentucky = _team("Kentucky Wildcats", "UK", "mens-college-basketball",
-                     "basketball", "4", short="Wildcats")
+    lsu = _team("LSU Tigers", "LSU", "mens-college-basketball", "basketball", "3", short="Tigers")
+    kentucky = _team(
+        "Kentucky Wildcats", "UK", "mens-college-basketball", "basketball", "4", short="Wildcats"
+    )
     stats = dict(COLLEGE_STATS)
-    stats.update({
-        "3": TeamStats(record="15-12", conference="Southeastern Conference",
-                   conference_abbrev="SEC", conference_id="8"),
-        "4": TeamStats(record="21-6", rank=8, conference="Southeastern Conference",
-                   conference_abbrev="SEC", conference_id="8"),
-    })
+    stats.update(
+        {
+            "3": TeamStats(
+                record="15-12",
+                conference="Southeastern Conference",
+                conference_abbrev="SEC",
+                conference_id="8",
+            ),
+            "4": TeamStats(
+                record="21-6",
+                rank=8,
+                conference="Southeastern Conference",
+                conference_abbrev="SEC",
+                conference_id="8",
+            ),
+        }
+    )
     return _render_team_starter(
-        conn, "College Team (Starter)",
-        schedule=_schedule_around_now(current, last_opponent=lsu,
-                                      next_opponent=kentucky),
-        stats=stats, league="mens-college-basketball",
-        team_name="Arkansas Razorbacks", team_abbrev="ARK",
+        conn,
+        "College Team (Starter)",
+        schedule=_schedule_around_now(current, last_opponent=lsu, next_opponent=kentucky),
+        stats=stats,
+        league="mens-college-basketball",
+        team_name="Arkansas Razorbacks",
+        team_abbrev="ARK",
     )
 
 
@@ -462,15 +571,19 @@ def _assert_matches_golden(name, content):
         path.write_text(actual)
         return
     assert path.exists(), (
-        f"missing golden {path.name} — generate with "
-        f"UPDATE_GOLDENS=1 pytest {Path(__file__).name}"
+        f"missing golden {path.name} — generate with UPDATE_GOLDENS=1 pytest {Path(__file__).name}"
     )
     expected = path.read_text()
     if actual != expected:
-        diff = "\n".join(difflib.unified_diff(
-            expected.splitlines(), actual.splitlines(),
-            fromfile=f"goldens/{path.name}", tofile="generated", lineterm="",
-        ))
+        diff = "\n".join(
+            difflib.unified_diff(
+                expected.splitlines(),
+                actual.splitlines(),
+                fromfile=f"goldens/{path.name}",
+                tofile="generated",
+                lineterm="",
+            )
+        )
         pytest.fail(
             f"XMLTV output changed for {name}:\n{diff}\n\n"
             f"If this change is intentional, regenerate with "
@@ -506,17 +619,24 @@ def test_default_team_idle_with_no_previous_game_names_the_next_one(db_conn):
     stats = dict(NBA_STATS)
     stats["3"] = TeamStats(record="6-6")
     nxt = _event(
-        current.home_team, bulls, "nba", "basketball",
-        id_="e2", start=EVENT_START + timedelta(days=2),
+        current.home_team,
+        bulls,
+        "nba",
+        "basketball",
+        id_="e2",
+        start=EVENT_START + timedelta(days=2),
     )
     xml = _render_team_starter(
-        db_conn, "Default Team (Starter)", schedule=[nxt], stats=stats,
-        league="nba", team_name="Boston Celtics", team_abbrev="BOS",
+        db_conn,
+        "Default Team (Starter)",
+        schedule=[nxt],
+        stats=stats,
+        league="nba",
+        team_name="Boston Celtics",
+        team_abbrev="BOS",
     )
-    assert _idle_descs(xml) == {
-        "Next game: vs the Chicago Bulls, Sunday, Jul 12 at 3:00 PM EDT."
-    }
-    assert "<sub-title lang=\"en\">Next: vs the Chicago Bulls, Sun Jul 12, 3:00 PM EDT<" in xml
+    assert _idle_descs(xml) == {"Next game: vs the Chicago Bulls, Sunday, Jul 12 at 3:00 PM EDT."}
+    assert '<sub-title lang="en">Next: vs the Chicago Bulls, Sun Jul 12, 3:00 PM EDT<' in xml
 
 
 def test_soccer_team_idle_with_no_previous_match_names_the_next_one(db_conn):
@@ -525,12 +645,21 @@ def test_soccer_team_idle_with_no_previous_match_names_the_next_one(db_conn):
     stats = dict(SOCCER_STATS)
     stats["4"] = TeamStats(record="13-2-2")
     nxt = _event(
-        current.home_team, liverpool, "eng.1", "soccer",
-        id_="e2", start=EVENT_START + timedelta(days=2),
+        current.home_team,
+        liverpool,
+        "eng.1",
+        "soccer",
+        id_="e2",
+        start=EVENT_START + timedelta(days=2),
     )
     xml = _render_team_starter(
-        db_conn, "Soccer Team (Starter)", schedule=[nxt], stats=stats,
-        league="eng.1", team_name="Chelsea", team_abbrev="CHE",
+        db_conn,
+        "Soccer Team (Starter)",
+        schedule=[nxt],
+        stats=stats,
+        league="eng.1",
+        team_name="Chelsea",
+        team_abbrev="CHE",
     )
     assert _idle_descs(xml) == {"Next match: vs Liverpool, Sunday, Jul 12 at 3:00 PM EDT."}
 
@@ -544,16 +673,32 @@ def test_team_idle_after_a_final_reports_the_result_then_the_next_game(db_conn):
     stats = dict(NBA_STATS)
     stats.update({"3": TeamStats(record="6-6"), "4": TeamStats(record="7-5")})
     last = _event(
-        current.home_team, knicks, "nba", "basketball", id_="e0", state="final",
-        start=EVENT_START - timedelta(days=2), home_score=104, away_score=112,
+        current.home_team,
+        knicks,
+        "nba",
+        "basketball",
+        id_="e0",
+        state="final",
+        start=EVENT_START - timedelta(days=2),
+        home_score=104,
+        away_score=112,
     )
     nxt = _event(
-        current.home_team, bulls, "nba", "basketball",
-        id_="e2", start=EVENT_START + timedelta(days=2),
+        current.home_team,
+        bulls,
+        "nba",
+        "basketball",
+        id_="e2",
+        start=EVENT_START + timedelta(days=2),
     )
     xml = _render_team_starter(
-        db_conn, "Default Team (Starter)", schedule=[last, nxt], stats=stats,
-        league="nba", team_name="Boston Celtics", team_abbrev="BOS",
+        db_conn,
+        "Default Team (Starter)",
+        schedule=[last, nxt],
+        stats=stats,
+        league="nba",
+        team_name="Boston Celtics",
+        team_abbrev="BOS",
     )
     assert (
         "The Boston Celtics lost to the New York Knicks, 112-104 on Jul 8. "

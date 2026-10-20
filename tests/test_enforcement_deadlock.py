@@ -26,9 +26,7 @@ from teamarr.database.connection import get_connection, get_db
 
 
 def _write(conn: sqlite3.Connection, key: str) -> None:
-    conn.execute(
-        "INSERT OR REPLACE INTO settings (id, epg_output_path) VALUES (1, ?)", (key,)
-    )
+    conn.execute("INSERT OR REPLACE INTO settings (id, epg_output_path) VALUES (1, ?)", (key,))
 
 
 def test_a_second_connection_cannot_write_under_an_open_write_txn(db_path):
@@ -135,6 +133,4 @@ def test_run_enforcement_does_not_borrow_a_caller_connection(db_factory):
     import inspect
 
     params = inspect.signature(EventGroupProcessor._run_enforcement).parameters
-    assert "conn" not in params, (
-        "_run_enforcement must not accept a caller's connection — see #607"
-    )
+    assert "conn" not in params, "_run_enforcement must not accept a caller's connection — see #607"

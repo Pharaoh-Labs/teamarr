@@ -539,9 +539,7 @@ class ChannelLifecycleService(
         event_league = getattr(event, "league", None) or ""
 
         # Resolve template from global subscription
-        template_id = get_subscription_template_for_event(
-            conn, event_sport, event_league
-        )
+        template_id = get_subscription_template_for_event(conn, event_sport, event_league)
 
         if template_id:
             template = get_template(conn, template_id)
@@ -567,8 +565,7 @@ class ChannelLifecycleService(
             )
         else:
             logger.warning(
-                "[LIFECYCLE] No template matched for event %s "
-                "(sport=%r, league=%r), fallback=%s",
+                "[LIFECYCLE] No template matched for event %s (sport=%r, league=%r), fallback=%s",
                 event.id,
                 event_sport,
                 event_league,

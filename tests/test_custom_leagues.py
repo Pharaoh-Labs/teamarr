@@ -400,9 +400,7 @@ def test_delete_removes_custom_row(monkeypatch):
     _patch_client(monkeypatch)
     create_custom_league(conn, **_VALID)
     delete_custom_league(conn, "swe.1")
-    assert (
-        conn.execute("SELECT 1 FROM leagues WHERE league_code = 'swe.1'").fetchone() is None
-    )
+    assert conn.execute("SELECT 1 FROM leagues WHERE league_code = 'swe.1'").fetchone() is None
 
 
 def test_delete_rejects_builtin():
@@ -454,18 +452,12 @@ def test_delete_purges_cached_team_and_league_rows(monkeypatch):
     # League row + both caches for swe.1 are gone.
     assert conn.execute("SELECT 1 FROM leagues WHERE league_code = 'swe.1'").fetchone() is None
     assert (
-        conn.execute(
-            "SELECT COUNT(*) AS n FROM team_cache WHERE league = 'swe.1'"
-        ).fetchone()["n"]
+        conn.execute("SELECT COUNT(*) AS n FROM team_cache WHERE league = 'swe.1'").fetchone()["n"]
         == 0
     )
-    assert (
-        conn.execute("SELECT 1 FROM league_cache WHERE league_slug = 'swe.1'").fetchone() is None
-    )
+    assert conn.execute("SELECT 1 FROM league_cache WHERE league_slug = 'swe.1'").fetchone() is None
     # Unrelated league's cache is untouched.
-    assert (
-        conn.execute("SELECT 1 FROM team_cache WHERE league = 'eng.1'").fetchone() is not None
-    )
+    assert conn.execute("SELECT 1 FROM team_cache WHERE league = 'eng.1'").fetchone() is not None
 
 
 def test_create_survives_restart(monkeypatch):
@@ -783,9 +775,9 @@ def test_refresh_league_populates_teams_and_counts(monkeypatch):
     result = CacheRefresher(db_factory=_shared_factory(conn)).refresh_league("swe.1")
     assert result == {"success": True, "league_code": "swe.1", "team_count": 2, "error": None}
 
-    cached = conn.execute(
-        "SELECT COUNT(*) AS n FROM team_cache WHERE league = 'swe.1'"
-    ).fetchone()["n"]
+    cached = conn.execute("SELECT COUNT(*) AS n FROM team_cache WHERE league = 'swe.1'").fetchone()[
+        "n"
+    ]
     assert cached == 2
     row = conn.execute(
         "SELECT cached_team_count, last_cache_refresh FROM leagues WHERE league_code = 'swe.1'"
@@ -814,9 +806,7 @@ def test_refresh_league_does_not_wipe_other_leagues(monkeypatch):
     _patch_provider(monkeypatch, provider)
     CacheRefresher(db_factory=_shared_factory(conn)).refresh_league("swe.1")
 
-    assert (
-        conn.execute("SELECT 1 FROM team_cache WHERE league = 'eng.1'").fetchone() is not None
-    )
+    assert conn.execute("SELECT 1 FROM team_cache WHERE league = 'eng.1'").fetchone() is not None
     assert (
         conn.execute("SELECT COUNT(*) AS n FROM team_cache WHERE league = 'swe.1'").fetchone()["n"]
         == 1
@@ -900,4 +890,3 @@ def test_refresh_custom_league_teams_wrapper_never_raises(monkeypatch):
     out = svc.refresh_custom_league_teams("swe.1")
     assert out["success"] is False
     assert "kaboom" in out["error"].lower()
-

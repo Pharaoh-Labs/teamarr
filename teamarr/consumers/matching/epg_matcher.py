@@ -30,9 +30,7 @@ from teamarr.dispatcharr.types import DispatcharrProgram
 # superscript "Live"/"New" markers, e.g. U+1D38 U+1DA6 U+1D5B U+1D49). These
 # spacing-modifier / phonetic-superscript / super-subscript ranges are never
 # part of a team name, so we drop them before team extraction.
-_EPG_DECORATION = re.compile(
-    "[ʰ-˿ᴬ-ᵪᶠ-ᶿ⁰-₟]+"
-)
+_EPG_DECORATION = re.compile("[ʰ-˿ᴬ-ᵪᶠ-ᶿ⁰-₟]+")
 
 # Inline matchup separators used by feeds that put the whole matchup in the
 # title with no sub_title ("MLB Baseball : Mets at Mariners", "… - …", "… — …").

@@ -292,9 +292,7 @@ class FillerGenerator:
             first_game = day_events[0]
             pregame_start = skip_pregame_until
             # End filler when game programme starts (event - buffer)
-            pregame_end_utc = event_programme_start(
-                first_game, options.pregame_buffer_minutes
-            )
+            pregame_end_utc = event_programme_start(first_game, options.pregame_buffer_minutes)
             pregame_end = pregame_end_utc.astimezone(tz)
 
             if pregame_start < pregame_end:
@@ -511,9 +509,7 @@ class FillerGenerator:
             # Resolve art URL if present
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             icon = (
-                self._resolver.resolve_art(template.art_url, context)
-                if template.art_url
-                else None
+                self._resolver.resolve_art(template.art_url, context) if template.art_url else None
             )
 
             # Filler categories come from the template's xmltv_filler_categories

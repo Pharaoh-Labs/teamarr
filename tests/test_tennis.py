@@ -604,8 +604,11 @@ def _epg_ids(m):
 def test_epg_tennis_tournament_plus_pair_matches_one():
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "Tennis: Wimbledon", "Sabalenka vs Osaka",
-        datetime(2026, 7, 5, 12, 30, tzinfo=tz), datetime(2026, 7, 5, 16, tzinfo=tz),
+        1,
+        "Tennis: Wimbledon",
+        "Sabalenka vs Osaka",
+        datetime(2026, 7, 5, 12, 30, tzinfo=tz),
+        datetime(2026, 7, 5, 16, tzinfo=tz),
     )
     m = _epg_matcher([prog])
     ids = _epg_ids(m)
@@ -620,13 +623,19 @@ def test_epg_tennis_tournament_only_is_matchup_unknown():
 
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "Tennis: Wimbledon", "Day 7",
-        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 20, tzinfo=tz),
+        1,
+        "Tennis: Wimbledon",
+        "Day 7",
+        datetime(2026, 7, 5, 12, tzinfo=tz),
+        datetime(2026, 7, 5, 20, tzinfo=tz),
     )
     m = _epg_matcher([prog])
     assert _epg_ids(m) == {}
-    name = [MatchedStreamResult(stream_name="ESPN", stream_id=1, matched=False,
-                                exclusion_reason="teams_not_parsed")]
+    name = [
+        MatchedStreamResult(
+            stream_name="ESPN", stream_id=1, matched=False, exclusion_reason="teams_not_parsed"
+        )
+    ]
     merged = m._reconcile_epg(name, [], "espn")
     # #683: a real FailedReason now (the old exclusion_reason overwrite
     # persisted as the bare "unmatched" catch-all); exclusion stays intact.
@@ -640,8 +649,11 @@ def test_epg_tennis_tournament_only_is_matchup_unknown():
 def test_epg_tennis_pair_without_tournament_is_matchup_unknown():
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "WTA Tennis", "Sabalenka vs Osaka",
-        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 16, tzinfo=tz),
+        1,
+        "WTA Tennis",
+        "Sabalenka vs Osaka",
+        datetime(2026, 7, 5, 12, tzinfo=tz),
+        datetime(2026, 7, 5, 16, tzinfo=tz),
     )
     m = _epg_matcher([prog])
     assert _epg_ids(m) == {}
@@ -651,8 +663,11 @@ def test_epg_tennis_pair_without_tournament_is_matchup_unknown():
 def test_epg_tennis_court_in_description_fans_out_within_window():
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "Tennis: Wimbledon", "Day 7",
-        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 14, tzinfo=tz),
+        1,
+        "Tennis: Wimbledon",
+        "Day 7",
+        datetime(2026, 7, 5, 12, tzinfo=tz),
+        datetime(2026, 7, 5, 14, tzinfo=tz),
         description="Live coverage from Centre Court on day seven of the Championships.",
     )
     m = _epg_matcher([prog])
@@ -663,8 +678,11 @@ def test_epg_tennis_court_in_description_fans_out_within_window():
 def test_epg_tennis_pair_in_description_matches():
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "Tennis: Wimbledon", None,
-        datetime(2026, 7, 5, 14, tzinfo=tz), datetime(2026, 7, 5, 18, tzinfo=tz),
+        1,
+        "Tennis: Wimbledon",
+        None,
+        datetime(2026, 7, 5, 14, tzinfo=tz),
+        datetime(2026, 7, 5, 18, tzinfo=tz),
         description="Iga Swiatek takes on Coco Gauff in the fourth round.",
     )
     m = _epg_matcher([prog])
@@ -675,8 +693,11 @@ def test_epg_tennis_never_fans_out_tournament_wide():
     """The 2026-07-05 regression shape: tournament + day, nothing else."""
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "Wimbledon", "Wimbledon Day 7 highlights and live matches",
-        datetime(2026, 7, 5, 12, tzinfo=tz), datetime(2026, 7, 5, 22, tzinfo=tz),
+        1,
+        "Wimbledon",
+        "Wimbledon Day 7 highlights and live matches",
+        datetime(2026, 7, 5, 12, tzinfo=tz),
+        datetime(2026, 7, 5, 22, tzinfo=tz),
     )
     m = _epg_matcher([prog])
     assert _epg_ids(m) == {}
@@ -1163,8 +1184,13 @@ def test_majors_only_gates_cache_hits():
     def _match(majors_only, cache):
         tm = TennisMatcher(service=_PoolService([]), cache=cache, majors_only=majors_only)
         return tm.match(
-            c, "wta", date(2026, 8, 3),
-            group_id=1, stream_id=1, generation=1, user_tz=tz,
+            c,
+            "wta",
+            date(2026, 8, 3),
+            group_id=1,
+            stream_id=1,
+            generation=1,
+            user_tz=tz,
         )
 
     # majors_only off: the cached non-major match is a valid hit
@@ -1206,7 +1232,12 @@ def test_pair_stream_naming_tournament_vetoes_other_tournament():
     tm = TennisMatcher(service=_PoolService([uso, wso]), cache=_NoCache())
     out = tm.match(
         _pair_stream("Winston-Salem Open: Zheng vs Norrie @ Aug 25 3:00 PM"),
-        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+        "atp",
+        date(2026, 8, 25),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
     )
     assert out.is_matched and out.event.id == "wso-zn"
 
@@ -1219,7 +1250,12 @@ def test_pair_stream_names_tournament_with_no_match_there_is_vetoed():
     tm = TennisMatcher(service=_PoolService([uso, wso]), cache=_NoCache())
     out = tm.match(
         _pair_stream("Winston-Salem Open: Zheng vs Norrie"),
-        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+        "atp",
+        date(2026, 8, 25),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
     )
     assert not out.is_matched
     assert out.failed_reason == FailedReason.TENNIS_TOURNAMENT_MISMATCH
@@ -1232,7 +1268,12 @@ def test_pair_stream_without_tournament_defers():
     tm = TennisMatcher(service=_PoolService([uso, wso]), cache=_NoCache())
     out = tm.match(
         _pair_stream("ATP: Zheng vs Norrie @ Aug 25 12:00 PM"),
-        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+        "atp",
+        date(2026, 8, 25),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
     )
     assert out.is_matched and out.event.id == "uso-zn"
 
@@ -1244,7 +1285,12 @@ def test_generic_tokens_never_veto_pair_streams():
     tm = TennisMatcher(service=_PoolService([uso]), cache=_NoCache())
     out = tm.match(
         _pair_stream("ATP Open Tennis: Zheng vs Norrie"),
-        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+        "atp",
+        date(2026, 8, 25),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
     )
     assert out.is_matched
 
@@ -1289,12 +1335,22 @@ def test_singles_stream_picks_singles_over_same_day_doubles():
     tm = TennisMatcher(service=_PoolService([doubles, singles]), cache=_NoCache())
     out = tm.match(
         _pair_stream("Wimbledon: Sinner vs Alcaraz"),
-        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+        "atp",
+        date(2026, 8, 25),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
     )
     assert out.is_matched and out.event.id == "s"
     out = tm.match(
         _pair_stream("Wimbledon: Sinner/Sonego vs Alcaraz/Carreno Busta"),
-        "atp", date(2026, 8, 25), group_id=1, stream_id=1, generation=1, user_tz=tz,
+        "atp",
+        date(2026, 8, 25),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
     )
     assert out.is_matched and out.event.id == "d"
 
@@ -1412,8 +1468,13 @@ def test_us_prefixed_stream_is_not_vetoed_from_other_tournament():
         event_league_sport="tennis",
     )
     ctx = TennisMatchContext(
-        stream_name=c.normalized.original, stream_id=1, group_id=1,
-        target_date=date(2026, 8, 28), generation=1, user_tz=tz, classified=c,
+        stream_name=c.normalized.original,
+        stream_id=1,
+        group_id=1,
+        target_date=date(2026, 8, 28),
+        generation=1,
+        user_tz=tz,
+        classified=c,
     )
     outcome = _TM._match_to_event(ctx, [other, ws], "atp")
     assert outcome.is_matched and outcome.event.id == "ws-sf"
@@ -1424,12 +1485,20 @@ def test_us_prefixed_stream_is_not_vetoed_from_other_tournament():
 # classify tennis on the primary pass.
 _MIXED_LEAGUES = ("nfl", "mlb", "nba", "nhl", "atp", "wta")
 _MIXED_EVENT_TYPES = {
-    "nfl": "team_vs_team", "mlb": "team_vs_team", "nba": "team_vs_team",
-    "nhl": "team_vs_team", "atp": "event", "wta": "event",
+    "nfl": "team_vs_team",
+    "mlb": "team_vs_team",
+    "nba": "team_vs_team",
+    "nhl": "team_vs_team",
+    "atp": "event",
+    "wta": "event",
 }
 _MIXED_SPORTS = {
-    "nfl": "football", "mlb": "baseball", "nba": "basketball",
-    "nhl": "hockey", "atp": "tennis", "wta": "tennis",
+    "nfl": "football",
+    "mlb": "baseball",
+    "nba": "basketball",
+    "nhl": "hockey",
+    "atp": "tennis",
+    "wta": "tennis",
 }
 
 
@@ -1447,7 +1516,8 @@ def _mixed_group_with_us_open(monkeypatch, events, **kw):
     )
     m._tennis_matcher._service = _PoolService(events)
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
     )
     return m
@@ -1486,7 +1556,8 @@ def test_espn_plus_court_feed_matches_in_mixed_group(monkeypatch):
 def test_tsn_plus_court_feed_stays_inside_the_named_tournament(monkeypatch):
     m = _mixed_group_with_us_open(monkeypatch, _day3_slate())
     out = m._match_single(
-        1, "TSN+ 03: US Open: Day #3 - Court 7 (ft. Rinderknech, Zverev) @ 1 Sep 11:00 AM ET",
+        1,
+        "TSN+ 03: US Open: Day #3 - Court 7 (ft. Rinderknech, Zverev) @ 1 Sep 11:00 AM ET",
         date(2026, 9, 1),
     )
     # Winston-Salem's Court 7 the same day is vetoed by the tournament guard
@@ -1498,9 +1569,7 @@ def test_court_feed_fallback_requires_court_evidence(monkeypatch):
     not evidence; nothing reaches the tennis feed matcher."""
     m = _mixed_group_with_us_open(monkeypatch, _day3_slate())
     called = []
-    monkeypatch.setattr(
-        m._tennis_matcher, "match_feed", lambda *a, **kw: called.append(1) or []
-    )
+    monkeypatch.setattr(m._tennis_matcher, "match_feed", lambda *a, **kw: called.append(1) or [])
     for name in (
         "Court Cam | Episode 10",
         "Divorce Court | Controlling Love: Nalayah Casey vs. Robert Williams",
@@ -1553,8 +1622,11 @@ def test_epg_programme_naming_pooled_tournament_reaches_tennis_path(monkeypatch)
     to take the team path and die no_event_found."""
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "US Open 2026", "Men's First Round: Ben Shelton/Tallon Griekspoor",
-        datetime(2026, 9, 1, 15, tzinfo=tz), datetime(2026, 9, 1, 18, tzinfo=tz),
+        1,
+        "US Open 2026",
+        "Men's First Round: Ben Shelton/Tallon Griekspoor",
+        datetime(2026, 9, 1, 15, tzinfo=tz),
+        datetime(2026, 9, 1, 18, tzinfo=tz),
     )
     m = _us_open_epg_matcher([prog])
     results = m._match_via_epg(
@@ -1572,13 +1644,17 @@ def test_epg_programme_naming_tournament_without_pair_or_court_falls_through(mon
 
     tz = ZoneInfo("UTC")
     prog = _epg_program(
-        1, "SportsCenter", "at the US Open",
-        datetime(2026, 9, 1, 15, tzinfo=tz), datetime(2026, 9, 1, 16, tzinfo=tz),
+        1,
+        "SportsCenter",
+        "at the US Open",
+        datetime(2026, 9, 1, 15, tzinfo=tz),
+        datetime(2026, 9, 1, 16, tzinfo=tz),
     )
     m = _us_open_epg_matcher([prog])
     routed = []
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: routed.append(c) or [MatchOutcome.failed(None)],
     )
     results = m._match_via_epg(

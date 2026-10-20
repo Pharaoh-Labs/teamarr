@@ -22,11 +22,20 @@ def _competition(time_valid):
         "id": "401858490",
         "date": "2026-10-17T04:00Z",
         "competitors": [
-            {"id": "130", "homeAway": "home",
-             "team": {"id": "130", "displayName": "Michigan Wolverines", "abbreviation": "MICH"}},
-            {"id": "213", "homeAway": "away",
-             "team": {"id": "213", "displayName": "Penn State Nittany Lions",
-                      "abbreviation": "PSU"}},
+            {
+                "id": "130",
+                "homeAway": "home",
+                "team": {"id": "130", "displayName": "Michigan Wolverines", "abbreviation": "MICH"},
+            },
+            {
+                "id": "213",
+                "homeAway": "away",
+                "team": {
+                    "id": "213",
+                    "displayName": "Penn State Nittany Lions",
+                    "abbreviation": "PSU",
+                },
+            },
         ],
         "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED", "shortDetail": "TBD"}},
     }
@@ -58,14 +67,16 @@ def test_scoreboard_time_valid_sets_time_tbd(time_valid, tbd):
 def test_summary_reads_the_header_level_flag():
     """The summary endpoint carries the flag on the header, not the competition."""
     provider = ESPNProvider(client=MagicMock())
-    provider._client.get_event = MagicMock(return_value={
-        "header": {
-            "gameNote": "",
-            "timeValid": False,
-            "competitions": [_competition(None)],
-            "season": {"year": 2026, "type": 2},
-        },
-    })
+    provider._client.get_event = MagicMock(
+        return_value={
+            "header": {
+                "gameNote": "",
+                "timeValid": False,
+                "competitions": [_competition(None)],
+                "season": {"year": 2026, "type": 2},
+            },
+        }
+    )
     event = provider.get_event("401858490", "college-football")
     assert event is not None
     assert event.time_tbd is True
@@ -73,15 +84,28 @@ def test_summary_reads_the_header_level_flag():
 
 def _event(time_tbd):
     def team(id_, name):
-        return Team(id=id_, provider="espn", name=name, short_name=name, abbreviation=name[:3],
-                    league="college-football", sport="football")
+        return Team(
+            id=id_,
+            provider="espn",
+            name=name,
+            short_name=name,
+            abbreviation=name[:3],
+            league="college-football",
+            sport="football",
+        )
 
     return Event(
-        id="401858490", provider="espn", name="x", short_name="x",
-        start_time=datetime(2026, 10, 17, 4, 0, tzinfo=UTC), league="college-football",
-        sport="football", status=EventStatus(state="pre"),
+        id="401858490",
+        provider="espn",
+        name="x",
+        short_name="x",
+        start_time=datetime(2026, 10, 17, 4, 0, tzinfo=UTC),
+        league="college-football",
+        sport="football",
+        status=EventStatus(state="pre"),
         home_team=team("130", "Michigan Wolverines"),
-        away_team=team("213", "Penn State Nittany Lions"), time_tbd=time_tbd,
+        away_team=team("213", "Penn State Nittany Lions"),
+        time_tbd=time_tbd,
     )
 
 
@@ -98,8 +122,12 @@ def test_game_time_says_tbd_instead_of_the_placeholder():
     def game_time(event):
         ctx = TemplateContext(
             game_context=GameContext(event=event),
-            team_config=TeamChannelContext(team_id="130", league="college-football",
-                                           sport="football", team_name="Michigan Wolverines"),
+            team_config=TeamChannelContext(
+                team_id="130",
+                league="college-football",
+                sport="football",
+                team_name="Michigan Wolverines",
+            ),
             team_stats=None,
         )
         return extract_game_time(ctx, ctx.game_context)

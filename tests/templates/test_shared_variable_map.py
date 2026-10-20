@@ -30,19 +30,24 @@ def real_league_service(db_factory):
 def context() -> TemplateContext:
     common = dict(provider="espn", league="nba", sport="basketball")
     event = Event(
-        id="1", provider="espn", name="Miami Heat at Boston Celtics",
+        id="1",
+        provider="espn",
+        name="Miami Heat at Boston Celtics",
         short_name="MIA @ BOS",
         start_time=datetime(2026, 6, 17, 23, 0, tzinfo=UTC),
-        league="nba", sport="basketball", status=EventStatus(state="pre"),
-        home_team=Team(id="1", name="Boston Celtics", short_name="Celtics",
-                       abbreviation="BOS", **common),
-        away_team=Team(id="2", name="Miami Heat", short_name="Heat",
-                       abbreviation="MIA", **common),
+        league="nba",
+        sport="basketball",
+        status=EventStatus(state="pre"),
+        home_team=Team(
+            id="1", name="Boston Celtics", short_name="Celtics", abbreviation="BOS", **common
+        ),
+        away_team=Team(id="2", name="Miami Heat", short_name="Heat", abbreviation="MIA", **common),
     )
     return TemplateContext(
         game_context=GameContext(event=event),
-        team_config=TeamChannelContext(team_id="1", league="nba", sport="basketball",
-                                       team_name="Boston Celtics"),
+        team_config=TeamChannelContext(
+            team_id="1", league="nba", sport="basketball", team_name="Boston Celtics"
+        ),
         team_stats=None,
     )
 
@@ -82,9 +87,7 @@ def test_extra_vars_reach_a_shared_map(context):
     context.extra_vars = {"exception_keyword": "Spanish"}
     resolver = TemplateResolver()
     variables = resolver.build_variables(context)
-    assert (
-        resolver.resolve("{exception_keyword}", context, variables=variables) == "Spanish"
-    )
+    assert resolver.resolve("{exception_keyword}", context, variables=variables) == "Spanish"
 
 
 def test_build_variables_covers_the_whole_registry(context):

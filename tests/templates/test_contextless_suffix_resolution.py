@@ -41,9 +41,7 @@ def test_illegal_suffix_on_base_only_variable_stays_literal():
 
 
 def test_present_context_still_wins():
-    out = _resolver().resolve_with_map(
-        "Next: {opponent.next}", {"opponent.next": "Lakers"}
-    )
+    out = _resolver().resolve_with_map("Next: {opponent.next}", {"opponent.next": "Lakers"})
     assert out == "Next: Lakers"
 
 

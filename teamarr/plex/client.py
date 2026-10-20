@@ -217,9 +217,7 @@ def compute_channelmap_update(
     """
     stale = (previously_pushed or set()) - teamarr_channel_keys
 
-    keep = [
-        m for m in current if m.enabled and m.device_identifier not in stale
-    ]
+    keep = [m for m in current if m.enabled and m.device_identifier not in stale]
 
     mapping: dict[str, str] = {
         m.device_identifier: m.lineup_identifier or m.device_identifier for m in keep

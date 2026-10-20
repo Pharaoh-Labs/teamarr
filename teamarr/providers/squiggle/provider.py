@@ -10,6 +10,7 @@ API contract (from https://api.squiggle.com.au/):
 - game["date"]            → local Australian time (YYYY-MM-DD HH:MM:SS)
 - game["unixtime"]        → UTC unix timestamp (authoritative for scheduling)
 """
+
 import logging
 from datetime import UTC, date, datetime, timedelta
 
@@ -76,7 +77,9 @@ class SquiggleProvider(SportsProvider):
 
         logger.info(
             "[SQUIGGLE] get_team_schedule team=%s league=%s days_ahead=%d",
-            team_id, league, days_ahead,
+            team_id,
+            league,
+            days_ahead,
         )
 
         today = date.today()
@@ -129,9 +132,7 @@ class SquiggleProvider(SportsProvider):
             return None
 
         standings = self._client.get_standings(date.today().year)
-        entry = next(
-            (s for s in standings if str(s.get("id")) == team_id), None
-        )
+        entry = next((s for s in standings if str(s.get("id")) == team_id), None)
         if not entry:
             return None
 
@@ -159,8 +160,7 @@ class SquiggleProvider(SportsProvider):
         if not self._league_mapping_source:
             return []
         return [
-            m.league_code
-            for m in self._league_mapping_source.get_leagues_for_provider(self.name)
+            m.league_code for m in self._league_mapping_source.get_leagues_for_provider(self.name)
         ]
 
     # -------------------------------------------------------------------------
@@ -222,7 +222,7 @@ class SquiggleProvider(SportsProvider):
             id=team_id,
             provider=self.name,
             name=name,
-            short_name=name,   # Squiggle doesn't provide a separate short name
+            short_name=name,  # Squiggle doesn't provide a separate short name
             abbreviation=abbrev,
             league=league,
             sport=_SPORT,
@@ -247,16 +247,22 @@ class SquiggleProvider(SportsProvider):
         aid = str(game.get("ateamid", ""))
 
         home_team = teams_by_id.get(hid) or Team(
-            id=hid, provider=self.name,
+            id=hid,
+            provider=self.name,
             name=game.get("hteam") or "Unknown",
             short_name=game.get("hteam") or "Unknown",
-            abbreviation=hid, league=league, sport=_SPORT,
+            abbreviation=hid,
+            league=league,
+            sport=_SPORT,
         )
         away_team = teams_by_id.get(aid) or Team(
-            id=aid, provider=self.name,
+            id=aid,
+            provider=self.name,
             name=game.get("ateam") or "Unknown",
             short_name=game.get("ateam") or "Unknown",
-            abbreviation=aid, league=league, sport=_SPORT,
+            abbreviation=aid,
+            league=league,
+            sport=_SPORT,
         )
 
         venue_name = game.get("venue")

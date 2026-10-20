@@ -31,7 +31,9 @@ SPANISH = ExceptionKeyword(
 KEYWORDS = [MANNINGCAST, SPANISH]
 
 EVENT = "Denver Broncos at Kansas City Chiefs"
-PROGRAM = "NFL Football | Monday Night Football with Peyton and Eli: Denver Broncos at Kansas City Chiefs"
+PROGRAM = (
+    "NFL Football | Monday Night Football with Peyton and Eli: Denver Broncos at Kansas City Chiefs"
+)
 
 
 class TestCheck:
@@ -53,7 +55,10 @@ class TestCheck:
     def test_event_name_guard_applies_to_programme(self):
         # #803: a term the event is named with never fires, wherever it appears.
         assert check_exception_keyword(
-            "Sky Sports F1", KEYWORDS, "Tag Heuer Spanish Grand Prix", "F1 | Spanish Grand Prix: Race"
+            "Sky Sports F1",
+            KEYWORDS,
+            "Tag Heuer Spanish Grand Prix",
+            "F1 | Spanish Grand Prix: Race",
         ) == (None, None)
 
     def test_superscript_live_marker_is_stripped_before_matching(self):

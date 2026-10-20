@@ -56,9 +56,7 @@ class BellMediaProvider(SportsProvider):
             if (event := self._parse_event(row, league, teams)) is not None
         ]
 
-    def get_team_schedule(
-        self, team_id: str, league: str, days_ahead: int = 14
-    ) -> list[Event]:
+    def get_team_schedule(self, team_id: str, league: str, days_ahead: int = 14) -> list[Event]:
         if not self.supports_league(league):
             return []
         today = date.today()

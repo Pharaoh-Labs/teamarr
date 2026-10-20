@@ -44,17 +44,28 @@ def _reset_matchup_cache():
 
 def _team(name, short, abbrev, sport, league):
     return Team(
-        id=name, provider="espn", name=name, short_name=short,
-        abbreviation=abbrev, league=league, sport=sport,
+        id=name,
+        provider="espn",
+        name=name,
+        short_name=short,
+        abbreviation=abbrev,
+        league=league,
+        sport=sport,
     )
 
 
 def _ctx(home, away, sport, league):
     event = Event(
-        id="1", provider="espn", name=f"{away.name} at {home.name}", short_name="x",
+        id="1",
+        provider="espn",
+        name=f"{away.name} at {home.name}",
+        short_name="x",
         start_time=datetime(2026, 9, 2, 19, 0, tzinfo=UTC),
-        home_team=home, away_team=away, status=EventStatus(state="pre"),
-        league=league, sport=sport,
+        home_team=home,
+        away_team=away,
+        status=EventStatus(state="pre"),
+        league=league,
+        sport=sport,
     )
     gc = GameContext(event=event, is_home=True, team=home, opponent=away)
     tc = TeamChannelContext(team_id=home.id, league=league, sport=sport, team_name=home.name)
@@ -65,7 +76,8 @@ def _nfl():
     return _ctx(
         _team("Detroit Lions", "Lions", "det", "football", "nfl"),
         _team("Chicago Bears", "Bears", "chi", "football", "nfl"),
-        "football", "nfl",
+        "football",
+        "nfl",
     )
 
 
@@ -73,7 +85,8 @@ def _epl():
     return _ctx(
         _team("Ipswich Town", "Ipswich", "ips", "soccer", "eng.1"),
         _team("Liverpool", "Liverpool", "liv", "soccer", "eng.1"),
-        "soccer", "eng.1",
+        "soccer",
+        "eng.1",
     )
 
 

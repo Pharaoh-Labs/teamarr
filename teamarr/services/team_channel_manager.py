@@ -142,8 +142,14 @@ class TeamChannelManager:
         the caller reports as ``relayout`` (the event pass computes it once).
         """
         result: dict[str, Any] = {
-            "created": 0, "synced": 0, "deleted": 0, "conflicts": 0, "errors": 0,
-            "idle": 0, "hibernated": 0, "unavailable": False,
+            "created": 0,
+            "synced": 0,
+            "deleted": 0,
+            "conflicts": 0,
+            "errors": 0,
+            "idle": 0,
+            "hibernated": 0,
+            "unavailable": False,
         }
         if not self._channels:
             return result
@@ -515,7 +521,8 @@ class TeamChannelManager:
             return result
         with self._db_factory() as conn:
             teams = [
-                team for team in list_enabled_managed_teams(conn)
+                team
+                for team in list_enabled_managed_teams(conn)
                 if team.get("dispatcharr_channel_id")
             ]
         if not teams:
@@ -843,17 +850,13 @@ class TeamChannelManager:
                 },
             )
             if changed.success:
-                saves.append(
-                    {**saved, "dispatcharr_recording_id": row["dispatcharr_recording_id"]}
-                )
+                saves.append({**saved, "dispatcharr_recording_id": row["dispatcharr_recording_id"]})
                 result["updated"] += 1
             elif changed.message == "not_found":
                 # Deleted in Dispatcharr by hand. Keep the row, with the new
                 # times, so the game is not scheduled again: the user removed
                 # this recording on purpose.
-                saves.append(
-                    {**saved, "dispatcharr_recording_id": row["dispatcharr_recording_id"]}
-                )
+                saves.append({**saved, "dispatcharr_recording_id": row["dispatcharr_recording_id"]})
             else:
                 result["errors"] += 1
 
@@ -994,8 +997,7 @@ class TeamChannelManager:
         groups = set(completed_group_ids)
         try:
             enabled = {
-                row[0]
-                for row in conn.execute("SELECT id FROM event_epg_groups WHERE enabled = 1")
+                row[0] for row in conn.execute("SELECT id FROM event_epg_groups WHERE enabled = 1")
             }
             present = {
                 row[0]
@@ -1077,13 +1079,16 @@ class TeamChannelManager:
                 channel_id = team["dispatcharr_channel_id"]
                 for row in rows:
                     stream = ManagedChannelStream(
-                        id=row["id"], managed_channel_id=0,
+                        id=row["id"],
+                        managed_channel_id=0,
                         dispatcharr_stream_id=row["dispatcharr_stream_id"],
                         stream_name=row["stream_name"],
                         m3u_account_name=row["m3u_account_name"],
                         source_group_id=row["source_group_id"],
-                        match_type=row["match_type"], match_method=row["match_method"],
-                        feed_team_id=row["feed_team_id"], feed_side=row["feed_side"],
+                        match_type=row["match_type"],
+                        match_method=row["match_method"],
+                        feed_team_id=row["feed_team_id"],
+                        feed_side=row["feed_side"],
                         dispatcharr_channel_group=row["dispatcharr_channel_group"],
                         dispatcharr_source_channel_id=(
                             row["dispatcharr_source_channel_id"]
@@ -1323,7 +1328,7 @@ class TeamChannelManager:
         )
         if not url:
             return None
-        uploaded = self._logos.upload(name=f'{team["team_name"]} Logo', url=url)
+        uploaded = self._logos.upload(name=f"{team['team_name']} Logo", url=url)
         return uploaded.logo.get("id") if uploaded.success and uploaded.logo else None
 
     @classmethod

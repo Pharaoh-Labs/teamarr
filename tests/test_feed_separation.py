@@ -265,9 +265,7 @@ class TestDetectTeamInStreamName:
         from teamarr.consumers.event_group_processor import EventGroupProcessor
 
         for variant in ("yankees @ orioles yankees tv", "yankees @ orioles (yankeestv)"):
-            result = EventGroupProcessor._detect_team_in_stream_name(
-                variant, home_team, away_team
-            )
+            result = EventGroupProcessor._detect_team_in_stream_name(variant, home_team, away_team)
             assert result == away_team, variant
 
     def test_team_branded_domain_suffix(self, home_team, away_team):
@@ -278,9 +276,7 @@ class TestDetectTeamInStreamName:
             "yankees @ orioles (yankees.us)",
             "yankees @ orioles yankees.live",
         ):
-            result = EventGroupProcessor._detect_team_in_stream_name(
-                variant, home_team, away_team
-            )
+            result = EventGroupProcessor._detect_team_in_stream_name(variant, home_team, away_team)
             assert result == away_team, variant
 
     def test_dot_separated_stream_name_not_a_feed(self, home_team, away_team):
@@ -313,12 +309,22 @@ class TestDetectFeedFromBroadcastMarkets:
 
         return MockEvent(
             home_team=MockTeam(
-                id="1", provider="espn", name="Chicago Cubs", short_name="Cubs",
-                abbreviation="CHC", league="mlb", sport="baseball",
+                id="1",
+                provider="espn",
+                name="Chicago Cubs",
+                short_name="Cubs",
+                abbreviation="CHC",
+                league="mlb",
+                sport="baseball",
             ),
             away_team=MockTeam(
-                id="2", provider="espn", name="Milwaukee Brewers", short_name="Brewers",
-                abbreviation="MIL", league="mlb", sport="baseball",
+                id="2",
+                provider="espn",
+                name="Milwaukee Brewers",
+                short_name="Brewers",
+                abbreviation="MIL",
+                league="mlb",
+                sport="baseball",
             ),
             broadcast_markets={
                 "MLB.TV": "national",
@@ -330,9 +336,7 @@ class TestDetectFeedFromBroadcastMarkets:
     def _detect(self, stream_name, event):
         from teamarr.consumers.event_group_processor import EventGroupProcessor
 
-        return EventGroupProcessor._detect_feed_from_broadcast_markets(
-            stream_name.lower(), event
-        )
+        return EventGroupProcessor._detect_feed_from_broadcast_markets(stream_name.lower(), event)
 
     def test_away_market_name_matches(self, event):
         """The #343 report: 'Brewers.TV' resolves to the away feed."""
@@ -1083,8 +1087,7 @@ class TestResolveFeedTeamsMatchedSide:
     def test_feed_hint_takes_precedence_over_matched_side(self, event):
         stream = {"name": "Miami Marlins HOME"}
         assert (
-            self._resolve(stream, event, matched_side="away", feed_hint="home")
-            is event.home_team
+            self._resolve(stream, event, matched_side="away", feed_hint="home") is event.home_team
         )
 
     def test_matched_side_takes_precedence_over_broadcast_markets(self, event):
@@ -1098,20 +1101,14 @@ class TestResolveFeedTeamsMatchedSide:
         # stays off; per-stream persistence still happens in the creator's
         # matched_side fallback, not here.
         stream = {"name": "MLB | Miami Marlins"}
-        assert (
-            self._resolve(stream, event, matched_side="home", detect_team_names=False)
-            is None
-        )
+        assert self._resolve(stream, event, matched_side="home", detect_team_names=False) is None
         assert self._last_entry["stream_feed_team"] is None
 
     def test_separation_off_still_identifies_stream_feed_team(self, event):
         # Identification decoupled from separation (#527): channel-level
         # feed_team stays None, per-stream identity is still resolved.
         stream = {"name": "MLB | Miami Marlins"}
-        assert (
-            self._resolve(stream, event, matched_side="home", separation_enabled=False)
-            is None
-        )
+        assert self._resolve(stream, event, matched_side="home", separation_enabled=False) is None
         assert self._last_entry["stream_feed_team"] is event.home_team
 
     def test_matchup_stream_without_matched_side_never_splits(self, event):
@@ -1249,9 +1246,7 @@ class TestCleanupPassEligibility:
         from teamarr.services.stream_filter import FilterResult
         from tests.fakes import make_event
 
-        cur = db_conn.execute(
-            "INSERT INTO templates (name, template_type) VALUES ('T', 'event')"
-        )
+        cur = db_conn.execute("INSERT INTO templates (name, template_type) VALUES ('T', 'event')")
         db_conn.execute(
             "INSERT INTO subscription_templates (template_id) VALUES (?)", (cur.lastrowid,)
         )
@@ -1318,27 +1313,17 @@ class TestCleanupPassEligibility:
         assert reached == ["_process_channels"]
         return calls
 
-    def test_nothing_eligible_when_separation_is_off(
-        self, db_conn, db_factory, monkeypatch
-    ):
-        calls = self._run_pipeline(
-            db_conn, db_factory, monkeypatch, separation_enabled=False
-        )
+    def test_nothing_eligible_when_separation_is_off(self, db_conn, db_factory, monkeypatch):
+        calls = self._run_pipeline(db_conn, db_factory, monkeypatch, separation_enabled=False)
         assert calls == [({"123"}, set())]
 
-    def test_everything_eligible_when_separation_is_on(
-        self, db_conn, db_factory, monkeypatch
-    ):
+    def test_everything_eligible_when_separation_is_on(self, db_conn, db_factory, monkeypatch):
         # The sweep still runs — it is simply a no-op, because every event that
         # passed the filter is also still eligible to be split.
-        calls = self._run_pipeline(
-            db_conn, db_factory, monkeypatch, separation_enabled=True
-        )
+        calls = self._run_pipeline(db_conn, db_factory, monkeypatch, separation_enabled=True)
         assert calls == [({"123"}, {"123"})]
 
-    def test_event_in_a_selected_sport_stays_eligible(
-        self, db_conn, db_factory, monkeypatch
-    ):
+    def test_event_in_a_selected_sport_stays_eligible(self, db_conn, db_factory, monkeypatch):
         calls = self._run_pipeline(
             db_conn,
             db_factory,
@@ -1382,18 +1367,22 @@ class TestPerSportScope:
 
         team_kwargs = {"provider": "espn", "league": "mlb", "sport": sport or "baseball"}
         home = MockTeam(
-            id="28", name="Miami Marlins", short_name="Marlins",
-            abbreviation="MIA", **team_kwargs,
+            id="28",
+            name="Miami Marlins",
+            short_name="Marlins",
+            abbreviation="MIA",
+            **team_kwargs,
         )
         away = MockTeam(
-            id="23", name="Pittsburgh Pirates", short_name="Pirates",
-            abbreviation="PIT", **team_kwargs,
+            id="23",
+            name="Pittsburgh Pirates",
+            short_name="Pirates",
+            abbreviation="PIT",
+            **team_kwargs,
         )
         if sport is None:
             return MockEvent(home_team=home, away_team=away, broadcast_markets={})
-        return SportedEvent(
-            home_team=home, away_team=away, broadcast_markets={}, sport=sport
-        )
+        return SportedEvent(home_team=home, away_team=away, broadcast_markets={}, sport=sport)
 
     # --- _separation_applies ---------------------------------------------
 
@@ -1441,9 +1430,7 @@ class TestPerSportScope:
             "feed_hint": None,
             "matched_side": "home",
         }
-        StreamMatching._resolve_feed_teams(
-            StreamMatching(), [entry], True, True, separation_sports
-        )
+        StreamMatching._resolve_feed_teams(StreamMatching(), [entry], True, True, separation_sports)
         return entry
 
     def test_listed_sport_splits(self):

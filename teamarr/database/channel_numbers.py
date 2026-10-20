@@ -99,9 +99,7 @@ def get_global_consolidation_mode(conn: Connection) -> str:
         'consolidate' or 'separate'
     """
     try:
-        cursor = conn.execute(
-            "SELECT global_consolidation_mode FROM settings WHERE id = 1"
-        )
+        cursor = conn.execute("SELECT global_consolidation_mode FROM settings WHERE id = 1")
         row = cursor.fetchone()
     except sqlite3.OperationalError:
         return "consolidate"
@@ -266,9 +264,7 @@ def arm_channel_relayout(conn: Connection) -> bool:
     """
     if not _table_has_column(conn, "settings", "force_channel_relayout_pending"):
         return False
-    conn.execute(
-        "UPDATE settings SET force_channel_relayout_pending = 1 WHERE id = 1"
-    )
+    conn.execute("UPDATE settings SET force_channel_relayout_pending = 1 WHERE id = 1")
     return True
 
 
@@ -282,9 +278,7 @@ def clear_channel_relayout(conn: Connection) -> bool:
     """
     if not _table_has_column(conn, "settings", "force_channel_relayout_pending"):
         return False
-    conn.execute(
-        "UPDATE settings SET force_channel_relayout_pending = 0 WHERE id = 1"
-    )
+    conn.execute("UPDATE settings SET force_channel_relayout_pending = 0 WHERE id = 1")
     return True
 
 
@@ -365,8 +359,13 @@ def get_next_channel_number(
 
     resolver = LaneResolver.load(conn, _default_lane(conn))
     lane = resolver.resolve(
-        sport, league, home_team, away_team, season_type,
-        segment=segment, exception_keyword=exception_keyword,
+        sport,
+        league,
+        home_team,
+        away_team,
+        season_type,
+        segment=segment,
+        exception_keyword=exception_keyword,
     )
 
     used_set = _get_all_used_channels(conn)
@@ -378,13 +377,16 @@ def get_next_channel_number(
         # Bounded block is full — overflow into the default lane.
         logger.warning(
             "[CHANNEL_NUM] Pinned block %d-%s is full; overflowing to default range",
-            lane.start, lane.end,
+            lane.start,
+            lane.end,
         )
         default = resolver.default
         num = _first_free(default.start, _lane_end(conn, default), used_set)
     if num is None:
         logger.warning(
-            "[CHANNEL_NUM] No available channels (lane start %d, league=%s)", lane.start, league,
+            "[CHANNEL_NUM] No available channels (lane start %d, league=%s)",
+            lane.start,
+            league,
         )
     return num
 
@@ -587,12 +589,24 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
             # "Everything" priority teams still lead; the sport- and
             # league-scoped tiers break ties among games starting together.
             return (
-                all_tier, event_date, sport_pri, sport_tier, league_pri, league_tier,
-                str(event_id), keyword_sort,
+                all_tier,
+                event_date,
+                sport_pri,
+                sport_tier,
+                league_pri,
+                league_tier,
+                str(event_id),
+                keyword_sort,
             )
         return (
-            all_tier, sport_pri, sport_tier, league_pri, league_tier,
-            event_date, str(event_id), keyword_sort,
+            all_tier,
+            sport_pri,
+            sport_tier,
+            league_pri,
+            league_tier,
+            event_date,
+            str(event_id),
+            keyword_sort,
         )
 
     sorted_channels = sorted(channels, key=sort_key)
@@ -600,7 +614,10 @@ def get_all_channels_sorted(conn: Connection) -> list[dict]:
     logger.debug(
         "[CHANNEL_SORT] Global sort: %d channels, %d sport priorities, "
         "%d league priorities, %d priority teams",
-        len(sorted_channels), len(sport_order), len(league_order), len(priority_keys),
+        len(sorted_channels),
+        len(sport_order),
+        len(league_order),
+        len(priority_keys),
     )
 
     return sorted_channels
@@ -692,16 +709,16 @@ def reassign_all_channels(
         elif force_reset:
             result, leftover = _place_reset(conn, channels, smode, gap_size, start, end, used)
         else:
-            result, leftover = _place_sticky(
-                conn, channels, smode, gap_size, start, end, used, ext
-            )
+            result, leftover = _place_sticky(conn, channels, smode, gap_size, start, end, used, ext)
         _merge(totals, result)
         if leftover and not lane.is_default and lane.end is not None:
             # Bounded block overflowed — its remaining channels take the tail of the
             # default lane (in their sort order) rather than being left unnumbered.
             logger.warning(
                 "[CHANNEL_SORT] Pinned block %d-%d full; %d channel(s) overflow to default range",
-                lane.start, lane.end, len(leftover),
+                lane.start,
+                lane.end,
+                len(leftover),
             )
             by_lane[default_lane.id].extend(leftover)
 
@@ -711,7 +728,9 @@ def reassign_all_channels(
     if len(lanes) > 1:
         logger.info(
             "[CHANNEL_SORT] Lanes: %d pinned + default; %d channels processed, %d moved",
-            len(lanes) - 1, totals["channels_processed"], totals["channels_moved"],
+            len(lanes) - 1,
+            totals["channels_processed"],
+            totals["channels_moved"],
         )
     return totals
 
@@ -766,15 +785,21 @@ def _apply_number(conn: Connection, ch: dict, target: int, mode: str, drift: lis
     cur = _channel_num_as_int(ch["channel_number"])
     if cur != target:
         conn.execute(_SET_NUMBER_LOCKED_SQL, (target, ch["id"]))
-        drift.append({
-            "channel_id": ch["id"],
-            "dispatcharr_channel_id": ch["dispatcharr_channel_id"],
-            "channel_name": ch["channel_name"],
-            "old_number": cur,
-            "new_number": target,
-        })
+        drift.append(
+            {
+                "channel_id": ch["id"],
+                "dispatcharr_channel_id": ch["dispatcharr_channel_id"],
+                "channel_name": ch["channel_name"],
+                "old_number": cur,
+                "new_number": target,
+            }
+        )
         logger.debug(
-            "[CHANNEL_NUM] '%s' placed #%s → #%d (%s)", ch["channel_name"], cur, target, mode,
+            "[CHANNEL_NUM] '%s' placed #%s → #%d (%s)",
+            ch["channel_name"],
+            cur,
+            target,
+            mode,
         )
         return True
     # Number already correct — just lock it so it's sticky from now on.
@@ -822,17 +847,21 @@ def _place_compact(
                 "UPDATE managed_channels SET channel_number = ? WHERE id = ?",
                 (next_num, ch["id"]),
             )
-            drift_details.append({
-                "channel_id": ch["id"],
-                "dispatcharr_channel_id": ch["dispatcharr_channel_id"],
-                "channel_name": ch["channel_name"],
-                "old_number": old_num,
-                "new_number": next_num,
-            })
+            drift_details.append(
+                {
+                    "channel_id": ch["id"],
+                    "dispatcharr_channel_id": ch["dispatcharr_channel_id"],
+                    "channel_name": ch["channel_name"],
+                    "old_number": old_num,
+                    "new_number": next_num,
+                }
+            )
             channels_moved += 1
             logger.debug(
                 "[CHANNEL_NUM] '%s' moved #%s → #%d",
-                ch["channel_name"], old_num, next_num,
+                ch["channel_name"],
+                old_num,
+                next_num,
             )
 
         used.add(next_num)
@@ -842,7 +871,9 @@ def _place_compact(
 
     placed = len(channels) - len(leftover)
     logger.info(
-        "[CHANNEL_SORT] COMPACT reassign: %d channels processed, %d moved", placed, channels_moved,
+        "[CHANNEL_SORT] COMPACT reassign: %d channels processed, %d moved",
+        placed,
+        channels_moved,
     )
     return (
         {
@@ -921,9 +952,7 @@ def _place_sticky(
 
     def free_run(start: int, k: int) -> bool:
         """True if the k contiguous slots from `start` are all free and in range."""
-        return start + (k - 1) <= effective_end and all(
-            (start + j) not in used for j in range(k)
-        )
+        return start + (k - 1) <= effective_end and all((start + j) not in used for j in range(k))
 
     def gap_start(prev_end: int) -> int:
         """Preferred start for the next block: a full gap_size step past the previous
@@ -985,9 +1014,7 @@ def _place_sticky(
         if not unplaced:
             # Fully anchored event — fixed; advance the neighbourhood low-water mark.
             anchor_nums = [
-                n
-                for ch in anchors
-                if (n := _channel_num_as_int(ch["channel_number"])) is not None
+                n for ch in anchors if (n := _channel_num_as_int(ch["channel_number"])) is not None
             ]
             if anchor_nums:
                 lo = max(lo, max(anchor_nums))
@@ -1018,9 +1045,10 @@ def _place_sticky(
                 if target is None or target > effective_end:
                     logger.warning(
                         "[CHANNEL_SORT] %s sticky stopped (event=%s) - range exhausted",
-                        mode.upper(), group[0].get("event_id"),
+                        mode.upper(),
+                        group[0].get("event_id"),
                     )
-                    leftover = unplaced[ui:] + [c for g in groups[gi + 1:] for c in g]
+                    leftover = unplaced[ui:] + [c for g in groups[gi + 1 :] for c in g]
                     stopped = True
                     break
                 claim(ch, target)
@@ -1041,7 +1069,9 @@ def _place_sticky(
         if start is None or start + (k - 1) > effective_end:
             logger.warning(
                 "[CHANNEL_SORT] %s sticky stopped (event=%s, %d feed(s)) - range exhausted",
-                mode.upper(), group[0].get("event_id"), k,
+                mode.upper(),
+                group[0].get("event_id"),
+                k,
             )
             leftover = [c for g in groups[gi:] for c in g]
             break
@@ -1053,7 +1083,9 @@ def _place_sticky(
     placed = len(sorted_channels) - len(leftover)
     logger.info(
         "[CHANNEL_SORT] %s sticky: %d channels processed, %d placed",
-        mode.upper(), placed, channels_moved,
+        mode.upper(),
+        placed,
+        channels_moved,
     )
     return (
         {
@@ -1088,9 +1120,7 @@ def _place_reset(
     leftover: list[dict] = []
 
     def free_run(start: int, k: int) -> bool:
-        return start + (k - 1) <= effective_end and all(
-            (start + j) not in used for j in range(k)
-        )
+        return start + (k - 1) <= effective_end and all((start + j) not in used for j in range(k))
 
     # Each event is a contiguous block; the next event starts a full gap_size step
     # past the previous block's END — so a multi-feed block consumes its own slots
@@ -1107,7 +1137,9 @@ def _place_reset(
         if start + (k - 1) > effective_end:
             logger.warning(
                 "[CHANNEL_SORT] %s reset stopped (event=%s, %d feed(s)) - range exhausted",
-                mode.upper(), group[0].get("event_id"), k,
+                mode.upper(),
+                group[0].get("event_id"),
+                k,
             )
             leftover = [c for g in groups[gi:] for c in g]
             break
@@ -1120,7 +1152,9 @@ def _place_reset(
     placed = len(sorted_channels) - len(leftover)
     logger.info(
         "[CHANNEL_SORT] %s reset re-layout: %d channels processed, %d moved",
-        mode.upper(), placed, channels_moved,
+        mode.upper(),
+        placed,
+        channels_moved,
     )
     return (
         {

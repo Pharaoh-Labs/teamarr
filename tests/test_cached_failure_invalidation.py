@@ -26,14 +26,37 @@ EVENT = {"id": "e1", "name": "Rays at Tigers"}
 def _seed(db_factory):
     """Two failures, a success and a user correction."""
     c = StreamMatchCache(db_factory)
-    c.set_failed(group_id=1, stream_id=1, stream_name="fail A", generation=5,
-                 reason=FailedReason.NO_EVENT_FOUND.value)
-    c.set_failed(group_id=2, stream_id=2, stream_name="fail B", generation=5,
-                 reason=FailedReason.FIXTURE_NOT_IN_LEAGUE.value)
-    c.set(group_id=1, stream_id=3, stream_name="ok", event_id="e1", league="mlb",
-          cached_data=EVENT, generation=5)
-    c.set_user_correction(group_id=1, stream_id=4, stream_name="pinned",
-                          event_id="e9", league="mlb", cached_data=EVENT)
+    c.set_failed(
+        group_id=1,
+        stream_id=1,
+        stream_name="fail A",
+        generation=5,
+        reason=FailedReason.NO_EVENT_FOUND.value,
+    )
+    c.set_failed(
+        group_id=2,
+        stream_id=2,
+        stream_name="fail B",
+        generation=5,
+        reason=FailedReason.FIXTURE_NOT_IN_LEAGUE.value,
+    )
+    c.set(
+        group_id=1,
+        stream_id=3,
+        stream_name="ok",
+        event_id="e1",
+        league="mlb",
+        cached_data=EVENT,
+        generation=5,
+    )
+    c.set_user_correction(
+        group_id=1,
+        stream_id=4,
+        stream_name="pinned",
+        event_id="e9",
+        league="mlb",
+        cached_data=EVENT,
+    )
     return c
 
 
@@ -41,10 +64,11 @@ def _counts(db_factory):
     with db_factory() as conn:
         total = conn.execute("SELECT COUNT(*) FROM stream_match_cache").fetchone()[0]
         failed = conn.execute(
-            "SELECT COUNT(*) FROM stream_match_cache WHERE event_id = ?",
-            (FAILED_MATCH_EVENT_ID,)).fetchone()[0]
+            "SELECT COUNT(*) FROM stream_match_cache WHERE event_id = ?", (FAILED_MATCH_EVENT_ID,)
+        ).fetchone()[0]
         pinned = conn.execute(
-            "SELECT COUNT(*) FROM stream_match_cache WHERE user_corrected = 1").fetchone()[0]
+            "SELECT COUNT(*) FROM stream_match_cache WHERE user_corrected = 1"
+        ).fetchone()[0]
     return total, failed, pinned
 
 
@@ -135,30 +159,48 @@ def api_db(tmp_path, monkeypatch):
 
 def _seed_failure(db_factory):
     StreamMatchCache(db_factory).set_failed(
-        group_id=1, stream_id=1, stream_name="Rays vs Tigers", generation=5,
-        reason=FailedReason.FIXTURE_NOT_IN_LEAGUE.value)
+        group_id=1,
+        stream_id=1,
+        stream_name="Rays vs Tigers",
+        generation=5,
+        reason=FailedReason.FIXTURE_NOT_IN_LEAGUE.value,
+    )
 
 
 def _failed_rows(db_factory):
     with db_factory() as conn:
         return conn.execute(
-            "SELECT COUNT(*) FROM stream_match_cache WHERE event_id = ?",
-            (FAILED_MATCH_EVENT_ID,)).fetchone()[0]
+            "SELECT COUNT(*) FROM stream_match_cache WHERE event_id = ?", (FAILED_MATCH_EVENT_ID,)
+        ).fetchone()[0]
 
 
 def test_creating_an_alias_clears_cached_failures(api_db):
     _seed_failure(api_db)
     assert _failed_rows(api_db) == 1
 
-    r = client.post(ALIASES, json={"alias": "D-backs", "league": "mlb", "team_id": "29",
-                                   "team_name": "Arizona Diamondbacks"})
+    r = client.post(
+        ALIASES,
+        json={
+            "alias": "D-backs",
+            "league": "mlb",
+            "team_id": "29",
+            "team_name": "Arizona Diamondbacks",
+        },
+    )
     assert r.status_code == 201, r.text
     assert _failed_rows(api_db) == 0
 
 
 def test_updating_an_alias_clears_cached_failures(api_db):
-    created = client.post(ALIASES, json={"alias": "Dbacks", "league": "mlb", "team_id": "29",
-                                         "team_name": "Arizona Diamondbacks"})
+    created = client.post(
+        ALIASES,
+        json={
+            "alias": "Dbacks",
+            "league": "mlb",
+            "team_id": "29",
+            "team_name": "Arizona Diamondbacks",
+        },
+    )
     assert created.status_code == 201, created.text
     alias_id = created.json()["id"]
     _seed_failure(api_db)
@@ -169,8 +211,15 @@ def test_updating_an_alias_clears_cached_failures(api_db):
 
 
 def test_deleting_an_alias_clears_cached_failures(api_db):
-    created = client.post(ALIASES, json={"alias": "Dbacks", "league": "mlb", "team_id": "29",
-                                         "team_name": "Arizona Diamondbacks"})
+    created = client.post(
+        ALIASES,
+        json={
+            "alias": "Dbacks",
+            "league": "mlb",
+            "team_id": "29",
+            "team_name": "Arizona Diamondbacks",
+        },
+    )
     alias_id = created.json()["id"]
     _seed_failure(api_db)
 
@@ -181,8 +230,15 @@ def test_deleting_an_alias_clears_cached_failures(api_db):
 
 def test_reading_an_alias_does_not_clear_the_cache(api_db):
     """Reads must stay free — an earlier draft cleared on GET by mistake."""
-    created = client.post(ALIASES, json={"alias": "Dbacks", "league": "mlb", "team_id": "29",
-                                         "team_name": "Arizona Diamondbacks"})
+    created = client.post(
+        ALIASES,
+        json={
+            "alias": "Dbacks",
+            "league": "mlb",
+            "team_id": "29",
+            "team_name": "Arizona Diamondbacks",
+        },
+    )
     alias_id = created.json()["id"]
     _seed_failure(api_db)
 

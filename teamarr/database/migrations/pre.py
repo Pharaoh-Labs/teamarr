@@ -142,9 +142,7 @@ def _migrate_settings_for_v65(conn: sqlite3.Connection) -> None:
     Data is backed up to _settings_v65_backup and restored in _run_migrations.
     """
     try:
-        row = conn.execute(
-            "SELECT schema_version FROM settings WHERE id = 1"
-        ).fetchone()
+        row = conn.execute("SELECT schema_version FROM settings WHERE id = 1").fetchone()
         if not row or row[0] >= 65:
             return
     except Exception:
@@ -153,25 +151,18 @@ def _migrate_settings_for_v65(conn: sqlite3.Connection) -> None:
     # Add new columns first so backup includes them
     for col in ["channel_pre_buffer_minutes", "channel_post_buffer_minutes"]:
         try:
-            conn.execute(
-                f"ALTER TABLE settings ADD COLUMN {col} INTEGER DEFAULT 60"
-            )
+            conn.execute(f"ALTER TABLE settings ADD COLUMN {col} INTEGER DEFAULT 60")
         except Exception:
             pass  # Already exists
 
     # Backup all settings data (CREATE TABLE AS copies data, no constraints)
     conn.execute("DROP TABLE IF EXISTS _settings_v65_backup")
-    conn.execute(
-        "CREATE TABLE _settings_v65_backup "
-        "AS SELECT * FROM settings"
-    )
+    conn.execute("CREATE TABLE _settings_v65_backup AS SELECT * FROM settings")
 
     # Drop settings table — executescript will recreate with new CHECK constraints
     conn.execute("DROP TABLE settings")
 
-    logger.info(
-        "[PRE-MIGRATE] Settings table dropped for v65 lifecycle timing migration"
-    )
+    logger.info("[PRE-MIGRATE] Settings table dropped for v65 lifecycle timing migration")
 
 
 def _migrate_detection_keywords_check(conn: sqlite3.Connection) -> None:
@@ -187,8 +178,7 @@ def _migrate_detection_keywords_check(conn: sqlite3.Connection) -> None:
     """
     try:
         row = conn.execute(
-            "SELECT sql FROM sqlite_master "
-            "WHERE type='table' AND name='detection_keywords'"
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='detection_keywords'"
         ).fetchone()
     except Exception:
         return  # Table doesn't exist yet (fresh install)
@@ -198,9 +188,7 @@ def _migrate_detection_keywords_check(conn: sqlite3.Connection) -> None:
         return  # Constraint already current — nothing to do
 
     conn.execute("DROP TABLE IF EXISTS _detection_keywords_backup")
-    conn.execute(
-        "CREATE TABLE _detection_keywords_backup AS SELECT * FROM detection_keywords"
-    )
+    conn.execute("CREATE TABLE _detection_keywords_backup AS SELECT * FROM detection_keywords")
     conn.execute("DROP TABLE detection_keywords")
     logger.info(
         "[PRE-MIGRATE] detection_keywords dropped to refresh stale category CHECK constraint"
@@ -221,8 +209,7 @@ def _migrate_stream_match_cache_check(conn: sqlite3.Connection) -> None:
     """
     try:
         row = conn.execute(
-            "SELECT sql FROM sqlite_master "
-            "WHERE type='table' AND name='stream_match_cache'"
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='stream_match_cache'"
         ).fetchone()
     except Exception:
         return  # Table doesn't exist yet (fresh install)

@@ -46,9 +46,7 @@ def _boxing_event() -> Event:
 
 
 def _ctx(event: Event) -> tuple[TemplateContext, GameContext]:
-    game = GameContext(
-        event=event, is_home=True, team=event.home_team, opponent=event.away_team
-    )
+    game = GameContext(event=event, is_home=True, team=event.home_team, opponent=event.away_team)
     ctx = TemplateContext(
         game_context=game,
         team_config=TeamChannelContext(

@@ -41,6 +41,8 @@ RETRY_JITTER = 0.3  # ±30% randomization to prevent thundering herd
 RATE_LIMIT_BASE_DELAY = 5.0  # Start at 5s for 429s (more serious)
 RATE_LIMIT_MAX_DELAY = 60.0  # Cap at 60s
 RATE_LIMIT_MAX_RETRIES = 3  # Give up after 3 rate-limit retries
+
+
 @dataclass
 class ProviderRequestPolicy:
     """Shared outbound policy for provider clients, refreshed from settings."""
@@ -95,9 +97,7 @@ class BaseHTTPClient:
         self._max_connections = max_connections
         # Default keepalive = max_connections to maximize connection reuse
         self._max_keepalive = (
-            max_keepalive_connections
-            if max_keepalive_connections is not None
-            else max_connections
+            max_keepalive_connections if max_keepalive_connections is not None else max_connections
         )
         self._headers = dict(headers or {})
         if _request_policy.user_agent:
@@ -207,9 +207,7 @@ class BaseHTTPClient:
                 return response.json()
 
             except httpx.HTTPStatusError as e:
-                logger.warning(
-                    "[%s] HTTP %d for %s", self.LOG_TAG, e.response.status_code, url
-                )
+                logger.warning("[%s] HTTP %d for %s", self.LOG_TAG, e.response.status_code, url)
                 # 4xx is deterministic (429 is handled before raise_for_status),
                 # so retrying just repeats the identical failure — only 5xx gets
                 # the retry/backoff treatment (#282).

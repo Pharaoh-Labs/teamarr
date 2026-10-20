@@ -88,9 +88,28 @@ _ROUND_ORDINALS = {"first": "1", "second": "2", "third": "3", "fourth": "4"}
 # on hall/fame, never on open/cup) — used by the feed tournament guard (#316).
 _GENERIC_TOURNAMENT_TOKENS = frozenset(
     {
-        "atp", "wta", "tour", "tennis", "open", "cup", "championship",
-        "championships", "masters", "classic", "international", "invitational",
-        "presented", "by", "the", "for", "of", "and", "at", "in", "de", "du",
+        "atp",
+        "wta",
+        "tour",
+        "tennis",
+        "open",
+        "cup",
+        "championship",
+        "championships",
+        "masters",
+        "classic",
+        "international",
+        "invitational",
+        "presented",
+        "by",
+        "the",
+        "for",
+        "of",
+        "and",
+        "at",
+        "in",
+        "de",
+        "du",
     }
 )
 
@@ -162,9 +181,7 @@ def _named_tournaments(text: str, pool: list[Event]) -> set[str]:
         seen.add(key)
         tnorm = normalize_text(tname)
         distinctive = {
-            tok
-            for tok in tnorm.split()
-            if tok not in _GENERIC_TOURNAMENT_TOKENS and len(tok) >= 3
+            tok for tok in tnorm.split() if tok not in _GENERIC_TOURNAMENT_TOKENS and len(tok) >= 3
         }
         if (distinctive & text_tokens) or (tnorm and f" {tnorm} " in padded_text):
             named.add(key)
@@ -649,9 +666,7 @@ class TennisMatcher:
         for offset in (-1, 0, 1):
             events.extend(self._service.get_events(league, match_date + timedelta(days=offset)))
         events = self._apply_majors_filter(events)
-        return [
-            e for e in events if e.start_time.astimezone(user_tz).date() == match_date
-        ]
+        return [e for e in events if e.start_time.astimezone(user_tz).date() == match_date]
 
     # How far back the widened-date fallback looks for replay/delayed streams
     _FALLBACK_LOOKBACK_DAYS = 4
@@ -744,9 +759,7 @@ class TennisMatcher:
         candidates, vetoed = _tournament_guard(normalize_text(ctx.stream_name), events)
 
         def _score(event: Event) -> int:
-            return self._pair_score(
-                team1, team2, event.home_team, event.away_team, pair1, pair2
-            )
+            return self._pair_score(team1, team2, event.home_team, event.away_team, pair1, pair2)
 
         scored: list[tuple[int, Event]] = []
         for event in candidates:
@@ -799,9 +812,7 @@ class TennisMatcher:
 
         # Tie-break by proximity to the stream's "@ 12:30 PM" time if present
         if len(top_events) > 1 and stream_instant is not None:
-            top_events.sort(
-                key=lambda e: abs((e.start_time - stream_instant).total_seconds())
-            )
+            top_events.sort(key=lambda e: abs((e.start_time - stream_instant).total_seconds()))
 
         score, event = top_score, top_events[0]
         method = MatchMethod.DIRECT if score == 100 else MatchMethod.FUZZY
@@ -836,12 +847,8 @@ class TennisMatcher:
         match the same event — 0..100. pair1/pair2: whether each parsed side
         is written as a doubles pair (None = unknown, see _parsed_side_is_pair).
         """
-        straight = min(
-            self._side_score(team1, home, pair1), self._side_score(team2, away, pair2)
-        )
-        swapped = min(
-            self._side_score(team1, away, pair1), self._side_score(team2, home, pair2)
-        )
+        straight = min(self._side_score(team1, home, pair1), self._side_score(team2, away, pair2))
+        swapped = min(self._side_score(team1, away, pair1), self._side_score(team2, home, pair2))
         return max(straight, swapped)
 
     def _side_score(self, parsed: str, player: Team, parsed_pair: bool | None = None) -> int:
@@ -870,9 +877,7 @@ class TennisMatcher:
 
         # player.abbreviation carries the surname(s) — "de Minaur",
         # "Nys/Roger-Vasselin" for doubles pairs
-        surname_flat = normalize_text(
-            player.abbreviation.replace("/", " ").replace("_", " ")
-        )
+        surname_flat = normalize_text(player.abbreviation.replace("/", " ").replace("_", " "))
         surname_tokens = set(surname_flat.split())
         if surname_tokens and surname_tokens <= parsed_tokens:
             return 100

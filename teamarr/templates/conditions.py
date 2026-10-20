@@ -723,9 +723,7 @@ class ConditionalDescriptionSelector:
         register); the preview endpoint surfaces the trace (#428).
         """
         fields, trace = self.select_fields_with_trace(rows, ctx, game_ctx)
-        winner_index = next(
-            (r["index"] for r in trace if "description" in r["selected_for"]), None
-        )
+        winner_index = next((r["index"] for r in trace if "description" in r["selected_for"]), None)
         runners_up = sorted(
             (opt.priority, i, opt.field_text("description"))
             for i, opt in enumerate(self._parse_options(rows))

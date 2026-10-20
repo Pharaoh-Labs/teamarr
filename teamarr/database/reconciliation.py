@@ -126,9 +126,7 @@ class ReconcileResult:
     errors: list[str] = field(default_factory=list)
 
 
-def reconcile_schema(
-    conn: sqlite3.Connection, schema_sql: str
-) -> ReconcileResult:
+def reconcile_schema(conn: sqlite3.Connection, schema_sql: str) -> ReconcileResult:
     """Ensure all table columns match schema.sql definitions.
 
     Creates an in-memory reference database from schema.sql, then compares
@@ -200,9 +198,7 @@ def _reconcile_table(
     Returns list of column names that were added.
     """
     # Get actual columns
-    actual_cols = {
-        row["name"] for row in conn.execute(f"PRAGMA table_info([{table}])").fetchall()
-    }
+    actual_cols = {row["name"] for row in conn.execute(f"PRAGMA table_info([{table}])").fetchall()}
     if not actual_cols:
         return []  # Table exists but has no columns (shouldn't happen)
 

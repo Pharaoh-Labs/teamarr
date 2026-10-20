@@ -50,12 +50,18 @@ def test_cfl_migration_remaps_known_team_and_clears_cache(db_conn):
     ).fetchone()
     assert cache_count == 0
     assert league_count == 0
-    assert db_conn.execute(
-        "SELECT COUNT(*) FROM service_cache WHERE cache_key LIKE '%:cfl:%'"
-    ).fetchone()[0] == 0
-    assert db_conn.execute(
-        "SELECT COUNT(*) FROM service_cache WHERE cache_key = 'events:nfl:2026-08-15'"
-    ).fetchone()[0] == 1
+    assert (
+        db_conn.execute(
+            "SELECT COUNT(*) FROM service_cache WHERE cache_key LIKE '%:cfl:%'"
+        ).fetchone()[0]
+        == 0
+    )
+    assert (
+        db_conn.execute(
+            "SELECT COUNT(*) FROM service_cache WHERE cache_key = 'events:nfl:2026-08-15'"
+        ).fetchone()[0]
+        == 1
+    )
     assert tuple(team) == ("bellmedia", "110380")
     assert db_conn.execute("SELECT deleted_at FROM managed_channels").fetchone()[0] is not None
 
@@ -83,9 +89,12 @@ def test_cfl_service_cache_migration_handles_existing_v85_database(db_conn):
 
     _migrate_v86_cfl_service_cache(db_conn)
 
-    assert db_conn.execute(
-        "SELECT COUNT(*) FROM service_cache WHERE cache_key = 'events:cfl:2026-08-15'"
-    ).fetchone()[0] == 0
+    assert (
+        db_conn.execute(
+            "SELECT COUNT(*) FROM service_cache WHERE cache_key = 'events:cfl:2026-08-15'"
+        ).fetchone()[0]
+        == 0
+    )
 
 
 def test_cfl_team_selection_migration_remaps_global_defaults(db_conn):
@@ -139,9 +148,9 @@ def test_hockey_migration_remaps_known_team_and_preserves_non_targets(db_conn):
 
     _migrate_v96_hockeytech_bellmedia(db_conn)
 
-    cached_ohl = db_conn.execute(
-        "SELECT COUNT(*) FROM team_cache WHERE league = 'ohl'"
-    ).fetchone()[0]
+    cached_ohl = db_conn.execute("SELECT COUNT(*) FROM team_cache WHERE league = 'ohl'").fetchone()[
+        0
+    ]
     assert cached_ohl == 0
     ldn = db_conn.execute(
         "SELECT provider, provider_team_id FROM teams WHERE channel_id = 'ldn'"

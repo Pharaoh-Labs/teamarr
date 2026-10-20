@@ -50,8 +50,14 @@ def test_standing_line_names_the_teams_own_group(summary, group):
 
 @pytest.mark.parametrize(
     "name, placeholder",
-    [("Conference 5", True), ("Division 80", True), ("Big Ten Conference", False),
-     ("Conference USA", False), ("", False), (None, False)],
+    [
+        ("Conference 5", True),
+        ("Division 80", True),
+        ("Big Ten Conference", False),
+        ("Conference USA", False),
+        ("", False),
+        (None, False),
+    ],
 )
 def test_placeholder_detection(name, placeholder):
     # A placeholder is always an id behind the label; "Conference USA" is a name.
@@ -75,7 +81,9 @@ def groups_db(db_conn):
 
 def test_group_names_come_from_the_cached_tree(groups_db):
     assert get_group_names(groups_db, "college-football", "5") == {
-        "name": "Big Ten Conference", "abbrev": "Big Ten", "division": "FBS",
+        "name": "Big Ten Conference",
+        "abbrev": "Big Ten",
+        "division": "FBS",
     }
     assert get_group_names(groups_db, "college-football", "12")["name"] == "Conference USA"
     # a cached placeholder is no name at all
@@ -86,11 +94,18 @@ def test_group_names_come_from_the_cached_tree(groups_db):
 
 def test_service_fills_names_from_the_tree(groups_db, db_factory, monkeypatch):
     monkeypatch.setattr("teamarr.services.sports_data.get_db", db_factory)
-    stats = TeamStats(record="3-2", conference="Big Ten", conference_abbrev="Big Ten",
-                      conference_id="5", division_id="80")
+    stats = TeamStats(
+        record="3-2",
+        conference="Big Ten",
+        conference_abbrev="Big Ten",
+        conference_id="5",
+        division_id="80",
+    )
     filled = SportsDataService._with_group_names(stats, "college-football")
     assert (filled.conference, filled.conference_abbrev, filled.division) == (
-        "Big Ten Conference", "Big Ten", "FBS",
+        "Big Ten Conference",
+        "Big Ten",
+        "FBS",
     )
 
 
@@ -101,8 +116,14 @@ def test_service_keeps_the_providers_name_when_the_league_has_no_tree(db_factory
 
 
 def test_stats_cache_keeps_ids_and_drops_old_placeholders():
-    stats = TeamStats(record="3-2", conference="Big Ten Conference", conference_abbrev="Big Ten",
-                      division="FBS", conference_id="5", division_id="80")
+    stats = TeamStats(
+        record="3-2",
+        conference="Big Ten Conference",
+        conference_abbrev="Big Ten",
+        division="FBS",
+        conference_id="5",
+        division_id="80",
+    )
     assert dict_to_stats(stats_to_dict(stats)) == stats
     old = stats_to_dict(TeamStats(record="3-2", conference="Conference 5", division="Division 80"))
     del old["conference_id"], old["division_id"]
@@ -113,8 +134,12 @@ def test_stats_cache_keeps_ids_and_drops_old_placeholders():
 def _same_conference(ours: TeamStats, theirs: TeamStats) -> bool:
     ctx = TemplateContext(
         game_context=None,
-        team_config=TeamChannelContext(team_id="130", league="college-football",
-                                       sport="football", team_name="Michigan Wolverines"),
+        team_config=TeamChannelContext(
+            team_id="130",
+            league="college-football",
+            sport="football",
+            team_name="Michigan Wolverines",
+        ),
         team_stats=ours,
     )
     game = GameContext(event=None, opponent_stats=theirs)
@@ -130,6 +155,10 @@ def test_conference_game_compares_ids_not_spellings():
 
 
 def test_conference_game_falls_back_to_names_without_ids():
-    assert _same_conference(TeamStats(record="1-0", conference="SEC"),
-                            TeamStats(record="1-0", conference="sec")) is True
+    assert (
+        _same_conference(
+            TeamStats(record="1-0", conference="SEC"), TeamStats(record="1-0", conference="sec")
+        )
+        is True
+    )
     assert _same_conference(TeamStats(record="1-0"), TeamStats(record="1-0")) is False

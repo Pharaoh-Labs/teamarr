@@ -33,9 +33,7 @@ def test_legacy_alias_maps_match():
     src = _CONSTANTS_TS.read_text()
     match = re.search(r"LEGACY_FILTER_ALIASES[^=]+=\s*\{(.*?)\n\}", src, re.S)
     assert match, "LEGACY_FILTER_ALIASES not found in constants.ts"
-    frontend = dict(
-        re.findall(r'^\s{2}(\w+):\s*\["(\w+)",\s*"\w+"\]', match.group(1), re.M)
-    )
+    frontend = dict(re.findall(r'^\s{2}(\w+):\s*\["(\w+)",\s*"\w+"\]', match.group(1), re.M))
     backend = {old: base for old, (base, _f) in _LEGACY_ALIASES.items()}
     assert frontend == backend
 

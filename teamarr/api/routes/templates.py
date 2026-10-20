@@ -87,6 +87,7 @@ def _log_validation_warnings(template_type: str | None, data: dict) -> None:
             for w in warnings:
                 logger.warning("[template-validation] %s.%s: %s", rows_field, field, w.message)
 
+
 # JSON fields that need serialization from Pydantic models to strings
 _JSON_FIELDS = {
     "xmltv_flags",
@@ -152,9 +153,7 @@ def validate_template(req: TemplateValidateRequest):
 
     is_event = req.template_type == "event"
     results = validate_fields(req.fields, is_event)
-    results.update(
-        validate_conditional_descriptions(req.conditional_descriptions or [], is_event)
-    )
+    results.update(validate_conditional_descriptions(req.conditional_descriptions or [], is_event))
     return {"valid": not results, "warnings": warnings_as_dicts(results)}
 
 
@@ -314,13 +313,10 @@ def get_template(template_id: int):
     """Get a template by ID with all JSON fields parsed."""
     from dataclasses import asdict
 
-
     with get_db() as conn:
         template = db_get(conn, template_id)
         if not template:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
         # Template dataclass already has parsed JSON fields
         return asdict(template)
 
@@ -356,9 +352,7 @@ def update_template(template_id: int, template: TemplateUpdate):
                     )
 
         if not db_update(conn, template_id, **kwargs):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Template not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
         logger.info("[UPDATED] Template id=%d fields=%s", template_id, list(updates.keys()))
 
         row = get_template_raw(conn, template_id)

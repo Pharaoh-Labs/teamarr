@@ -54,10 +54,7 @@ def _event_near_date(event_data: dict, near_strs: set[str]) -> bool:
     cheap SUPERSET gate (so full-season lists aren't parsed wholesale); exact
     membership is decided by the user-day window at the service seam.
     """
-    return (
-        event_data.get("dateEvent") in near_strs
-        or event_data.get("dateEventLocal") in near_strs
-    )
+    return event_data.get("dateEvent") in near_strs or event_data.get("dateEventLocal") in near_strs
 
 
 class TSDBProvider(SportsProvider):
@@ -366,9 +363,7 @@ class TSDBProvider(SportsProvider):
         return None
 
     def get_team(self, team_id: str, league: str) -> Team | None:
-        """Get team details.
-
-        """
+        """Get team details."""
         data = self._client.get_team(team_id)
 
         if not data:
@@ -496,9 +491,7 @@ class TSDBProvider(SportsProvider):
             home_name = data.get("strHomeTeam")
             away_name = data.get("strAwayTeam")
 
-            if not home_name and not away_name and any(
-                sep in event_name for sep in _VS_SEPARATORS
-            ):
+            if not home_name and not away_name and any(sep in event_name for sep in _VS_SEPARATORS):
                 # Parse fighters from event name: "Fighter A vs Fighter B"
                 home_team, away_team = self._parse_fighters_from_event_name(
                     event_name, event_id, league, sport

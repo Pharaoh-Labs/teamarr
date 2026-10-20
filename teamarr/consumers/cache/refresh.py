@@ -20,6 +20,7 @@ from .queries import TeamLeagueCache
 
 logger = logging.getLogger(__name__)
 
+
 class CacheRefresher:
     """Refreshes team and league cache from providers."""
 
@@ -238,9 +239,7 @@ class CacheRefresher:
                     # Wrong season guess (e.g. tree not published yet) — try
                     # the adjacent year before giving up.
                     season -= 1
-                    groups = self._fetch_conference_tree(
-                        client, sport, espn_league, season, roots
-                    )
+                    groups = self._fetch_conference_tree(client, sport, espn_league, season, roots)
                 if not groups:
                     logger.warning("[CONFERENCES] No tree for %s — skipped", league_slug)
                     continue
@@ -603,7 +602,6 @@ class CacheRefresher:
                 # Fall back to ESPN API if not in leagues table
                 if (not logo_url or not league_name) and provider_name == "espn":
                     try:
-
                         client = ESPNClient()
                         league_info_api = client.get_league_info(league_slug)
                         if league_info_api:
@@ -801,7 +799,9 @@ class CacheRefresher:
     def _should_include_soccer_league(self, slug: str) -> bool:
         """Filter out junk soccer leagues."""
         skip_slugs = {
-            "nonfifa", "usa.ncaa.m.1", "usa.ncaa.w.1",
+            "nonfifa",
+            "usa.ncaa.m.1",
+            "usa.ncaa.w.1",
             # uru.2: ESPN data is severely stale (2011 roster, 2010 scoreboard).
             # Configured as TSDB-only in schema.sql.
             "uru.2",

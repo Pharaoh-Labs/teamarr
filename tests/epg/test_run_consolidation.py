@@ -191,9 +191,7 @@ def test_details_keyed_on_parent_run_or_skipped(monkeypatch):
     conn, group = _seeded_group()
     proc = _processor_with_zero_matches(conn, monkeypatch)
     captured: list[int] = []
-    monkeypatch.setattr(
-        proc, "_save_match_details", lambda **kw: captured.append(kw["run_id"])
-    )
+    monkeypatch.setattr(proc, "_save_match_details", lambda **kw: captured.append(kw["run_id"]))
 
     proc._process_group_internal(conn, group, date.today(), run_id=None)
     assert captured == []
@@ -224,8 +222,11 @@ def test_batch_rollups_and_group_summaries():
 
 def test_v90_rekeys_details_folds_cache_hits_and_drops_subruns(db_conn):
     parent = _insert_run(
-        db_conn, run_type="full_epg",
-        started="2026-08-04 20:00:00", completed="2026-08-04 20:01:00", cached=0,
+        db_conn,
+        run_type="full_epg",
+        started="2026-08-04 20:00:00",
+        completed="2026-08-04 20:01:00",
+        cached=0,
     )
     child1 = _insert_run(db_conn, run_type="event_group", started="2026-08-04 20:00:03", cached=30)
     child2 = _insert_run(db_conn, run_type="event_group", started="2026-08-04 20:00:34", cached=2)

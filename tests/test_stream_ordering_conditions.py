@@ -1,4 +1,4 @@
-""""Only when" conditions on stream priority rules (#539).
+""" "Only when" conditions on stream priority rules (#539).
 
 A team's own channel is attached to every one of its games, including the
 exclusive national ones where it shows nothing. No fixed score can fix that:
@@ -47,8 +47,11 @@ DEMOTE_TEAM_WHEN_DARK = StreamOrderingRule(
 
 def _team_stream():
     return ManagedChannelStream(
-        id=1, managed_channel_id=1, dispatcharr_stream_id=1,
-        stream_name="MLB | Milwaukee Brewers", match_type="team",
+        id=1,
+        managed_channel_id=1,
+        dispatcharr_stream_id=1,
+        stream_name="MLB | Milwaukee Brewers",
+        match_type="team",
     )
 
 
@@ -92,9 +95,10 @@ class TestConditionMatching:
     def test_unknown_never_fires(self):
         assert _priority(DEMOTE_TEAM_WHEN_DARK) == BASELINE
         # ...and a service built with no context at all behaves the same
-        assert StreamOrderingService([DEMOTE_TEAM_WHEN_DARK]).compute_priority(
-            _team_stream()
-        ) == BASELINE
+        assert (
+            StreamOrderingService([DEMOTE_TEAM_WHEN_DARK]).compute_priority(_team_stream())
+            == BASELINE
+        )
 
     @pytest.mark.parametrize("season", ["preseason", "regular", "postseason"])
     def test_season_condition_matches_its_own_season_only(self, season):
@@ -107,8 +111,11 @@ class TestConditionMatching:
 
     def test_the_stream_must_still_match_the_rule(self):
         event_stream = ManagedChannelStream(
-            id=2, managed_channel_id=1, dispatcharr_stream_id=2,
-            stream_name="Brewers vs Orioles", match_type="event",
+            id=2,
+            managed_channel_id=1,
+            dispatcharr_stream_id=2,
+            stream_name="Brewers vs Orioles",
+            match_type="event",
         )
         service = StreamOrderingService(
             [DEMOTE_TEAM_WHEN_DARK], context=GameContext(has_local_broadcast=False)
@@ -145,8 +152,11 @@ class TestConditionMatching:
             DEMOTE_TEAM_WHEN_DARK,
         ]
         unlabelled = ManagedChannelStream(
-            id=2, managed_channel_id=1, dispatcharr_stream_id=2,
-            stream_name="Brewers vs Orioles", match_type="event",
+            id=2,
+            managed_channel_id=1,
+            dispatcharr_stream_id=2,
+            stream_name="Brewers vs Orioles",
+            match_type="event",
         )
         normal = StreamOrderingService(rules, context=GameContext(has_local_broadcast=True))
         dark = StreamOrderingService(rules, context=GameContext(has_local_broadcast=False))
@@ -174,8 +184,16 @@ class TestGameContextFromChannel:
 def ruled_db(db_conn):
     update_stream_ordering_rules(
         db_conn,
-        [{"type": "stream_type", "value": "team", "priority": 99, "mode": "score",
-          "points": -20000, "condition": "no_local_broadcast"}],
+        [
+            {
+                "type": "stream_type",
+                "value": "team",
+                "priority": 99,
+                "mode": "score",
+                "points": -20000,
+                "condition": "no_local_broadcast",
+            }
+        ],
     )
     db_conn.commit()
     return db_conn
@@ -217,8 +235,9 @@ class TestChannelPaths:
             league="mlb",
             has_local_broadcast=local,
         )
-        add_stream_to_channel(conn, channel_id, 500, stream_name="MLB | Brewers",
-                              match_type="team", priority=0)
+        add_stream_to_channel(
+            conn, channel_id, 500, stream_name="MLB | Brewers", match_type="team", priority=0
+        )
         return channel_id
 
     def test_attach_time_priority_uses_the_game(self, ruled_db):
@@ -255,8 +274,12 @@ class TestChannelPaths:
                 patch("teamarr.database.channels.update_managed_channel") as update,
             ):
                 lifecycle._sync_channel_settings(
-                    conn=db_conn, existing=existing, stream={"id": 1}, event=event,
-                    group_config={}, template=None,
+                    conn=db_conn,
+                    existing=existing,
+                    stream={"id": 1},
+                    event=event,
+                    group_config={},
+                    template=None,
                 )
             written = {}
             for call in update.call_args_list:
@@ -279,8 +302,14 @@ class TestApi:
         return TestClient(app)
 
     def _rule(self, **extra):
-        return {"type": "stream_type", "value": "team", "priority": 99, "mode": "score",
-                "points": -20000, **extra}
+        return {
+            "type": "stream_type",
+            "value": "team",
+            "priority": 99,
+            "mode": "score",
+            "points": -20000,
+            **extra,
+        }
 
     def test_put_and_get_carry_the_condition(self, client):
         resp = client.put(
@@ -305,9 +334,14 @@ class TestApi:
     def test_a_scoped_ruleset_carries_it_too(self, client):
         resp = client.post(
             "/api/v1/settings/stream-ordering/scopes",
-            json={"name": "MLB", "sports": [], "leagues": ["mlb"],
-                  "rules": [self._rule(condition="season:postseason")],
-                  "use_global_scoring": True, "use_global_priority": True},
+            json={
+                "name": "MLB",
+                "sports": [],
+                "leagues": ["mlb"],
+                "rules": [self._rule(condition="season:postseason")],
+                "use_global_scoring": True,
+                "use_global_priority": True,
+            },
         )
         assert resp.status_code in (200, 201), resp.text
         with get_db() as conn:

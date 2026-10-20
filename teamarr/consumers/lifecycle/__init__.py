@@ -180,7 +180,6 @@ def create_lifecycle_service(
     m3u_manager = None
 
     if dispatcharr_client and settings.get("enabled"):
-
         # Extract raw client if we received a DispatcharrConnection
         raw_client = (
             dispatcharr_client.client

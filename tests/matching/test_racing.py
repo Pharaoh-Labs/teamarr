@@ -181,9 +181,7 @@ def test_unique_country_fallback_matches():
     # event is in Mexico → country fallback resolves it.
     a = _event("a", "Viva Mexico 250", country="Mexico")
     b = _event("b", "Firekeepers Casino 400", country="USA")
-    out = _matcher()._match_to_event(
-        _ctx("NASCAR Cup Series at Mexico"), [a, b], "nascar-cup"
-    )
+    out = _matcher()._match_to_event(_ctx("NASCAR Cup Series at Mexico"), [a, b], "nascar-cup")
     assert out.is_matched and out.event.id == "a"
 
 
@@ -269,9 +267,7 @@ def test_covers_instant_checks_every_session_in_the_weekend():
     # first) counts as covered.
     fp1 = datetime(2026, 7, 10, 9, 0, tzinfo=UTC)
     race = datetime(2026, 7, 12, 18, 0, tzinfo=UTC)
-    event = _sessions_event(
-        [_racing_session("fp1", fp1), _racing_session("race", race)]
-    )
+    event = _sessions_event([_racing_session("fp1", fp1), _racing_session("race", race)])
     matcher = _matcher()
     assert matcher._covers_instant(event, fp1, None)
     assert matcher._covers_instant(event, race, None)
@@ -355,7 +351,8 @@ def _failed_route(monkeypatch, m):
     from teamarr.consumers.matching.result import MatchOutcome
 
     monkeypatch.setattr(
-        m, "_route_to_outcomes",
+        m,
+        "_route_to_outcomes",
         lambda c, sid, td, anchor_dt=None: [MatchOutcome.failed(None)],
     )
 
@@ -367,7 +364,8 @@ def test_stream_name_racing_fallback_in_mixed_group(monkeypatch):
     m = _mixed_matcher()
     _failed_route(monkeypatch, m)
     monkeypatch.setattr(
-        m, "_match_racing_event",
+        m,
+        "_match_racing_event",
         lambda classified, sid, td, anchor_dt=None: _racing_outcome(),
     )
     captured = {}
@@ -392,7 +390,8 @@ def test_stream_name_racing_fallback_requires_text_evidence(monkeypatch):
     _failed_route(monkeypatch, m)
     racing_called = []
     monkeypatch.setattr(
-        m, "_match_racing_event",
+        m,
+        "_match_racing_event",
         lambda *a, **kw: racing_called.append(1) or _racing_outcome(),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
@@ -410,7 +409,8 @@ def test_stream_name_racing_fallback_gated_by_name_match(monkeypatch):
     _failed_route(monkeypatch, m)
     racing_called = []
     monkeypatch.setattr(
-        m, "_match_racing_event",
+        m,
+        "_match_racing_event",
         lambda *a, **kw: racing_called.append(1) or _racing_outcome(),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
@@ -428,7 +428,8 @@ def test_stream_name_racing_fallback_on_placeholder_gate(monkeypatch):
     # being dropped as "unclassifiable".
     m = _mixed_matcher()
     monkeypatch.setattr(
-        m, "_match_racing_event",
+        m,
+        "_match_racing_event",
         lambda classified, sid, td, anchor_dt=None: _racing_outcome(),
     )
     captured = {}
@@ -454,7 +455,8 @@ def test_placeholder_without_racing_evidence_stays_unclassifiable(monkeypatch):
     m = _mixed_matcher()
     racing_called = []
     monkeypatch.setattr(
-        m, "_match_racing_event",
+        m,
+        "_match_racing_event",
         lambda *a, **kw: racing_called.append(1) or _racing_outcome(),
     )
 
@@ -472,7 +474,8 @@ def test_stream_name_racing_fallback_on_team_only_gate(monkeypatch):
     # team_streams_disabled (mirrors the EPG path's TEAM_ONLY bypass).
     m = _mixed_matcher(team_streams_enabled=False)
     monkeypatch.setattr(
-        m, "_match_racing_event",
+        m,
+        "_match_racing_event",
         lambda classified, sid, td, anchor_dt=None: _racing_outcome(),
     )
     captured = {}
@@ -503,7 +506,9 @@ class TestDetectRacingSeriesLeagues:
 
     def test_nascar_umbrella(self):
         assert detect_racing_series_leagues("NASCAR Cup Series at San Diego") == (
-            "nascar-cup", "nascar-xfinity", "nascar-truck",
+            "nascar-cup",
+            "nascar-xfinity",
+            "nascar-truck",
         )
 
     def test_wec(self):
@@ -541,13 +546,15 @@ def test_racing_series_scoping_blocks_unconfigured_series(monkeypatch):
     _failed_route(monkeypatch, m)
     racing_called = []
     monkeypatch.setattr(
-        m._racing_matcher, "match",
+        m._racing_matcher,
+        "match",
         lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
 
     out = m._match_single(
-        1, "CA (SN+ 017) | MotoGP _ Grand Prix of Germany (2026-07-12 07:15:00)",
+        1,
+        "CA (SN+ 017) | MotoGP _ Grand Prix of Germany (2026-07-12 07:15:00)",
         date(2026, 7, 12),
     )
     assert not racing_called  # f1 must never be attempted
@@ -562,7 +569,8 @@ def test_racing_series_scoping_blocks_f2_from_binding_to_f1(monkeypatch):
     _failed_route(monkeypatch, m)
     racing_called = []
     monkeypatch.setattr(
-        m._racing_matcher, "match",
+        m._racing_matcher,
+        "match",
         lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
@@ -588,7 +596,8 @@ def test_racing_series_scoping_restricts_to_named_league(monkeypatch):
     )
     racing_called = []
     monkeypatch.setattr(
-        m._racing_matcher, "match",
+        m._racing_matcher,
+        "match",
         lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
@@ -607,7 +616,8 @@ def test_racing_generic_name_stays_unscoped(monkeypatch):
     _failed_route(monkeypatch, m)
     racing_called = []
     monkeypatch.setattr(
-        m._racing_matcher, "match",
+        m._racing_matcher,
+        "match",
         lambda **kw: racing_called.append(kw["league"]) or _racing_outcome(),
     )
     monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
@@ -647,19 +657,23 @@ def _wec_sessions():
         SimpleNamespace(code="fp2", name="Free Practice 2", start_time=base + timedelta(hours=4)),
         SimpleNamespace(code="fp3", name="Free Practice 3", start_time=base + timedelta(hours=8)),
         SimpleNamespace(
-            code="qualifying_lmgt3", name="Qualifying - LMGT3",
+            code="qualifying_lmgt3",
+            name="Qualifying - LMGT3",
             start_time=base + timedelta(hours=12),
         ),
         SimpleNamespace(
-            code="hyperpole_lmgt3", name="Hyperpole - LMGT3",
+            code="hyperpole_lmgt3",
+            name="Hyperpole - LMGT3",
             start_time=base + timedelta(hours=12, minutes=30),
         ),
         SimpleNamespace(
-            code="qualifying_hypercar", name="Qualifying - Hypercar",
+            code="qualifying_hypercar",
+            name="Qualifying - Hypercar",
             start_time=base + timedelta(hours=13),
         ),
         SimpleNamespace(
-            code="hyperpole_hypercar", name="Hyperpole - Hypercar",
+            code="hyperpole_hypercar",
+            name="Hyperpole - Hypercar",
             start_time=base + timedelta(hours=13, minutes=30),
         ),
         SimpleNamespace(code="race", name="Race", start_time=base + timedelta(days=1)),
@@ -689,14 +703,21 @@ def test_isolate_stream_session_label_no_delimiters():
 
 class TestSessionCategoryFromStreamName:
     def test_numbered_free_practice(self):
-        assert _session_category_from_stream_name(
-            "AU (STAN 36) | Free Practice 3: 6 Hours of Sao Paulo WEC 2026 (2026-07-11 23:00:44)"
-        ) == "fp3"
+        assert (
+            _session_category_from_stream_name(
+                "AU (STAN 36) | Free Practice 3: 6 Hours of Sao Paulo WEC 2026 "
+                "(2026-07-11 23:00:44)"
+            )
+            == "fp3"
+        )
 
     def test_bare_qualifying(self):
-        assert _session_category_from_stream_name(
-            "AU (STAN 39) | Qualifying: 6 Hours of Sao Paulo WEC 2026 (2026-07-12 03:20:29)"
-        ) == "qualifying"
+        assert (
+            _session_category_from_stream_name(
+                "AU (STAN 39) | Qualifying: 6 Hours of Sao Paulo WEC 2026 (2026-07-12 03:20:29)"
+            )
+            == "qualifying"
+        )
 
     def test_bare_race(self):
         name = "AU (STAN) | Race: 6 Hours of Sao Paulo"
@@ -718,12 +739,19 @@ class TestSessionCategoryFromStreamName:
     def test_trailing_qualifying_keyword(self):
         # NASCAR/TSN+ convention: session type as a trailing word in the
         # label, not the whole label (unlike tsdb/STAN's bare "Qualifying").
-        assert _session_category_from_stream_name(
-            "CA (TSN+ 021) | NASCAR Cup Series Qualifying: Quaker State 400 (2026-07-11 16:30:00)"
-        ) == "qualifying"
-        assert _session_category_from_stream_name(
-            "CA (TSN+ 015) | 2026 NASCAR ORAP Series Qualifying: Focused Health 250 (2026-07-11 11:00:00)"  # noqa: E501
-        ) == "qualifying"
+        assert (
+            _session_category_from_stream_name(
+                "CA (TSN+ 021) | NASCAR Cup Series Qualifying: Quaker State 400 "
+                "(2026-07-11 16:30:00)"
+            )
+            == "qualifying"
+        )
+        assert (
+            _session_category_from_stream_name(
+                "CA (TSN+ 015) | 2026 NASCAR ORAP Series Qualifying: Focused Health 250 (2026-07-11 11:00:00)"  # noqa: E501
+            )
+            == "qualifying"
+        )
 
     def test_trailing_unnumbered_practice_keyword(self):
         # NASCAR emits an unnumbered "practice" session code and TSN+ labels
@@ -731,25 +759,37 @@ class TestSessionCategoryFromStreamName:
         # practice category, not fall into the generic fan-out where the
         # practice exclusion would drop it (the exact inversion: a dedicated
         # practice feed landing on Qualifying/Race but not Practice).
-        assert _session_category_from_stream_name(
-            "CA (TSN+ 021) | NASCAR Cup Series Practice: Quaker State 400 (2026-07-11 14:30:00)"
-        ) == "practice"
+        assert (
+            _session_category_from_stream_name(
+                "CA (TSN+ 021) | NASCAR Cup Series Practice: Quaker State 400 (2026-07-11 14:30:00)"
+            )
+            == "practice"
+        )
 
     def test_trailing_practice_requires_word_boundary(self):
         # "...practice" as a word-suffix must not match ("Malpractice").
-        assert _session_category_from_stream_name(
-            "US | Malpractice: Medical Drama Marathon (2026-07-11 20:00:00)"
-        ) is None
+        assert (
+            _session_category_from_stream_name(
+                "US | Malpractice: Medical Drama Marathon (2026-07-11 20:00:00)"
+            )
+            is None
+        )
 
     def test_no_trailing_keyword_has_no_hint(self):
         # A label ending in descriptive text (not a session word) must not
         # trip the trailing fallback.
-        assert _session_category_from_stream_name(
-            "2026 NASCAR CRAFTSMAN Truck Series: LiUNA 150 (2026-07-11 13:00:00)"
-        ) is None
-        assert _session_category_from_stream_name(
-            "CA (TSN+ 036) | NASCAR Cup Series On_Board Camera: Quaker State 400 (2026-07-12 19:00:00)"  # noqa: E501
-        ) is None
+        assert (
+            _session_category_from_stream_name(
+                "2026 NASCAR CRAFTSMAN Truck Series: LiUNA 150 (2026-07-11 13:00:00)"
+            )
+            is None
+        )
+        assert (
+            _session_category_from_stream_name(
+                "CA (TSN+ 036) | NASCAR Cup Series On_Board Camera: Quaker State 400 (2026-07-12 19:00:00)"  # noqa: E501
+            )
+            is None
+        )
 
 
 class TestSessionInCategory:
@@ -791,18 +831,29 @@ class TestIsPracticeSession:
 
 
 def test_expand_racing_segments_scopes_dedicated_fp3_stream():
-    matched = [{"stream": {"id": 1, "name": "AU (STAN) | Free Practice 3: 6 Hours of Sao Paulo"},
-                "event": _wec_event()}]
+    matched = [
+        {
+            "stream": {"id": 1, "name": "AU (STAN) | Free Practice 3: 6 Hours of Sao Paulo"},
+            "event": _wec_event(),
+        }
+    ]
     out = expand_racing_segments(matched)
     assert [m["segment"] for m in out] == ["fp3"]
 
 
 def test_expand_racing_segments_scopes_bare_qualifying_to_both_classes_and_hyperpole():
-    matched = [{"stream": {"id": 1, "name": "AU (STAN) | Qualifying: 6 Hours of Sao Paulo"},
-                "event": _wec_event()}]
+    matched = [
+        {
+            "stream": {"id": 1, "name": "AU (STAN) | Qualifying: 6 Hours of Sao Paulo"},
+            "event": _wec_event(),
+        }
+    ]
     out = expand_racing_segments(matched)
     assert {m["segment"] for m in out} == {
-        "qualifying_lmgt3", "qualifying_hypercar", "hyperpole_lmgt3", "hyperpole_hypercar",
+        "qualifying_lmgt3",
+        "qualifying_hypercar",
+        "hyperpole_lmgt3",
+        "hyperpole_hypercar",
     }
 
 
@@ -811,13 +862,18 @@ def test_expand_racing_segments_keeps_full_fanout_for_generic_channel_name_exclu
     # practice — providers rarely carry a dedicated practice feed, so a
     # whole-weekend stream landing on a Practice channel is more likely to
     # be dead air than a real source; better no channel than that.
-    matched = [{
-        "stream": {"id": 1, "name": "HBO UK 065|  6 HOURS OF SAO PAULO - FIA WEC | Round 5"},
-        "event": _wec_event(),
-    }]
+    matched = [
+        {
+            "stream": {"id": 1, "name": "HBO UK 065|  6 HOURS OF SAO PAULO - FIA WEC | Round 5"},
+            "event": _wec_event(),
+        }
+    ]
     out = expand_racing_segments(matched)
     assert {m["segment"] for m in out} == {
-        "qualifying_lmgt3", "hyperpole_lmgt3", "qualifying_hypercar", "hyperpole_hypercar",
+        "qualifying_lmgt3",
+        "hyperpole_lmgt3",
+        "qualifying_hypercar",
+        "hyperpole_hypercar",
         "race",
     }
 
@@ -825,8 +881,12 @@ def test_expand_racing_segments_keeps_full_fanout_for_generic_channel_name_exclu
 def test_expand_racing_segments_still_scopes_dedicated_practice_stream():
     # The exception: a stream whose name specifically names a practice
     # session still gets that session's channel.
-    matched = [{"stream": {"id": 1, "name": "AU (STAN) | Free Practice 2: 6 Hours of Sao Paulo"},
-                "event": _wec_event()}]
+    matched = [
+        {
+            "stream": {"id": 1, "name": "AU (STAN) | Free Practice 2: 6 Hours of Sao Paulo"},
+            "event": _wec_event(),
+        }
+    ]
     out = expand_racing_segments(matched)
     assert [m["segment"] for m in out] == ["fp2"]
 
@@ -841,10 +901,15 @@ def test_expand_racing_segments_scopes_unnumbered_trailing_practice_stream():
         SimpleNamespace(code="qualifying", name="Qualifying", start_time=base + timedelta(hours=3)),
         SimpleNamespace(code="race", name="Race", start_time=base + timedelta(days=1)),
     ]
-    matched = [{
-        "stream": {"id": 1, "name": "CA (TSN+ 021) | NASCAR Cup Series Practice: Quaker State 400"},
-        "event": _wec_event(sessions),
-    }]
+    matched = [
+        {
+            "stream": {
+                "id": 1,
+                "name": "CA (TSN+ 021) | NASCAR Cup Series Practice: Quaker State 400",
+            },
+            "event": _wec_event(sessions),
+        }
+    ]
     out = expand_racing_segments(matched)
     assert [m["segment"] for m in out] == ["practice"]
 
@@ -857,8 +922,12 @@ def test_expand_racing_segments_drops_stream_when_no_session_of_the_category_exi
     # sources on the Race channel. A stream that names a session category
     # the event doesn't have must be dropped, not rebound to other sessions.
     sessions = [s for s in _wec_sessions() if s.code != "fp3"]
-    matched = [{"stream": {"id": 1, "name": "AU (STAN) | Free Practice 3: 6 Hours of Sao Paulo"},
-                "event": _wec_event(sessions)}]
+    matched = [
+        {
+            "stream": {"id": 1, "name": "AU (STAN) | Free Practice 3: 6 Hours of Sao Paulo"},
+            "event": _wec_event(sessions),
+        }
+    ]
     out = expand_racing_segments(matched)
     assert out == []
 
@@ -868,8 +937,9 @@ def test_expand_racing_segments_produces_no_channel_when_only_practice_exists():
     # rather than land the stream on a Practice channel with nothing airing
     # yet, no segment — and so no channel — should be produced at all.
     sessions = [
-        SimpleNamespace(code="practice", name="Practice",
-                        start_time=datetime(2026, 7, 11, 9, tzinfo=UTC)),
+        SimpleNamespace(
+            code="practice", name="Practice", start_time=datetime(2026, 7, 11, 9, tzinfo=UTC)
+        ),
     ]
     matched = [{"stream": {"id": 1, "name": "TSN+ 016"}, "event": _wec_event(sessions)}]
     out = expand_racing_segments(matched)
@@ -991,14 +1061,20 @@ def test_name_path_still_uses_run_target_date():
 
 def _belgian_sessions():
     return [
-        SimpleNamespace(code="fp1", name="Practice 1",
-                        start_time=datetime(2026, 7, 17, 11, 30, tzinfo=UTC)),
-        SimpleNamespace(code="fp2", name="Practice 2",
-                        start_time=datetime(2026, 7, 17, 15, 0, tzinfo=UTC)),
-        SimpleNamespace(code="qualifying", name="Qualifying",
-                        start_time=datetime(2026, 7, 18, 14, 0, tzinfo=UTC)),
-        SimpleNamespace(code="race", name="Race",
-                        start_time=datetime(2026, 7, 19, 13, 0, tzinfo=UTC)),
+        SimpleNamespace(
+            code="fp1", name="Practice 1", start_time=datetime(2026, 7, 17, 11, 30, tzinfo=UTC)
+        ),
+        SimpleNamespace(
+            code="fp2", name="Practice 2", start_time=datetime(2026, 7, 17, 15, 0, tzinfo=UTC)
+        ),
+        SimpleNamespace(
+            code="qualifying",
+            name="Qualifying",
+            start_time=datetime(2026, 7, 18, 14, 0, tzinfo=UTC),
+        ),
+        SimpleNamespace(
+            code="race", name="Race", start_time=datetime(2026, 7, 19, 13, 0, tzinfo=UTC)
+        ),
     ]
 
 
@@ -1014,38 +1090,54 @@ def _epg_entry(prog_start, prog_end):
 
 def test_epg_entry_scopes_to_practice_session_its_programme_covers():
     # "Live: Formula 1 | Belgian Grand Prix: 1st Practice" 11:00–12:55 UTC.
-    out = expand_racing_segments([_epg_entry(
-        datetime(2026, 7, 17, 11, 0, tzinfo=UTC),
-        datetime(2026, 7, 17, 12, 55, tzinfo=UTC),
-    )])
+    out = expand_racing_segments(
+        [
+            _epg_entry(
+                datetime(2026, 7, 17, 11, 0, tzinfo=UTC),
+                datetime(2026, 7, 17, 12, 55, tzinfo=UTC),
+            )
+        ]
+    )
     assert [m["segment"] for m in out] == ["fp1"]
 
 
 def test_epg_entry_scopes_to_race_for_race_slot():
-    out = expand_racing_segments([_epg_entry(
-        datetime(2026, 7, 19, 12, 30, tzinfo=UTC),
-        datetime(2026, 7, 19, 15, 30, tzinfo=UTC),
-    )])
+    out = expand_racing_segments(
+        [
+            _epg_entry(
+                datetime(2026, 7, 19, 12, 30, tzinfo=UTC),
+                datetime(2026, 7, 19, 15, 30, tzinfo=UTC),
+            )
+        ]
+    )
     assert [m["segment"] for m in out] == ["race"]
 
 
 def test_epg_buildup_programme_binds_to_nearest_session_within_tolerance():
     # Pre-race build-up that ENDS before lights out (no window overlap) —
     # the anchor gate admitted it, so it binds to the nearest session.
-    out = expand_racing_segments([_epg_entry(
-        datetime(2026, 7, 19, 11, 30, tzinfo=UTC),
-        datetime(2026, 7, 19, 12, 50, tzinfo=UTC),
-    )])
+    out = expand_racing_segments(
+        [
+            _epg_entry(
+                datetime(2026, 7, 19, 11, 30, tzinfo=UTC),
+                datetime(2026, 7, 19, 12, 50, tzinfo=UTC),
+            )
+        ]
+    )
     assert [m["segment"] for m in out] == ["race"]
 
 
 def test_epg_entry_covering_no_session_is_dropped():
     # A slot hours from every session (stale plan entry): no channel at all
     # beats a wrong one.
-    out = expand_racing_segments([_epg_entry(
-        datetime(2026, 7, 18, 2, 0, tzinfo=UTC),
-        datetime(2026, 7, 18, 3, 0, tzinfo=UTC),
-    )])
+    out = expand_racing_segments(
+        [
+            _epg_entry(
+                datetime(2026, 7, 18, 2, 0, tzinfo=UTC),
+                datetime(2026, 7, 18, 3, 0, tzinfo=UTC),
+            )
+        ]
+    )
     assert out == []
 
 
@@ -1086,32 +1178,38 @@ def test_nearest_session_no_sessions():
 
 class TestColonValueSessionLabels:
     def test_apple_tv_race_stream_scopes_to_race(self):
-        assert _session_category_from_stream_name(
-            "NEXT | BELGIUM: RACE | Sun 19 Jul 11:50 UTC (UK) | 8K EXCLUSIVE "
-            "| UK: APPLE TV F1 PPV 1"
-        ) == "race"
+        assert (
+            _session_category_from_stream_name(
+                "NEXT | BELGIUM: RACE | Sun 19 Jul 11:50 UTC (UK) | 8K EXCLUSIVE "
+                "| UK: APPLE TV F1 PPV 1"
+            )
+            == "race"
+        )
 
     def test_apple_tv_sprint_stream_scopes_to_sprint(self):
-        assert _session_category_from_stream_name(
-            "NEXT | NETHERLANDS: SPRINT | Sat 22 Aug 09:15 UTC (UK) | 8K EXCLUSIVE "
-            "| UK: APPLE TV F1 PPV 3"
-        ) == "sprint"
+        assert (
+            _session_category_from_stream_name(
+                "NEXT | NETHERLANDS: SPRINT | Sat 22 Aug 09:15 UTC (UK) | 8K EXCLUSIVE "
+                "| UK: APPLE TV F1 PPV 3"
+            )
+            == "sprint"
+        )
 
     def test_session_word_embedded_in_branding_does_not_count(self):
         # "RACING"/"Race" inside branding text is not an anchored field match.
-        assert _session_category_from_stream_name(
-            "UK ★ SKY SPORTS F1 RACING HD"
-        ) is None
-        assert _session_category_from_stream_name(
-            "US: Racecourse Network | Live: Horse Coverage"
-        ) is None
+        assert _session_category_from_stream_name("UK ★ SKY SPORTS F1 RACING HD") is None
+        assert (
+            _session_category_from_stream_name("US: Racecourse Network | Live: Horse Coverage")
+            is None
+        )
 
     def test_timestamp_colons_do_not_confuse_field_scan(self):
         # "11:50" splits into non-session fields; a generic linear name with
         # times must keep the full fan-out.
-        assert _session_category_from_stream_name(
-            "HBO UK 065 | Live 11:50 | Grand Prix Coverage"
-        ) is None
+        assert (
+            _session_category_from_stream_name("HBO UK 065 | Live 11:50 | Grand Prix Coverage")
+            is None
+        )
 
 
 def test_expand_scopes_apple_tv_race_stream_to_race_only():
@@ -1119,8 +1217,11 @@ def test_expand_scopes_apple_tv_race_stream_to_race_only():
     # fanned out generically and landed as full-life sources on the
     # Qualifying channel too.
     entry = {
-        "stream": {"id": 1, "name": "NEXT | BELGIUM: RACE | Sun 19 Jul 11:50 UTC (UK) "
-                   "| 8K EXCLUSIVE | UK: APPLE TV F1 PPV 1"},
+        "stream": {
+            "id": 1,
+            "name": "NEXT | BELGIUM: RACE | Sun 19 Jul 11:50 UTC (UK) "
+            "| 8K EXCLUSIVE | UK: APPLE TV F1 PPV 1",
+        },
         "event": _wec_event(_belgian_sessions()),
     }
     out = expand_racing_segments([entry])
@@ -1154,9 +1255,7 @@ def test_archival_replay_naming_old_year_is_rejected():
     # Live (Plex FAST "F1 Channel"): "2008 Belgian Grand Prix" aired 33 min
     # into 2026 qualifying — inside anchor tolerance, racing text evidence,
     # near-perfect fuzzy score. The year is the tell.
-    out = _match_named_stream(
-        "2008 Belgian Grand Prix", datetime(2026, 7, 19, 13, 33, tzinfo=UTC)
-    )
+    out = _match_named_stream("2008 Belgian Grand Prix", datetime(2026, 7, 19, 13, 33, tzinfo=UTC))
     assert not out.is_matched
     assert "archival" in (out.detail or "")
 
@@ -1200,11 +1299,13 @@ def test_compound_spelling_mismatch_still_matches():
     # but the provider event is "FaithFest 250 presented by Mercer
     # Transportation" — plain token scoring shares only "250" and lands under
     # the 50 sanity threshold, so the qualifying broadcast never matched.
-    a = _event("a", "FaithFest 250 presented by Mercer Transportation",
-               circuit="North Wilkesboro Speedway")
+    a = _event(
+        "a", "FaithFest 250 presented by Mercer Transportation", circuit="North Wilkesboro Speedway"
+    )
     out = _matcher()._match_to_event(
         _ctx("NASCAR Craftsman Truck Series | Faith Fest 250, Qualifying"),
-        [a], "nascar-truck",
+        [a],
+        "nascar-truck",
     )
     assert out.is_matched and out.event.id == "a"
 
@@ -1215,6 +1316,7 @@ def test_unrelated_stream_still_rejected_with_augmentation():
     a = _event("a", "Focused Health 250", circuit="Atlanta Motor Speedway")
     out = _matcher()._match_to_event(
         _ctx("HBO UK 047 | Malilla - FIM Speedway GP | Round 6 | Malilla"),
-        [a], "nascar-xfinity",
+        [a],
+        "nascar-xfinity",
     )
     assert not out.is_matched

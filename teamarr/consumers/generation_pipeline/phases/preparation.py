@@ -65,9 +65,7 @@ def stage_prepare_team_channels(context: GenerationContext) -> None:
     )
 
 
-def refresh_m3u_accounts_for_groups(
-    db_factory: Callable[[], Any], dispatcharr_client: Any
-) -> dict:
+def refresh_m3u_accounts_for_groups(db_factory: Callable[[], Any], dispatcharr_client: Any) -> dict:
     """Refresh M3U accounts for all enabled event groups."""
     from teamarr.database.groups import get_all_groups
 

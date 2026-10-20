@@ -159,8 +159,7 @@ def _abbrev_or_name(team) -> str:
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.ALL,
     description=(
-        "Home team abbreviation uppercase (falls back to short/full name "
-        "when the league has none)"
+        "Home team abbreviation uppercase (falls back to short/full name when the league has none)"
     ),
 )
 def extract_home_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:
@@ -174,8 +173,7 @@ def extract_home_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None)
     category=Category.HOME_AWAY,
     suffix_rules=SuffixRules.ALL,
     description=(
-        "Away team abbreviation uppercase (falls back to short/full name "
-        "when the league has none)"
+        "Away team abbreviation uppercase (falls back to short/full name when the league has none)"
     ),
 )
 def extract_away_team_abbrev(ctx: TemplateContext, game_ctx: GameContext | None) -> str:

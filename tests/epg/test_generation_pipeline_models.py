@@ -106,9 +106,7 @@ def test_snapshot_stores_the_expected_typed_objects():
     dispatcharr = DispatcharrSettings()
     display = DisplaySettings()
 
-    snapshot = GenerationSettingsSnapshot(
-        epg=epg, dispatcharr=dispatcharr, display=display
-    )
+    snapshot = GenerationSettingsSnapshot(epg=epg, dispatcharr=dispatcharr, display=display)
 
     assert snapshot.epg is epg
     assert snapshot.dispatcharr is dispatcharr
@@ -162,9 +160,7 @@ def test_generation_snapshots_settings_once_per_run(isolated_db, monkeypatch):
     _trace("get_dispatcharr_settings")
     _trace("get_display_settings")
 
-    result = generation_mod.run_full_generation(
-        db_factory=isolated_db, dispatcharr_client=None
-    )
+    result = generation_mod.run_full_generation(db_factory=isolated_db, dispatcharr_client=None)
 
     assert result.success is True
     # The snapshot: three reads, in this order, before any stage runs.

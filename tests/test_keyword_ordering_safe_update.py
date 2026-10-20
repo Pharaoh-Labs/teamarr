@@ -55,9 +55,7 @@ def _numbers() -> tuple[int, int]:
         # channel_number is stored TEXT (hence the CAST in the pair query).
         rows = {
             r["id"]: int(r["channel_number"])
-            for r in conn.execute(
-                "SELECT id, channel_number FROM managed_channels ORDER BY id"
-            )
+            for r in conn.execute("SELECT id, channel_number FROM managed_channels ORDER BY id")
         }
     return rows[1], rows[2]
 
@@ -104,7 +102,6 @@ def test_no_history_row_written_for_a_rejected_swap(db):
 
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT COUNT(*) AS n FROM managed_channel_history "
-            "WHERE change_type = 'number_swapped'"
+            "SELECT COUNT(*) AS n FROM managed_channel_history WHERE change_type = 'number_swapped'"
         ).fetchone()
     assert rows["n"] == 0, "a rejected swap must not leave a 'number_swapped' audit row"

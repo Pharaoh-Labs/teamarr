@@ -161,9 +161,7 @@ def test_bundle_redacts_account_name_leaked_via_pinned_stream_snapshot(db_path, 
     with zipfile.ZipFile(BytesIO(bundle)) as archive:
         report = json.loads(archive.read("support-report.json"))
 
-    [keyword] = [
-        kw for kw in report["configuration"]["exception_keywords"] if kw["label"] == "ES"
-    ]
+    [keyword] = [kw for kw in report["configuration"]["exception_keywords"] if kw["label"] == "ES"]
     assert keyword["streams"] == [{"id": 99, "name": "DAZN 1 ([REDACTED])"}]
 
     [source] = report["sources_and_subscriptions"]["sources"]

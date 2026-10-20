@@ -33,7 +33,12 @@ def _stream(sid, name, group_id=None):
 
 
 def _make_processor(
-    stream_channel_map, epg_data_list, streams, managed, epg_groups, monkeypatch,
+    stream_channel_map,
+    epg_data_list,
+    streams,
+    managed,
+    epg_groups,
+    monkeypatch,
     dp_groups=None,
 ):
     """Build a processor with mocked Dispatcharr client + DB lookups.
@@ -60,9 +65,7 @@ def _make_processor(
         ),
         m3u=SimpleNamespace(
             # Detail lookup is by id (#647) — the full catalog is never listed.
-            get_streams_by_ids=lambda ids: [
-                s for s in streams if s.id in {int(i) for i in ids}
-            ],
+            get_streams_by_ids=lambda ids: [s for s in streams if s.id in {int(i) for i in ids}],
             # Real channels API has no channel_group_name; names come from here (#379).
             list_groups=lambda: dp_groups or [],
         ),
@@ -138,9 +141,7 @@ def test_excludes_channels_without_active_epg(monkeypatch):
 def test_dedupes_streams_already_in_epg_match_group(monkeypatch):
     # Stream 500 lives in M3U group 42, which is an EPG-match-enabled event group,
     # so the per-group path already handles it → channel source must skip it.
-    epg_group = SimpleNamespace(
-        m3u_group_id=42, epg_match_enabled=True, is_channel_source=False
-    )
+    epg_group = SimpleNamespace(m3u_group_id=42, epg_match_enabled=True, is_channel_source=False)
     proc = _make_processor(
         stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
         epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
@@ -154,9 +155,7 @@ def test_dedupes_streams_already_in_epg_match_group(monkeypatch):
 
 def test_keeps_streams_in_non_epg_group(monkeypatch):
     # Same as above but the M3U group is NOT EPG-match-enabled → keep it.
-    plain_group = SimpleNamespace(
-        m3u_group_id=42, epg_match_enabled=False, is_channel_source=False
-    )
+    plain_group = SimpleNamespace(m3u_group_id=42, epg_match_enabled=False, is_channel_source=False)
     proc = _make_processor(
         stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
         epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
@@ -450,9 +449,7 @@ def test_run_time_sync_builds_rows_from_settings(db_conn):
     db_conn.commit()
     proc = make_bare_processor(
         _dispatcharr_client=SimpleNamespace(
-            m3u=SimpleNamespace(
-                list_groups=lambda: [SimpleNamespace(id=470, name="NFL Local")]
-            )
+            m3u=SimpleNamespace(list_groups=lambda: [SimpleNamespace(id=470, name="NFL Local")])
         )
     )
 

@@ -227,7 +227,6 @@ def validate_tsdb_sport_matches(tsdb_str_sport: str | None, chosen_sport: str) -
 # ---------------------------------------------------------------------------
 
 
-
 def _require_tsdb(provider: str) -> None:
     """Reject any non-TSDB provider (the epic's #1 non-negotiable constraint)."""
     if provider != "tsdb":
@@ -378,8 +377,7 @@ def list_custom_leagues_with_state(conn: sqlite3.Connection) -> list[dict]:
 
     subscribed = global_subscription_league_codes(conn)
     return [
-        {**row, "subscribed": row["league_code"] in subscribed}
-        for row in list_custom_leagues(conn)
+        {**row, "subscribed": row["league_code"] in subscribed} for row in list_custom_leagues(conn)
     ]
 
 

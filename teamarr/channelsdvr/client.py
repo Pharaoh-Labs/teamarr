@@ -269,9 +269,7 @@ class ChannelsDVRClient:
             "source_name": self.source_name,
         }
 
-    def trigger_m3u_refresh(
-        self, timeout: int = 60, wait_for_completion: bool = False
-    ) -> dict:
+    def trigger_m3u_refresh(self, timeout: int = 60, wait_for_completion: bool = False) -> dict:
         """Trigger an M3U source refresh on the Channels DVR server.
 
         The POST returns immediately — CDVR runs the refresh in the
@@ -299,9 +297,7 @@ class ChannelsDVRClient:
         completion_pattern = re.compile(
             rf"\[M3U\] Refreshed lineup for {re.escape(self.source_name)}\b"
         )
-        since_marker = (
-            self._latest_log_marker(completion_pattern) if wait_for_completion else None
-        )
+        since_marker = self._latest_log_marker(completion_pattern) if wait_for_completion else None
 
         start = time.monotonic()
         try:
@@ -429,11 +425,7 @@ class ChannelsDVRClient:
                 )
                 if not lineup_id:
                     continue
-                name = (
-                    item.get("Name")
-                    or item.get("name")
-                    or str(lineup_id)
-                )
+                name = item.get("Name") or item.get("name") or str(lineup_id)
                 lineups.append({"id": str(lineup_id), "name": str(name)})
         elif isinstance(data, dict):
             # CDVR returns {source_id: lineup_id} — values are the lineup IDs
@@ -526,9 +518,7 @@ class ChannelsDVRClient:
         }
 
         if verify:
-            self._verify_guide_reindexed(
-                fetched_pattern, indexed_pattern, since_marker, result
-            )
+            self._verify_guide_reindexed(fetched_pattern, indexed_pattern, since_marker, result)
 
         return result
 
@@ -555,16 +545,13 @@ class ChannelsDVRClient:
 
         # Step 1: the guide must actually be fetched. No fetch line = the PUT
         # was accepted but did nothing = the stale-guide failure we must surface.
-        fetched = self._poll_log_for(
-            fetched_pattern, since_marker, self.GUIDE_FETCH_TIMEOUT
-        )
+        fetched = self._poll_log_for(fetched_pattern, since_marker, self.GUIDE_FETCH_TIMEOUT)
         if not fetched:
             result["verified"] = False
             result["verification"] = {
                 "status": "no_fetch",
                 "detail": (
-                    "CDVR accepted the refresh but never fetched the guide — "
-                    "guide is likely stale"
+                    "CDVR accepted the refresh but never fetched the guide — guide is likely stale"
                 ),
             }
             logger.warning(
@@ -578,9 +565,7 @@ class ChannelsDVRClient:
 
         # Step 2: the fetch should be followed by an index. Its absence is
         # benign (unchanged content is deduped, or indexing is still running).
-        indexed = self._poll_log_for(
-            indexed_pattern, since_marker, self.GUIDE_INDEX_TIMEOUT
-        )
+        indexed = self._poll_log_for(indexed_pattern, since_marker, self.GUIDE_INDEX_TIMEOUT)
         if indexed:
             match = indexed_pattern.search(indexed)
             airings = int(match.group(1)) if match else None
@@ -597,8 +582,7 @@ class ChannelsDVRClient:
             result["verification"] = {
                 "status": "fetched",
                 "detail": (
-                    "guide fetched; no re-index observed "
-                    "(content unchanged or still indexing)"
+                    "guide fetched; no re-index observed (content unchanged or still indexing)"
                 ),
             }
             logger.info(

@@ -131,9 +131,7 @@ class StreamOrderingService:
         self.conn = conn
         # Only widen the priority scale when scoring is actually in play; a
         # pure-priority ruleset keeps its legacy small values (see BAND_STRIDE).
-        self._has_score_rules = any(
-            r.mode == "score" and r.type != "catch_all" for r in self.rules
-        )
+        self._has_score_rules = any(r.mode == "score" and r.type != "catch_all" for r in self.rules)
         self._compiled_regex: dict[str, re.Pattern] = {}
         self._group_name_cache: dict[int, str] = {}
         # Keyed by rule.value string so different team selections cache separately
@@ -280,8 +278,13 @@ class StreamOrderingService:
             if rule.mode == "score":
                 matched.append(
                     RuleEvaluation(
-                        rule.type, rule.value, rule.priority, False,
-                        mode="score", points=rule.points, condition=rule.condition,
+                        rule.type,
+                        rule.value,
+                        rule.priority,
+                        False,
+                        mode="score",
+                        points=rule.points,
+                        condition=rule.condition,
                     )
                 )
             else:
@@ -289,8 +292,12 @@ class StreamOrderingService:
                 band_won = band_won or is_winner
                 matched.append(
                     RuleEvaluation(
-                        rule.type, rule.value, rule.priority, is_winner,
-                        mode="priority", condition=rule.condition,
+                        rule.type,
+                        rule.value,
+                        rule.priority,
+                        is_winner,
+                        mode="priority",
+                        condition=rule.condition,
                     )
                 )
 
@@ -432,9 +439,7 @@ class StreamOrderingService:
 
     # Detects streams that explicitly name a feed perspective (home/away/cam/feed keyword).
     # Used by not_team_feed to avoid matching generic streams with no feed markers.
-    _FEED_INDICATOR_RE = re.compile(
-        r"(?i)\b(?:home|away)\b|\bcam\s*0?[12]\b|\bfeed\b"
-    )
+    _FEED_INDICATOR_RE = re.compile(r"(?i)\b(?:home|away)\b|\bcam\s*0?[12]\b|\bfeed\b")
 
     def _match_team_feed(self, stream: ManagedChannelStream, rule_value: str) -> bool:
         """Match a stream against the rule's team selection (#489).
@@ -824,9 +829,7 @@ class StreamOrderingService:
                             f" WHERE id IN ({placeholders}) AND active = 1",
                             row_ids,
                         ).fetchall()
-                        keys.update(
-                            ((r[1] or None), str(r[0])) for r in rows if r[0] is not None
-                        )
+                        keys.update(((r[1] or None), str(r[0])) for r in rows if r[0] is not None)
                     except Exception as e:
                         logger.warning(
                             "[STREAM_ORDER] Failed to resolve team ids for team_feed rule: %s",

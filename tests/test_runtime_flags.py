@@ -19,9 +19,19 @@ from teamarr.dispatcharr.client import DispatcharrClient
 
 @pytest.mark.parametrize(
     "value,expected",
-    [(None, True), ("", True), ("on", True), ("1", True), ("anything", True),
-     ("off", False), ("OFF", False), ("0", False), ("false", False), ("no", False),
-     (" off ", False)],
+    [
+        (None, True),
+        ("", True),
+        ("on", True),
+        ("1", True),
+        ("anything", True),
+        ("off", False),
+        ("OFF", False),
+        ("0", False),
+        ("false", False),
+        ("no", False),
+        (" off ", False),
+    ],
 )
 def test_scheduler_enabled_parsing(monkeypatch, value, expected):
     if value is None:
@@ -33,8 +43,18 @@ def test_scheduler_enabled_parsing(monkeypatch, value, expected):
 
 @pytest.mark.parametrize(
     "value,expected",
-    [(None, False), ("", False), ("false", False), ("0", False), ("off", False),
-     ("true", True), ("TRUE", True), ("1", True), ("yes", True), ("on", True)],
+    [
+        (None, False),
+        ("", False),
+        ("false", False),
+        ("0", False),
+        ("off", False),
+        ("true", True),
+        ("TRUE", True),
+        ("1", True),
+        ("yes", True),
+        ("on", True),
+    ],
 )
 def test_dry_run_parsing(monkeypatch, value, expected):
     if value is None:
@@ -124,7 +144,10 @@ def test_dry_run_media_refresh_records_and_skips(monkeypatch):
 
     monkeypatch.setenv("DRY_RUN", "true")
     result = SimpleNamespace(
-        emby_refresh={}, jellyfin_refresh={}, channelsdvr_refresh={}, channelsdvr_epg_refresh={},
+        emby_refresh={},
+        jellyfin_refresh={},
+        channelsdvr_refresh={},
+        channelsdvr_epg_refresh={},
         media_server_outcomes=[],
     )
     jobs = [
@@ -133,12 +156,15 @@ def test_dry_run_media_refresh_records_and_skips(monkeypatch):
     ]
     assert _dry_run_media_refresh(result, jobs) is True
     assert result.emby_refresh == {
-        "success": True, "dry_run": True, "servers": ["http://emby:8096"],
+        "success": True,
+        "dry_run": True,
+        "servers": ["http://emby:8096"],
     }
     # Suppressed refreshes are still recorded as (dry-run) successes (#649),
     # so a dev instance never trips the consecutive-failure signal.
     assert [(o["kind"], o["success"], o["dry_run"]) for o in result.media_server_outcomes] == [
-        ("emby", True, True), ("channelsdvr", True, True),
+        ("emby", True, True),
+        ("channelsdvr", True, True),
     ]
     assert result.channelsdvr_refresh["dry_run"] is True
     assert result.channelsdvr_epg_refresh["dry_run"] is True

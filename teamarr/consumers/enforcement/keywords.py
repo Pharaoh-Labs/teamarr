@@ -391,8 +391,7 @@ class KeywordEnforcer:
                         # streams is tuple[int, ...] — filter out the moved stream
                         streams = [s for s in channel.streams if s != stream_id]
                         logger.info(
-                            "[STREAM_AUDIT] keyword move: removing stream %d "
-                            "from ch %d: %s → %s",
+                            "[STREAM_AUDIT] keyword move: removing stream %d from ch %d: %s → %s",
                             stream_id,
                             from_channel_id,
                             list(channel.streams),
@@ -409,8 +408,7 @@ class KeywordEnforcer:
                         if stream_id not in streams:
                             streams.append(stream_id)
                             logger.info(
-                                "[STREAM_AUDIT] keyword move: adding stream %d "
-                                "to ch %d: %s → %s",
+                                "[STREAM_AUDIT] keyword move: adding stream %d to ch %d: %s → %s",
                                 stream_id,
                                 to_channel_id,
                                 list(channel.streams) if channel.streams else [],

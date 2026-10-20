@@ -52,9 +52,11 @@ def test_detect_league_hint_gender(stream, expected):
         (PAIR, "NCAAB: Women: South Carolina @ LSU", "womens-college-basketball"),
         (PAIR, "NCAAB 216: LSU (w)", "womens-college-basketball"),  # case-insensitive
         # Non-gendered league lists pass through untouched.
-        (["eng.2", "eng.3", "eng.4", "eng.fa"],
-         "EFL: Portsmouth vs Southampton (W)",
-         ["eng.2", "eng.3", "eng.4", "eng.fa"]),
+        (
+            ["eng.2", "eng.3", "eng.4", "eng.fa"],
+            "EFL: Portsmouth vs Southampton (W)",
+            ["eng.2", "eng.3", "eng.4", "eng.fa"],
+        ),
         # Spanish/Portuguese markers.
         (PAIR, "Fútbol Femenino: España vs Italia", "womens-college-basketball"),
         (PAIR, "Liga Femenina", "womens-college-basketball"),

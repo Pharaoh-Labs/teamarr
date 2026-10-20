@@ -28,21 +28,29 @@ def _event(state: str) -> Event:
         sport="basketball",
         status=EventStatus(state=state),
         home_team=Team(
-            id="1", provider="espn", name="Home Heat", short_name="Heat",
-            abbreviation="HH", league="nba", sport="basketball",
+            id="1",
+            provider="espn",
+            name="Home Heat",
+            short_name="Heat",
+            abbreviation="HH",
+            league="nba",
+            sport="basketball",
         ),
         away_team=Team(
-            id="2", provider="espn", name="Away Aces", short_name="Aces",
-            abbreviation="AA", league="nba", sport="basketball",
+            id="2",
+            provider="espn",
+            name="Away Aces",
+            short_name="Aces",
+            abbreviation="AA",
+            league="nba",
+            sport="basketball",
         ),
     )
 
 
 def _ctx(event: Event | None) -> tuple[TemplateContext, GameContext]:
     gc = GameContext(event=event)
-    tc = TeamChannelContext(
-        team_id="1", league="nba", sport="basketball", team_name="Home Heat"
-    )
+    tc = TeamChannelContext(team_id="1", league="nba", sport="basketball", team_name="Home Heat")
     return TemplateContext(game_context=gc, team_config=tc, team_stats=None), gc
 
 

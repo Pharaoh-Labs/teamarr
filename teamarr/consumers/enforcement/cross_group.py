@@ -69,7 +69,6 @@ class CrossGroupEnforcer:
         event-scoped. Retained for API compatibility.
         """
         logger.debug(
-            "[CROSS_GROUP] No-op — event-scoped channel creation "
-            "prevents cross-group duplicates"
+            "[CROSS_GROUP] No-op — event-scoped channel creation prevents cross-group duplicates"
         )
         return CrossGroupResult()

@@ -33,8 +33,13 @@ def real_league_service(db_factory):
 
 def _team(name, abbrev, id_="1"):
     return Team(
-        id=id_, provider="espn", name=name, short_name=name,
-        abbreviation=abbrev, league="nba", sport="basketball",
+        id=id_,
+        provider="espn",
+        name=name,
+        short_name=name,
+        abbreviation=abbrev,
+        league="nba",
+        sport="basketball",
     )
 
 
@@ -42,11 +47,15 @@ def _ctx(is_home=True, **event_kw):
     home = _team("Boston Celtics", "BOS", "1")
     away = _team("Detroit Pistons", "DET", "2")
     event = Event(
-        id="e1", provider="espn", name="Detroit Pistons at Boston Celtics",
+        id="e1",
+        provider="espn",
+        name="Detroit Pistons at Boston Celtics",
         short_name="DET @ BOS",
         start_time=datetime(2026, 7, 10, 19, 0, tzinfo=UTC),
-        home_team=home, away_team=away,
-        league="nba", sport="basketball",
+        home_team=home,
+        away_team=away,
+        league="nba",
+        sport="basketball",
         venue=Venue(name="TD Garden", city="Boston", state="MA"),
         **{"status": EventStatus(state="pre"), **event_kw},
     )
@@ -55,8 +64,11 @@ def _ctx(is_home=True, **event_kw):
     return TemplateContext(
         game_context=game_ctx,
         team_config=TeamChannelContext(
-            team_id=team.id, league="nba", sport="basketball",
-            team_name=team.name, team_abbrev=team.abbreviation,
+            team_id=team.id,
+            league="nba",
+            sport="basketball",
+            team_name=team.name,
+            team_abbrev=team.abbreviation,
         ),
         team_stats=None,
     )
@@ -121,8 +133,12 @@ class TestSelectWithTrace:
 
     def test_condition_value_in_reason(self):
         options = [
-            {"condition": "win_streak", "condition_value": "5", "priority": 10,
-             "template": "Streaking"},
+            {
+                "condition": "win_streak",
+                "condition_value": "5",
+                "priority": 10,
+                "template": "Streaking",
+            },
             {"priority": 100, "template": "Default"},
         ]
         ctx = _ctx()
@@ -180,8 +196,7 @@ class TestPreviewEndpoint:
             "/api/v1/templates/preview",
             json={
                 "live": False,
-                "fields": {"subtitle": "{away_team} at {home_team}",
-                           "typo": "{not_a_var}"},
+                "fields": {"subtitle": "{away_team} at {home_team}", "typo": "{not_a_var}"},
                 "conditional_descriptions": OPTIONS,
             },
         )
@@ -263,8 +278,12 @@ class TestFillerPreview:
         monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
         resp = client.post(
             "/api/v1/templates/preview",
-            json={"league": "nba", "live": True, "fields": {},
-                  "filler_conditional_rows": FILLER_ROWS},
+            json={
+                "league": "nba",
+                "live": True,
+                "fields": {},
+                "filler_conditional_rows": FILLER_ROWS,
+            },
         )
         assert resp.status_code == 200
         reg = resp.json()["filler_conditional"]["postgame"]
@@ -280,8 +299,12 @@ class TestFillerPreview:
         monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
         resp = client.post(
             "/api/v1/templates/preview",
-            json={"league": "nba", "live": True, "fields": {},
-                  "filler_conditional_rows": FILLER_ROWS},
+            json={
+                "league": "nba",
+                "live": True,
+                "fields": {},
+                "filler_conditional_rows": FILLER_ROWS,
+            },
         )
         reg = resp.json()["filler_conditional"]["postgame"]
         assert reg["rendered_description"] is None
@@ -294,8 +317,12 @@ class TestFillerPreview:
         monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
         resp = client.post(
             "/api/v1/templates/preview",
-            json={"league": "nba", "live": True, "fields": {},
-                  "filler_conditional_rows": FILLER_ROWS},
+            json={
+                "league": "nba",
+                "live": True,
+                "fields": {},
+                "filler_conditional_rows": FILLER_ROWS,
+            },
         )
         reg = resp.json()["filler_conditional"]["postgame"]
         assert reg["rendered_description"] == "Still going."
@@ -305,14 +332,19 @@ class TestFillerPreview:
 
         ctx = _ctx(status=EventStatus(state="post"))
         monkeypatch.setattr(t, "build_live_context", lambda league: ctx)
-        rows = {"idle": [
-            {"condition": "is_final", "priority": 50,
-             "template": "Final recap line", "title": "After: {home_team}"},
-        ]}
+        rows = {
+            "idle": [
+                {
+                    "condition": "is_final",
+                    "priority": 50,
+                    "template": "Final recap line",
+                    "title": "After: {home_team}",
+                },
+            ]
+        }
         resp = client.post(
             "/api/v1/templates/preview",
-            json={"league": "nba", "live": True, "fields": {},
-                  "filler_conditional_rows": rows},
+            json={"league": "nba", "live": True, "fields": {}, "filler_conditional_rows": rows},
         )
         reg = resp.json()["filler_conditional"]["idle"]
         assert reg["rendered_title"] == "After: Boston Celtics"
@@ -322,8 +354,11 @@ class TestFillerPreview:
     def test_empty_rows_register_omitted(self):
         resp = client.post(
             "/api/v1/templates/preview",
-            json={"live": False, "fields": {},
-                  "filler_conditional_rows": {"pregame": [], "postgame": []}},
+            json={
+                "live": False,
+                "fields": {},
+                "filler_conditional_rows": {"pregame": [], "postgame": []},
+            },
         )
         assert resp.status_code == 200
         assert resp.json()["filler_conditional"] == {}

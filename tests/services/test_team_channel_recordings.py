@@ -35,8 +35,13 @@ class FakeRecordingApi:
     def create_recording(self, channel_id, start_time, end_time, custom_properties=None):
         self.next_id += 1
         self.created.append(
-            {"id": self.next_id, "channel": channel_id, "start": start_time, "end": end_time,
-             "props": custom_properties}
+            {
+                "id": self.next_id,
+                "channel": channel_id,
+                "start": start_time,
+                "end": end_time,
+                "props": custom_properties,
+            }
         )
         return OperationResult(success=True, data={"id": self.next_id})
 
@@ -143,9 +148,9 @@ def test_remembered_event_supplies_name_and_end(db_factory, manager, api):
 
     made = api.created[0]
     assert made["props"]["program"]["sub_title"] == "Michigan at Minnesota"
-    assert made["end"] == (
-        kickoff + timedelta(hours=4, minutes=RECORDING_POST_MINUTES)
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert made["end"] == (kickoff + timedelta(hours=4, minutes=RECORDING_POST_MINUTES)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
 
 
 @pytest.mark.parametrize(
@@ -289,10 +294,14 @@ class TestRecordToggleApi:
         resp = client.post(
             "/api/v1/teams",
             json={
-                "provider": "espn", "provider_team_id": "130",
-                "primary_league": "college-football", "leagues": ["college-football"],
-                "sport": "football", "team_name": "Michigan Wolverines",
-                "channel_id": "michigan.cfb", **extra,
+                "provider": "espn",
+                "provider_team_id": "130",
+                "primary_league": "college-football",
+                "leagues": ["college-football"],
+                "sport": "football",
+                "team_name": "Michigan Wolverines",
+                "channel_id": "michigan.cfb",
+                **extra,
             },
         )
         assert resp.status_code in (200, 201), resp.text
