@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useSearchParams } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,8 +21,14 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "advanced", label: "Advanced" },
 ]
 
+const isTab = (v: string | null): v is SettingsTab => TABS.some((t) => t.id === v)
+
 export function Settings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general")
+  // `?tab=dispatcharr` opens that tab directly — the Getting Started card's
+  // step 0 links here (#818). Local state after that; the URL is not kept in sync.
+  const [searchParams] = useSearchParams()
+  const requested = searchParams.get("tab")
+  const [activeTab, setActiveTab] = useState<SettingsTab>(isTab(requested) ? requested : "general")
   const { data: settings, isLoading, error, refetch } = useSettings()
 
   if (isLoading) {

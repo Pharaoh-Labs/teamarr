@@ -360,6 +360,10 @@ CREATE TABLE IF NOT EXISTS settings (
     -- Display Preferences
     time_format TEXT DEFAULT '12h' CHECK(time_format IN ('12h', '24h')),
     show_timezone BOOLEAN DEFAULT 1,
+    -- Getting Started checklist on the Dashboard (#818): the user closed it.
+    -- Per install, not per browser. It also hides itself once a run has
+    -- created a channel, so this only matters for an install still setting up.
+    getting_started_dismissed BOOLEAN DEFAULT 0,
     -- Sport naming (#691): 'us' = Football / Soccer; 'international' =
     -- American Football / Football. Applied to the sports.display_name map
     -- everywhere it is read (templates, {sport} channel groups, UI labels).

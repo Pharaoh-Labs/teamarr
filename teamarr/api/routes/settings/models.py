@@ -321,6 +321,7 @@ class DisplaySettingsModel(BaseModel):
     xmltv_generator_name: str = "Teamarr"
     xmltv_generator_url: str = "https://github.com/Pharaoh-Labs/teamarr"
     tsdb_api_key: str | None = None  # Optional TheSportsDB premium API key
+    getting_started_dismissed: bool = False  # Dashboard checklist closed (#818)
 
     @field_serializer("tsdb_api_key")
     @classmethod

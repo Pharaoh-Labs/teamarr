@@ -6,6 +6,7 @@ import { ManagedChannelsTable } from "@/components/ManagedChannelsTable"
 import { EventMatcherModal } from "@/components/EventMatcherModal"
 import { useEventMatcher } from "@/hooks/useEventMatcher"
 import { StatusStrip } from "@/components/StatusStrip"
+import { GettingStarted } from "@/components/GettingStarted"
 import { useRecentRuns, useStats } from "@/hooks/useEPG"
 import { usePersistentCollapse } from "@/hooks/usePersistentCollapse"
 
@@ -56,6 +57,10 @@ export function Dashboard() {
       {/* Status strip — at-a-glance system health */}
       <StatusStrip lastRun={runs[0]} mediaServers={stats?.media_server_health} />
 
+      {/* Getting Started (#818) — renders only while the install is still
+          setting up; hides itself once a run has created a channel. */}
+      <GettingStarted />
+
       {/* Generation History — full pipeline runs (matching, channels, EPG) */}
       {runs.length > 0 && (
         <div>
@@ -86,8 +91,6 @@ export function Dashboard() {
         {/* EPG output diagnostics: URL, coverage analysis, XML preview (collapsed) */}
         <EpgOutput />
       </div>
-
-      {/* Getting Started slot — first-run experience handled by epic 297x */}
 
       {/* All-time totals — compact de-emphasized footer */}
       {stats && (

@@ -190,6 +190,7 @@ class DisplaySettings:
     xmltv_generator_name: str = "Teamarr"
     xmltv_generator_url: str = "https://github.com/Pharaoh-Labs/teamarr"
     tsdb_api_key: str | None = None
+    getting_started_dismissed: bool = False  # Dashboard checklist closed (#818)
 
 
 @dataclass

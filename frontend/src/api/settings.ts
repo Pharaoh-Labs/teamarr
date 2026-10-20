@@ -138,6 +138,7 @@ export interface DisplaySettings {
   xmltv_generator_name: string
   xmltv_generator_url: string
   tsdb_api_key: string | null  // Optional TheSportsDB premium API key
+  getting_started_dismissed: boolean  // Dashboard checklist closed (#818)
 }
 
 export interface TSDBKeyValidationResult {

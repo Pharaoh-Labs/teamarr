@@ -29,6 +29,7 @@ from teamarr.api.routes import (
     presets,
     race_feeds,
     settings,
+    setup,
     sort_priorities,
     source_discovery,
     stats,
@@ -404,6 +405,7 @@ def create_app() -> FastAPI:
     app.include_router(backup.router, prefix="/api/v1", tags=["Backup"])
     app.include_router(subscription.router, prefix="/api/v1", tags=["Subscription"])
     app.include_router(support.router, prefix="/api/v1", tags=["Support"])
+    app.include_router(setup.router, prefix="/api/v1", tags=["Setup"])
     app.include_router(detection_keywords.router, tags=["Detection Keywords"])
 
     # Serve React UI static files

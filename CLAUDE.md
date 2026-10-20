@@ -253,7 +253,7 @@ Documentation epic: `bd list --parent teamarr-nv4`
 ## Architecture
 
 ```
-API Layer        → teamarr/api/routes/ (18 modules)
+API Layer        → teamarr/api/routes/ (19 modules)
 Consumer Layer   → teamarr/consumers/ (key packages: generation, team_epg, event_epg, event_group_processor/, cache/, lifecycle/, matching/, enforcement/, filler/)
 Service Layer    → teamarr/services/sports_data.py
 Provider Layer   → teamarr/providers/ (espn, bellmedia, squiggle, nascar, mlbstats, hockeytech, supabase, tsdb)
