@@ -569,30 +569,6 @@ class TSDBClient(BaseHTTPClient):
             last_result = result or last_result
         return last_result
 
-    def get_team_next_events(self, team_id: str) -> dict | None:
-        """Fetch upcoming events for a team.
-
-        Args:
-            team_id: TSDB team ID
-
-        Returns:
-            Raw TSDB response or None
-        """
-        # TODO: PRUNE? — no in-tree callers (verified Aug 2026), dead along
-        # with get_team_last_events; verify with user
-        return self._request("eventsnext.php", {"id": team_id})
-
-    def get_team_last_events(self, team_id: str) -> dict | None:
-        """Fetch recent events for a team.
-
-        Args:
-            team_id: TSDB team ID
-
-        Returns:
-            Raw TSDB response or None
-        """
-        return self._request("eventslast.php", {"id": team_id})
-
     def get_team(self, team_id: str) -> dict | None:
         """Fetch team details.
 

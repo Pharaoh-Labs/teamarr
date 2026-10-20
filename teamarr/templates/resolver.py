@@ -395,31 +395,6 @@ class TemplateResolver:
         """Get count of registered variables."""
         return self._registry.count()
 
-    def get_available_conditions(self) -> list[str]:
-        """Get list of all available condition types.
-
-        TODO: PRUNE? — no callers; stale vs conditions.py (missing combat/
-        racing/summary conditions). The API's /variables/conditions endpoint
-        is the served list; verify with user before removing.
-        """
-        return [
-            "is_home",
-            "is_away",
-            "win_streak",
-            "loss_streak",
-            "is_ranked",
-            "is_ranked_opponent",
-            "is_ranked_matchup",
-            "is_top_ten_matchup",
-            "is_conference_game",
-            "is_playoff",
-            "is_preseason",
-            "is_national_broadcast",
-            "has_odds",
-            "opponent_name_contains",
-            "always",
-        ]
-
 
 def resolve(template: str, context: TemplateContext) -> str:
     """Convenience function for one-off resolution.
