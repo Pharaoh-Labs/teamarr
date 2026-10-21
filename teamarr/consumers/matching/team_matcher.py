@@ -1065,8 +1065,23 @@ class TeamMatcher:
                 )
             ]
 
+        # Identity gate (#1108). The fixture gate (#619) vetoes cross-sport
+        # pairs on two-sided streams, but a team-only name never met it, and
+        # token_set_ratio hands a subset a free 100: every token of "florida
+        # panthers" is in "Florida International Panthers", and "rangers" is a
+        # subset of "new york rangers", so an NHL team feed was attached to
+        # FIU football and Rangers FC channels run after run. Same rules as
+        # the pair gate: only an EXACT full-name identity speaks (a short
+        # name, bare city or code defers — "Panthers" is five teams), a league
+        # the index has no teams for is never vetoed, and an explicit league
+        # hint keeps its #627 hatch. Teach the index the schedule first (#912).
+        self._teach_candidates(all_events)
+        identity_leagues = None if league_hint else self._identity_leagues(classified.team1)
+
         matched_outcomes: list[MatchOutcome] = []
         seen_event_ids: set[str] = set()
+        identity_rejected = 0
+        scored = 0
 
         for league, event in all_events:
             if event.id in seen_event_ids:
@@ -1078,6 +1093,10 @@ class TeamMatcher:
                 anchor_skew = _anchor_distance_seconds(event, anchor_dt)
                 if anchor_skew > ANCHOR_MATCH_TOLERANCE_SECONDS:
                     continue
+            if self._fixture_vetoes(identity_leagues, event.league):
+                identity_rejected += 1
+                continue
+            scored += 1
             score, side = self._score_single_team_against_event(team_norm, event)
             if score is None:
                 continue
@@ -1107,6 +1126,34 @@ class TeamMatcher:
 
         if matched_outcomes:
             return matched_outcomes
+
+        if identity_rejected and not scored:
+            # Every candidate was vetoed: the stream names a real team and
+            # none of the events in the window are in a league it plays in.
+            # "No event found" would send the user hunting for a scheduling
+            # gap; refine to the #791 reason when the team's leagues exist
+            # but none are subscribed.
+            if (
+                identity_leagues
+                and self._include_leagues is not None
+                and identity_leagues.isdisjoint(self._include_leagues)
+            ):
+                reason = FailedReason.FIXTURE_LEAGUE_NOT_SUBSCRIBED
+            else:
+                reason = FailedReason.FIXTURE_NOT_IN_LEAGUE
+            plays_in = ", ".join(sorted(identity_leagues or set()))
+            return [
+                MatchOutcome.failed(
+                    reason,
+                    stream_name=stream_name,
+                    stream_id=stream_id,
+                    detail=(
+                        f"'{classified.team1}' plays in {plays_in}; "
+                        f"{identity_rejected} candidate(s) in other leagues skipped"
+                    ),
+                    parsed_team1=classified.team1,
+                )
+            ]
 
         return [
             MatchOutcome.failed(
@@ -2733,6 +2780,22 @@ class TeamMatcher:
         if index is None:
             return None
         return index.fixture_leagues(ctx.team1, ctx.team2)
+
+    def _identity_leagues(self, team: str | None) -> set[str] | None:
+        """Leagues a team-only stream's one side is known to play in (#1108).
+
+        Only an exact full-name identity answers; everything else is None so
+        the gate defers. An exact hit still carries its partial readings
+        (#619, #789), so a bare "Rangers" — Rangers FC's full name and the NHL
+        side's short name — keeps both leagues and vetoes neither.
+        """
+        index = self._get_identity_index()
+        if index is None:
+            return None
+        resolution = index.resolve(team)
+        if not resolution or not resolution.exact:
+            return None
+        return resolution.leagues
 
     def _fixture_vetoes(self, fixture_leagues: set[str] | None, league: str) -> bool:
         """Should the fixture gate refuse a candidate from ``league``?
