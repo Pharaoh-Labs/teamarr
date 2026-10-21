@@ -65,11 +65,20 @@ def _league_names(conn: Connection) -> tuple[dict[str, str], dict[str, str], dic
 def get_group_league_shares(conn: Connection) -> tuple[str | None, dict[int, list[LeagueShare]]]:
     """``(run_timestamp, {group_id: [LeagueShare, ...] by share desc})``.
 
-    The run is the latest one that recorded any match detail; a source absent
-    from the result matched nothing in it. Excluded matches (wrong date,
-    league not included) do not count: they never reached a channel.
+    The run is the latest COMPLETED one that recorded any match detail; a
+    source absent from the result matched nothing in it. A failed or
+    interrupted run is skipped — the first deploy of this feature restarted
+    prod mid-run, the interrupted run had written details for one source,
+    and every other source read "no matches yet" until the next hour.
+    Excluded matches (wrong date, league not included) do not count: they
+    never reached a channel.
     """
-    run = conn.execute("SELECT MAX(run_id) AS r FROM epg_matched_streams").fetchone()
+    run = conn.execute(
+        """SELECT MAX(m.run_id) AS r
+           FROM epg_matched_streams m
+           JOIN processing_runs p ON p.id = m.run_id
+           WHERE p.status = 'completed'"""
+    ).fetchone()
     run_id = run["r"] if run else None
     if run_id is None:
         return None, {}
