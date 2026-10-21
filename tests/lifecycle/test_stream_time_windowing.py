@@ -111,6 +111,7 @@ def conn():
             managed_channel_id INTEGER,
             dispatcharr_stream_id INTEGER,
             priority INTEGER DEFAULT 0,
+            source_group_id INTEGER,
             added_at TEXT DEFAULT CURRENT_TIMESTAMP,
             removed_at TEXT,
             attach_at TEXT,

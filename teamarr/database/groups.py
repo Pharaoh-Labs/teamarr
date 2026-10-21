@@ -351,6 +351,7 @@ def get_all_groups(
     conn: Connection,
     include_disabled: bool = False,
     exclude_channel_source: bool = False,
+    processing_order: bool = False,
 ) -> list[EventEPGGroup]:
     """Get all event EPG groups.
 
@@ -360,6 +361,10 @@ def get_all_groups(
         exclude_channel_source: Omit the system-managed channel-source group (183.9)
             from the result. The UI list uses this so the auto-managed source does
             not appear as a user-editable Event Group; processing leaves it False.
+        processing_order: Order by id instead of the Sources page arrangement.
+            ``sort_order`` is how the user arranged the table and nothing more
+            (#1109): the run reads sources in id order, so dragging a row can
+            never change which source reaches an event first.
 
     Returns:
         List of EventEPGGroup objects
@@ -370,7 +375,8 @@ def get_all_groups(
     if exclude_channel_source:
         clauses.append("COALESCE(is_channel_source, 0) = 0")
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    cursor = conn.execute(f"SELECT * FROM event_epg_groups {where} ORDER BY sort_order, name")
+    order = "id" if processing_order else "sort_order, name"
+    cursor = conn.execute(f"SELECT * FROM event_epg_groups {where} ORDER BY {order}")
 
     return [_row_to_group(row) for row in cursor.fetchall()]
 
@@ -543,9 +549,7 @@ def get_groups_for_league(conn: Connection, league: str) -> list[EventEPGGroup]:
     Returns:
         List of EventEPGGroup objects that include the league
     """
-    cursor = conn.execute(
-        "SELECT * FROM event_epg_groups WHERE enabled = 1 ORDER BY sort_order, name"
-    )
+    cursor = conn.execute("SELECT * FROM event_epg_groups WHERE enabled = 1 ORDER BY id")
 
     groups = []
     for row in cursor.fetchall():

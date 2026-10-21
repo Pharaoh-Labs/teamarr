@@ -34,7 +34,7 @@ The Sources page header shows an overall **X% matched** summary and the **Add St
 
 | Column | Description |
 |--------|-------------|
-| *(drag handle)* | Drag rows to reorder — the order sets each source's processing order and auto channel allocation |
+| *(drag handle)* | Drag rows to arrange the list. Arrangement is cosmetic — it never affects matching or [stream priority](../channels/stream-priority#source-order) |
 | *(checkbox)* | Multi-select for the bulk action bar |
 | **Name** | Source name, M3U account, and a color-coded badge per active matching type (plus a **Regex** badge when custom regex is configured — team-vs-team extraction patterns or include/exclude stream filters) |
 | **Matched** | Stream coverage — how many of the source's eligible streams matched at least one event, as a 0–100% bar. Hover for total *matches produced* and the last-run timestamp |
