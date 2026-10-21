@@ -40,11 +40,11 @@ def _source(conn, name, account="Acme IPTV", account_id=1, channel_source=False,
     return cursor.lastrowid
 
 
-def _run(conn, run_id):
+def _run(conn, run_id, status="completed"):
     conn.execute(
         "INSERT INTO processing_runs (id, run_type, started_at, completed_at, status)"
-        " VALUES (?, 'full_epg', '2026-10-21 04:00:00', '2026-10-21 04:03:00', 'completed')",
-        (run_id,),
+        " VALUES (?, 'full_epg', '2026-10-21 04:00:00', '2026-10-21 04:03:00', ?)",
+        (run_id, status),
     )
 
 
@@ -93,12 +93,15 @@ def seeded(db):
             _match(conn, 2, ids["f1"], 500 + i, "f1")
         # An excluded match never reaches a channel and never counts.
         _match(conn, 2, ids["f1"], 600, "nascar", excluded="league_not_included")
+        # Run 3 was interrupted after one source: not "the last run".
+        _run(conn, 3, status="failed")
+        _match(conn, 3, ids["quiet"], 700, "nhl")
         conn.commit()
     return ids
 
 
 class TestLeagueShares:
-    def test_shares_come_from_the_last_run_and_exclude_excluded(self, seeded):
+    def test_shares_come_from_the_last_completed_run_and_exclude_excluded(self, seeded):
         with get_db() as conn:
             run_at, shares = get_group_league_shares(conn)
         assert run_at == "2026-10-21 04:03:00"
