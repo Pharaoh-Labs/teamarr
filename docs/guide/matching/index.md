@@ -33,6 +33,8 @@ Teamarr resolves each side of the stream name against its cached team list (ever
 
 The check only ever *rejects* a candidate; it never creates a match on its own. Ambiguous names stay ambiguous: a stream called `TB vs DET` reads as both Rays/Tigers and Lightning/Red Wings, so both leagues remain eligible and the game that actually exists on the day is the one that matches.
 
+Team streams get the same protection from their one name. A stream called `Florida Panthers` is the NHL club's full name, so it is only ever attached to NHL games — never to a Florida International Panthers football game, even though every word of the stream name appears in that team's name. Only a full team name is read this strictly: a bare `Panthers` or `Rangers` could be several teams, so it stays eligible everywhere and the games on the day decide.
+
 {: .note }
 > This relies on the team cache, so it is inactive until your first cache refresh — and a stream naming teams from a league Teamarr hasn't cached is passed through to normal matching rather than rejected.
 
