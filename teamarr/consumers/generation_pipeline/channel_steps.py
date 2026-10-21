@@ -55,8 +55,8 @@ def _push_stream_orders(
     """PATCH each channel's stream order to Dispatcharr, concurrently (#735).
 
     One PATCH per channel used to go out serially, and since #712 any order
-    difference triggers one — so a windowed install re-pushes most of its
-    channels every run and this was the longest serial stretch left. The work
+    difference triggers one — on a windowed install that was most channels
+    every run until #1115 — so this was the longest serial stretch left. The work
     is pure network wait: ``update_channel`` guards only a cache write, and the
     client pools its connections.
 
@@ -322,9 +322,10 @@ def apply_stream_ordering(
                             current_order=current_order,
                             pinned_top=pinned_top,
                             reordered_count=reordered_count,
-                            # A channel with any time-windowed stream must be
-                            # synced every run: membership flips as the window
-                            # opens and closes.
+                            # A channel with any time-windowed stream: its
+                            # membership flips as windows open and close, which
+                            # the order comparison sees; it is pushed blind only
+                            # when that comparison has nothing to read (#1115).
                             has_windowed=any(s.attach_at for s in streams),
                         )
                     )
@@ -365,7 +366,17 @@ def apply_stream_ordering(
                 # doesn't re-push every run.
                 order_drifted = plan.current_order is not None and ordered_ids != plan.current_order
 
-                if not (plan.reordered_count > 0 or plan.has_windowed or order_drifted):
+                # A windowed channel used to push unconditionally, from before
+                # #712 could see Dispatcharr's order: resending every run was
+                # the only way to be sure a window open/close had landed. A
+                # window flip IS a difference between the intended active set
+                # and what Dispatcharr holds, so the comparison above already
+                # catches it; the blind push is kept only for a run that could
+                # not read the order at all (#1115). Measured: 9 no-op PATCHes
+                # per hourly run on a real install, every one logged as a sync.
+                window_blind = plan.has_windowed and plan.current_order is None
+
+                if not (plan.reordered_count > 0 or window_blind or order_drifted):
                     continue
 
                 if plan.has_windowed:
@@ -408,10 +419,10 @@ def apply_stream_ordering(
         # decision is already made and nothing below writes to it.
         #
         # This was the longest serial stretch left in a run: one PATCH per
-        # channel, and since #712 any order difference triggers one, so a
-        # windowed install pushes most of its channels every run. update_channel
-        # is thread-safe (its only shared state is a locked cache write) and the
-        # client pools connections, so the wait is pure overlap.
+        # channel, and since #712 any order difference triggers one (a window
+        # opening or closing included). update_channel is thread-safe (its only
+        # shared state is a locked cache write) and the client pools
+        # connections, so the wait is pure overlap.
         if pushes:
             failed = _push_stream_orders(channel_mgr, pushes, update_progress)
             reorder_result["push_failures"] = failed
