@@ -136,8 +136,9 @@ export function EventGroups() {
     })
   }, [allGroups, nameFilter, statusFilter])
 
-  // Column sort: 3-click cycle (asc → desc → reset to persisted sort_order).
-  // DnD reordering is only active while unsorted.
+  // Column sort: 3-click cycle (asc → desc → reset to the saved arrangement).
+  // DnD is only active while unsorted. The arrangement is cosmetic (#1109):
+  // processing order and stream priority never read it.
   const { sortColumn, sortDirection, handleSort, clearSort, sortedRows: sortedGroups } =
     useTableSort<EventGroup, "name" | "matched" | "status">({
       rows: filteredGroups,
@@ -251,7 +252,7 @@ export function EventGroups() {
     }
   }
 
-  // Drag-and-drop handlers (only active in default sort_order mode)
+  // Drag-and-drop handlers (only active while showing the saved arrangement)
   const handleDragStart = (e: React.DragEvent, groupId: number) => {
     setDraggedGroupId(groupId)
     e.dataTransfer.effectAllowed = "move"
@@ -476,10 +477,10 @@ export function EventGroups() {
                         size="sm"
                         className="h-5 px-1.5 text-xs"
                         onClick={clearSort}
-                        title="Reset to priority order"
+                        title="Back to your arrangement"
                       >
                         <RotateCcw className="h-3 w-3 mr-1" />
-                        Priority
+                        Arrangement
                       </Button>
                     ) : (
                       "Actions"
@@ -559,7 +560,7 @@ export function EventGroups() {
                         <TableCell className="px-0 w-6">
                           <div className={`flex items-center justify-center transition-opacity ${
                             isDndActive ? "cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground" : "opacity-0 pointer-events-none"
-                          }`}>
+                          }`} title="Drag to arrange the list. Arrangement never affects matching or stream priority.">
                             <GripVertical className="h-4 w-4" />
                           </div>
                         </TableCell>

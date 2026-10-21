@@ -103,6 +103,16 @@ class GameContext:
         )
 
 
+def _tie_break(stream: ManagedChannelStream) -> tuple:
+    """Order inside a band: source id, then attach time (#1109).
+
+    Mirrors ``_STREAM_ORDER`` in ``database/channels/streams.py`` — the SQL
+    readers and this in-memory sort must agree or the end-of-run push (#712)
+    flaps between the two. A stream with no source sorts last.
+    """
+    return (stream.source_group_id is None, stream.source_group_id or 0, stream.added_at or 0)
+
+
 class StreamOrderingService:
     """Service for computing stream ordering based on rules.
 
@@ -328,16 +338,15 @@ class StreamOrderingService:
             Sorted list of streams (lowest priority first)
         """
         if not self.rules:
-            # No rules - preserve existing order by added_at
-            return sorted(streams, key=lambda s: (s.priority, s.added_at or 0))
+            # No rules: stored priority, then the fixed tie-break (#1109).
+            return sorted(streams, key=lambda s: (s.priority, *_tie_break(s)))
 
         def sort_key(stream: ManagedChannelStream):
             group_name = None
             if source_group_names and stream.source_group_id:
                 group_name = source_group_names.get(stream.source_group_id)
             priority = self.compute_priority(stream, group_name)
-            # Secondary sort by added_at for stable ordering within same priority
-            return (priority, stream.added_at or 0)
+            return (priority, *_tie_break(stream))
 
         return sorted(streams, key=sort_key)
 

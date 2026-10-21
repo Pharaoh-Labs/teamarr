@@ -15,6 +15,14 @@ from .types import ManagedChannelStream
 
 logger = logging.getLogger(__name__)
 
+# Within a priority band, streams order by the id of the source that attached
+# them, then by attach time (#1109). It used to be attach time alone, which
+# was the Sources page drag order in disguise — the one place outside Stream
+# Ordering that could change which feed a channel listed first. The page's
+# arrangement is cosmetic now; this key is fixed and documented. A NULL
+# source (a hand-attached stream) sorts after every sourced one.
+_STREAM_ORDER = "priority, source_group_id IS NULL, source_group_id, added_at"
+
 
 def add_stream_to_channel(
     conn: Connection,
@@ -141,16 +149,16 @@ def get_channel_streams(
     """
     if include_removed:
         cursor = conn.execute(
-            """SELECT * FROM managed_channel_streams
+            f"""SELECT * FROM managed_channel_streams
                WHERE managed_channel_id = ?
-               ORDER BY priority, added_at""",
+               ORDER BY {_STREAM_ORDER}""",
             (managed_channel_id,),
         )
     else:
         cursor = conn.execute(
-            """SELECT * FROM managed_channel_streams
+            f"""SELECT * FROM managed_channel_streams
                WHERE managed_channel_id = ? AND removed_at IS NULL
-               ORDER BY priority, added_at""",
+               ORDER BY {_STREAM_ORDER}""",
             (managed_channel_id,),
         )
     return [ManagedChannelStream.from_row(dict(row)) for row in cursor.fetchall()]
@@ -1002,9 +1010,9 @@ def get_all_channel_streams(
         ``{managed_channel_id: [ManagedChannelStream, ...]}`` in priority order.
     """
     cursor = conn.execute(
-        """SELECT * FROM managed_channel_streams
+        f"""SELECT * FROM managed_channel_streams
            WHERE removed_at IS NULL
-           ORDER BY managed_channel_id, priority, added_at"""
+           ORDER BY managed_channel_id, {_STREAM_ORDER}"""
     )
     grouped: dict[int, list[ManagedChannelStream]] = {}
     for row in cursor.fetchall():
@@ -1038,7 +1046,7 @@ def get_all_ordered_stream_ids(
            WHERE removed_at IS NULL
              AND (attach_at IS NULL
                   OR (attach_at <= {now_expr} AND {now_expr} < detach_at))
-           ORDER BY managed_channel_id, priority, added_at""",
+           ORDER BY managed_channel_id, {_STREAM_ORDER}""",
         params,
     )
     grouped: dict[int, list[int]] = {}
@@ -1077,7 +1085,7 @@ def get_ordered_stream_ids(
            WHERE managed_channel_id = ? AND removed_at IS NULL
              AND (attach_at IS NULL
                   OR (attach_at <= {now_expr} AND {now_expr} < detach_at))
-           ORDER BY priority, added_at""",
+           ORDER BY {_STREAM_ORDER}""",
         params,
     )
     return [row[0] for row in cursor.fetchall()]

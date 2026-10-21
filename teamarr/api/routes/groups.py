@@ -1262,7 +1262,12 @@ def update_groups_bulk(request: BulkGroupUpdateRequest):
 
 @router.post("/reorder", response_model=ReorderGroupsResponse)
 def reorder_groups_endpoint(request: ReorderGroupsRequest):
-    """Reorder event groups by updating sort_order values."""
+    """Store the Sources page arrangement (sort_order).
+
+    Display order only (#1109): the run reads sources in id order and stream
+    priority inside a band is source id then attach time, so this never
+    changes matching or which feed a channel lists first.
+    """
 
     if not request.groups:
         raise HTTPException(

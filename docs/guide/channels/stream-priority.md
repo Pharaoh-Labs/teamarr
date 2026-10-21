@@ -13,7 +13,7 @@ This is distinct from [channel ordering](numbering#channel-ordering), which cont
 
 ![Channels → Stream Priority — scoring and priority rule sections](../../assets/images/channels-stream-priority.png)
 
-With no rules configured, streams simply keep the order they were added in — generation performs no reordering.
+With no rules configured, streams are listed by source id and then by the time they were added — see [Source order](#source-order).
 
 ## Scoped rulesets
 
@@ -48,9 +48,15 @@ Every rule belongs to one of two classes, added with the separate **Add scoring 
 | **Scoring** | Additive. Each matching rule adds its signed **points**; a stream's points are summed and the highest total sorts first. Negative points push a stream down. | The everyday case — nudge streams up or down by several attributes at once (preferred provider, HD, right feed) and let the totals decide. |
 | **Priority** *(hard order)* | The first Priority rule a stream matches sets its **band** (1–99). Bands always outrank scoring, so a Priority match is a hard "must always win / must always lose". Lower number = higher priority. | Escape hatch for absolutes: "streams from this account always come first," "EPG-matched streams always come last." |
 
-**How the two combine.** A stream is ranked by its hard band first, then by its total score *within* that band, then by the order it was added. Because bands are strict, no amount of score moves a stream out of its band — scoring only reorders streams that share a band. Streams that match no Priority rule fall into the baseline band (see [Everything Else](#the-everything-else-baseline)).
+**How the two combine.** A stream is ranked by its hard band first, then by its total score *within* that band, then by [source order](#source-order) (source id, then the time it was added). Because bands are strict, no amount of score moves a stream out of its band — scoring only reorders streams that share a band. Streams that match no Priority rule fall into the baseline band (see [Everything Else](#the-everything-else-baseline)).
 
 **Example — push EPG-matched streams to the back:** a Scoring rule *M3U Account = "Premium IPTV"* at **+100** plus a Scoring rule *Stream Type = EPG matched stream* at **−100000**. Premium streams float up; anything EPG-matched sinks below everything, premium or not.
+
+## Source order
+
+Streams that tie on band and score are ordered by the **id of the source** that attached them (the order sources were created), then by the time each stream was added. That tie-break is fixed. Dragging rows on the [Sources](../sources) page arranges that table and nothing else — it never changes which feed a channel lists first.
+
+That was not always so: before v2.25 the drag order was also the order sources were read, so it quietly acted as a second stream-priority mechanism beside the rules on this page. Two places to express the same intent is a trap, so there is now one: to put one source's feeds ahead of another's, add a **Source Group** or **M3U Account** rule here.
 
 ## Rule Types
 

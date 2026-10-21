@@ -711,7 +711,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
         CHECK(channel_assignment_mode IN ('auto', 'manual')),
 
     -- Channel Numbering (for AUTO mode)
-    sort_order INTEGER DEFAULT 0,            -- Ordering for AUTO channel allocation
+    sort_order INTEGER DEFAULT 0,            -- Sources page arrangement only — cosmetic (#1109)
     total_stream_count INTEGER DEFAULT 0,    -- Expected streams (for range reservation)
     parent_group_id INTEGER,                 -- Parent group for child group relationships
 

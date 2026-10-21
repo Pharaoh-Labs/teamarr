@@ -275,7 +275,8 @@ class EventGroupProcessor(
     ) -> BatchProcessingResult:
         """Process all active event groups.
 
-        All groups are processed equally in sort_order. No parent/child
+        All groups are processed equally, in id order (#1109 — the Sources
+        page arrangement is cosmetic). No parent/child
         distinction — every group creates channels and generates XMLTV.
         Leagues come from the global sports subscription.
 
@@ -323,7 +324,7 @@ class EventGroupProcessor(
             # available; only the channel-source toggle gates these rows.)
             self._sync_channel_source_rows(conn)
 
-            groups = get_all_groups(conn, include_disabled=False)
+            groups = get_all_groups(conn, include_disabled=False, processing_order=True)
             total_groups = len(groups)
             processed_count = 0
 
