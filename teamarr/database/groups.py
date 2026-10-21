@@ -130,6 +130,7 @@ class EventEPGGroup:
     # disabled or removed on its own; a hand edit clears the flag.
     managed: bool = False
     auto_added_at: str | None = None  # Set when discovery added it on its own (#997)
+    folder_id: int | None = None  # Sources page folder (#1110); cosmetic
     last_matched_at: str | None = None  # Last run in which it matched a stream
     # The Dispatcharr group behind this source is gone (#1046 for channel-source
     # rows; M3U rows use the same column through the stale-groups flow).
@@ -284,6 +285,7 @@ def _row_to_group(row) -> EventEPGGroup:
         ),
         managed=bool(row["managed"]) if "managed" in row.keys() else False,
         auto_added_at=row["auto_added_at"] if "auto_added_at" in row.keys() else None,
+        folder_id=row["folder_id"] if "folder_id" in row.keys() else None,
         last_matched_at=row["last_matched_at"] if "last_matched_at" in row.keys() else None,
         source_missing=bool(row["source_missing"]) if "source_missing" in row.keys() else False,
         dispatcharr_channel_group_id=(

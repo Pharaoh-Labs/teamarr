@@ -15,8 +15,30 @@ export interface SoccerFollowedTeam {
   name?: string | null  // For display only
 }
 
+// (#1110) One league a source's matched streams resolved to in the last run.
+// share = count / the source's matched streams (never its total streams).
+export interface LeagueShare {
+  league: string
+  display_name: string
+  sport: string
+  sport_display_name: string
+  count: number
+  share: number
+}
+
+// (#1110) A Sources page folder. Cosmetic, like sort_order.
+export interface SourceFolder {
+  id: number
+  name: string
+  sort_order: number
+  collapsed: boolean
+}
+
 export interface EventGroup {
   id: number
+  folder_id: number | null  // (#1110) Sources page folder; null = top level
+  league_shares: LeagueShare[]  // (#1110) last-run league evidence, by share desc
+  league_shares_run_at: string | null
   name: string
   display_name: string | null  // Optional display name override for UI
   leagues: string[]

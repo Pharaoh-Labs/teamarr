@@ -775,6 +775,7 @@ CREATE TABLE IF NOT EXISTS event_epg_groups (
     team_streams_enabled BOOLEAN DEFAULT 0,      -- Allow team-branded streams (e.g. "NHL | Toronto Maple Leafs") to match events
     epg_match_enabled BOOLEAN DEFAULT 0,         -- (183.6) Use Dispatcharr EPG program data to match static-named linear streams (ESPN, NBA1) and time-window them. Requires a Dispatcharr build with /api/epg/programs/search/ (0.24.0+). No global switch — per-source opt-in (3lp1).
     auto_added_at TIMESTAMP,                     -- (#997) Set when source discovery added it on its own (a toggled league); NULL = the user pressed Add
+    folder_id INTEGER,                           -- (#1110) Sources page folder; NULL = top level. Cosmetic, like sort_order.
     managed BOOLEAN DEFAULT 0,                   -- (#997) Created by source discovery. Only a managed source is ever disabled or removed on its own; a hand edit clears the flag.
     last_matched_at TIMESTAMP,                   -- (#997) Last generation run in which this source matched a stream
     is_channel_source BOOLEAN DEFAULT 0,         -- (183.9) System-managed source group whose candidate streams come from curated Dispatcharr channels (their assigned streams + each channel's own EPG) instead of an M3U group. Auto-created/toggled by settings.epg_channel_source_enabled; hidden from the Event Groups UI.
@@ -821,6 +822,24 @@ END;
 
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_enabled ON event_epg_groups(enabled);
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_sort_order ON event_epg_groups(sort_order);
+
+-- (#1110) Sources page folders. One level, optional, cosmetic: the run and
+-- stream priority never read them (see event_epg_groups.sort_order).
+CREATE TABLE IF NOT EXISTS source_folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    collapsed BOOLEAN NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- (#1110) One-level undo for the arrangement actions (auto-arrange, remove all
+-- folders): the folders and every source's folder/position before the action.
+CREATE TABLE IF NOT EXISTS source_arrangement_undo (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    payload JSON NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 CREATE INDEX IF NOT EXISTS idx_event_epg_groups_name ON event_epg_groups(name);
 -- Allow same group name from different M3U accounts (e.g., "US - NFL" from Provider A and B)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_epg_groups_name_account
