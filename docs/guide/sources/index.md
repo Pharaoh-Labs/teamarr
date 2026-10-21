@@ -34,14 +34,25 @@ The Sources page header shows an overall **X% matched** summary and the **Add St
 
 | Column | Description |
 |--------|-------------|
-| *(drag handle)* | Drag rows to arrange the list. Arrangement is cosmetic — it never affects matching or [stream priority](../channels/stream-priority#source-order) |
+| *(drag handle)* | Drag rows to arrange the list or drop them onto a folder. Arrangement is cosmetic — it never affects matching or [stream priority](../channels/stream-priority#source-order) |
 | *(checkbox)* | Multi-select for the bulk action bar |
-| **Name** | Source name, M3U account, and a color-coded badge per active matching type (plus a **Regex** badge when custom regex is configured — team-vs-team extraction patterns or include/exclude stream filters) |
+| **Name** | Source name and a color-coded badge per active matching type (plus a **Regex** badge when custom regex is configured — team-vs-team extraction patterns or include/exclude stream filters) |
+| **Provider** | The M3U account the source reads, or *Dispatcharr* for a channel source. Click it to filter the list to that provider |
+| **Leagues** | What the source matched in the **last run**, one chip per league — `NHL 97` means 97% of the streams this source matched were NHL games. The number is a share of the source's *matched* streams, never of all its streams, so a one-league source reads 100 whatever its coverage. As many chips as fit, then `+N`; hover for the full breakdown and the run time; click a chip to filter the list to that league. *No matches yet* means nothing matched in that run |
 | **Matched** | Stream coverage — how many of the source's eligible streams matched at least one event, as a 0–100% bar. Hover for total *matches produced* and the last-run timestamp |
 | **Status** | Enable/disable toggle |
 | **Actions** | Preview matches, clear cache, edit, delete |
 
-Column headers sort, and a filter row narrows the list by name and status. Selecting rows raises a bulk action bar: **Enable**, **Disable**, **Clear Cache**, **Edit** (bulk-edit shared settings), and **Delete**. Bulk **Edit** covers the stream timezone, the team filter, the three matching toggles, the subscription (league) override, the built-in-filter skip, the stream include/exclude regexes and every custom regex — only the fields you check are changed, and setting a pattern in bulk also switches it on while clearing it switches it off. When stale sources exist, a **Delete all stale** action appears.
+Column headers sort (Name, Provider, Leagues by top league, Matched, Status), and a filter row narrows the list by name, provider, sport or league, and status. While a column sort is active the list is flat and the drag handles are hidden; **Arrangement** in the Actions header brings back your own order.
+
+### Folders
+
+Folders are an optional way to arrange the table — one level, as many as you like, and purely cosmetic: a folder never changes which source reaches a game first or which stream a channel lists first (that is [stream priority](../channels/stream-priority#source-order)). Folders stay collapsed or expanded as you left them.
+
+- **Arrange → New folder…** creates one. Drag sources onto its header, or select them and use **Move to folder** in the bulk action bar. Drag a folder's header onto another to reorder folders; click a folder's name to rename it; the **×** on its row removes the folder and puts its sources back at the top level, positions kept.
+- **Arrange → Group into folders** builds folders for you, as a one-time action you can repeat whenever you like (it never runs on a schedule). **By provider** makes one folder per M3U account plus one for Dispatcharr channel sources. **By sport** and **By league** read the Leagues column: a source goes under its top sport or league when that one is at least 80% of what it matched in the last run, otherwise under **Multi**; a source with no matches stays at the top level. The result is ordinary folders — drag, rename and delete as usual.
+- **Arrange → Undo last arrange** restores the folders and positions from before the last Group or Remove action, exactly. One level of undo. **Remove all folders** flattens the list, sources keeping their order.
+ Selecting rows raises a bulk action bar: **Enable**, **Disable**, **Clear Cache**, **Edit** (bulk-edit shared settings), and **Delete**. Bulk **Edit** covers the stream timezone, the team filter, the three matching toggles, the subscription (league) override, the built-in-filter skip, the stream include/exclude regexes and every custom regex — only the fields you check are changed, and setting a pattern in bulk also switches it on while clearing it switches it off. When stale sources exist, a **Delete all stale** action appears.
 
 To see *which* streams matched or failed (and fix failures manually), use the **Matched**/**Failed** drill-downs in the [Dashboard](../dashboard)'s run history — the Sources table shows rates, not per-stream detail. The per-source **preview** button shows current stream matches without running a full generation.
 

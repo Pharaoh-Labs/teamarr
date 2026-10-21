@@ -37,6 +37,7 @@ from teamarr.database.groups import (
 )
 from teamarr.database.settings import get_display_settings
 from teamarr.database.source_candidates import dismiss_candidate_for_source
+from teamarr.database.source_league_shares import get_group_league_shares
 from teamarr.dispatcharr import get_dispatcharr_connection, get_factory
 from teamarr.services import create_group_service
 from teamarr.services.stream_filter import (
@@ -226,6 +227,17 @@ class GroupUpdate(BaseModel):
     clear_subscription_soccer_followed_teams: bool = False
 
 
+class LeagueShareResponse(BaseModel):
+    """One league a source's matched streams resolved to in the last run (#1110)."""
+
+    league: str
+    display_name: str
+    sport: str
+    sport_display_name: str
+    count: int
+    share: float
+
+
 class GroupResponse(BaseModel):
     """Event EPG group response."""
 
@@ -316,6 +328,13 @@ class GroupResponse(BaseModel):
     # stale-groups pass for channel-source rows; M3U rows surface the same
     # state through /groups/stale.
     source_missing: bool = False
+    # (#1110) Sources page folder (cosmetic) and last-run league evidence:
+    # per league, the distinct streams this source matched and that league's
+    # share of the source's matched streams. Empty = nothing matched in the
+    # run the chips describe (``league_shares_run_at``).
+    folder_id: int | None = None
+    league_shares: list[LeagueShareResponse] = Field(default_factory=list)
+    league_shares_run_at: str | None = None
 
 
 class GroupListResponse(BaseModel):
@@ -681,6 +700,7 @@ def list_groups(
         stats = {}
         if include_stats:
             stats = get_all_group_stats(conn)
+        shares_run_at, league_shares = get_group_league_shares(conn)
 
     # Fetch fresh M3U account names from Dispatcharr
     m3u_account_names: dict[int, str] = {}
@@ -715,6 +735,11 @@ def list_groups(
                 duplicate_event_handling=g.duplicate_event_handling,
                 channel_assignment_mode=g.channel_assignment_mode,
                 sort_order=g.sort_order,
+                folder_id=g.folder_id,
+                league_shares=[
+                    LeagueShareResponse(**s.to_dict()) for s in league_shares.get(g.id, [])
+                ],
+                league_shares_run_at=shares_run_at,
                 total_stream_count=g.total_stream_count,
                 m3u_group_id=g.m3u_group_id,
                 m3u_group_name=g.m3u_group_name,

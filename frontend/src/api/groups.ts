@@ -202,9 +202,3 @@ export async function getMatchCacheStats(): Promise<MatchCacheStats> {
   return api.get("/groups/cache/stats")
 }
 
-export async function reorderGroups(
-  groups: { group_id: number; sort_order: number }[]
-): Promise<{ success: boolean; updated_count: number; message: string }> {
-  return api.post("/groups/reorder", { groups })
-}
-

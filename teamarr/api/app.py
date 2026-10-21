@@ -32,6 +32,7 @@ from teamarr.api.routes import (
     setup,
     sort_priorities,
     source_discovery,
+    source_folders,
     stats,
     subscription,
     support,
@@ -387,6 +388,9 @@ def create_app() -> FastAPI:
     app.include_router(race_feeds.router, prefix="/api/v1/race-feeds", tags=["Race Feeds"])
     app.include_router(
         source_discovery.router, prefix="/api/v1/source-discovery", tags=["Source Discovery"]
+    )
+    app.include_router(
+        source_folders.router, prefix="/api/v1/source-folders", tags=["Source Folders"]
     )
     app.include_router(cache.router, prefix="/api/v1", tags=["Cache"])
     app.include_router(leagues.router, prefix="/api/v1", tags=["Custom Leagues"])
