@@ -912,7 +912,7 @@ class StreamOrderingService:
             r"(?i)(?=.*\b(?P<team>" + team_alt + r")\b)"
             r"(?:.*(?:vs|at|@).*(?P=team).*(?:home|\(home\)|cam\s*0?1)"
             r"|.*(?P=team).*(?:vs|at|@).*(?:away|cam\s*0?2)"
-            r"|.*\((?P=team)\s+feed\b.*"
+            r"|.*\((?P=team)\s+(?:feed|in[-\s]?arena)\b.*"
             r"|.*home\s*feed.*:\s*\S+\s+(?:vs|at|@)\s+(?P=team)\b"
             r"|.*away\s*feed.*:\s*(?P=team)\s+(?:vs|at|@)\s+\S+)"
         )

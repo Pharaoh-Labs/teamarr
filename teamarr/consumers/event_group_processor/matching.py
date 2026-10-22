@@ -916,8 +916,10 @@ class StreamMatching:
         """Detect team-specific feed by looking for feed indicator patterns.
 
         Only matches when a team name appears in a feed-specific context:
-        - In parentheses: "Game Title (Penguins)" or "(Penguins Feed)"
-        - With feed keyword: "Penguins Feed", "Penguins Broadcast"
+        - In parentheses: "Game Title (Penguins)", "(Penguins Feed)" or
+          "(Penguins In-Arena)" (#1128)
+        - With feed keyword: "Penguins Feed", "Penguins Broadcast",
+          "Penguins In-Arena"
         - With home/away: "Penguins Home", "Home Penguins"
         - Team-branded channel token: "Penguins.TV", "Penguins.US" (#343)
 
@@ -943,13 +945,14 @@ class StreamMatching:
         ]:
             for candidate in candidates:
                 esc = re.escape(candidate)
-                # Team in parentheses: "(Penguins)" or "(Penguins Feed)"
-                if re.search(rf"\(\s*{esc}(?:\s+feed)?\s*\)", stream_name_lower):
+                # Team in parentheses: "(Penguins)", "(Penguins Feed)" or
+                # "(Penguins In-Arena)" (#1128)
+                if re.search(rf"\(\s*{esc}(?:\s+(?:feed|in[-\s]?arena))?\s*\)", stream_name_lower):
                     return team
 
                 patterns = [
-                    rf"\b{esc}\s+(?:feed|broadcast)\b",
-                    rf"\b(?:feed|broadcast)[:\s]+{esc}\b",
+                    rf"\b{esc}\s+(?:feed|broadcast|in[-\s]?arena)\b",
+                    rf"\b(?:feed|broadcast|in[-\s]?arena)[:\s]+{esc}\b",
                     rf"\b{esc}\s+(?:home|away)\b",
                     rf"\b(?:home|away)\s+{esc}\b",
                     # Team-branded channel token: "Brewers.TV" / "Brewers TV"
