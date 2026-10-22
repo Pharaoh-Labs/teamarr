@@ -242,6 +242,7 @@ class ChannelCreator(_LifecycleHost):
                                     "stream": stream_name,
                                     "stream_id": stream_id,
                                     "event_id": event_id,
+                                    "effective_event_id": effective_event_id,
                                     "event_name": event.short_name or event.name,
                                     "reason": ExcludedReason.NO_EVENT_TEMPLATE.value,
                                     "reason_display": EXCLUDED_DISPLAY[
@@ -267,6 +268,9 @@ class ChannelCreator(_LifecycleHost):
                                     "stream": stream_name,
                                     "stream_id": stream_id,
                                     "event_id": event_id,
+                                    # Per session/day (#1117): a Test's past day 1
+                                    # must not take day 2's programmes with it.
+                                    "effective_event_id": effective_event_id,
                                     "event_name": event.short_name or event.name,
                                     "reason": excluded_reason.value,
                                     "reason_display": {

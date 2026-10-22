@@ -411,8 +411,9 @@ class ChannelLifecycleManager:
 
         `duration_override` (the event template's custom duration, #946)
         replaces the duration wherever one would have been derived — for a
-        racing weekend only when the last session IS the race, since a
-        custom duration describes the race, not practice/qualifying.
+        racing weekend only when the session is the race, or a Test day
+        (#1117), since a custom duration describes the race, not
+        practice/qualifying.
 
         Each session of a weekend has its own channel, so a `segment` that
         names one of the event's sessions anchors to THAT session (the latest
@@ -422,11 +423,14 @@ class ChannelLifecycleManager:
         last-session behavior.
         """
         if event.sessions:
-            from teamarr.consumers.racing_segments import _session_duration_hours
+            from teamarr.consumers.racing_segments import (
+                _session_duration_hours,
+                session_takes_template_duration,
+            )
 
             matches = self._segment_sessions(event, segment)
             session = matches[-1] if matches else max(event.sessions, key=lambda s: s.start_time)
-            if session.code == "race" and duration_override is not None:
+            if session_takes_template_duration(session.code) and duration_override is not None:
                 duration_hours = duration_override
             else:
                 duration_hours = _session_duration_hours(

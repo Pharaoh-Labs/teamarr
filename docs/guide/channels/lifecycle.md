@@ -49,7 +49,7 @@ An event that has finished keeps its channel and its guide programmes until the 
 | **Same day** | Delete channels at the end of the event's day (23:59 on the day the event is estimated to end) |
 | **After event + buffer** | Delete channels a configurable number of hours after the event ends |
 
-The **Post-Event Buffer (hours)** (0–336, default 1) sets how many hours after the event ends to keep the channel (e.g., 2 hours for postgame coverage). "Ends" is an **estimate**: start time plus a per-sport default duration (configurable under [EPG → Output](../epg/output#default-durations)). For session-based events like race weekends, each session's channel uses that session's own start plus its duration, so a Saturday sprint channel is removed after the sprint, not after Sunday's race.
+The **Post-Event Buffer (hours)** (0–336, default 1) sets how many hours after the event ends to keep the channel (e.g., 2 hours for postgame coverage). "Ends" is an **estimate**: start time plus a per-sport default duration (configurable under [EPG → Output](../epg/output#default-durations)). For session-based events like race weekends, each session's channel uses that session's own start plus its duration, so a Saturday sprint channel is removed after the sprint, not after Sunday's race. A template's custom duration describes the main session only: it stretches the race of a weekend and each day of a Test match, while practice and qualifying keep their fixed windows.
 
 {: .note }
 Events that cross midnight always use the post-event buffer for deletion, even in "Same day" mode, so a channel isn't pulled out from under a game in progress.

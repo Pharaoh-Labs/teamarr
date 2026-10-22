@@ -57,6 +57,42 @@ from .xmltv import XmltvRenderer
 logger = logging.getLogger(__name__)
 
 
+def _segment_event_id(match: dict) -> str | None:
+    """The id a channel is stored under: `<event id>-<segment>` for a session or
+    card segment, the bare event id otherwise."""
+    event = match.get("event")
+    if not event or not hasattr(event, "id"):
+        return None
+    segment = match.get("segment")
+    return f"{event.id}-{segment}" if segment else event.id
+
+
+def xmltv_candidates(matched_streams: list[dict], excluded: list[dict]) -> list[dict]:
+    """Matched entries that still get programmes after the lifecycle pass.
+
+    A lifecycle exclusion is per channel: a Test's day 1 is `event_past` from
+    day 2 on while days 2–5 are live channels, and a race weekend's practice
+    is past on race day. Those carry `effective_event_id` (`<id>-<segment>`)
+    and remove only that session's entry (#1117). An exclusion without it
+    (no event, league not included) names the whole event and removes every
+    entry for it, as before.
+    """
+    excluded_segments: set[str] = set()
+    excluded_events: set[str] = set()
+    for excl in excluded:
+        if excl.get("effective_event_id"):
+            excluded_segments.add(excl["effective_event_id"])
+        elif excl.get("event_id"):
+            excluded_events.add(excl["event_id"])
+    return [
+        ms
+        for ms in matched_streams
+        if ms.get("event")
+        and ms["event"].id not in excluded_events
+        and _segment_event_id(ms) not in excluded_segments
+    ]
+
+
 class EventGroupProcessor(
     StreamFetcher,
     StreamMatching,
@@ -806,12 +842,7 @@ class EventGroupProcessor(
 
             # Build event lookup BEFORE team filtering (for cleanup of existing channels)
             # Use segment-aware event_id to match channel.event_id storage
-            def _effective_event_id(m) -> str | None:
-                event = m.get("event")
-                if not event or not hasattr(event, "id"):
-                    return None
-                segment = m.get("segment")
-                return f"{event.id}-{segment}" if segment else event.id
+            _effective_event_id = _segment_event_id
 
             all_matched_events: dict[str, Event] = {
                 eid: ev
@@ -930,16 +961,7 @@ class EventGroupProcessor(
             if matched_streams:
                 # Step 5: Generate XMLTV from matched streams
                 # Filter out streams excluded by lifecycle (event_final, event_past, etc.)
-                excluded_event_ids = {
-                    excl.get("event_id")
-                    for excl in lifecycle_result.excluded
-                    if excl.get("event_id")
-                }
-                xmltv_streams = [
-                    ms
-                    for ms in matched_streams
-                    if ms.get("event") and ms["event"].id not in excluded_event_ids
-                ]
+                xmltv_streams = xmltv_candidates(matched_streams, lifecycle_result.excluded)
 
                 if status_callback:
                     status_callback(f"Generating EPG for {len(xmltv_streams)} events...")
