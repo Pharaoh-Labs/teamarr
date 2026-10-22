@@ -667,6 +667,16 @@ def expand_racing_segments(
     return result
 
 
+def session_takes_template_duration(session_code: str | None) -> bool:
+    """Whether a template's custom duration (#946) describes this session.
+
+    The race of a weekend and each day of a Test (#1117) are the sessions a
+    user's "8 hours" is about; practice and qualifying keep their fixed
+    windows.
+    """
+    return session_code == "race" or bool(session_code and session_code.startswith("day"))
+
+
 def apply_template_race_duration(match: dict, duration_override: float | None) -> dict:
     """Apply a template's custom duration to a match's race-session window (#946).
 
@@ -680,11 +690,15 @@ def apply_template_race_duration(match: dict, duration_override: float | None) -
     Also annotates `_duration_override` for downstream consumers that never
     see a template object (the event filler's non-segment path).
 
-    No-op when the override is None or the segment isn't the race.
+    No-op when the override is None or the segment is neither the race
+    nor a Test day.
     """
     if duration_override is None:
         return match
     match["_duration_override"] = duration_override
-    if match.get("segment") == "race" and match.get("segment_start") is not None:
+    if (
+        session_takes_template_duration(match.get("segment"))
+        and match.get("segment_start") is not None
+    ):
         match["segment_end"] = match["segment_start"] + timedelta(hours=duration_override)
     return match
