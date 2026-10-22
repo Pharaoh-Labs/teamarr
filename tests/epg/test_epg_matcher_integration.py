@@ -883,3 +883,73 @@ def test_a_programme_with_no_matchup_shape_says_so(monkeypatch):
     # Either never attempted (non-event) or attempted and unclassifiable — never a
     # diagnosis of what the programme "is".
     assert all(r in ("skipped:unclassifiable", "no_event_found") for r in reasons)
+
+
+# ======================================= description fallback, college names (#1125)
+
+
+def _cfb_matcher(events, prog):
+    m = make_stream_matcher(
+        leagues=("college-football",),
+        league_event_types={"college-football": "team_vs_team"},
+        league_sports={"college-football": "football"},
+        team_streams_enabled=False,
+        epg_index=EPGProgramIndex({"cbssn": [prog]}),
+    )
+    m._prefetched_events = {"college-football": events}
+    return m
+
+
+def _cfb_prog(desc, title="College Football", start=None):
+    start = start or datetime(2026, 10, 22, 23, 0, tzinfo=UTC)
+    return DispatcharrProgram.from_api(
+        {
+            "id": 11,
+            "tvg_id": "cbssn",
+            "title": title,
+            "sub_title": "",
+            "description": desc,
+            "start_time": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end_time": (start + timedelta(minutes=210)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "epg_source": "ext",
+            "custom_properties": {},
+        }
+    )
+
+
+def test_description_fallback_reads_the_school_without_its_mascot(monkeypatch):
+    """#1125: a Gracenote listing titled "College Football" with the matchup
+    only in the description. ESPN's short name is "Kennesaw St" and the full
+    name carries the mascot, so neither form appears in "Liberty at Kennesaw
+    State"; the school is a leading run of the full name (#650)."""
+    kickoff = datetime(2026, 10, 22, 23, 0, tzinfo=UTC)
+    event = SimpleNamespace(
+        id="cfb1",
+        home_team=_team("Kennesaw State Owls", "Kennesaw St"),
+        away_team=_team("Liberty Flames", "Liberty"),
+        start_time=kickoff,
+        league="college-football",
+        name="Liberty Flames at Kennesaw State Owls",
+        short_name="LIB @ KENN",
+    )
+    desc = "Liberty at Kennesaw State. The Flames visit the Owls in Conference USA play."
+    for title in ("College Football", "Live: College Football"):
+        m = _cfb_matcher([event], _cfb_prog(desc, title=title))
+        monkeypatch.setattr(m, "_outcome_to_result", lambda outcome, **kw: outcome)
+        out = m._match_via_epg(1, "CBS Sports Network", "cbssn", date(2026, 10, 22))
+        assert [o.event.id for o in out] == ["cfb1"], title
+        assert out[0].match_method == MatchMethod.EPG
+
+
+def test_description_name_forms_are_longest_first_and_two_tokens_or_more():
+    from teamarr.consumers.matching.matcher import _description_name_forms
+
+    forms = _description_name_forms(_team("New Mexico State Aggies", "New Mexico St"))
+    assert forms[0] == "new mexico state aggies"
+    assert "new mexico state" in forms and "new mexico st" in forms
+    assert "new" not in forms
+    # A two-token full name has no prefix shorter than itself
+    assert _description_name_forms(_team("Liberty Flames", "Liberty")) == [
+        "liberty flames",
+        "liberty",
+    ]
