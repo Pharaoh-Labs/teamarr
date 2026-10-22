@@ -350,6 +350,28 @@ def _negative_cache_enabled() -> bool:
     }
 
 
+def _description_name_forms(team) -> list[str]:
+    """Normalised spellings of a team a guide description might carry (#1125).
+
+    The full name, the short name and ESPN's ``location`` — plus every
+    leading run of two or more tokens of the full name, the #650 rule: ESPN
+    abbreviates the SCHOOL for college ("Kennesaw State Owls" is short-named
+    "Kennesaw St"), so a Gracenote description reading "Liberty at Kennesaw
+    State" matched neither form and the #540 fallback refused every college
+    team with "State" in its name. Forms shorter than three characters are
+    dropped; the result is longest first.
+    """
+    forms: set[str] = set()
+    for form in (team.name, team.short_name, getattr(team, "location", None)):
+        form_norm = normalize_text(form or "")
+        if len(form_norm) >= 3:
+            forms.add(form_norm)
+    name_tokens = normalize_text(team.name or "").split()
+    for n in range(2, len(name_tokens)):
+        forms.add(" ".join(name_tokens[:n]))
+    return sorted(forms, key=len, reverse=True)
+
+
 class StreamMatcher:
     """Unified stream matcher with classification and caching.
 
@@ -1684,9 +1706,8 @@ class StreamMatcher:
         desc_norm = normalize_text(description)
 
         def _in_desc(team) -> bool:
-            for form in (team.name, team.short_name):
-                form_norm = normalize_text(form or "")
-                if len(form_norm) >= 3 and re.search(rf"\b{re.escape(form_norm)}\b", desc_norm):
+            for form_norm in _description_name_forms(team):
+                if re.search(rf"\b{re.escape(form_norm)}\b", desc_norm):
                     return True
             return False
 
