@@ -82,6 +82,7 @@ def update_dispatcharr_settings(
     managed_team_channel_group_id: int | None | object = _NOT_PROVIDED,
     managed_team_channel_league_groups: bool | None = None,
     cleanup_unused_logos: bool | None = None,
+    refresh_m3u_before_generation: bool | None = None,
 ) -> bool:
     """Update Dispatcharr settings.
 
@@ -101,6 +102,7 @@ def update_dispatcharr_settings(
         epg_id=epg_id,
         managed_team_channel_league_groups=managed_team_channel_league_groups,
         cleanup_unused_logos=cleanup_unused_logos,
+        refresh_m3u_before_generation=refresh_m3u_before_generation,
     ) | _skip_missing(
         api_key=api_key,
         default_channel_profile_ids=default_channel_profile_ids,

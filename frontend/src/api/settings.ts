@@ -28,6 +28,8 @@ export interface DispatcharrSettings {
   managed_team_channel_league_groups: boolean
   // Clean up ALL unused logos in Dispatcharr after generation
   cleanup_unused_logos: boolean
+  // Refresh the Dispatcharr M3U account before a generation run and a group preview (#1120)
+  refresh_m3u_before_generation: boolean
 }
 
 export interface LifecycleSettings {

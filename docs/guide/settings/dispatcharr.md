@@ -49,6 +49,12 @@ Select which EPG source in Dispatcharr to associate with Teamarr-managed channel
 
 If you haven't created an EPG source in Dispatcharr yet, do that first — see the [Dispatcharr Integration Guide](../dispatcharr-integration) for the full walkthrough.
 
+## M3U Refresh
+
+**Refresh M3U accounts before generation** (on by default). When on, each EPG generation and each group preview asks Dispatcharr to refresh the group's M3U account first, unless it was refreshed recently (30 minutes for generation, 60 for a preview).
+
+Turn it off if you refresh your M3U accounts on your own schedule, or your provider limits how often it can be hit. Teamarr then reads the streams Dispatcharr already has; the generation log shows one `[M3U] Refresh skipped` line per run.
+
 ## Logo Cleanup
 
 When enabled, removes **all** unused logos from Dispatcharr after EPG generation.

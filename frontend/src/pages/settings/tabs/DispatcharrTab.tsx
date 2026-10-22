@@ -34,6 +34,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
     api_key: "", // Don't show masked key either
     epg_id: initial.epg_id,
     cleanup_unused_logos: initial.cleanup_unused_logos,
+    refresh_m3u_before_generation: initial.refresh_m3u_before_generation,
   })
 
   const handleSaveDispatcharr = async () => {
@@ -54,6 +55,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
         managed_team_channel_profile_ids: initial.managed_team_channel_profile_ids,
         managed_team_channel_group_id: initial.managed_team_channel_group_id,
         cleanup_unused_logos: dispatcharr.cleanup_unused_logos,
+        refresh_m3u_before_generation: dispatcharr.refresh_m3u_before_generation,
       }
       if (dispatcharr.password) {
         data.password = dispatcharr.password
@@ -290,6 +292,36 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
             </Select>
             <p className="text-xs text-muted-foreground">
               Associate Teamarr-managed channels with this EPG source in Dispatcharr.
+            </p>
+          </div>
+
+          <SaveButton onClick={handleSaveDispatcharr} pending={updateDispatcharr.isPending} />
+        </CardContent>
+      </Card>
+
+      {/* Card: M3U Refresh — whether Teamarr triggers the Dispatcharr M3U refresh itself
+          before a generation run and a group preview (#1120). */}
+      <Card>
+        <CardHeader>
+          <CardTitle>M3U Refresh</CardTitle>
+          <CardDescription>Whether Teamarr refreshes your M3U accounts in Dispatcharr</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={dispatcharr.refresh_m3u_before_generation ?? true}
+                onCheckedChange={(checked) =>
+                  setDispatcharr({ ...dispatcharr, refresh_m3u_before_generation: checked })
+                }
+              />
+              <Label>Refresh M3U accounts before generation</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              When enabled, each EPG generation and each group preview refreshes the group's M3U
+              account in Dispatcharr first (skipped if it was refreshed recently). Turn this off if
+              you refresh your M3U accounts on your own schedule or your provider limits how often
+              it can be hit; Teamarr then works with the streams Dispatcharr already has.
             </p>
           </div>
 

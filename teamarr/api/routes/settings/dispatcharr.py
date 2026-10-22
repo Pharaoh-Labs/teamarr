@@ -73,6 +73,7 @@ def update_dispatcharr_settings(update: DispatcharrSettingsUpdate):
             managed_team_channel_group_id=update.managed_team_channel_group_id,
             managed_team_channel_league_groups=update.managed_team_channel_league_groups,
             cleanup_unused_logos=update.cleanup_unused_logos,
+            refresh_m3u_before_generation=update.refresh_m3u_before_generation,
         )
 
     # Trigger reconnect on next use

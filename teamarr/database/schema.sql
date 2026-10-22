@@ -441,6 +441,9 @@ CREATE TABLE IF NOT EXISTS settings (
     -- when that league has one, and the group above otherwise (#933/#940)
     managed_team_channel_league_groups BOOLEAN DEFAULT 0,
     cleanup_unused_logos BOOLEAN DEFAULT 0,   -- Call Dispatcharr's cleanup API after generation
+    -- 1 = a generation run and a group preview refresh the Dispatcharr M3U account first
+    -- (the behaviour up to v2.23.1); 0 = neither does (#1120)
+    refresh_m3u_before_generation BOOLEAN DEFAULT 1,
 
     -- Reconciliation Settings
     reconcile_on_epg_generation BOOLEAN DEFAULT 1,
