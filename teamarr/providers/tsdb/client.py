@@ -292,12 +292,14 @@ class TSDBClient(BaseHTTPClient):
 
                 # Handle rate limit response (reactive) with exponential backoff
                 if response.status_code == 429:
+                    call_metrics.record_rate_limit("tsdb", endpoint)
                     backoff_attempt += 1
                     if backoff_attempt > self.BACKOFF_MAX_RETRIES:
                         logger.warning(
                             f"TSDB 429 persisted after {self.BACKOFF_MAX_RETRIES} retries. "
                             "Check API key or try again later."
                         )
+                        call_metrics.record_failure("tsdb", endpoint, "429")
                         return None
 
                     # Exponential backoff: 5s, 10s, 20s, 40s, 80s (capped at 120s)
@@ -336,10 +338,12 @@ class TSDBClient(BaseHTTPClient):
                 # 404 is deterministic — retrying wastes requests and can trip
                 # the rate limiter (see GH #217). Fail fast.
                 if status == 404:
+                    call_metrics.record_failure("tsdb", endpoint, "404")
                     return None
                 if attempt < self._retry_count - 1:
                     time.sleep(self._retry_delay * (attempt + 1))
                     continue
+                call_metrics.record_failure("tsdb", endpoint, str(status))
                 return None
 
             except (httpx.RequestError, RuntimeError, OSError) as e:
@@ -353,6 +357,7 @@ class TSDBClient(BaseHTTPClient):
                 if attempt < self._retry_count - 1:
                     time.sleep(self._retry_delay * (attempt + 1))
                     continue
+                call_metrics.record_failure("tsdb", endpoint, "connection")
                 return None
 
         return None

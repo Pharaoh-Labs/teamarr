@@ -167,6 +167,7 @@ class BaseHTTPClient:
 
                 # Handle 429 rate limit separately with longer backoff
                 if response.status_code == 429:
+                    call_metrics.record_rate_limit(self.PROVIDER, label)
                     rate_limit_retries += 1
                     if rate_limit_retries > RATE_LIMIT_MAX_RETRIES:
                         logger.error(
@@ -175,6 +176,7 @@ class BaseHTTPClient:
                             RATE_LIMIT_MAX_RETRIES,
                             url,
                         )
+                        call_metrics.record_failure(self.PROVIDER, label, "429")
                         return None
 
                     # Respect Retry-After header if present
@@ -212,10 +214,12 @@ class BaseHTTPClient:
                 # so retrying just repeats the identical failure — only 5xx gets
                 # the retry/backoff treatment (#282).
                 if e.response.status_code < 500:
+                    call_metrics.record_failure(self.PROVIDER, label, str(e.response.status_code))
                     return None
                 if attempt < self._retry_count - 1:
                     time.sleep(self._calculate_delay(attempt))
                     continue
+                call_metrics.record_failure(self.PROVIDER, label, str(e.response.status_code))
                 return None
             except (httpx.RequestError, RuntimeError, OSError) as e:
                 # RuntimeError: "Cannot send a request, as the client has been closed"
@@ -227,6 +231,7 @@ class BaseHTTPClient:
                 if attempt < self._retry_count - 1:
                     time.sleep(self._calculate_delay(attempt))
                     continue
+                call_metrics.record_failure(self.PROVIDER, label, "connection")
                 return None
 
         return None

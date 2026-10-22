@@ -769,6 +769,8 @@ def test_run_extra_metrics_keys(isolated_db):
         "file_written",
         "provider_calls",
         "provider_calls_total",
+        "provider_rate_limits",
+        "provider_call_failures",
         "phase_timings",
     ):
         assert key in saved.extra_metrics, key

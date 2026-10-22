@@ -99,7 +99,15 @@ class SupabaseLeagueClient(BaseHTTPClient):
         for attempt in range(self._retry_count):
             try:
                 response = self._get_client().get(url, **kwargs)
-                call_metrics.record_call("supabase", url)
+                # Callers read the status themselves; count a non-2xx here
+                # so the run summary sees it (#1127). Supabase never retries.
+                if response.status_code == 429:
+                    call_metrics.record_rate_limit("supabase", url)
+                    call_metrics.record_failure("supabase", url, "429")
+                elif response.is_success:
+                    call_metrics.record_call("supabase", url)
+                else:
+                    call_metrics.record_failure("supabase", url, str(response.status_code))
                 return response
             except (httpx.RequestError, RuntimeError, OSError) as e:
                 logger.warning(
@@ -111,6 +119,7 @@ class SupabaseLeagueClient(BaseHTTPClient):
                 )
                 if attempt < self._retry_count - 1:
                     continue
+        call_metrics.record_failure("supabase", url, "connection")
         return None
 
     # ------------------------------------------------------------------
