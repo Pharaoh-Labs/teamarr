@@ -111,3 +111,75 @@ def test_close_clears_pooled_client():
     assert client._request_json("https://api.test/x") == {}
     client.close()
     assert client._client is None
+
+
+# --- #1127: outcome telemetry ------------------------------------------------
+
+
+@pytest.fixture
+def _metrics():
+    from teamarr.utilities import call_metrics
+
+    call_metrics.reset()
+    yield call_metrics
+    call_metrics.reset()
+
+
+def test_success_counts_a_call_and_nothing_else(_metrics):
+    client = _make_client(lambda req: httpx.Response(200, json={}))
+    client._request_json("https://api.test/scoreboard")
+    assert _metrics.snapshot() == {"stub:scoreboard": 1}
+    assert _metrics.rate_limits_snapshot() == {}
+    assert _metrics.failures_snapshot() == {}
+
+
+def test_recovered_429_is_a_rate_limit_not_a_failure(_metrics, monkeypatch):
+    monkeypatch.setattr(base_client.time, "sleep", lambda s: None)
+    attempts = []
+
+    def handler(request):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(429)
+        return httpx.Response(200, json={})
+
+    client = _make_client(handler)
+    assert client._request_json("https://api.test/summary") == {}
+    assert _metrics.snapshot() == {"stub:summary": 1}
+    assert _metrics.rate_limits_snapshot() == {"stub:summary": 1}
+    assert _metrics.failures_snapshot() == {}
+
+
+def test_exhausted_429_is_one_failure(_metrics, monkeypatch):
+    monkeypatch.setattr(base_client.time, "sleep", lambda s: None)
+    client = _make_client(lambda req: httpx.Response(429))
+    assert client._request_json("https://api.test/summary") is None
+    assert _metrics.rate_limits_snapshot() == {
+        "stub:summary": base_client.RATE_LIMIT_MAX_RETRIES + 1
+    }
+    assert _metrics.failures_snapshot() == {"stub:summary:429": 1}
+    assert _metrics.total() == 0
+
+
+def test_4xx_is_a_failure_with_its_status(_metrics):
+    client = _make_client(lambda req: httpx.Response(404))
+    assert client._request_json("https://api.test/teams/8") is None
+    assert _metrics.failures_snapshot() == {"stub:teams:404": 1}
+
+
+def test_exhausted_5xx_retries_are_one_failure(_metrics, monkeypatch):
+    monkeypatch.setattr(base_client.time, "sleep", lambda s: None)
+    client = _make_client(lambda req: httpx.Response(503), retry_count=3)
+    assert client._request_json("https://api.test/x") is None
+    assert _metrics.failures_snapshot() == {"stub:x:503": 1}
+
+
+def test_exhausted_transport_errors_are_one_connection_failure(_metrics, monkeypatch):
+    monkeypatch.setattr(base_client.time, "sleep", lambda s: None)
+
+    def handler(request):
+        raise httpx.ConnectError("boom", request=request)
+
+    client = _make_client(handler, retry_count=3)
+    assert client._request_json("https://api.test/x") is None
+    assert _metrics.failures_snapshot() == {"stub:x:connection": 1}

@@ -81,7 +81,7 @@ You need to add Teamarr's XMLTV URL as an EPG source in Dispatcharr first. Copy 
 - Refresh the team/league directory if it's stale (Settings → Advanced → Data Caches → **Refresh Directory**)
 
 {: .tip }
-The **API Calls** column in the Dashboard's run history shows provider calls per channel. Healthy runs sit in the low single digits; an amber/red value means something is refetching abnormally and is worth a bug report.
+The **API Calls** column in the Dashboard's run history turns amber when a sports provider rate-limited the run and red when calls failed. Hover it for which endpoint and status. The number of calls on its own is not a problem indicator.
 
 ### Generation fails or shows errors
 

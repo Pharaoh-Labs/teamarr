@@ -17,14 +17,14 @@ def test_provider_calls_persist_and_surface(db_conn):
         "mlbstats:schedule": 12,
     }
     run.extra_metrics["provider_calls_total"] = 341
+    # #1127: the UI colours on these, never on the volume.
+    run.extra_metrics["provider_rate_limits"] = {"espn:summary": 3}
+    run.extra_metrics["provider_call_failures"] = {"espn:summary:503": 1}
     save_run(db_conn, run)
 
     reloaded = get_run(db_conn, run.id)
     d = reloaded.to_dict()
     assert d["extra_metrics"]["provider_calls"]["espn:summary"] == 289
     assert d["extra_metrics"]["provider_calls_total"] == 341
-
-    # calls-per-channel — the headline the UI derives — is computable from the
-    # surfaced fields (this is the regression signal: ~2.7 healthy vs ~16 buggy).
-    ratio = d["extra_metrics"]["provider_calls_total"] / d["channels"]["active"]
-    assert round(ratio, 1) == 2.7
+    assert d["extra_metrics"]["provider_rate_limits"] == {"espn:summary": 3}
+    assert d["extra_metrics"]["provider_call_failures"] == {"espn:summary:503": 1}

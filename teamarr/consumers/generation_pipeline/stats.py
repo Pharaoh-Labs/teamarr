@@ -150,6 +150,10 @@ def finalize_stats_run(
 
     stats_run.extra_metrics["provider_calls"] = call_metrics.snapshot()
     stats_run.extra_metrics["provider_calls_total"] = call_metrics.total()
+    # Rate-limit hits and final failures per endpoint (#1127): the dashboard
+    # colours the column on these, never on the volume.
+    stats_run.extra_metrics["provider_rate_limits"] = call_metrics.rate_limits_snapshot()
+    stats_run.extra_metrics["provider_call_failures"] = call_metrics.failures_snapshot()
 
     # Media-server refresh outcomes (#649): non-blocking failures otherwise
     # leave no trace beyond a phase timing collapsing to ~0.

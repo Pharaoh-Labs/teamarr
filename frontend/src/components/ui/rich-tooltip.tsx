@@ -11,6 +11,10 @@ interface TooltipRow {
   label: string
   value: string | number
   logo?: string
+  /** Colour override for label and value (e.g. a red failure row). */
+  className?: string
+  /** Render as a detail line under the previous row. */
+  indent?: boolean
 }
 
 interface RichTooltipProps {
@@ -62,7 +66,10 @@ export function RichTooltip({
               {rows.map((row, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between gap-3 px-3 py-1.5 text-sm"
+                  className={cn(
+                    "flex items-center justify-between gap-3 px-3 py-1.5 text-sm",
+                    row.indent && "pl-6 py-1 text-xs"
+                  )}
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     {row.logo && (
@@ -75,11 +82,11 @@ export function RichTooltip({
                         }}
                       />
                     )}
-                    <span className="text-muted-foreground truncate">
+                    <span className={cn("text-muted-foreground truncate", row.className)}>
                       {row.label}
                     </span>
                   </div>
-                  <span className="font-medium text-primary flex-shrink-0">
+                  <span className={cn("font-medium text-primary flex-shrink-0", row.className)}>
                     {row.value}
                   </span>
                 </div>

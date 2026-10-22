@@ -47,7 +47,7 @@ A table of recent full-pipeline runs (matching, channels, and EPG). Five show by
 | **Matched** | Streams matched to events. Click to open a searchable drill-down of matched streams, filterable by group, with a badge showing how each match was made (Cache, Alias, Fuzzy, Direct, …) and a **Fix** button to correct a wrong match |
 | **Failed** | Streams that could not be matched. Click to see each stream's failure reason, and use **Fix** to manually match it via the Event Matcher |
 | **Channels** | Active channels after the run |
-| **API Calls** | Provider HTTP calls made during the run, shown as calls-per-channel. Hover for the per-provider breakdown. Muted in the normal range; amber/red if call volume per channel climbs abnormally — a quick way to spot a fetch regression |
+| **API Calls** | Sports-provider HTTP calls made during the run. The count itself is not a health signal — it varies with cache state and the leagues you follow. **Amber** means a provider rate-limited some calls (retried, usually recovered); **red** means calls failed outright. Hover for the per-endpoint breakdown and the failure and rate-limit detail |
 | **Duration** | How long the run took |
 | **Size** | Size of the generated XMLTV file |
 

@@ -75,3 +75,27 @@ def test_thread_safe_increments():
         t.join()
     assert call_metrics.total() == 8000
     assert call_metrics.snapshot()["espn:summary"] == 8000
+
+
+def test_rate_limits_and_failures_are_counted_apart():
+    """#1127: a 429 is a rate-limit hit; a call that gave up is a failure."""
+    call_metrics.record_call("espn", "summary")
+    call_metrics.record_rate_limit("espn", "https://x/sports/nba/summary?event=1")
+    call_metrics.record_rate_limit("espn", "summary")
+    call_metrics.record_failure("espn", "https://x/sports/nba/teams/8", "404")
+    call_metrics.record_failure("tsdb", "eventsday.php", "connection")
+
+    assert call_metrics.total() == 1  # successes only
+    assert call_metrics.rate_limits_snapshot() == {"espn:summary": 2}
+    assert call_metrics.failures_snapshot() == {
+        "espn:teams:404": 1,
+        "tsdb:eventsday.php:connection": 1,
+    }
+
+
+def test_reset_clears_rate_limits_and_failures():
+    call_metrics.record_rate_limit("espn", "summary")
+    call_metrics.record_failure("espn", "summary", "503")
+    call_metrics.reset()
+    assert call_metrics.rate_limits_snapshot() == {}
+    assert call_metrics.failures_snapshot() == {}
