@@ -299,7 +299,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
         </CardContent>
       </Card>
 
-      {/* Card: M3U Refresh — whether Teamarr triggers the Dispatcharr M3U refresh itself
+      {/* Card 3: M3U Refresh — whether Teamarr triggers the Dispatcharr M3U refresh itself
           before a generation run and a group preview (#1120). */}
       <Card>
         <CardHeader>
@@ -329,7 +329,7 @@ export function DispatcharrTab({ initial }: { initial: DispatcharrSettings }) {
         </CardContent>
       </Card>
 
-      {/* Card 3: Logo Cleanup — a Dispatcharr-instance housekeeping behavior, so
+      {/* Card 4: Logo Cleanup — a Dispatcharr-instance housekeeping behavior, so
           it lives with the connection/EPG-source config. (Default profiles,
           channel group, and group mode moved to Channels → Dispatcharr Output in
           the v2.7.0 IA overhaul; logo cleanup is maintenance, not channel routing.) */}
