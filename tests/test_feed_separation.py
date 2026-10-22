@@ -251,6 +251,28 @@ class TestDetectTeamInStreamName:
         )
         assert result == home_team
 
+    @pytest.mark.parametrize(
+        "name,expected",
+        [
+            # The prod shape (#1128): each side's arena broadcast on the matchup.
+            ("nba 01: yankees vs orioles (yankees in-arena) @ 21 oct 07:00 pm et", "away"),
+            ("nba 02: yankees vs orioles (orioles in-arena) @ 21 oct 07:00 pm et", "home"),
+            ("yankees in arena", "away"),
+            ("in-arena: orioles", "home"),
+            # A marker that names no team is a shared feed.
+            ("nba 05: yankees vs orioles (espn in-arena) @ 21 oct 07:30 pm et", None),
+            # The matchup alone never splits.
+            ("yankees vs orioles", None),
+        ],
+    )
+    def test_in_arena_marker(self, home_team, away_team, name, expected):
+        """'(Team In-Arena)' is a team feed marker like '(Team Feed)' (#1128)."""
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        result = EventGroupProcessor._detect_team_in_stream_name(name, home_team, away_team)
+        want = {"home": home_team, "away": away_team, None: None}[expected]
+        assert result == want
+
     def test_team_branded_channel_token(self, home_team, away_team):
         """'Yankees.TV' is a team-specific feed even with no feed keyword (#343)."""
         from teamarr.consumers.event_group_processor import EventGroupProcessor

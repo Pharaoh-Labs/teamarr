@@ -437,6 +437,8 @@ class TestTeamFeed:
             ("Pirates vs Cubs (Away)", True),
             ("Pirates @ Cubs Away", True),
             ("(Pirates feed) MLB", True),
+            ("NBA 03: Cubs vs Pirates (Pirates In-Arena) @ 5 Oct 07:00 PM ET", True),  # #1128
+            ("NBA 04: Cubs vs Pirates (Cubs In-Arena) @ 5 Oct 07:00 PM ET", False),  # other side
             ("Home Feed: Cubs vs Pirates", True),
             ("Away Feed: Pirates vs Cubs", True),
             ("Pirates vs Cubs", False),  # no directional marker
