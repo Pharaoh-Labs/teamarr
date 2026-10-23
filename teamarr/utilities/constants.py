@@ -522,6 +522,9 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     # ==========================================================================
     (r"\bnrl[:\s-]", "nrl"),
     (r"\bsuper\s+rugby[:\s-]", "super-rugby"),
+    # "URC Rugby - Sharks @ Cardiff Blues" (#1141): without the hint an install
+    # that never cached the rugby Sharks let the NHL Sharks take the stream.
+    (r"\burc[:\s-]", "urc"),
 ]
 
 
@@ -566,6 +569,10 @@ SPORT_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\bnhl\b", "Hockey"),
     (r"\bahl\b", "Hockey"),
     (r"\bpwhl\b", "Hockey"),
+    # Rugby (union and league share the sport). Bare "rugby" was never a hint,
+    # only Flo's vertical above, so "URC Rugby - Sharks @ Cardiff Blues" gave
+    # the matcher no sport and the NHL Sharks stayed eligible (#1141).
+    (r"\brugby\b", "Rugby"),
     # American Football — require explicit context
     (r"\bamerican\s+football\b", "Football"),
     (r"\bcollege\s+football\b", "Football"),
