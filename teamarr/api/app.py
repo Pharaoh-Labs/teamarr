@@ -25,7 +25,6 @@ from teamarr.api.routes import (
     keywords,
     leagues,
     logs,
-    manual_events,
     numbering_exceptions,
     presets,
     race_feeds,
@@ -395,7 +394,6 @@ def create_app() -> FastAPI:
     )
     app.include_router(cache.router, prefix="/api/v1", tags=["Cache"])
     app.include_router(leagues.router, prefix="/api/v1", tags=["Custom Leagues"])
-    app.include_router(manual_events.router, prefix="/api/v1/manual-events", tags=["Manual Events"])
     app.include_router(logs.router, prefix="/api/v1", tags=["Logging"])
     app.include_router(channels.router, prefix="/api/v1/channels", tags=["Channels"])
     app.include_router(settings.router, prefix="/api/v1", tags=["Settings"])

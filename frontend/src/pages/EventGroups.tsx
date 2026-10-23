@@ -903,6 +903,7 @@ export function EventGroups() {
   if (error) {
     return (
       <div className="space-y-4">
+        <h1 className="text-2xl font-bold">Sources</h1>
         <Card className="border-destructive">
           <CardContent className="pt-6">
             <p className="text-destructive">
@@ -919,9 +920,10 @@ export function EventGroups() {
 
   return (
     <div className="space-y-2">
-      {/* Header - Compact. Section title lives in SourcesLayout (#1131). */}
+      {/* Header - Compact */}
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
+          <h1 className="text-xl font-bold">Sources</h1>
           {matchRate.hasData && (
             <span className="text-sm text-muted-foreground">
               <span className={`font-semibold ${matchRateColor(matchRate.rate)}`}>{matchRate.rate}%</span> matched

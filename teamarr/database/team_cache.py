@@ -322,8 +322,7 @@ def get_team_picker_leagues(conn: Connection) -> list[dict]:
             CASE WHEN l.league_code IS NOT NULL THEN 1 ELSE 0 END as is_configured,
             COALESCE(l.display_name, lc.league_name, UPPER(tc.league)) as display_name,
             l.logo_url as configured_logo_url,
-            lc.logo_url as cached_logo_url,
-            l.event_type as event_type
+            lc.logo_url as cached_logo_url
         FROM team_cache tc
         LEFT JOIN leagues l ON l.league_code = tc.league
         LEFT JOIN league_cache lc ON lc.league_slug = tc.league
@@ -345,10 +344,6 @@ def get_team_picker_leagues(conn: Connection) -> list[dict]:
             "is_configured": bool(row["is_configured"]),
             "name": row["display_name"],
             "logo_url": row["configured_logo_url"] or row["cached_logo_url"],
-            # Matching classification from the leagues table (None when the
-            # league isn't configured). The manual-event form filters on
-            # 'team_vs_team'; #1131.
-            "event_type": row["event_type"],
         }
         for row in cursor.fetchall()
     ]

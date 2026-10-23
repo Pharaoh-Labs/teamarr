@@ -13,7 +13,6 @@ Uses PersistentTTLCache for all caching:
 import logging
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast, overload
@@ -22,17 +21,11 @@ from teamarr.core import (
     GENERATED_PREVIEW_FIELDS,
     KNOCKOUT_FIELDS,
     Event,
-    EventStatus,
     SportsProvider,
     Team,
     TeamStats,
 )
 from teamarr.database import get_db
-from teamarr.database.manual_events import (
-    MANUAL_EVENT_PREFIX,
-    get_manual_event,
-    manual_events_in_window,
-)
 from teamarr.database.provider_cache import (
     dict_to_event,
     dict_to_stats,
@@ -259,7 +252,7 @@ def create_default_service() -> "SportsDataService":
 
     # Get all enabled providers from the registry, sorted by priority
     providers = ProviderRegistry.get_all()
-    return SportsDataService(providers=providers, supplemental_db_factory=get_db)
+    return SportsDataService(providers=providers)
 
 
 class SportsDataService:
@@ -276,13 +269,8 @@ class SportsDataService:
     - Team info: 24 hours - static team data
     """
 
-    def __init__(
-        self,
-        providers: list[SportsProvider] | None = None,
-        supplemental_db_factory: Callable | None = None,
-    ):
+    def __init__(self, providers: list[SportsProvider] | None = None):
         self._providers: list[SportsProvider] = providers or []
-        self._supplemental_db_factory = supplemental_db_factory
         self._cache = _get_shared_cache()
         # Let providers that scan day-by-day (ESPN team schedules) reuse the
         # cached, league-wide get_events so a league's daily scoreboard is
@@ -291,31 +279,13 @@ class SportsDataService:
         for provider in self._providers:
             setter = getattr(provider, "set_cached_events_fn", None)
             if callable(setter):
-                # Team schedules must remain provider-only: manual fixtures are
-                # temporary event-channel inputs, not permanent team schedules.
-                setter(self._get_provider_events)
+                setter(self.get_events)
 
     def add_provider(self, provider: SportsProvider) -> None:
         """Register a provider."""
         self._providers.append(provider)
 
     def get_events(self, league: str, target_date: date, cache_only: bool = False) -> list[Event]:
-        """Merge durable supplemental fixtures AFTER the provider cache boundary.
-
-        cache_only forbids network work, not reads of user-owned local schedules.
-        Never cache this merged list: additions, edits and cancellations must be
-        visible to an already-created service, including a cached empty day.
-        """
-        events = self._get_provider_events(league, target_date, cache_only)
-        if self._supplemental_db_factory is None:
-            return events
-        with self._supplemental_db_factory() as conn:
-            manual = manual_events_in_window(conn, league, user_day_window(target_date))
-        return sorted([*events, *manual], key=lambda event: (event.start_time, event.id))
-
-    def _get_provider_events(
-        self, league: str, target_date: date, cache_only: bool = False
-    ) -> list[Event]:
         """Get all events for a league on a given date.
 
         Args:
@@ -678,15 +648,6 @@ class SportsDataService:
 
         Uses shorter TTL (30min) since this is called for fresh scores/odds.
         """
-        # Resolve user-owned identities before any provider cache or API call.
-        # Cancelled rows remain available to lifecycle/status refresh, but are
-        # never candidates. Missing manual IDs must not fall through to ESPN.
-        if event_id and event_id.startswith(MANUAL_EVENT_PREFIX):
-            if self._supplemental_db_factory is None:
-                return None
-            with self._supplemental_db_factory() as conn:
-                return get_manual_event(conn, event_id, league)
-
         # Guard against empty event_id which would cause malformed API requests
         if not event_id:
             logger.warning(
@@ -787,10 +748,6 @@ class SportsDataService:
         """
         if not event:
             return event
-
-        if event.id.startswith(MANUAL_EVENT_PREFIX):
-            fresh = self.get_event(event.id, event.league)
-            return fresh or replace(event, status=EventStatus(state="cancelled"))
 
         # Coalesce repeated refreshes of the same event within a run. Normally we
         # invalidate the event cache to force a fresh provider fetch, but the same
