@@ -106,10 +106,11 @@ with a missing preseason or other team game.
 It requires neither an upstream event nor a TSDB key, but the fixture's league
 must still be subscribed here or in the source's override. Matching, templates,
 team filters and temporary channel settings work as usual. Permanent team
-guides are not extended. Named events (rally), custom competitions and ICS
-import are follow-up slices of #1131; the UI warns about upstream duplicates
-but does not yet resolve them. Do not duplicate a fixture that already exists
-upstream.
+guides are not extended. Upstream duplicates are detected and surfaced as a
+banner on the page (same two sides, either orientation, ±1 day); resolution is
+the explicit "Remove manual copy" action — nothing is auto-suppressed. Named
+events (rally), custom competitions and ICS
+import are follow-up slices of #1131.
 
 ## Per-Source subscription overrides
 

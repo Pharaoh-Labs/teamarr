@@ -3,6 +3,7 @@ import {
   type ManualEventInput,
   cancelManualEvent,
   createManualEvent,
+  listDuplicates,
   listManualEvents,
   updateManualEvent,
 } from "@/api/manualEvents"
@@ -11,6 +12,14 @@ export function useManualEvents() {
   return useQuery({
     queryKey: ["manual-events"],
     queryFn: listManualEvents,
+  })
+}
+
+export function useManualEventDuplicates() {
+  return useQuery({
+    queryKey: ["manual-events", "duplicates"],
+    queryFn: listDuplicates,
+    staleTime: 1000 * 60,
   })
 }
 
