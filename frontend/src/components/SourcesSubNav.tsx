@@ -9,7 +9,16 @@ export function SourcesSubNav() {
   return (
     <SubNav
       items={[
-        { key: "/sources", label: "Stream Sources", to: "/sources" },
+        {
+          key: "/sources",
+          label: "Stream Sources",
+          to: "/sources",
+          // NavLink is prefix-active by default; /sources is a prefix of every
+          // other Sources URL (manual-events, new, :id, import), so this pill
+          // would stay lit on all of them. EPG/Channels tabs don't overlap and
+          // don't need this.
+          end: true,
+        },
         { key: "/sources/manual-events", label: "Manual Events", to: "/sources/manual-events" },
       ]}
     />
