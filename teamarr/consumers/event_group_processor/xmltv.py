@@ -246,6 +246,7 @@ class XmltvRenderer:
                 options.sport_durations,
                 lookback_hours,
                 prepend_postponed_label=options.prepend_postponed_label,
+                untagged_keyword_label=options.untagged_keyword_label,
             )
             if filler_result.programmes:
                 pregame_count = filler_result.pregame_count
@@ -299,6 +300,7 @@ class XmltvRenderer:
         sport_durations: dict[str, float],
         lookback_hours: int = 6,
         prepend_postponed_label: bool = True,
+        untagged_keyword_label: str | None = None,
     ) -> EventFillerResult:
         """Generate filler programmes for matched event streams.
 
@@ -308,6 +310,8 @@ class XmltvRenderer:
             sport_durations: Sport duration settings
             lookback_hours: How far back to generate EPG (for preceding content)
             prepend_postponed_label: Whether to prepend "Postponed: " for postponed events
+            untagged_keyword_label: ``{exception_keyword}`` value for a channel no
+                keyword matched (#1136) — the same rule the programme path uses
 
         Returns:
             EventFillerResult with programmes and pregame/postgame counts
@@ -356,8 +360,12 @@ class XmltvRenderer:
             # Must include feed_team_id when feed separation is active so filler lands
             # on the same per-feed channel as the live programme.
             from teamarr.consumers.lifecycle import generate_event_tvg_id
+            from teamarr.database.channels.keywords import keyword_display_value
 
             exception_keyword = stream_match.get("_exception_keyword")
+            # Display value for {exception_keyword} in filler fields (#1136):
+            # the tvg-id below keeps the raw keyword, the text gets the label.
+            keyword_value = keyword_display_value(exception_keyword, untagged_keyword_label)
             feed_team = stream_match.get("feed_team")
             feed_team_id = feed_team.id if feed_team else None
             channel_id = generate_event_tvg_id(
@@ -402,6 +410,7 @@ class XmltvRenderer:
                     config=stream_filler_config,
                     options=use_options,
                     card_segment=segment,
+                    exception_keyword=keyword_value,
                 )
                 result.programmes.extend(filler_result.programmes)
                 result.pregame_count += filler_result.pregame_count
