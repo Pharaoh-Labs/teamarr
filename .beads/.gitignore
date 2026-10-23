@@ -82,3 +82,6 @@ proxied_server_client_info.json
 # Added by bd (missing required patterns)
 *.gate.lock*
 dolt-backup-state.json
+
+# Added by bd (missing required patterns)
+dolt-server-config.yaml
