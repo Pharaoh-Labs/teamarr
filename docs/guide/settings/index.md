@@ -21,7 +21,7 @@ has_children: true
 What remains under Settings:
 
 - **[General](general)** — timezone, time format, scheduled generation, TheSportsDB API key, and update notifications
-- **[Dispatcharr](dispatcharr)** — connection, EPG source, and logo cleanup
+- **[Dispatcharr](dispatcharr)** — connection, EPG source, M3U refresh, and logo cleanup
 - **[Media Servers](media-servers)** — Emby, Jellyfin, Channels DVR, and Plex integration (multiple servers supported for each)
 - **[Advanced](advanced)** — backup/restore (including scheduled backups), scheduled channel reset, Gracenote category overrides, and the data caches
 

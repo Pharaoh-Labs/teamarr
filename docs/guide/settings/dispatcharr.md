@@ -7,7 +7,7 @@ nav_order: 2
 
 # Dispatcharr Integration
 
-Configure the connection to Dispatcharr for automatic channel management. The tab holds three cards — **Connection Settings**, **EPG Source**, and **Logo Cleanup** — each with its own Save button.
+Configure the connection to Dispatcharr for automatic channel management. The tab holds four cards — **Connection Settings**, **EPG Source**, **M3U Refresh**, and **Logo Cleanup** — each with its own Save button.
 
 ![Settings → Dispatcharr — connection, EPG source, and logo cleanup](../../assets/images/settings-dispatcharr.png)
 
