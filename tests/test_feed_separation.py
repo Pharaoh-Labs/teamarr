@@ -317,6 +317,61 @@ class TestDetectTeamInStreamName:
 # ===========================================================================
 
 
+class TestBroadcasterNamedLikeItsTeam:
+    """A broadcaster whose name is the team's own name ("Jazz+") is the
+    matchup word once normalised and must not claim the game's streams
+    (#1144). It still counts when the stream spells it verbatim."""
+
+    @pytest.fixture
+    def event(self):
+        @dataclass
+        class MockEvent:
+            home_team: object
+            away_team: object
+            broadcast_markets: dict
+
+        def team(id_, name, short, abbrev):
+            return MockTeam(
+                id=id_,
+                provider="espn",
+                name=name,
+                short_name=short,
+                abbreviation=abbrev,
+                league="nba",
+                sport="basketball",
+            )
+
+        # ESPN 2026-10-21: Utah Jazz at Memphis Grizzlies.
+        return MockEvent(
+            home_team=team("29", "Memphis Grizzlies", "Grizzlies", "MEM"),
+            away_team=team("26", "Utah Jazz", "Jazz", "UTA"),
+            broadcast_markets={"DAZN MEM": "home", "KJZZ-TV": "away", "Jazz+": "away"},
+        )
+
+    @staticmethod
+    def _detect(text, event):
+        from teamarr.consumers.event_group_processor import EventGroupProcessor
+
+        return EventGroupProcessor._detect_feed_from_broadcast_markets(text, event)
+
+    def test_the_matchup_word_is_not_the_broadcaster(self, event):
+        # The prod shape: both sides' arena feeds resolved to the Jazz.
+        for name in (
+            "nba 12: grizzlies vs jazz (grizzlies in-arena) @ 21 oct 08:00 pm et",
+            "nba 13: grizzlies vs jazz (jazz in-arena) @ 21 oct 08:00 pm et",
+            "nba: utah jazz @ memphis grizzlies",
+        ):
+            assert self._detect(name, event) is None, name
+
+    def test_the_broadcaster_spelled_verbatim_still_counts(self, event):
+        assert self._detect("jazz+ | grizzlies vs jazz", event) == event.away_team
+        assert self._detect("nba: grizzlies vs jazz (jazz+)", event) == event.away_team
+
+    def test_other_broadcasters_are_unaffected(self, event):
+        assert self._detect("kjzz-tv: grizzlies vs jazz", event) == event.away_team
+        assert self._detect("dazn mem: grizzlies vs jazz", event) == event.home_team
+
+
 class TestDetectFeedFromBroadcastMarkets:
     """_detect_feed_from_broadcast_markets() maps ESPN broadcasts[].market
     names found in the stream name to that side's team."""
