@@ -75,8 +75,12 @@ def create_folder(conn: Connection, name: str) -> SourceFolder:
     cursor = conn.execute(
         "INSERT INTO source_folders (name, sort_order) VALUES (?, ?)", (name, row[0])
     )
+    # lastrowid is Optional in the sqlite3 types but always set after a
+    # successful INSERT; narrow before the read-back so pyright stays green.
+    inserted_id = cursor.lastrowid
+    assert inserted_id is not None
     conn.commit()
-    folder = get_folder(conn, cursor.lastrowid)
+    folder = get_folder(conn, inserted_id)
     assert folder is not None
     return folder
 
