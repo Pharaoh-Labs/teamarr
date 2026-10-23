@@ -7,8 +7,8 @@ separate extensions, not fake teams forced through this contract.
 
 import sqlite3
 from dataclasses import replace
-from datetime import UTC
-from typing import Literal
+from datetime import UTC, timedelta
+from typing import Any, Literal
 from uuid import uuid4
 
 from pydantic import (
@@ -22,7 +22,12 @@ from pydantic import (
 
 from teamarr.core import Event, EventStatus, Team, Venue
 from teamarr.database.leagues import get_league
-from teamarr.database.manual_events import MANUAL_EVENT_PREFIX, get_manual_event, save_manual_event
+from teamarr.database.manual_events import (
+    MANUAL_EVENT_PREFIX,
+    get_manual_event,
+    list_manual_events,
+    save_manual_event,
+)
 from teamarr.database.team_cache import get_team_identity
 
 
@@ -138,3 +143,57 @@ def cancel_manual_fixture(
     # No failure-cache purge: cancelling cannot make unmatched streams match.
     save_manual_event(conn, event, clear_cached_failures=False)
     return event
+
+
+def _team_pair_key(home_name: str, away_name: str) -> frozenset[str]:
+    """Orientation-independent, conservatively exact team-pair identity.
+
+    Manual fixtures resolve their teams from the same team_cache identities the
+    providers write, so normalized exact names should match; anything fuzzier
+    risks flagging genuinely different fixtures (#1131).
+    """
+    normalize = lambda name: " ".join(name.lower().split())  # noqa: E731
+    return frozenset({normalize(home_name), normalize(away_name)})
+
+
+def find_upstream_duplicates(
+    conn: sqlite3.Connection, service: Any, window_days: int = 1
+) -> list[dict[str, Any]]:
+    """Pair each scheduled manual fixture with same-pair upstream events.
+
+    A duplicate is an upstream (non-manual) event in the same league whose two
+    sides are the same teams in either orientation, on the fixture's user-local
+    date or within ``window_days`` either side — calendars disagree across
+    timezones. Detection only: resolution stays an explicit user choice, so
+    nothing here suppresses candidates or touches channels (#1131).
+
+    Reads ride the service's normal cache, so this is cheap to poll from the
+    UI. Cancelled fixtures are skipped — they are not candidates anymore.
+    """
+    from teamarr.utilities.tz import get_user_timezone
+
+    tz = get_user_timezone()
+    duplicates: list[dict[str, Any]] = []
+    for manual in list_manual_events(conn):
+        if manual.status.state != "scheduled":
+            continue
+        local_date = manual.start_time.astimezone(tz).date()
+        pair = _team_pair_key(manual.home_team.name, manual.away_team.name)
+        seen_upstream: set[str] = set()
+        for offset in range(-window_days, window_days + 1):
+            try:
+                events = service.get_events(manual.league, local_date + timedelta(days=offset))
+            except Exception:  # noqa: BLE001 - one league blip ≠ lost report
+                continue
+            for upstream in events:
+                if upstream.id.startswith(MANUAL_EVENT_PREFIX):
+                    continue
+                if upstream.id in seen_upstream:
+                    continue
+                if upstream.league != manual.league:
+                    continue
+                if _team_pair_key(upstream.home_team.name, upstream.away_team.name) != pair:
+                    continue
+                seen_upstream.add(upstream.id)
+                duplicates.append({"manual": manual, "upstream": upstream})
+    return duplicates
