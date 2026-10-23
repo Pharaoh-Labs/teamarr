@@ -1,7 +1,7 @@
 """Manual fixtures are schedules, not provider caches or permanent team games."""
 
 from dataclasses import replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
 
@@ -9,7 +9,6 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from teamarr.api.dependencies import get_sports_service
 from teamarr.api.routes import manual_events as routes
 from teamarr.consumers.matching.classifier import classify_stream
 from teamarr.consumers.matching.team_matcher import TeamMatcher
@@ -290,88 +289,6 @@ def test_soccer_and_neutral_fixtures_use_vs_conventions(setup):
     assert soccer.name == "Miami Heat vs Boston Celtics"
     assert soccer.short_name == "MIA vs BOS"
     assert service.get_events("nba", DAY, cache_only=True)[0].name == soccer.name
-
-
-def test_duplicate_detection_pairs_manual_with_upstream_sides(setup, monkeypatch):
-    """Report-only duplicate detection: same two sides, either orientation,
-    on the fixture's date or the adjacent day (#1131)."""
-    from teamarr.services.manual_events import find_upstream_duplicates
-
-    factory, data, service = setup
-    fixture = save(setup)  # Falcons at Cardinals, DAY 20:00 UTC
-    kickoff = datetime(2026, 10, 23, 19, tzinfo=UTC)
-
-    def upstream_side(event_id, home_name, away_name, start=kickoff, league="nba"):
-        return replace(
-            fixture,
-            id=event_id,
-            provider="espn",
-            league=league,
-            start_time=start,
-            home_team=replace(fixture.home_team, name=home_name),
-            away_team=replace(fixture.away_team, name=away_name),
-        )
-
-    # Same pair, flipped orientation, one day after — still a duplicate.
-    monkeypatch.setattr(
-        service,
-        "_get_provider_events",
-        lambda *args: [
-            upstream_side("espn-1", "Boston Celtics", "Miami Heat", start=kickoff),
-            upstream_side(
-                "espn-2",
-                "Miami Heat",
-                "Boston Celtics",
-                start=kickoff + timedelta(days=1),
-            ),
-            # Different pair / other league / manual row: never duplicates.
-            upstream_side("espn-3", "Miami Heat", "New York Knicks"),
-            upstream_side("espn-4", "Miami Heat", "Boston Celtics", league="nfl"),
-            replace(fixture, id="manual:other"),
-        ],
-    )
-    with factory() as conn:
-        duplicates = find_upstream_duplicates(conn, service)
-    assert {d["upstream"].id for d in duplicates} == {"espn-1", "espn-2"}
-    assert {d["manual"].id for d in duplicates} == {fixture.id}
-
-    # A cancelled manual fixture is not a candidate, so nothing is reported.
-    with factory() as conn:
-        cancel_manual_fixture(conn, fixture.id)
-        assert find_upstream_duplicates(conn, service) == []
-
-
-def test_duplicates_endpoint_reports_pairs_and_cancel_resolves(setup, monkeypatch):
-    from dataclasses import replace as dc_replace
-
-    factory, data, service = setup
-    fixture = save(setup)
-    monkeypatch.setattr(
-        service,
-        "_get_provider_events",
-        lambda *args: [
-            dc_replace(
-                fixture,
-                id="espn-dup",
-                provider="espn",
-                start_time=datetime(2026, 10, 23, 21, tzinfo=UTC),
-            )
-        ],
-    )
-    monkeypatch.setattr(routes, "get_db", factory)
-    # Depends() captured the original function object, so patch via the
-    # FastAPI dependency-override mechanism, not the module attribute.
-    app = FastAPI()
-    app.dependency_overrides[get_sports_service] = lambda: service
-    app.include_router(routes.router, prefix="/api/v1/manual-events")
-    with TestClient(app) as client:
-        report = client.get("/api/v1/manual-events/duplicates")
-        assert report.status_code == 200, report.text
-        assert report.json()["total"] == 1
-        assert report.json()["duplicates"][0]["upstream"]["id"] == "espn-dup"
-        # Resolution is the user's explicit cancel — then the report is empty.
-        assert client.delete(f"/api/v1/manual-events/{fixture.id}").status_code == 200
-        assert client.get("/api/v1/manual-events/duplicates").json()["total"] == 0
 
 
 def test_failed_cache_purge_is_league_scoped_and_skipped_on_cancel(setup):

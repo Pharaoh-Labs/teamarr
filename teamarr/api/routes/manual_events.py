@@ -1,8 +1,7 @@
 """API-first manual fixture management; normal generation owns all side effects."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 
-from teamarr.api.dependencies import get_sports_service
 from teamarr.database import get_db
 from teamarr.database.manual_events import get_manual_event, list_manual_events
 from teamarr.database.provider_cache import event_to_dict
@@ -11,7 +10,6 @@ from teamarr.services.manual_events import (
     cancel_manual_fixture,
     write_manual_fixture,
 )
-from teamarr.services.sports_data import SportsDataService
 
 router = APIRouter()
 
@@ -31,29 +29,6 @@ def create_fixture(data: ManualFixtureInput) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return event_to_dict(event)
-
-
-@router.get("/duplicates")
-def list_duplicates(service: SportsDataService = Depends(get_sports_service)) -> dict:
-    """Scheduled manual fixtures that also exist upstream, for resolution.
-
-    Deliberately report-only: the user chooses whether to remove the manual
-    copy. Nothing is auto-suppressed and no channel state is touched here.
-    """
-    from teamarr.services.manual_events import find_upstream_duplicates
-
-    with get_db() as conn:
-        duplicates = find_upstream_duplicates(conn, service)
-    return {
-        "duplicates": [
-            {
-                "manual": event_to_dict(pair["manual"]),
-                "upstream": event_to_dict(pair["upstream"]),
-            }
-            for pair in duplicates
-        ],
-        "total": len(duplicates),
-    }
 
 
 @router.get("/{event_id}")

@@ -73,7 +73,6 @@ league codes are normalized to their lowercase slug on save, so `"NBA"` and
 | Method/path (relative to `/api/v1/manual-events`) | Behavior |
 |---|---|
 | `GET` | List fixtures, including cancelled; optional `?league=nba` |
-| `GET /duplicates` | Scheduled fixtures that also exist upstream (same two sides, either orientation, ±1 day). Report-only — resolution is the user's explicit cancel |
 | `POST` | Create a fixture; returns 201 |
 | `GET /{id}` | Read a fixture. `id` is a globally unique surrogate key; `?league=` is an optional consistency check (a mismatched league returns 404) |
 | `PUT /{id}` | Replace editable fixture fields using the complete POST body; preserve ID and league. Editing a cancelled fixture returns 400 — cancellation is permanent |

@@ -36,7 +36,6 @@ import {
 import {
   useCancelManualEvent,
   useCreateManualEvent,
-  useManualEventDuplicates,
   useManualEvents,
   useUpdateManualEvent,
 } from "@/hooks/useManualEvents"
@@ -433,7 +432,6 @@ function defaultEventName(e: ManualEvent): string {
 
 export function ManualEvents() {
   const events = useManualEvents()
-  const duplicates = useManualEventDuplicates()
   const cancel = useCancelManualEvent()
 
   const [formOpen, setFormOpen] = useState(false)
@@ -477,48 +475,6 @@ export function ManualEvents() {
           Add Event
         </Button>
       </div>
-
-      {duplicates.data && duplicates.data.total > 0 && (
-        <Alert
-          variant="warning"
-          title={`${duplicates.data.total} manual event${duplicates.data.total > 1 ? "s" : ""} also exist upstream`}
-          icon={<TriangleAlert />}
-        >
-          <div className="space-y-2">
-            <p>
-              These fixtures are also on the provider schedules. Two candidates for the same
-              game can produce duplicate channels. Removing the manual copy keeps the upstream
-              event — channels from it are handled by normal generation.
-            </p>
-            {duplicates.data.duplicates.map((pair) => (
-              <div
-                key={pair.manual.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-yellow-500/30 bg-background/50 px-2.5 py-1.5 text-sm"
-              >
-                <span>
-                  <strong>{pair.manual.name}</strong>
-                  {pair.manual.status.state === "scheduled" && (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      — also listed as {pair.upstream.name} (
-                      {formatKickoff(pair.upstream.start_time)})
-                    </span>
-                  )}
-                </span>
-                {pair.manual.status.state === "scheduled" && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPendingCancel(pair.manual)}
-                  >
-                    Remove manual copy
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
-        </Alert>
-      )}
 
       <Card>
         <CardHeader>

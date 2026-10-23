@@ -55,15 +55,6 @@ export async function listManualEvents(): Promise<{ events: ManualEvent[]; total
   return api.get("/manual-events")
 }
 
-export interface DuplicatePair {
-  manual: ManualEvent
-  upstream: ManualEvent
-}
-
-export async function listDuplicates(): Promise<{ duplicates: DuplicatePair[]; total: number }> {
-  return api.get("/manual-events/duplicates")
-}
-
 export async function createManualEvent(data: ManualEventInput): Promise<ManualEvent> {
   return api.post("/manual-events", data)
 }
