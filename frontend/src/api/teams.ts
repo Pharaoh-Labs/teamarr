@@ -165,8 +165,6 @@ export interface TeamPickerLeague {
   is_configured: boolean
   name: string
   logo_url: string | null
-  /** Matching classification; null when the league isn't configured (#1131). */
-  event_type: string | null
 }
 
 export interface TeamPickerLeaguesResponse {

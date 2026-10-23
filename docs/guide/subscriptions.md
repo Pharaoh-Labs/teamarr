@@ -97,22 +97,6 @@ Deleting a custom league removes its definition and purges its cached teams and 
 
 ## Per-Source subscription overrides
 
-### Missing team fixtures (API-first)
-
-The initial [manual fixture API](../reference/architecture/api-layer#manual-fixture-api-initial-slice)
-— also on **Sources → Manual Events** in the UI, beside the stream sources it
-supplements — can supplement provider schedules
-with a missing preseason or other team game.
-It requires neither an upstream event nor a TSDB key, but the fixture's league
-must still be subscribed here or in the source's override. Matching, templates,
-team filters and temporary channel settings work as usual. Permanent team
-guides are not extended. Named events (rally), custom competitions and ICS
-import are follow-up slices of #1131; the UI warns about upstream duplicates
-but does not yet resolve them. Do not duplicate a fixture that already exists
-upstream.
-
-## Per-Source subscription overrides
-
 By default, every Source (event group) uses the global Subscription. A Source can **override** it with its own league set and its own soccer mode. When an override is present, that Source matches only its overridden leagues; the global Subscription is ignored for that Source.
 
 Use this when one Source should be scoped more narrowly than the rest — for example a "Soccer only" M3U group that should never pull in other sports. Configure overrides on the Source itself; see [Sources](sources/).

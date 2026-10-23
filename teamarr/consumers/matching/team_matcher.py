@@ -66,7 +66,6 @@ from teamarr.core.types import (
     Team,
     Venue,
 )
-from teamarr.database.manual_events import MANUAL_EVENT_PREFIX
 from teamarr.services.sports_data import SportsDataService
 from teamarr.utilities.constants import TEAM_ALIASES
 from teamarr.utilities.fuzzy_match import get_matcher, normalize_text
@@ -1391,8 +1390,7 @@ class TeamMatcher:
             logger.debug(
                 "[MATCH_CACHE] Invalid: failed to reconstruct event for stream=%d", ctx.stream_id
             )
-            if not entry.user_corrected:
-                self._cache.delete(ctx.group_id, ctx.stream_id, ctx.stream_name)
+            self._cache.delete(ctx.group_id, ctx.stream_id, ctx.stream_name)
             return None
 
         # User-corrected entries are pinned - always trust them regardless of date
@@ -3061,12 +3059,6 @@ class TeamMatcher:
 
     def _reconstruct_event(self, cached_data: dict[str, Any]) -> Event | None:
         """Reconstruct Event from cached dict."""
-        event_id = cached_data.get("id", "")
-        if isinstance(event_id, str) and event_id.startswith(MANUAL_EVENT_PREFIX):
-            event = self._service.get_event(event_id, cached_data.get("league", ""))
-            # A cached snapshot is never authoritative for user-owned schedules,
-            # including pinned matches. Keep the pin, but don't revive its event.
-            return event if event and event.status.state == "scheduled" else None
         try:
             # Handle datetime parsing
             start_time = cached_data.get("start_time")
