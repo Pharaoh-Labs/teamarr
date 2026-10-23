@@ -32,7 +32,8 @@ def create_fixture(data: ManualFixtureInput) -> dict:
 
 
 @router.get("/{event_id}")
-def read_fixture(event_id: str, league: str) -> dict:
+def read_fixture(event_id: str, league: str | None = None) -> dict:
+    """The id is a globally unique surrogate key; league is an optional check."""
     with get_db() as conn:
         event = get_manual_event(conn, event_id, league)
     if event is None:
@@ -53,8 +54,9 @@ def replace_fixture(event_id: str, data: ManualFixtureInput) -> dict:
 
 
 @router.delete("/{event_id}")
-def cancel_fixture(event_id: str, league: str) -> dict:
-    """Soft cancel: never erase identity/history or delete Dispatcharr here."""
+def cancel_fixture(event_id: str, league: str | None = None) -> dict:
+    """Idempotently soft-cancel an existing fixture; never erase identity or
+    delete Dispatcharr state here."""
     try:
         with get_db() as conn:
             event = cancel_manual_fixture(conn, event_id, league)

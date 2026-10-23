@@ -66,15 +66,17 @@ and `neutral_site`; `season_type` accepts `preseason` (default), `regular` or
 `postseason`. The response is a normalized event with a stable `manual:<uuid>`
 identity and `provider: "manual"`; its teams retain their original identities.
 Times are stored in UTC. Ambiguous local times must be supplied with the intended
-UTC offset; naive date/time input is rejected.
+UTC offset; naive date/time input is rejected. Table queries are case-sensitive;
+league codes are normalized to their lowercase slug on save, so `"NBA"` and
+`"nba"` are the same fixture league.
 
 | Method/path (relative to `/api/v1/manual-events`) | Behavior |
 |---|---|
 | `GET` | List fixtures, including cancelled; optional `?league=nba` |
 | `POST` | Create a fixture; returns 201 |
-| `GET /{id}?league=nba` | Read a fixture; missing/wrong league returns 404 |
-| `PUT /{id}` | Replace editable fixture fields using the complete POST body; preserve ID and league |
-| `DELETE /{id}?league=nba` | Idempotently soft-cancel an existing fixture; missing returns 404 |
+| `GET /{id}` | Read a fixture. `id` is a globally unique surrogate key; `?league=` is an optional consistency check (a mismatched league returns 404) |
+| `PUT /{id}` | Replace editable fixture fields using the complete POST body; preserve ID and league. Editing a cancelled fixture returns 400 — cancellation is permanent |
+| `DELETE /{id}` | Idempotently soft-cancel an existing fixture; missing returns 404 |
 
 Generation must still run (scheduled or manual). The league must be subscribed
 globally or by the source override, with a template and an available matching

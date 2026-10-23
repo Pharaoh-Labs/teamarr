@@ -119,31 +119,10 @@ interface EventFormProps {
 }
 
 function EventForm({ open, onOpenChange, editing }: EventFormProps) {
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
+  // Keyed by editing?.id in the parent so each open/edit session mounts
+  // fresh from props — no setState-during-render, no stale reset (#1131 review).
+  const [form, setForm] = useState<FormState>(() => initialForm(editing))
   const [formError, setFormError] = useState<string | null>(null)
-
-  // Reset the form each time the dialog opens (fresh add vs. pre-filled edit).
-  const [lastOpen, setLastOpen] = useState(false)
-  if (open !== lastOpen) {
-    setLastOpen(open)
-    if (open) {
-      setFormError(null)
-      setForm(
-        editing
-          ? {
-              league: editing.league,
-              homeId: `${editing.home_team.provider}:${editing.home_team.id}`,
-              awayId: `${editing.away_team.provider}:${editing.away_team.id}`,
-              kickoff: toLocalInput(new Date(editing.start_time)),
-              name: editing.name.startsWith("manual") ? "" : editing.name,
-              venue: editing.venue?.name ?? "",
-              seasonType: (editing.season_type as FormState["seasonType"]) ?? "preseason",
-              neutralSite: editing.neutral_site,
-            }
-          : EMPTY_FORM
-      )
-    }
-  }
 
   const pickerLeagues = useQuery({
     queryKey: ["team-picker-leagues"],
@@ -172,14 +151,34 @@ function EventForm({ open, onOpenChange, editing }: EventFormProps) {
   const away = teams.find((t) => `${t.provider}:${t.provider_team_id}` === form.awayId)
 
   // Upstream duplicate check (#1131): as soon as both sides and a date are
-  // picked, look for the same fixture on provider schedules for that day.
+  // picked, look for the same fixture on provider schedules. The kickoff input
+  // is browser-local while the backend resolves target_date in the Teamarr
+  // timezone — the two calendars can disagree by a day, so fetch BOTH days and
+  // merge rather than slicing the raw local string (#1131 review).
   const targetDate = form.kickoff ? form.kickoff.slice(0, 10) : ""
+  const previousDate = targetDate
+    ? new Date(`${targetDate}T12:00:00`)
+    : null
+  const dayBefore = previousDate
+    ? new Date(previousDate.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    : ""
   const upstream = useQuery({
-    queryKey: ["manual-events", "upstream", form.league, targetDate],
-    queryFn: () =>
-      api.get<{ events: EventSearchHit[] }>(
-        `/epg/events/search?league=${encodeURIComponent(form.league)}&target_date=${targetDate}&limit=200`
-      ),
+    queryKey: ["manual-events", "upstream", form.league, dayBefore, targetDate],
+    queryFn: async () => {
+      const search = (date: string) =>
+        api
+          .get<{ events: EventSearchHit[] }>(
+            `/epg/events/search?league=${encodeURIComponent(form.league)}&target_date=${date}&limit=200`
+          )
+          .catch(() => ({ events: [] as EventSearchHit[] }))
+      const [today, yesterday] = await Promise.all([search(targetDate), search(dayBefore)])
+      const seen = new Set<string>()
+      return {
+        events: [...yesterday.events, ...today.events].filter((e) =>
+          seen.has(e.event_id) ? false : (seen.add(e.event_id), true)
+        ),
+      }
+    },
     enabled:
       open &&
       form.league !== "" &&
@@ -195,7 +194,8 @@ function EventForm({ open, onOpenChange, editing }: EventFormProps) {
 
   const create = useCreateManualEvent()
   const update = useUpdateManualEvent()
-  const pending = create.isPending || update.isPending
+  const pending =
+    create.isPending || update.isPending || pickerLeagues.isPending || leagueTeams.isPending
 
   const submit = () => {
     setFormError(null)
@@ -387,7 +387,7 @@ function EventForm({ open, onOpenChange, editing }: EventFormProps) {
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={pending}>
+          <Button onClick={submit} disabled={pending || !form.league}>
             {pending && <Spinner className="mr-1.5 h-4 w-4" />}
             {editing ? "Save Changes" : "Add Event"}
           </Button>
@@ -403,6 +403,33 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+/** Blank form, or one pre-filled from the event being edited. */
+function initialForm(editing: ManualEvent | null): FormState {
+  if (!editing) return EMPTY_FORM
+  return {
+    league: editing.league,
+    homeId: `${editing.home_team.provider}:${editing.home_team.id}`,
+    awayId: `${editing.away_team.provider}:${editing.away_team.id}`,
+    kickoff: toLocalInput(new Date(editing.start_time)),
+    // Only blank when it still equals the generated default — never wipe a
+    // real custom title (#1131 review; the startsWith("manual") heuristic
+    // would eat titles like "Manual High School Showcase").
+    name:
+      editing.name === defaultEventName(editing) ? "" : editing.name,
+    venue: editing.venue?.name ?? "",
+    seasonType: (editing.season_type as FormState["seasonType"]) ?? "preseason",
+    neutralSite: editing.neutral_site,
+  }
+}
+
+/** What the backend would have generated: "at" hosted, "vs" soccer/neutral. */
+function defaultEventName(e: ManualEvent): string {
+  if (e.neutral_site || e.home_team.sport === "soccer") {
+    return `${e.away_team.name} vs ${e.home_team.name}`
+  }
+  return `${e.away_team.name} at ${e.home_team.name}`
+}
+
 export function ManualEvents() {
   const events = useManualEvents()
   const cancel = useCancelManualEvent()
@@ -414,10 +441,11 @@ export function ManualEvents() {
   const rows = useMemo(
     () =>
       [...(events.data?.events ?? [])].sort((a, b) => {
-        // Cancelled last, then soonest first.
+        // Cancelled last, then soonest first. Compare instants, not strings —
+        // lexicographic order breaks across offset representations (#1131 review).
         if ((a.status.state === "cancelled") !== (b.status.state === "cancelled"))
           return a.status.state === "cancelled" ? 1 : -1
-        return a.start_time.localeCompare(b.start_time)
+        return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
       }),
     [events.data]
   )
@@ -482,17 +510,17 @@ export function ManualEvents() {
                   <TableRow key={e.id} className={e.status.state === "cancelled" ? "opacity-50" : ""}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {e.home_team.logo_url && (
-                          <img src={e.home_team.logo_url} alt="" className="h-5 w-5 object-contain" />
+                        {e.away_team.logo_url && (
+                          <img src={e.away_team.logo_url} alt="" className="h-5 w-5 object-contain" />
                         )}
                         <span className="font-medium">
                           {e.away_team.name} at {e.home_team.name}
                         </span>
-                        {e.away_team.logo_url && (
-                          <img src={e.away_team.logo_url} alt="" className="h-5 w-5 object-contain" />
+                        {e.home_team.logo_url && (
+                          <img src={e.home_team.logo_url} alt="" className="h-5 w-5 object-contain" />
                         )}
                       </div>
-                      {e.name !== `${e.away_team.name} at ${e.home_team.name}` && (
+                      {e.name !== defaultEventName(e) && (
                         <div className="text-xs text-muted-foreground">{e.name}</div>
                       )}
                     </TableCell>
@@ -533,7 +561,13 @@ export function ManualEvents() {
         </CardContent>
       </Card>
 
-      <EventForm open={formOpen} onOpenChange={setFormOpen} editing={editing} />
+      {/* Keyed remount: each open/edit session initializes from its props. */}
+      <EventForm
+        key={editing?.id ?? "new"}
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        editing={editing}
+      />
 
       <ConfirmDialog
         open={pendingCancel !== null}

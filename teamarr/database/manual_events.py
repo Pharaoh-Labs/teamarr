@@ -11,11 +11,20 @@ from teamarr.utilities.event_dates import EVENT_TAIL_HOURS, event_intersects
 MANUAL_EVENT_PREFIX = "manual:"
 
 
-def get_manual_event(conn: sqlite3.Connection, event_id: str, league: str) -> Event | None:
-    row = conn.execute(
-        "SELECT event_data FROM manual_events WHERE id = ? AND league = ?",
-        (event_id, league),
-    ).fetchone()
+def get_manual_event(
+    conn: sqlite3.Connection, event_id: str, league: str | None = None
+) -> Event | None:
+    """The manual:<uuid> id is a globally unique surrogate key; ``league`` is an
+    optional consistency check, never a required lookup half (#1131 review)."""
+    if league is None:
+        row = conn.execute(
+            "SELECT event_data FROM manual_events WHERE id = ?", (event_id,)
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT event_data FROM manual_events WHERE id = ? AND league = ?",
+            (event_id, league),
+        ).fetchone()
     return dict_to_event(json.loads(row["event_data"])) if row else None
 
 
@@ -47,7 +56,9 @@ def manual_events_in_window(
     return [event for event in events if event_intersects(event, window)]
 
 
-def save_manual_event(conn: sqlite3.Connection, event: Event) -> None:
+def save_manual_event(
+    conn: sqlite3.Connection, event: Event, *, clear_cached_failures: bool = True
+) -> None:
     conn.execute(
         """INSERT INTO manual_events (id, league, start_time, status, event_data)
            VALUES (?, ?, ?, ?, ?)
@@ -62,11 +73,19 @@ def save_manual_event(conn: sqlite3.Connection, event: Event) -> None:
             json.dumps(event_to_dict(event)),
         ),
     )
-    # In the same transaction as the fixture. A newly added schedule must get a
-    # fresh chance at streams that previously failed. Preserve corrections/skips.
-    conn.execute(
-        "DELETE FROM stream_match_cache WHERE event_id = '__FAILED__' AND user_corrected = 0"
-    )
+    # In the same transaction as the fixture. An ADDED or EDITED schedule must
+    # get a fresh chance at streams that previously failed *in its league* —
+    # scoped, because a single fixture save must not thrash the failure cache
+    # of every other sport (#1131 review). Cancellation cannot turn unmatched
+    # streams into matches, so it skips the failure purge entirely. Both
+    # deletes preserve user corrections/skips; the fixture's own algorithmic
+    # rows go on every write since a cached snapshot is never authoritative.
+    if clear_cached_failures:
+        conn.execute(
+            """DELETE FROM stream_match_cache
+               WHERE event_id = '__FAILED__' AND league = ? AND user_corrected = 0""",
+            (event.league,),
+        )
     conn.execute(
         "DELETE FROM stream_match_cache WHERE event_id = ? AND user_corrected = 0", (event.id,)
     )

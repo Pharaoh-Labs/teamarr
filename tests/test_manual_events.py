@@ -241,7 +241,11 @@ def test_api_crud_validation_and_cancel(setup, monkeypatch):
         assert response.status_code == 201, response.text
         event_id = response.json()["id"]
         assert client.get(url).json()["total"] == 1
+        # The uuid id is a surrogate key: league is an optional check, never a
+        # required lookup half (#1131 review).
+        assert client.get(f"{url}/{event_id}").status_code == 200
         assert client.get(f"{url}/{event_id}", params={"league": "nba"}).status_code == 200
+        assert client.get(f"{url}/{event_id}", params={"league": "nfl"}).status_code == 404
         changed = client.put(f"{url}/{event_id}", json={**payload, "name": "Showcase"})
         assert changed.status_code == 200
         assert changed.json()["id"] == event_id
@@ -254,11 +258,66 @@ def test_api_crud_validation_and_cancel(setup, monkeypatch):
         assert client.post(url, json=same_teams).status_code == 422
         wrong_team = {**payload, "away_team": {"provider": "espn", "id": "99999"}}
         assert client.post(url, json=wrong_team).status_code == 400
+        assert "Away team" in client.post(url, json=wrong_team).json()["detail"]
         assert client.post(url, json={**payload, "league": "f1"}).status_code == 400
+        # Mixed-case league codes normalize to the lowercase slug every other
+        # table stores — a raw "NBA" row would be invisible to every candidate
+        # query (#1131 review).
+        upper = client.post(url, json={**payload, "league": "NBA"})
+        assert upper.status_code == 201
+        assert service.get_events("nba", DAY, cache_only=True)
+        upper_id = upper.json()["id"]
         assert client.get(url, params={"league": "nfl"}).json()["total"] == 0
-        assert client.delete(f"{url}/{event_id}", params={"league": "nfl"}).status_code == 404
-        assert client.delete(f"{url}/{event_id}", params={"league": "nba"}).status_code == 200
-        assert client.delete(f"{url}/{event_id}", params={"league": "nba"}).status_code == 200
+        # PUT must not resurrect a cancelled fixture (#1131 review).
+        assert client.delete(f"{url}/{event_id}").status_code == 200
+        assert client.put(f"{url}/{event_id}", json=payload).status_code == 400
+        assert client.delete(f"{url}/{upper_id}").status_code == 200
+        assert client.delete(f"{url}/{event_id}").status_code == 200
     assert service.get_events("nba", DAY, cache_only=True) == []
     with factory() as conn:
-        assert get_manual_event(conn, event_id, "nba").status.state == "cancelled"
+        assert get_manual_event(conn, event_id).status.state == "cancelled"
+
+
+def test_soccer_and_neutral_fixtures_use_vs_conventions(setup):
+    factory, data, service = setup
+    with factory() as conn:
+        conn.execute("UPDATE team_cache SET sport = 'soccer' WHERE league = 'nba'")
+        soccer = write_manual_fixture(
+            conn,
+            data.model_copy(update={"neutral_site": True, "name": None}),
+        )
+    assert soccer.name == "Miami Heat vs Boston Celtics"
+    assert soccer.short_name == "MIA vs BOS"
+    assert service.get_events("nba", DAY, cache_only=True)[0].name == soccer.name
+
+
+def test_failed_cache_purge_is_league_scoped_and_skipped_on_cancel(setup):
+    """One fixture write must not thrash every other league's failure cache,
+    and cancelling cannot make unmatched streams match (#1131 review)."""
+    factory, data, service = setup
+    event = save(setup)
+    cache = StreamMatchCache(factory)
+    for league in ("nba", "nfl"):
+        cache.set(1, 10, f"{league}-fail", "__FAILED__", league, {}, 1)
+        cache.set(1, 11, f"{league}-keep", f"{league}-event", league, {}, 1)
+    with factory() as conn:
+        write_manual_fixture(conn, data, event.id)
+        rows = {
+            r["stream_name"]: r["event_id"]
+            for r in conn.execute("SELECT stream_name, event_id FROM stream_match_cache")
+        }
+    expected_kept = {"nba-keep": "nba-event", "nfl-keep": "nfl-event"}
+    assert rows == {"nfl-fail": "__FAILED__", **expected_kept}
+    with factory() as conn:
+        cancel_manual_fixture(conn, event.id, "nba")
+        rows = {
+            r["stream_name"]: r["event_id"]
+            for r in conn.execute("SELECT stream_name, event_id FROM stream_match_cache")
+        }
+    assert rows == {"nfl-fail": "__FAILED__", **expected_kept}
+    # The cancelled fixture's own stale algorithmic rows are gone, though.
+    with factory() as conn:
+        count = conn.execute(
+            "SELECT COUNT(*) FROM stream_match_cache WHERE event_id = ?", (event.id,)
+        ).fetchone()[0]
+    assert count == 0
