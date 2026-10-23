@@ -125,6 +125,7 @@ class EventFillerGenerator:
         config: EventFillerConfig | None = None,
         options: EventFillerOptions | None = None,
         card_segment: str | None = None,
+        exception_keyword: str | None = None,
     ) -> list[Programme]:
         """Generate pregame and postgame filler for an event.
 
@@ -134,6 +135,9 @@ class EventFillerGenerator:
             config: Filler template configuration
             options: Generation options
             card_segment: UFC card segment code (e.g., "prelims", "main_card")
+            exception_keyword: Display value of ``{exception_keyword}`` for this
+                channel (the keyword, or the untagged label), already resolved
+                by the caller. None leaves the variable empty (#1136).
 
         Returns:
             List of filler Programme entries
@@ -159,7 +163,9 @@ class EventFillerGenerator:
         epg_end = options.epg_end or (event_end + timedelta(hours=options.postgame_buffer_hours))
 
         # Build context once - event filler uses single context, no suffixes
-        context = self._build_event_context(event, card_segment=card_segment)
+        context = self._build_event_context(
+            event, card_segment=card_segment, exception_keyword=exception_keyword
+        )
 
         # Generate pregame filler
         if config.pregame_enabled and epg_start < event_start:
@@ -226,6 +232,7 @@ class EventFillerGenerator:
         config: EventFillerConfig | None = None,
         options: EventFillerOptions | None = None,
         card_segment: str | None = None,
+        exception_keyword: str | None = None,
     ) -> EventFillerResult:
         """Generate filler with separate pregame/postgame counts.
 
@@ -252,7 +259,9 @@ class EventFillerGenerator:
         epg_end = options.epg_end or (event_end + timedelta(hours=options.postgame_buffer_hours))
 
         # Build context once
-        context = self._build_event_context(event, card_segment=card_segment)
+        context = self._build_event_context(
+            event, card_segment=card_segment, exception_keyword=exception_keyword
+        )
 
         # Generate pregame filler
         if config.pregame_enabled and epg_start < event_start:
@@ -390,12 +399,20 @@ class EventFillerGenerator:
         return programmes
 
     def _build_event_context(
-        self, event: Event, card_segment: str | None = None
+        self,
+        event: Event,
+        card_segment: str | None = None,
+        exception_keyword: str | None = None,
     ) -> TemplateContext:
         """Build template context for event filler.
 
         Event filler uses positional variables (home_team, away_team)
         not perspective-based (team_name, opponent). No .next/.last support.
+
+        ``{exception_keyword}`` is not derived from event data: the main
+        programme path injects it through ``extra_vars`` and this context must
+        do the same, or a keyword channel's pregame/postgame titles,
+        descriptions and art URLs render it empty (#1136).
 
         Fetches team stats if service available. Odds come from scoreboard
         (event.odds_data) - no enrichment needed.
@@ -441,6 +458,7 @@ class EventFillerGenerator:
             team=event.home_team,
             next_game=None,  # No .next for event filler
             last_game=None,  # No .last for event filler
+            extra_vars={"exception_keyword": exception_keyword or ""},
         )
 
     def _build_odds(self, odds_data: dict, is_home: bool) -> Odds:
