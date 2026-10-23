@@ -76,6 +76,9 @@ const ChannelDispatcharrOutput = lazy(() =>
     default: m.ChannelDispatcharrOutput,
   })),
 )
+const ManualEvents = lazy(() =>
+  import("@/pages/ManualEvents").then((m) => ({ default: m.ManualEvents })),
+)
 
 /**
  * Shown while a route chunk downloads.
@@ -150,6 +153,7 @@ function AppContent() {
               <Route path="epg/templates" element={<Templates />} />
               <Route path="epg/assignments" element={<Redirect to="/epg/templates" />} />
               <Route path="epg/teams" element={<Teams />} />
+              <Route path="epg/manual-events" element={<ManualEvents />} />
               <Route path="epg/output" element={<EpgOutput />} />
             </Route>
 

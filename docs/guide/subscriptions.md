@@ -100,13 +100,15 @@ Deleting a custom league removes its definition and purges its cached teams and 
 ### Missing team fixtures (API-first)
 
 The initial [manual fixture API](../reference/architecture/api-layer#manual-fixture-api-initial-slice)
-can supplement provider schedules with a missing preseason or other team game.
+— also on **EPG → Manual Events** in the UI — can supplement provider schedules
+with a missing preseason or other team game.
 It requires neither an upstream event nor a TSDB key, but the fixture's league
 must still be subscribed here or in the source's override. Matching, templates,
 team filters and temporary channel settings work as usual. Permanent team
-guides are not extended. There is not yet a manual-event form, rally/named-event
-support or ICS import; those are follow-up slices of #1131. Do not duplicate a
-fixture that already exists upstream; duplicate resolution is also pending.
+guides are not extended. Named events (rally), custom competitions and ICS
+import are follow-up slices of #1131; the UI warns about upstream duplicates
+but does not yet resolve them. Do not duplicate a fixture that already exists
+upstream.
 
 ## Per-Source subscription overrides
 

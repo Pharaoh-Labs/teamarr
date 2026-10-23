@@ -39,9 +39,13 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 ## Manual fixture API (initial slice)
 
 `/api/v1/manual-events` supplies missing team fixtures to the normal event-source
-matcher. No ESPN event or TSDB key is required. This is currently **API-only**:
-the creation UI, provider-duplicate resolution, custom teams/competitions, rally
-coverage and ICS synchronization are follow-up work tracked in #1131.
+matcher. No ESPN event or TSDB key is required. The UI lives at
+**EPG → Manual Events** (`/epg/manual-events`): an add/edit form with
+league/team pickers (configured `team_vs_team` leagues with cached teams only),
+a timezone-aware kickoff, an upstream-duplicate warning, and soft cancel.
+Provider-duplicate resolution remains manual — the UI warns but does not
+reconcile; custom teams/competitions, rally coverage and ICS synchronization
+are follow-up work tracked in #1131.
 
 POST the collection with a configured, enabled `team_vs_team` league, two team
 references from that league's team cache, and a timezone-aware start:
