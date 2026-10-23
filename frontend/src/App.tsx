@@ -76,6 +76,12 @@ const ChannelDispatcharrOutput = lazy(() =>
     default: m.ChannelDispatcharrOutput,
   })),
 )
+const ManualEvents = lazy(() =>
+  import("@/pages/ManualEvents").then((m) => ({ default: m.ManualEvents })),
+)
+const SourcesLayout = lazy(() =>
+  import("@/components/SourcesLayout").then((m) => ({ default: m.SourcesLayout })),
+)
 
 /**
  * Shown while a route chunk downloads.
@@ -126,11 +132,15 @@ function AppContent() {
           <Route path="/" element={<MainLayout />}>
             <Route index element={<Dashboard />} />
 
-            {/* ① Sources (was Event Groups) */}
-            <Route path="sources" element={<EventGroups />} />
+            {/* ① Sources — schedule inputs: stream sources + manual events (#1131;
+                editors stay standalone full-screen like the EPG form pages) */}
             <Route path="sources/new" element={<EventGroupForm />} />
             <Route path="sources/:groupId" element={<EventGroupForm />} />
             <Route path="sources/import" element={<EventGroupImport />} />
+            <Route element={<SourcesLayout />}>
+              <Route path="sources" element={<EventGroups />} />
+              <Route path="sources/manual-events" element={<ManualEvents />} />
+            </Route>
 
             {/* ② Subscriptions (Global Defaults + Custom Leagues) */}
             <Route path="subscriptions" element={<Subscriptions />} />

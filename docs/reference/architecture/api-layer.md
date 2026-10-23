@@ -30,10 +30,73 @@ Teamarr's backend is a FastAPI application serving a REST API at `/api/v1/` and 
 | `keywords.py` | 7 | Game event keywords (pregame, postgame, filler) |
 | `detection_keywords.py` | 9 | Detection keyword CRUD, import/export |
 | `leagues.py` | 9 | Custom league CRUD |
+| `manual_events.py` | 5 | API-first manual team fixture create/list/read/replace/cancel |
 | `subscription.py` | 9 | Global/per-group subscription config, soccer mode |
 | `variables.py` | 4 | Template variable discovery and introspection |
 | `backup.py` | 11 | Database backup creation, restore, compression |
 | `settings/` | 51 | Settings package: `models.py` plus 13 domain modules (`channel_numbering`, `channelsdvr`, `dispatcharr`, `display`, `emby`, `epg`, `feed_separation`, `jellyfin`, `lifecycle`, `plex`, `stream_ordering`, `team_filter`, `update_check`) — includes the media-server routes and the aggregate `GET /settings` in `__init__.py` |
+
+## Manual fixture API (initial slice)
+
+`/api/v1/manual-events` supplies missing team fixtures to the normal event-source
+matcher. No ESPN event or TSDB key is required. The UI lives at
+**Sources → Manual Events** (`/sources/manual-events`), beside the stream
+sources it supplements: an add/edit form with
+league/team pickers (configured `team_vs_team` leagues with cached teams only),
+a timezone-aware kickoff, an upstream-duplicate warning, and soft cancel.
+Provider-duplicate resolution remains manual — the UI warns but does not
+reconcile; custom teams/competitions, rally coverage and ICS synchronization
+are follow-up work tracked in #1131.
+
+POST the collection with a configured, enabled `team_vs_team` league, two team
+references from that league's team cache, and a timezone-aware start:
+
+```json
+{
+  "league": "nba",
+  "home_team": {"provider": "espn", "id": "2"},
+  "away_team": {"provider": "espn", "id": "14"},
+  "start_time": "2026-10-23T19:00:00-04:00",
+  "season_type": "preseason"
+}
+```
+
+Use your installation's actual team IDs. Optional fields are `name`, `venue`
+and `neutral_site`; `season_type` accepts `preseason` (default), `regular` or
+`postseason`. The response is a normalized event with a stable `manual:<uuid>`
+identity and `provider: "manual"`; its teams retain their original identities.
+Times are stored in UTC. Ambiguous local times must be supplied with the intended
+UTC offset; naive date/time input is rejected. Table queries are case-sensitive;
+league codes are normalized to their lowercase slug on save, so `"NBA"` and
+`"nba"` are the same fixture league.
+
+| Method/path (relative to `/api/v1/manual-events`) | Behavior |
+|---|---|
+| `GET` | List fixtures, including cancelled; optional `?league=nba` |
+| `POST` | Create a fixture; returns 201 |
+| `GET /{id}` | Read a fixture. `id` is a globally unique surrogate key; `?league=` is an optional consistency check (a mismatched league returns 404) |
+| `PUT /{id}` | Replace editable fixture fields using the complete POST body; preserve ID and league. Editing a cancelled fixture returns 400 — cancellation is permanent |
+| `DELETE /{id}` | Idempotently soft-cancel an existing fixture; missing returns 404 |
+
+Generation must still run (scheduled or manual). The league must be subscribed
+globally or by the source override, with a template and an available matching
+stream. Existing matching, team filters and source rules still apply; saving a
+fixture does not create a stream or bypass those controls. This slice uses the
+normal configured sport/template durations, not custom broadcast end times.
+
+Manual events supplement, rather than replace, upstream candidates even on
+cached or cache-only reads. Provider caches never store the merged schedule;
+fixture writes clear cached failures and their own algorithmic matches while
+retaining user corrections/skips. Cached manual matches reload the durable
+fixture so edits and cancellation cannot replay an obsolete snapshot.
+
+Only temporary event channels consume these schedules. Provider team-schedule
+scans remain provider-only; manual events do not extend permanent team guides.
+Cancellation retains the fixture and identity, and does not directly mutate
+Dispatcharr. Normal generation/lifecycle remains responsible for channels.
+
+Do not add a manual copy of a fixture that already exists upstream: this first
+slice does not yet reconcile provider duplicates or adopt provider channels.
 
 ## Application Startup
 
