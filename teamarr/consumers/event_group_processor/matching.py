@@ -895,12 +895,34 @@ class StreamMatching:
         if not markets:
             return None
         stream_norm = normalize_text(stream_name_lower)
+        # A broadcaster named like its team is the matchup word once
+        # normalised ("Jazz+" -> "jazz", #1144): the fuzzy tiers found it in
+        # "Grizzlies vs Jazz" and claimed BOTH sides' In-Arena streams for the
+        # Jazz. Such a name is evidence only when the stream spells it
+        # verbatim, distinguishing mark included. Measured over 80 home/away
+        # broadcaster names across four leagues: 3 collide, all "Jazz+".
+        team_surfaces = {
+            normalize_text(surface)
+            for team in (event.home_team, event.away_team)
+            for surface in (
+                getattr(team, "name", None),
+                getattr(team, "short_name", None),
+                getattr(team, "location", None),
+                getattr(team, "abbreviation", None),
+            )
+            if surface
+        }
         matched_sides: set[str] = set()
         for name, market in markets.items():
             if market not in ("home", "away"):
                 continue
             name_norm = normalize_text(name)
             if len(name_norm) < 3:
+                continue
+            if name_norm in team_surfaces:
+                raw = name.lower()
+                if raw != name_norm and raw in stream_name_lower:
+                    matched_sides.add(market)
                 continue
             if StreamMatching._broadcast_name_in_stream(name_norm, stream_norm):
                 matched_sides.add(market)
