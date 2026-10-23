@@ -1656,6 +1656,23 @@ CREATE INDEX IF NOT EXISTS idx_mc_type ON match_corrections(correction_type);
 
 
 -- =============================================================================
+-- MANUAL_EVENTS TABLE
+-- Manual fixtures supplement provider schedules; these are durable user data,
+-- not provider cache rows. Keep cancelled rows so stale references cannot revive them.
+-- Payload contains only normalized sporting metadata, never source credentials.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS manual_events (
+    id TEXT PRIMARY KEY,
+    league TEXT NOT NULL,
+    start_time TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('scheduled', 'cancelled')),
+    event_data JSON NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_manual_events_league_start ON manual_events(league, start_time);
+
+-- =============================================================================
 -- TEAM_CACHE TABLE
 -- Unified cache of all teams from all providers (ESPN + TSDB)
 -- Used for:
