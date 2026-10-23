@@ -22,8 +22,17 @@ from __future__ import annotations
 
 import threading
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 _lock = threading.Lock()
+# Threads whose calls are not the run's (#1145): the team/league cache
+# refresh runs in the background, and when it overlaps a generation its
+# calls were attributed to the run (1,110 against a normal 480 on a run
+# triggered seconds after a restart). Thread-local so a worker thread
+# marked by a pool initializer is excluded for its whole life and nothing
+# else is.
+_thread_state = threading.local()
 _calls: Counter[str] = Counter()
 _rate_limits: Counter[str] = Counter()
 _failures: Counter[str] = Counter()
@@ -46,12 +55,39 @@ def _endpoint_label(value: str) -> str:
     return "request"
 
 
+def exclude_current_thread() -> None:
+    """Mark the calling thread's provider calls as not the run's.
+
+    Pass as a ``ThreadPoolExecutor`` ``initializer`` so every worker of a
+    cache-refresh pool is excluded; use :func:`excluded` for a thread that
+    outlives the work (a scheduler thread must count again afterwards).
+    """
+    _thread_state.excluded = True
+
+
+def _is_excluded() -> bool:
+    return getattr(_thread_state, "excluded", False)
+
+
+@contextmanager
+def excluded() -> Iterator[None]:
+    """Exclude the current thread's calls for the duration of the block."""
+    previous = _is_excluded()
+    _thread_state.excluded = True
+    try:
+        yield
+    finally:
+        _thread_state.excluded = previous
+
+
 def record_call(provider: str, endpoint: str) -> None:
     """Count one successful provider HTTP call.
 
     ``endpoint`` may be a bare label (e.g. ``"summary"``) or a URL/path — the
     latter is reduced to its last path segment so cardinality stays low.
     """
+    if _is_excluded():
+        return
     label = _endpoint_label(endpoint)
     with _lock:
         _calls[f"{provider}:{label}"] += 1
@@ -59,6 +95,8 @@ def record_call(provider: str, endpoint: str) -> None:
 
 def record_rate_limit(provider: str, endpoint: str) -> None:
     """Count one 429 answer, whether or not a later retry recovers the call."""
+    if _is_excluded():
+        return
     label = _endpoint_label(endpoint)
     with _lock:
         _rate_limits[f"{provider}:{label}"] += 1
@@ -71,6 +109,8 @@ def record_failure(provider: str, endpoint: str, reason: str) -> None:
     word for a transport failure (``"connection"``). Retries of one request
     are one failure — the caller records only when it gives up.
     """
+    if _is_excluded():
+        return
     label = _endpoint_label(endpoint)
     with _lock:
         _failures[f"{provider}:{label}:{reason}"] += 1

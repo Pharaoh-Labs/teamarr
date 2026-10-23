@@ -14,6 +14,7 @@ from teamarr.database import get_db
 from teamarr.database.team_cache import invalidate_team_identity_caches
 from teamarr.providers import ProviderRegistry
 from teamarr.providers.espn.client import ESPNClient
+from teamarr.utilities import call_metrics
 from teamarr.utilities.tz import utcnow_iso
 
 from .queries import TeamLeagueCache
@@ -62,6 +63,18 @@ class CacheRefresher:
         return None
 
     def refresh(
+        self,
+        progress_callback: Callable[[str, int], None] | None = None,
+    ) -> dict:
+        """Refresh entire cache from all registered providers.
+
+        The refresh's provider calls are not a generation run's: the run-scoped
+        counter ignores this thread and the worker pools below (#1145).
+        """
+        with call_metrics.excluded():
+            return self._refresh(progress_callback)
+
+    def _refresh(
         self,
         progress_callback: Callable[[str, int], None] | None = None,
     ) -> dict:
@@ -657,7 +670,9 @@ class CacheRefresher:
                 }, []
 
         # Fetch in parallel
-        with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+        with ThreadPoolExecutor(
+            max_workers=self.MAX_WORKERS, initializer=call_metrics.exclude_current_thread
+        ) as executor:
             futures = {
                 executor.submit(fetch_league_teams, slug, sport): (slug, sport)
                 for slug, sport in all_leagues_with_sport
@@ -769,7 +784,9 @@ class CacheRefresher:
                 return None
 
             # Fetch slugs in parallel
-            with ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            with ThreadPoolExecutor(
+                max_workers=self.MAX_WORKERS, initializer=call_metrics.exclude_current_thread
+            ) as executor:
                 futures = {
                     executor.submit(fetch_slug, ref["$ref"]): ref
                     for ref in league_refs

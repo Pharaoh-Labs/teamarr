@@ -99,3 +99,39 @@ def test_reset_clears_rate_limits_and_failures():
     call_metrics.reset()
     assert call_metrics.rate_limits_snapshot() == {}
     assert call_metrics.failures_snapshot() == {}
+
+
+# --- #1145: a cache refresh's calls are not the run's -----------------------
+
+
+def test_excluded_block_records_nothing_and_resets():
+    call_metrics.record_call("espn", "summary")
+    with call_metrics.excluded():
+        call_metrics.record_call("espn", "teams")
+        call_metrics.record_rate_limit("espn", "teams")
+        call_metrics.record_failure("espn", "teams", "503")
+    call_metrics.record_call("espn", "summary")
+    assert call_metrics.snapshot() == {"espn:summary": 2}
+    assert call_metrics.rate_limits_snapshot() == {}
+    assert call_metrics.failures_snapshot() == {}
+
+
+def test_pool_initializer_excludes_workers_only():
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=4, initializer=call_metrics.exclude_current_thread) as pool:
+        list(pool.map(lambda _: call_metrics.record_call("espn", "teams"), range(50)))
+    call_metrics.record_call("espn", "summary")  # the calling thread still counts
+    assert call_metrics.snapshot() == {"espn:summary": 1}
+
+
+def test_cache_refresher_pools_are_excluded():
+    """Both refresher pools carry the initializer, so a refresh overlapping a
+    run adds nothing to the run's counters."""
+    import inspect
+
+    from teamarr.consumers.cache import refresh as refresh_module
+
+    src = inspect.getsource(refresh_module)
+    assert src.count("initializer=call_metrics.exclude_current_thread") == 2
+    assert "with call_metrics.excluded():" in src
