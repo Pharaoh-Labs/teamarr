@@ -100,7 +100,8 @@ Deleting a custom league removes its definition and purges its cached teams and 
 ### Missing team fixtures (API-first)
 
 The initial [manual fixture API](../reference/architecture/api-layer#manual-fixture-api-initial-slice)
-— also on **EPG → Manual Events** in the UI — can supplement provider schedules
+— also on **Sources → Manual Events** in the UI, beside the stream sources it
+supplements — can supplement provider schedules
 with a missing preseason or other team game.
 It requires neither an upstream event nor a TSDB key, but the fixture's league
 must still be subscribed here or in the source's override. Matching, templates,

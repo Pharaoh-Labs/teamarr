@@ -10,7 +10,6 @@ export function EpgSubNav() {
       items={[
         { key: "/epg/templates", label: "Templates", to: "/epg/templates" },
         { key: "/epg/teams", label: "Team EPG", to: "/epg/teams" },
-        { key: "/epg/manual-events", label: "Manual Events", to: "/epg/manual-events" },
         { key: "/epg/output", label: "EPG Output", to: "/epg/output" },
       ]}
     />

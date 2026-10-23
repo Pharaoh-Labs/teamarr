@@ -435,7 +435,7 @@ export function ManualEvents() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Manual Events</h1>
+          <h2 className="text-lg font-semibold">Manual Events</h2>
           <p className="text-sm text-muted-foreground">
             Add team games missing from the schedules (preseason fixtures, for example). They
             match streams and generate temporary event channels like any other event — no
