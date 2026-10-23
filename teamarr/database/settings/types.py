@@ -44,6 +44,10 @@ class DispatcharrSettings:
     # When True, call Dispatcharr's /api/channels/logos/cleanup/ after generation
     # This removes ALL unused logos in Dispatcharr, not just ones Teamarr uploaded
     cleanup_unused_logos: bool = False
+    # True = a generation run and a group preview refresh the Dispatcharr M3U
+    # account before reading its streams (#1120). Off for anyone who refreshes
+    # on their own schedule or whose provider limits how often it can be hit.
+    refresh_m3u_before_generation: bool = True
 
 
 @dataclass

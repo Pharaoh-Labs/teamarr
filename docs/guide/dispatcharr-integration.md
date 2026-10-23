@@ -47,7 +47,7 @@ See [Channels → Output](channels/output) for details on each option, including
 
 Once connected, each generation run manages the full channel lifecycle in Dispatcharr:
 
-1. **M3U accounts are refreshed** so matching sees the latest streams
+1. **M3U accounts are refreshed** so matching sees the latest streams (can be turned off under [Settings → Dispatcharr](settings/dispatcharr#m3u-refresh))
 2. Teamarr **matches streams to events** and resolves templates
 3. **Channels are created** with names, logos, EPG data, streams, and profile/group assignments
 4. **Channels are updated** when event data changes (scores, status, streams), **deleted** when events end (based on [lifecycle timing](channels/lifecycle)), and drift is reconciled

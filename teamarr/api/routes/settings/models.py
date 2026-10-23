@@ -117,6 +117,8 @@ class DispatcharrSettingsModel(BaseModel):
     managed_team_channel_league_groups: bool = False
     # Clean up ALL unused logos in Dispatcharr after generation
     cleanup_unused_logos: bool = False
+    # Refresh the Dispatcharr M3U account before a generation run and a group preview (#1120)
+    refresh_m3u_before_generation: bool = True
 
     @field_validator(
         "default_channel_profile_ids", "managed_team_channel_profile_ids", mode="before"
@@ -145,6 +147,7 @@ class DispatcharrSettingsUpdate(BaseModel):
     managed_team_channel_group_id: int | None = None
     managed_team_channel_league_groups: bool | None = None
     cleanup_unused_logos: bool | None = None
+    refresh_m3u_before_generation: bool | None = None
 
     @field_validator(
         "default_channel_profile_ids", "managed_team_channel_profile_ids", mode="before"

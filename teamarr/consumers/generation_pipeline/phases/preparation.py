@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from teamarr.database.settings import get_dispatcharr_settings
 from teamarr.dispatcharr import M3UManager
 from teamarr.dispatcharr.factory import DispatcharrConnection
 from teamarr.services import TeamChannelManager
@@ -20,12 +21,31 @@ def stage_m3u_refresh(
     context: GenerationContext,
     refresh_m3u_accounts: Callable[[Callable[[], Any], Any], dict] | None = None,
 ) -> None:
-    """Refresh M3U accounts before team and group processing."""
+    """Refresh M3U accounts before team and group processing.
+
+    Skipped when "Refresh M3U accounts before generation" is off (#1120); the
+    result is the same empty shape the helper returns when nothing needs refreshing.
+    """
+    if context.dispatcharr_client and not _refresh_enabled(context.db_factory):
+        context.report("init", 3, "Skipping M3U refresh (turned off in settings)...")
+        logger.info("[M3U] Refresh skipped: 'Refresh M3U accounts before generation' is off")
+        context.result.m3u_refresh = {"refreshed": 0, "skipped": 0, "failed": 0, "account_ids": []}
+        return
     context.report("init", 3, "Refreshing M3U accounts...")
     if context.dispatcharr_client:
         context.result.m3u_refresh = (refresh_m3u_accounts or refresh_m3u_accounts_for_groups)(
             context.db_factory, context.dispatcharr_client
         )
+
+
+def _refresh_enabled(db_factory: Callable[[], Any]) -> bool:
+    """Read the switch; an unreadable setting keeps the default (refresh)."""
+    try:
+        with db_factory() as conn:
+            return get_dispatcharr_settings(conn).refresh_m3u_before_generation
+    except Exception as e:
+        logger.warning("[M3U] Could not read the refresh setting, refreshing: %s", e)
+        return True
 
 
 def stage_prepare_team_channels(context: GenerationContext) -> None:

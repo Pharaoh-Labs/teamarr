@@ -5,6 +5,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from teamarr.database.groups import get_group
+from teamarr.database.settings import get_dispatcharr_settings
 from teamarr.utilities.sorting import natural_sort_key
 
 from .persistence import failure_reason_code
@@ -62,7 +63,13 @@ class PreviewBuilder:
                 result.errors.append("Dispatcharr not configured")
                 return result
 
-            if group.m3u_account_id:
+            # "Refresh M3U accounts before generation" off skips this step (#1120)
+            refresh_enabled = get_dispatcharr_settings(conn).refresh_m3u_before_generation
+            if group.m3u_account_id and not refresh_enabled:
+                logger.debug(
+                    "Preview: M3U refresh skipped, 'Refresh M3U accounts before generation' is off"
+                )
+            elif group.m3u_account_id:
                 try:
                     refresh_result = self._dispatcharr_client.m3u.wait_for_refresh(
                         group.m3u_account_id,
