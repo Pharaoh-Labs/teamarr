@@ -88,9 +88,30 @@ class KeywordOrderingEnforcer:
                 # Find channel pairs needing reorder
                 pairs = self._get_channels_needing_reorder(conn)
 
+                # A channel takes part in at most ONE swap per pass. The pairs
+                # are read once, so a second swap that reuses a channel would
+                # work from numbers that are already stale and could put two
+                # channels on one number. Lowest keyword first; a skipped pair
+                # is re-detected and finished by the next run.
+                pairs.sort(
+                    key=lambda p: (p["main_channel"]["id"], p["keyword_channel"]["channel_number"])
+                )
+                used_ids: set[int] = set()
+
                 for pair in pairs:
                     main_channel = pair["main_channel"]
                     keyword_channel = pair["keyword_channel"]
+
+                    if main_channel["id"] in used_ids or keyword_channel["id"] in used_ids:
+                        logger.debug(
+                            "[ORDERING] Channel %s or %s already swapped this pass; "
+                            "leaving the pair for the next run",
+                            main_channel["id"],
+                            keyword_channel["id"],
+                        )
+                        continue
+                    used_ids.add(main_channel["id"])
+                    used_ids.add(keyword_channel["id"])
 
                     main_number = main_channel["channel_number"]
                     keyword_number = keyword_channel["channel_number"]
