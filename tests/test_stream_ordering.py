@@ -1059,3 +1059,61 @@ class TestTeamFeedSportScope:
         tigers.managed_channel_id = mlb
         assert svc.compute_priority(lions) != 1
         assert svc.compute_priority(tigers) == 1
+
+
+class TestAudioChannelsMetric:
+    """audio_channels reads Dispatcharr's count OR ECM's layout word as a count (#1150).
+
+    Measured on a live install: 2,480 "2", 598 "stereo", 497 "0", 252 "6",
+    65 "5.1", 1 "mono" — both spellings coexist, so "5.1" must mean six
+    channels and never five-point-one.
+    """
+
+    def _stream(self, stats: dict | None) -> ManagedChannelStream:
+        return ManagedChannelStream(
+            id=1, managed_channel_id=1, dispatcharr_stream_id=1, stream_stats=stats
+        )
+
+    def _svc(self, value: str) -> StreamOrderingService:
+        return StreamOrderingService([StreamOrderingRule("stats_metric", value, 1)])
+
+    @pytest.mark.parametrize(
+        "raw,count",
+        [
+            ("stereo", 2),
+            ("mono", 1),
+            ("5.1", 6),
+            ("5.1(side)", 6),
+            ("7.1", 8),
+            ("7.1(wide)", 8),
+            ("2", 2),
+            (6, 6),
+            ("2.0", 2),
+            ("0", 0),
+            ("STEREO ", 2),
+        ],
+    )
+    def test_count_and_layout_both_read_as_a_count(self, raw, count):
+        svc = StreamOrderingService([])
+        assert svc._resolve_stat_value({"audio_channels": raw}, "audio_channels") == count
+
+    @pytest.mark.parametrize("raw", ["", "unknown", "surround", None])
+    def test_unreadable_layout_is_unknown(self, raw):
+        svc = StreamOrderingService([])
+        assert svc._resolve_stat_value({"audio_channels": raw}, "audio_channels") is None
+
+    def test_surround_rule_ranks_the_5_1_feed_over_stereo(self):
+        rule = self._svc("audio_channels|>=|6")
+        assert rule.compute_priority(self._stream({"audio_channels": "5.1"})) == 1
+        assert rule.compute_priority(self._stream({"audio_channels": "6"})) == 1
+        assert (
+            rule.compute_priority(self._stream({"audio_channels": "stereo"})) == NO_MATCH_PRIORITY
+        )
+        assert rule.compute_priority(self._stream({"audio_channels": "2"})) == NO_MATCH_PRIORITY
+
+    def test_is_unknown_matches_an_unreadable_layout(self):
+        rule = self._svc("audio_channels|is_unknown")
+        assert rule.compute_priority(self._stream({"audio_channels": "surround"})) == 1
+        assert (
+            rule.compute_priority(self._stream({"audio_channels": "stereo"})) == NO_MATCH_PRIORITY
+        )

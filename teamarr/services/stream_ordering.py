@@ -570,10 +570,58 @@ class StreamOrderingService:
         raw = stats.get(metric)
         if raw is None:
             return None
+        if metric == "audio_channels":
+            return self._audio_channel_count(raw)
         try:
             return float(raw)
         except (ValueError, TypeError):
             return None
+
+    # Dispatcharr's own probe writes audio_channels as a count ("2", "6");
+    # ECM-pushed stats write ffprobe's channel layout ("stereo", "5.1",
+    # "mono"). Measured on a live install (#1150): 2,480 "2", 598 "stereo",
+    # 497 "0", 252 "6", 65 "5.1", 1 "mono". A bare float() dropped the words
+    # and read "5.1" as five-point-one, so a surround rule (>= 6) could never
+    # match an ECM-probed stream. The map carries the LAYOUT words only; a
+    # numeric string stays a count.
+    _AUDIO_LAYOUT_CHANNELS: dict[str, float] = {
+        "mono": 1,
+        "stereo": 2,
+        "2.1": 3,
+        "quad": 4,
+        "4.0": 4,
+        "4.1": 5,
+        "5.0": 5,
+        "5.1": 6,
+        "6.0": 6,
+        "6.1": 7,
+        "7.0": 7,
+        "7.1": 8,
+    }
+
+    @classmethod
+    def _audio_channel_count(cls, raw: object) -> float | None:
+        """Read Dispatcharr's audio_channels as a channel count.
+
+        Accepts a count ("2", 6) or an ffprobe layout ("stereo", "5.1",
+        "5.1(side)", "7.1(wide)"). A layout the map does not know and a
+        count that does not parse both resolve to None (unknown).
+        """
+        if isinstance(raw, int | float):
+            return float(raw)
+        text = str(raw).strip().lower()
+        if not text:
+            return None
+        layout = text.split("(", 1)[0].strip()
+        if layout in cls._AUDIO_LAYOUT_CHANNELS:
+            return cls._AUDIO_LAYOUT_CHANNELS[layout]
+        try:
+            count = float(text)
+        except ValueError:
+            return None
+        # "2.0" is the stereo layout written as a number, not two channels
+        # plus a fraction; a count is always whole.
+        return float(int(count)) if count.is_integer() else None
 
     def _match_stats_metric(self, stream: ManagedChannelStream, rule_value: str) -> bool:
         """Match stream by numeric stat comparisons encoded in rule_value.
@@ -583,8 +631,10 @@ class StreamOrderingService:
 
         Each condition is "metric|operator|threshold". Actual field names match
         Dispatcharr's stream_stats JSON: resolution, source_fps,
-        ffmpeg_output_bitrate, audio_bitrate, sample_rate. Virtual metrics
-        resolution_width / resolution_height are derived from the resolution string.
+        ffmpeg_output_bitrate, audio_bitrate, sample_rate, audio_channels.
+        Virtual metrics resolution_width / resolution_height are derived from
+        the resolution string; audio_channels reads a count or a layout word
+        ("stereo", "5.1") as a channel count (#1150).
         """
         if not rule_value:
             return False
