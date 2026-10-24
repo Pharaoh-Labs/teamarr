@@ -769,6 +769,7 @@ const METRIC_LABELS: Record<string, string> = {
   source_fps: "FPS",
   audio_bitrate: "Audio",
   sample_rate: "Sample",
+  audio_channels: "Audio Ch",
 }
 const OP_SYMBOLS: Record<string, string> = {
   ">=": "≥", "<=": "≤", ">": ">", "<": "<", "=": "=", is_unknown: "?",
@@ -851,6 +852,7 @@ function StatsMetricBuilder({ value, onChange }: { value: string; onChange: (v: 
                   <option value="source_fps">FPS</option>
                   <option value="audio_bitrate">Audio Bitrate (kbps)</option>
                   <option value="sample_rate">Sample Rate (Hz)</option>
+                  <option value="audio_channels">Audio Channels (2 = stereo, 6 = 5.1)</option>
                 </Select>
                 <Select value={cond.operator} onChange={(e) => updateCond(ci, { operator: e.target.value })}>
                   <option value=">=">≥</option>
