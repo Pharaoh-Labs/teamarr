@@ -615,6 +615,9 @@ Variables for combat-sport templates (UFC/MMA and boxing). Unlike Motorsports an
 | `{prelims_time}` | Prelims start time | `8:00 PM EST` |
 | `{early_prelims_time}` | Early prelims start time | `6:00 PM EST` |
 
+{: .note }
+In a card-segment channel, the date and time variables (`{game_time}`, `{game_date}`, `{game_day_short}`, …) give that segment's start, not the card's first bout — in the channel name and logo URL as well as the guide.
+
 ### Fight Card
 
 | Variable | Description | Sample |
@@ -697,7 +700,7 @@ NASCAR-style scheduled race format (lap counts and stages). Empty for series who
 | `{fastest_lap_driver}` | Driver awarded fastest lap | `Lando Norris` |
 
 {: .note }
-Race weekends are split into per-session channels (Practice 1/2/3, Qualifying, Sprint, Race). Each channel gets a `{session_type}`/`{session_name}` value indicating which session it covers. Grid and results variables read from the qualifying and race sessions respectively, and are empty until those sessions have data.
+Race weekends are split into per-session channels (Practice 1/2/3, Qualifying, Sprint, Race). Each channel gets a `{session_type}`/`{session_name}` value indicating which session it covers. Grid and results variables read from the qualifying and race sessions respectively, and are empty until those sessions have data. In a session channel, the date and time variables (`{game_time}`, `{game_date}`, `{game_day_short}`, …) give that session's start, not the weekend's first session — in the channel name and logo URL as well as the guide, so `{session_name} · {game_day_short} {game_time}` reads `Race · Sun 16:00` on the race channel.
 
 ---
 
