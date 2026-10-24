@@ -5,6 +5,8 @@ This is the bridge between the data layer and the template engine.
 """
 
 import logging
+from dataclasses import replace
+from datetime import datetime
 
 from teamarr.core import Event, TeamStats
 from teamarr.services.sports_data import SportsDataService
@@ -17,6 +19,28 @@ from teamarr.templates.context import (
 from teamarr.utilities.sports import get_sport_from_league
 
 logger = logging.getLogger(__name__)
+
+
+def segment_start_time(event: Event, segment: str | None) -> datetime | None:
+    """The start of the session or card segment a segment channel covers.
+
+    A race weekend (or a cricket Test) is one Event whose `sessions[]` each
+    get their own channel; an MMA card is one Event whose `segment_times`
+    carry ESPN's per-segment starts. `event.start_time` is the weekend's or
+    card's FIRST start, so a context built for one segment must read that
+    segment's own start, or `{game_time}` / `{game_day_short}` in a session
+    channel's name print Practice 1's time on every channel while the guide
+    (which swaps the start in before resolving) shows each session's own
+    (#1148). A code that repeats on the weekend (three `race` runnings)
+    shares one channel, which starts at the earliest running (same rule as
+    the lifecycle timing). None when `segment` names nothing on the event.
+    """
+    if not segment:
+        return None
+    sessions = [s for s in event.sessions or [] if s.code == segment and s.start_time]
+    if sessions:
+        return min(s.start_time for s in sessions)
+    return (event.segment_times or {}).get(segment)
 
 
 class ContextBuilder:
@@ -154,6 +178,14 @@ class ContextBuilder:
         # future events within its lookahead, serves a per-event cache, and
         # enforces a fetch budget — a no-op for past/imminent/enriched events.
         event = self._service.enrich_event_preview(event)
+
+        # A segment channel's context is anchored to its own segment's start
+        # (#1148) — see segment_start_time. Every reader of this context
+        # (channel name, logo URL, conditions, the sync rename, the guide)
+        # then agrees on what "the game time" is for that channel.
+        segment_start = segment_start_time(event, card_segment)
+        if segment_start is not None and segment_start != event.start_time:
+            event = replace(event, start_time=segment_start)
 
         is_home = event.home_team.id == team_id
         team = event.home_team if is_home else event.away_team
