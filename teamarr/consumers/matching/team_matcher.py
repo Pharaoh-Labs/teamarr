@@ -269,6 +269,33 @@ def _is_placeholder_team(team: Team) -> bool:
     )
 
 
+def _team_surfaces(
+    team: tuple[str, str | None, str | None, str | None, str, str],
+) -> tuple[set[str], set[str]]:
+    """The surfaces a stream could write for a taught team (#1153).
+
+    Whole-word phrases: the full name, the short name, the provider's bare
+    location, and every ≥2-token leading run of the full name (the #650
+    rule — "Fairmont State" from "Fairmont State Falcons"). The abbreviation
+    is returned apart, because it counts only where a stream writes it as a
+    code (#799).
+    """
+    name, short_name, abbrev, location, _league, _sport = team
+    phrases: set[str] = set()
+    for surface in (name, short_name, location):
+        norm = normalize_text(surface) if surface else ""
+        if norm:
+            phrases.add(norm)
+    name_tokens = normalize_text(name).split() if name else []
+    for end in range(2, len(name_tokens)):
+        phrases.add(" ".join(name_tokens[:end]))
+    codes: set[str] = set()
+    code = normalize_text(abbrev) if abbrev else ""
+    if code:
+        codes.add(code)
+    return phrases, codes
+
+
 _WEEKDAY_WORDS = (
     frozenset({"mon", "monday"}),
     frozenset({"tue", "tues", "tuesday"}),
@@ -2685,15 +2712,24 @@ class TeamMatcher:
         it, and once at batch start by StreamMatcher so the lesson lands
         before the negative cache is consulted for the batch's first stream.
 
-        When a team is taught for the first time in this process, cached
-        failures are dropped (#757): they were reached without that team, and
-        a cached failure short-circuits before the logic that would now pass
-        it. All of them, not just FIXTURE_NOT_IN_LEAGUE — side refinement
-        (#799) reads the same index, so a taught surface also turns a
-        NO_EVENT_FOUND into a match (3 of 14 recovered streams in the replay
-        that measured this were exactly that, and clearing by reason left
-        them failing). Re-teaching the same schedule after an index rebuild is
-        not news and clears nothing, so the negative cache keeps its value.
+        When a team is taught for the first time in this process, the cached
+        failures that could NAME it are dropped (#757, scoped in #1153): they
+        were reached without that team, and a cached failure short-circuits
+        before the logic that would now pass it. Every reason, not just
+        FIXTURE_NOT_IN_LEAGUE — side refinement (#799) reads the same index,
+        so a taught surface also turns a NO_EVENT_FOUND into a match (3 of 14
+        recovered streams in the replay that measured this were exactly that,
+        and clearing by reason left them failing). But only the rows whose
+        stream name carries one of the team's surfaces: the clear used to be
+        the whole table, and because this set is process memory a restart
+        re-taught the entire schedule as news, while a tournament's daily draw
+        did the same every day — on a real install the ~2,000 cached failures
+        were wiped every two or three runs. Re-teaching the same schedule
+        after an index rebuild is not news and clears nothing.
+
+        Tennis is not taught at all: its events carry players as the two
+        sides, the tennis matcher never reads this index, and every round of
+        a draw would otherwise be a fresh "team".
         """
         index = self._get_identity_index()
         if index is None:
@@ -2704,6 +2740,8 @@ class TeamMatcher:
             if key in self._taught_event_keys:
                 continue
             self._taught_event_keys.add(key)
+            if (event.sport or "").lower() == "tennis":
+                continue
             for team in (event.home_team, event.away_team):
                 if team is None or _is_placeholder_team(team):
                     continue
@@ -2731,7 +2769,13 @@ class TeamMatcher:
             len(fresh),
         )
         if fresh and self._cache is not None:
-            self._cache.clear_failed()
+            phrases: set[str] = set()
+            codes: set[str] = set()
+            for team in fresh:
+                team_phrases, team_codes = _team_surfaces(team)
+                phrases |= team_phrases
+                codes |= team_codes
+            self._cache.clear_failed_naming(phrases, codes)
 
     def _refine_sides(self, ctx: MatchContext) -> None:
         """Strip provider junk from both extracted sides before anything reads them (#799).

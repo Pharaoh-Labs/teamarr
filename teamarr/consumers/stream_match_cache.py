@@ -25,13 +25,14 @@ import hashlib
 import json
 import logging
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
 from teamarr.core import Event
+from teamarr.utilities.fuzzy_match import normalize_text
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,22 @@ def compute_fingerprint(group_id: int, stream_id: int, stream_name: str) -> str:
     """
     key = f"{group_id}:{stream_id}:{stream_name}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _names_a_surface(stream_name: str, phrases: set[str], codes: set[str]) -> bool:
+    """Whether a stream name carries one of the surfaces, whole-word (#1153)."""
+    if not stream_name:
+        return False
+    if phrases:
+        padded = f" {normalize_text(stream_name)} "
+        if any(f" {phrase} " in padded for phrase in phrases):
+            return True
+    if codes:
+        for token in stream_name.split():
+            if token.isalpha() and token.isupper() and 2 <= len(token) <= 5:
+                if normalize_text(token) in codes:
+                    return True
+    return False
 
 
 @dataclass
@@ -672,6 +689,66 @@ class StreamMatchCache:
             logger.warning("[STREAM_CACHE_ERROR] Clear failed entries: %s", e)
             return 0
 
+    def clear_failed_naming(self, phrases: "Iterable[str]", codes: "Iterable[str]" = ()) -> int:
+        """Drop the cached FAILURES whose stream name carries one of these surfaces (#1153).
+
+        The schedule-taught lesson (#912) used to call ``clear_failed`` — every
+        failed row — whenever any competitor was taught for the first time in
+        the process. A restart re-teaches the whole schedule as news, and a
+        tournament's daily draw brings new names every day, so on a real
+        install the ~2,000 cached failures were wiped every two or three runs
+        and re-scored from scratch each time. A newly taught team can only
+        flip a verdict on a stream that could name it, so only those rows go.
+
+        ``phrases`` are normalized whole-word surfaces (full name, short name,
+        location, leading runs of the full name); ``codes`` are normalized
+        abbreviations, honoured only where the stream writes them as codes —
+        upper-case 2–5 letter tokens, the #799 rule — so DAY the code never
+        matches "Day 1". User corrections are pinned and never cleared;
+        successes are validated on read and left alone.
+
+        Returns:
+            Number of entries cleared
+        """
+        wanted = {p for p in (ph.strip() for ph in phrases) if p}
+        wanted_codes = {c for c in (cd.strip() for cd in codes) if c}
+        if not wanted and not wanted_codes:
+            return 0
+        try:
+            with self._conn() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT fingerprint, stream_name
+                    FROM stream_match_cache
+                    WHERE event_id = ? AND user_corrected = 0
+                    """,
+                    (FAILED_MATCH_EVENT_ID,),
+                ).fetchall()
+                doomed = [
+                    row["fingerprint"]
+                    for row in rows
+                    if _names_a_surface(row["stream_name"], wanted, wanted_codes)
+                ]
+                for start in range(0, len(doomed), 500):
+                    chunk = doomed[start : start + 500]
+                    marks = ",".join("?" * len(chunk))
+                    conn.execute(
+                        f"DELETE FROM stream_match_cache WHERE fingerprint IN ({marks})",  # noqa: S608 — placeholders only
+                        chunk,
+                    )
+                self._commit(conn)
+                if doomed:
+                    logger.info(
+                        "[STREAM_CACHE] Cleared %d of %d cached failure(s) naming a newly "
+                        "taught team",
+                        len(doomed),
+                        len(rows),
+                    )
+                return len(doomed)
+        except sqlite3.Error as e:
+            logger.warning("[STREAM_CACHE_ERROR] Clear failed entries by name: %s", e)
+            return 0
+
     def clear_group(self, group_id: int) -> int:
         """Clear all cache entries for a specific group.
 
@@ -732,9 +809,10 @@ class NullStreamMatchCache(StreamMatchCache):
     sources. Those streams belong to no source, so nothing about them may be
     read from or written to the cache: every lookup misses and every write is
     dropped. The one call that still reaches the real table is
-    ``clear_failed`` — the matcher clears cached failures when the schedule
-    teaches it a new team (#912), and that invalidation is owed to the real
-    cache no matter which matcher instance did the learning.
+    ``clear_failed_naming`` — the matcher clears the cached failures that name
+    a team the schedule just taught it (#912, scoped in #1153), and that
+    invalidation is owed to the real cache no matter which matcher instance
+    did the learning.
     """
 
     @contextmanager

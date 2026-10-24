@@ -287,17 +287,37 @@ class TestMatcherTeachesBeforeItGates:
 
 class TestCachedVerdictsDoNotOutliveALesson:
     """A cached failure replays before the logic that would now pass it
-    (#757), so the first time a team is taught, cached failures go — every
-    reason, because refinement (#799) reads the index too and a taught surface
-    turns NO_EVENT_FOUND into a match as readily as it lifts a veto."""
+    (#757), so the first time a team is taught, the cached failures that could
+    name it go — every reason, because refinement (#799) reads the index too
+    and a taught surface turns NO_EVENT_FOUND into a match as readily as it
+    lifts a veto. Only those rows (#1153): the clear used to be the whole
+    table, and a restart or a tournament's daily draw re-taught "news" often
+    enough that a real install wiped ~2,000 failures every two or three runs."""
 
-    def test_a_new_team_clears_cached_failures(self, db_factory):
+    def test_a_new_team_clears_the_failures_naming_it(self, db_factory):
         cache = MagicMock()
         matcher = make_team_matcher(cache=cache, db_factory=db_factory)
 
         matcher.learn_events([SOCCER_GAME])
 
-        cache.clear_failed.assert_called_once_with()
+        cache.clear_failed.assert_not_called()
+        cache.clear_failed_naming.assert_called_once()
+        phrases, codes = cache.clear_failed_naming.call_args.args
+        # Full name, short name and the bare location of the side that was news.
+        assert {"massachusetts minutewomen", "umass", "massachusetts"} <= phrases
+        # Vermont's soccer row is already in the cache: not news, no surfaces.
+        assert not {"vermont catamounts", "vermont"} & phrases
+        # Codes travel apart: they count only where a stream writes them as codes.
+        assert codes == {"mass"}
+
+    def test_surfaces_carry_the_leading_runs_of_a_full_name(self):
+        phrases, codes = team_matcher_module._team_surfaces(
+            ("Fairmont State Falcons", "Fairmont St", "FSU", None, "college-football", "football")
+        )
+        assert "fairmont state" in phrases  # the #650 reading a stream writes
+        assert "fairmont state falcons" in phrases
+        assert "fairmont st" in phrases
+        assert codes == {"fsu"}
 
     def test_reteaching_after_an_index_rebuild_clears_nothing(self, db_factory):
         """The index is rebuilt every TTL window and re-taught the same
@@ -309,6 +329,7 @@ class TestCachedVerdictsDoNotOutliveALesson:
         make_team_matcher(cache=cache, db_factory=db_factory).learn_events([SOCCER_GAME])
 
         cache.clear_failed.assert_not_called()
+        cache.clear_failed_naming.assert_not_called()
 
     def test_a_schedule_the_cache_already_covers_clears_nothing(self, db_factory):
         cache = MagicMock()
@@ -319,6 +340,21 @@ class TestCachedVerdictsDoNotOutliveALesson:
         )
         make_team_matcher(cache=cache, db_factory=db_factory).learn_events([mlb_no_location])
         cache.clear_failed.assert_not_called()
+        cache.clear_failed_naming.assert_not_called()
+
+    def test_tennis_players_are_not_taught_and_clear_nothing(self, db_factory):
+        """A draw's two sides are players, the tennis matcher never reads the
+        index, and every round would otherwise be a fresh team (#1153)."""
+        cache = MagicMock()
+        matcher = make_team_matcher(cache=cache, db_factory=db_factory)
+        sinner = _team("Jannik Sinner", "J. Sinner", "SIN", "atp", "tennis")
+        alcaraz = _team("Carlos Alcaraz", "C. Alcaraz", "ALC", "atp", "tennis")
+
+        matcher.learn_events([_event(sinner, alcaraz, "atp-final")])
+
+        assert not matcher._get_identity_index().resolve("Jannik Sinner")
+        cache.clear_failed.assert_not_called()
+        cache.clear_failed_naming.assert_not_called()
 
 
 class TestProviderCarriesLocation:
