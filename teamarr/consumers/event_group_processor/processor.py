@@ -345,6 +345,8 @@ class EventGroupProcessor(
         self._run_now = datetime.now(get_user_timezone())
         self._shared_events.clear()
         self.clear_epg_resolution_cache()
+        self._group_name_cache = None
+        self._account_name_cache = None
         if hasattr(self, "_subscription_leagues_cache"):
             del self._subscription_leagues_cache
         self._lifecycle_service = None
