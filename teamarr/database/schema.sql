@@ -1069,6 +1069,7 @@ INSERT OR REPLACE INTO sports (sport_code, display_name) VALUES
     ('football', 'Football'),
     ('basketball', 'Basketball'),
     ('hockey', 'Hockey'),
+    ('field hockey', 'Field Hockey'),
     ('baseball', 'Baseball'),
     ('softball', 'Softball'),
     ('soccer', 'Soccer'),
@@ -1381,6 +1382,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('fra.1', 'espn', 'soccer/fra.1', NULL, 'Ligue 1', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/9.png', NULL, 1, NULL, 'ligue1', 'team_vs_team', 'Ligue 1 Soccer', NULL, NULL, NULL, 1),
     ('fra.coupe_de_france', 'espn', 'soccer/fra.coupe_de_france', NULL, 'Coupe de France', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/192.png', NULL, 1, NULL, 'coupe-de-france', 'team_vs_team', 'Coupe de France Soccer', NULL, NULL, NULL, 1),
     ('uefa.champions', 'espn', 'soccer/uefa.champions', NULL, 'UEFA Champions League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2.png', NULL, 1, 'UCL', 'ucl', 'team_vs_team', 'UEFA Champions League Soccer', NULL, NULL, NULL, 1),
+    ('uefa.wchampions', 'espn', 'soccer/uefa.wchampions', NULL, 'UEFA Women''s Champions League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2408.png', NULL, 1, 'UWCL', 'uwcl', 'team_vs_team', 'UEFA Women''s Champions League Soccer', NULL, NULL, NULL, 1),
     ('ksa.1', 'espn', 'soccer/ksa.1', NULL, 'Saudi Pro League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2488.png', NULL, 1, 'SPL', 'spl', 'team_vs_team', 'Saudi Pro League Soccer', NULL, NULL, NULL, 1),
     -- Additional European Leagues
     ('ned.1', 'espn', 'soccer/ned.1', NULL, 'Eredivisie', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/35.png', NULL, 1, NULL, 'eredivisie', 'team_vs_team', 'Eredivisie Soccer', NULL, NULL, NULL, 1),
@@ -1467,6 +1469,9 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     -- Volleyball (ESPN)
     ('mens-college-volleyball', 'espn', 'volleyball/mens-college-volleyball', NULL, 'NCAA Men''s Volleyball', 'volleyball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png', NULL, 1, 'NCAA Volleyball', 'ncaavb', 'team_vs_team', 'Men''s College Volleyball', NULL, NULL, NULL, 1),
     ('womens-college-volleyball', 'espn', 'volleyball/womens-college-volleyball', NULL, 'NCAA Women''s Volleyball', 'volleyball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png', NULL, 1, 'NCAA W Volleyball', 'ncaawvb', 'team_vs_team', 'Women''s College Volleyball', NULL, NULL, NULL, 1),
+
+    -- Field Hockey (ESPN) - Teams learned from scoreboards; /teams is empty.
+    ('womens-college-field-hockey', 'espn', 'field-hockey/womens-college-field-hockey', NULL, 'NCAA Women''s Field Hockey', 'field hockey', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-field-hockey.png', NULL, 0, 'NCAAWFH', 'ncaawfh', 'team_vs_team', 'Women''s College Field Hockey', NULL, NULL, NULL, 1),
 
     -- Lacrosse - NCAA (ESPN)
     ('mens-college-lacrosse', 'espn', 'lacrosse/mens-college-lacrosse', NULL, 'NCAA Men''s Lacrosse', 'lacrosse', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/lacrosse.png', NULL, 1, 'NCAA Lacrosse', 'ncaalax', 'team_vs_team', NULL, NULL, NULL, NULL, 1),

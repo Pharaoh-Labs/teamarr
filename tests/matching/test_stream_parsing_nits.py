@@ -15,7 +15,7 @@ from teamarr.consumers.matching.classifier import classify_stream
 from teamarr.consumers.matching.identity import TeamIdentityIndex
 from teamarr.consumers.matching.team_matcher import _weekday_words
 from teamarr.services.detection_keywords import DetectionKeywordService
-from teamarr.services.stream_filter import UNSUPPORTED_SPORTS
+from teamarr.services.stream_filter import StreamFilter, StreamFilterConfig
 
 SUNDAY = date(2026, 9, 27)
 TUESDAY = date(2026, 9, 29)
@@ -50,10 +50,11 @@ class TestFieldHockeyIsNotIceHockey:
     def test_field_hockey_is_its_own_sport(self, name):
         assert DetectionKeywordService.detect_sport(name) == "Field Hockey"
 
-    def test_it_is_unsupported_so_the_filter_drops_it(self):
-        """No provider carries field hockey; hinting it Hockey kept ice-hockey
-        games in play for schools that play both."""
-        assert "Field Hockey" in UNSUPPORTED_SPORTS
+    def test_field_hockey_passes_builtin_filter(self):
+        streams = [{"id": 1, "name": "Field Hockey: Iowa at Michigan"}]
+        result = StreamFilter(StreamFilterConfig(require_event_pattern=True)).filter(streams)
+        assert result.passed == streams
+        assert result.filtered_unsupported_sport == 0
 
     @pytest.mark.parametrize(
         "name",

@@ -61,8 +61,9 @@ baseball/mlb
 | Football | NFL, NCAAF, UFL | |
 | Basketball | NBA, WNBA, G League, NCAAM, NCAAW, NBL (Australia) | FIBA World Cup (M/W) is TSDB — ESPN only tracks the final, not qualifiers |
 | Hockey | NHL, NCAA M/W, Olympics M/W | |
+| Field Hockey | NCAA Women's Field Hockey | Team identities learned from scoreboards; ESPN's `/teams` roster is empty |
 | Baseball | MLB, NCAA Baseball, World Baseball Classic, Little League Baseball | MiLB handled by MLB Stats provider; LLB is the August World Series only |
-| Soccer | 48 pre-configured, ~228 discovered | Dot notation: `eng.1`, `ger.2` |
+| Soccer | Includes UEFA Women's Champions League (UWCL), plus ~228 discovered | Dot notation: `eng.1`, `ger.2`, `uefa.wchampions` |
 | Rugby | 20 leagues (Six Nations, Rugby World Cup, Super Rugby, URC, Premiership, Top 14, MLR, NRL, Olympic 7s, …) | Second-largest ESPN sport by league count; NRL and Super Rugby Pacific migrated here from TSDB |
 | Combat Sports | UFC, PFL | Event Card matching. ESPN files every other promotion (Cage Warriors, OKTAGON, RIZIN, ONE, and LFA since June 2026) under a catch-all `mma/other` bucket, and only after the event, so none of them can be a league (#760, #1083) |
 | Motorsports | F1, IndyCar | Race weekend sessions |
