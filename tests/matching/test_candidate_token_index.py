@@ -1,4 +1,4 @@
-"""Candidate narrowing by inverted token index (#747, flag-gated).
+"""Candidate narrowing by inverted token index (#747, enabled by default).
 
 The index only ever removes candidates that share no word with the stream, and
 such an event cannot clear a `token_set_ratio` floor — so narrowing must not
@@ -165,13 +165,15 @@ class TestFlagAndScope:
             ("mlb", _event(METS, YANKEES, "e2")),
         )
 
-    def test_disabled_by_default(self, matcher, monkeypatch):
+    def test_enabled_by_default(self, matcher, monkeypatch):
         monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
         cands = self._cands()
-        assert matcher._narrow_candidates(_ctx("Tampa Bay Rays vs Detroit Tigers"), cands) is cands
+        got = matcher._narrow_candidates(_ctx("Tampa Bay Rays vs Detroit Tigers"), cands)
+        assert [e.id for _lg, e in got] == ["e1"]
 
-    def test_enabled_by_the_flag(self, matcher, monkeypatch):
-        monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
+    @pytest.mark.parametrize("value", ["1", "true", "yes", "on", " TRUE ", "On"])
+    def test_enabled_by_the_flag(self, matcher, monkeypatch, value):
+        monkeypatch.setenv("TEAMARR_TOKEN_INDEX", value)
         cands = self._cands()
         got = matcher._narrow_candidates(_ctx("Tampa Bay Rays vs Detroit Tigers"), cands)
         assert [e.id for _lg, e in got] == ["e1"]
@@ -221,7 +223,7 @@ class TestVerdictsUnchanged:
         ],
     )
     def test_same_verdict_with_flag_on_and_off(self, matcher, monkeypatch, name):
-        monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+        monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "0")
         off = self._run(matcher, name)
         monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
         on = self._run(matcher, name)
@@ -307,7 +309,7 @@ class TestMissingSplitSquadCandidates:
         if token_index:
             monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
         else:
-            monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+            monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "0")
 
         result = matcher.match_multi_league(
             classified=classify_stream(stream_name),
@@ -359,7 +361,7 @@ class TestMissingSplitSquadCandidates:
         if token_index:
             monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
         else:
-            monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+            monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "0")
 
         try:
             result = matcher.match_multi_league(

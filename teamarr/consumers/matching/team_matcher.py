@@ -178,14 +178,13 @@ class _DateWindow:
 # team_cache refresh is picked up without a restart; the window is generous
 # because team identity barely moves and a generation run is far shorter.
 def _token_index_enabled() -> bool:
-    """Whether candidate narrowing is on (#747). Default OFF.
+    """Whether candidate narrowing is on (#747). Default ON; explicit 0 opts out.
 
-    Read per call rather than captured at import so a soak can be started and
-    stopped by restarting the process, and so tests can toggle it with
-    monkeypatch without reloading the module. Matches the ``ESPN_MAX_WORKERS``
-    convention for perf knobs that are not user-facing settings.
+    Read per call rather than captured at import so overrides and tests can
+    toggle it without reloading the module. Matches the ``ESPN_MAX_WORKERS``
+    convention for performance knobs.
     """
-    return os.environ.get("TEAMARR_TOKEN_INDEX", "").strip().lower() in {"1", "true", "yes", "on"}
+    return os.environ.get("TEAMARR_TOKEN_INDEX", "1").strip().lower() in {"1", "true", "yes", "on"}
 
 
 _IDENTITY_INDEX_TTL = 900.0  # seconds
@@ -1572,7 +1571,7 @@ class TeamMatcher:
 
         Deliberately narrow in scope:
 
-        * **Off by default** — gated on ``TEAMARR_TOKEN_INDEX``.
+        * **On by default** — ``TEAMARR_TOKEN_INDEX=0`` opts out.
         * **TEAM_VS_TEAM only.** Tennis, racing and event-card streams match
           through their own routes, and the safety measurement behind this did
           not cover them; they keep the full scan.
