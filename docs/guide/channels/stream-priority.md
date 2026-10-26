@@ -15,6 +15,99 @@ This is distinct from [channel ordering](numbering#channel-ordering), which cont
 
 With no rules configured, streams are listed by source id and then by the time they were added — see [Source order](#source-order).
 
+## Coordinated external ordering (Podium)
+
+Podium can own the stream order of individual managed event, plugin, and team
+channels. The channel list shows **Ordered by Podium** and offers **Return
+ordering to Teamarr**. Ownership is stored in Teamarr's database and survives
+restarts. Returning ownership lets the next ordering pass apply Teamarr rules;
+it does not immediately rerank the channel.
+
+While Podium owns ordering, generation, Apply Stream Ordering, drift repair,
+live-event first-stream pins, and team synchronization preserve the relative
+live order of surviving streams. Normal matching, EPG updates, channel lifecycle,
+and membership windows remain active: obsolete members are removed and new
+members append. Rule sync can still update rules, but those rules do not rerank
+externally ordered channels.
+
+### Deployment and retirement
+
+1. Deploy Teamarr first. All workers/replicas must run this version and share the
+   same SQLite database **and database directory**, on a filesystem supporting
+   shared `flock` locks. Mixed old/new workers are unsupported.
+2. Keep `PODIUM_TEAMARR_EXTERNAL_ORDERING=false` (the default) while testing.
+   Configure `PODIUM_TEAMARR_URL` to this Teamarr instance and smoke-test the
+   endpoint below on a test managed channel.
+3. Deploy Podium, then enable **Coordinate external ordering** in its Settings.
+   Coordination covers worker reorders and manual apply, undo, and unassign
+   operations through Podium's shared stream-order client. Dry runs do not
+   claim ownership. Disabled coordination makes no calls to Teamarr.
+
+Podium must block its write on missing endpoints, busy responses, network
+failures, or malformed acknowledgements; it must never fall back on those
+errors. Only an explicit unmanaged acknowledgement permits a direct Dispatcharr
+write. This integration never calls the global
+`/api/v1/settings/stream-ordering/apply` endpoint, which runs Teamarr ranking.
+
+Disabling the Podium setting **does not release Teamarr ownership**. Return
+channels to Teamarr explicitly before retiring Podium.
+
+Both applications must use the same Dispatcharr instance, with a unique Teamarr
+manager per channel. Multiple independent Teamarr installations owning a channel
+are unsupported. During coordination, do not import, manually adopt, or remap
+existing unmanaged Dispatcharr channels into Teamarr. Normal channel creation
+creates a new Dispatcharr ID; plugin adoption only transfers an already managed
+Teamarr row, and team creation refuses unmanaged TVG-ID collisions. This
+operational exclusion must remain in force throughout Podium's unmanaged
+acknowledgement/direct-write handoff.
+
+### API contract
+
+`PUT /api/v1/channels/by-dispatcharr/{dispatcharr_channel_id}/external-order`
+uses **Dispatcharr's channel ID**, not Teamarr's row ID:
+
+```json
+{"owner":"podium","streams":[3,2,1]}
+```
+
+Stream IDs must be unique JSON integers (booleans, strings and floats are
+rejected). Permutations, removals (including an empty list), and additions or
+undo of **known local memberships within their allowed time windows** are
+supported. For team channels, additions must belong to the selected active
+event. Unknown additions, other-event team streams, and future/expired windows
+are rejected with HTTP 422; no requested edit is silently filtered. This API
+cannot create a new match between an arbitrary stream and a channel.
+
+Successful responses contain exactly one of:
+
+```json
+{"managed":true,"applied":true}
+```
+
+```json
+{"managed":false,"applied":false}
+```
+
+The unmanaged response has no database or Dispatcharr side effects. Lookup
+includes core events, plugin events, and all persisted team mappings, including
+disabled teams. Ambiguous or retired mappings return HTTP 409, never an unmanaged
+acknowledgement. A held generation/order lock also returns HTTP 409.
+
+For managed channels, Teamarr commits external ownership and a pending intent
+before writing Dispatcharr, confirms the resulting live order, then saves local
+positions, the order hash, and membership edits. A remote failure, malformed
+response, failed confirmation, or interrupted finalization returns an error and
+keeps ownership. Pending intent fences automatic stream writes until Podium
+retries the PUT. Retrying repeats a full replacement and completes local state;
+intent records removals too, so a crash after remote success cannot lose them.
+A database transaction cannot make the remote HTTP write atomic.
+
+`PUT /api/v1/channels/by-dispatcharr/{dispatcharr_channel_id}/ordering-owner`
+explicitly returns a managed channel to Teamarr ordering (no body required).
+It also clears any uncertain pending request, so use it deliberately when
+abandoning recovery. Channel list/detail APIs expose `ordering_owner`, defaulting
+to `teamarr` for existing and new channels.
+
 ## Scoped rulesets
 
 The **Global** tab is the default for every channel. Add scoped tabs to use a

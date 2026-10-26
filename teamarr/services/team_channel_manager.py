@@ -1077,7 +1077,8 @@ class TeamChannelManager:
                 if hasattr(service, "conn"):
                     service.conn = conn
                 channel_id = team["dispatcharr_channel_id"]
-                for row in rows:
+                external = team.get("ordering_owner") == "podium"
+                for row in [] if external else rows:
                     stream = ManagedChannelStream(
                         id=row["id"],
                         managed_channel_id=0,
@@ -1108,6 +1109,22 @@ class TeamChannelManager:
                         result["streams"] += 1
 
                 ordered = active_stream_ids(conn, team["id"], now_utc())
+                if external:
+                    from teamarr.services.external_ordering import (
+                        find_channel,
+                        persist_positions,
+                        preserve_live_order,
+                    )
+
+                    match = find_channel(conn, channel_id)
+                    if (
+                        not match
+                        or match[2]["external_order_pending"] is not None
+                        or channel_id not in remote_order
+                    ):
+                        continue
+                    ordered = preserve_live_order(remote_order[channel_id], ordered)
+                    persist_positions(conn, match, ordered)
                 if channel_id not in remote_order or ordered == remote_order[channel_id]:
                     continue
                 pushes.append((team, ordered))

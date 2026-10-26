@@ -172,6 +172,9 @@ CREATE TABLE IF NOT EXISTS plex_pushed_channels (
 );
 
 CREATE TABLE IF NOT EXISTS managed_team_channels (
+    ordering_owner TEXT NOT NULL DEFAULT 'teamarr' CHECK(ordering_owner IN ('teamarr', 'podium')),
+    external_order_pending TEXT,
+    stream_order_hash TEXT,
     team_id INTEGER PRIMARY KEY,
     dispatcharr_channel_id INTEGER,
     dispatcharr_uuid TEXT,
@@ -638,7 +641,7 @@ CREATE TABLE IF NOT EXISTS settings (
     plex_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 103
+    schema_version INTEGER DEFAULT 104
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -936,6 +939,9 @@ CREATE TABLE IF NOT EXISTS subscription_league_config (
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS managed_channels (
+    ordering_owner TEXT NOT NULL DEFAULT 'teamarr' CHECK(ordering_owner IN ('teamarr', 'podium')),
+    external_order_pending TEXT,
+    stream_order_hash TEXT,
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -24,6 +24,7 @@ class ManagedChannel:
     event_provider: str
     tvg_id: str
     channel_name: str
+    ordering_owner: str = "teamarr"
     plugin_id: str | None = None
     plugin_logical_key: str | None = None
     plugin_adoption_key: str | None = None
@@ -96,6 +97,7 @@ class ManagedChannel:
             event_provider=row["event_provider"],
             tvg_id=row["tvg_id"],
             channel_name=row["channel_name"],
+            ordering_owner=row.get("ordering_owner", "teamarr"),
             plugin_id=row.get("plugin_id"),
             plugin_logical_key=row.get("plugin_logical_key"),
             plugin_adoption_key=row.get("plugin_adoption_key"),
