@@ -19,10 +19,6 @@ Support-bundle v2 adds `owner_type` and the nullable plugin identity/adoption fi
 > source of truth; don't `bd import` during normal operation; don't
 > reach for third-party Dolt hosting before trying the default).
 
-## Matching Performance Defaults
-
-Candidate token indexing (`TEAMARR_TOKEN_INDEX`) and negative match caching (`TEAMARR_NEGATIVE_CACHE`) are enabled when unset. Preserve explicit opt-outs (`=0`, also false/no/off/empty) and the existing case-insensitive truthy parsing. Default-enabled failure caching must retain its measured allowlist, exact failure reasons, generation touch, and alias/team-data invalidation; keep scoped schedule-taught invalidation (#1153). On/off parity tests must set `=0` explicitly for the disabled path, rather than unsetting the variable.
-
 ## Quick Reference
 
 Franchise cricket (#1069): IPL, BBL, SA20 and MLC use ESPN numeric series IDs.
@@ -38,6 +34,11 @@ bd update <id> --claim  # Claim work atomically
 bd close <id>         # Complete work
 bd dolt push          # Push beads data to remote
 ```
+
+## Matching Performance Defaults
+
+Candidate token indexing (`TEAMARR_TOKEN_INDEX`) and negative match caching (`TEAMARR_NEGATIVE_CACHE`) are enabled when unset. Preserve explicit opt-outs (`=0`, also false/no/off/empty) and the existing case-insensitive truthy parsing. Default-enabled failure caching must retain its measured allowlist, exact failure reasons, generation touch, and alias/team-data invalidation; keep scoped schedule-taught invalidation (#1153). On/off parity tests must set `=0` explicitly for the disabled path, rather than unsetting the variable.
+
 
 ## Non-Interactive Shell Commands
 
