@@ -81,6 +81,24 @@ Teamarr maintains several caches, each with a tile and a clear/refresh action. T
 {: .note }
 The Team & League Directory refreshes automatically on **every startup** unless the `SKIP_CACHE_REFRESH` environment variable is set. Manual refresh is useful after adding new leagues or when team rosters change significantly. Clearing the game-data or match caches forces fresh lookups on the next generation run.
 
+## Matching Performance Overrides
+
+Both matching optimizations are enabled when their environment variables are unset:
+
+| Environment variable | Default behavior | Opt out |
+|----------------------|------------------|---------|
+| `TEAMARR_TOKEN_INDEX` | Narrow team-versus-team candidates using shared name tokens before scoring | `TEAMARR_TOKEN_INDEX=0` |
+| `TEAMARR_NEGATIVE_CACHE` | Reuse eligible failed-match results across generations | `TEAMARR_NEGATIVE_CACHE=0` |
+
+Negative caching applies only to an allowlist of failure reasons. Alias and team-data
+changes invalidate cached failures so the next generation can try matching again.
+Successful matches and user corrections are preserved during that invalidation.
+
+Explicit `1`, `true`, `yes`, or `on` enables an optimization. Explicit `0`, `false`,
+`no`, `off`, or an empty value disables it. Values ignore case and surrounding
+whitespace. Change these in your deployment's environment and restart Teamarr;
+leaving them unset uses the defaults.
+
 ## Database & Run History
 
 Every generation run writes a summary row (counts, duration, status) plus one **detail row per stream** — the matched and unmatched stream lists you drill into from the Dashboard's Generation History. The detail rows are the bulk of the database, and they multiply with your generation interval: a source with 100 streams on a 5-minute schedule writes 28,800 detail rows a day. Retention is pruned automatically after each run on two windows:

@@ -336,13 +336,13 @@ _CACHEABLE_FAILED_REASONS = frozenset(
 
 
 def _negative_cache_enabled() -> bool:
-    """Whether failed matches are remembered between runs (#754). Default OFF.
+    """Whether failed matches are remembered between runs (#754). Default ON.
 
-    Read per call so a soak can be started and stopped with a restart, and so
-    tests can toggle it without reloading the module — same convention as
+    Explicit 0 opts out. Read per call so overrides and tests can toggle it
+    without reloading the module — same convention as
     TEAMARR_TOKEN_INDEX.
     """
-    return os.environ.get("TEAMARR_NEGATIVE_CACHE", "").strip().lower() in {
+    return os.environ.get("TEAMARR_NEGATIVE_CACHE", "1").strip().lower() in {
         "1",
         "true",
         "yes",
