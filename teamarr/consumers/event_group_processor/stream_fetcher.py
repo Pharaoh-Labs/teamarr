@@ -1,6 +1,7 @@
 """M3U stream fetching/filtering and known-league lookup for event groups."""
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from teamarr.database.groups import EventEPGGroup
@@ -60,6 +61,41 @@ def managed_channel_ids(db_factory: Any) -> set[int]:
     except Exception as e:
         logger.warning("[CHANNEL_SOURCE] Failed to load managed channel ids: %s", e)
         return set()
+
+
+@dataclass(frozen=True)
+class DispatcharrCatalogInputs:
+    """Read-only channel/guide snapshot shared by candidate fetching and resolution."""
+
+    managed_ids: set[int]
+    epg_data_list: list[dict]
+    stream_channels: dict[int, dict]
+    channel_by_uuid: dict[str, dict]
+
+
+def dispatcharr_catalog_inputs(processor: Any) -> DispatcharrCatalogInputs:
+    """Fetch the catalogs once per run; let callers handle failures without caching them.
+
+    Exclude managed output channels before assigning stream slots (#512). New
+    output channels created later in the run cannot enter this fixed snapshot.
+    Stream details remain a per-group, eligible-id-only lookup (#647).
+    """
+    cached = getattr(processor, "_dispatcharr_catalog_cache", None)
+    if cached is not None:
+        return cached
+
+    managed_ids = managed_channel_ids(processor._db_factory)
+    channels = processor._dispatcharr_client.channels
+    epg_data_list = channels.get_epg_data_list()
+    stream_channels, channel_by_uuid = channels.get_channel_maps(exclude_channel_ids=managed_ids)
+    inputs = DispatcharrCatalogInputs(
+        managed_ids=managed_ids,
+        epg_data_list=epg_data_list,
+        stream_channels=stream_channels,
+        channel_by_uuid=channel_by_uuid,
+    )
+    processor._dispatcharr_catalog_cache = inputs
+    return inputs
 
 
 class StreamFetcher:
@@ -214,19 +250,16 @@ class StreamFetcher:
         # opens a Teamarr event channel would steal a shared stream's slot from
         # the curated channel, dropping it from this pool and cascading into
         # delete/recreate churn on alternating runs.
-        managed_ids = managed_channel_ids(self._db_factory)
-
         try:
-            stream_channel_map = client.channels.get_stream_channel_map(
-                exclude_channel_ids=managed_ids
-            )
-            epg_data_list = client.channels.get_epg_data_list()
+            inputs = dispatcharr_catalog_inputs(self)
         except Exception as e:
             logger.warning("[CHANNEL_SOURCE] Failed to load channel/EPG data: %s", e)
             return []
 
+        managed_ids = inputs.managed_ids
+        stream_channel_map = inputs.stream_channels
         active_source_ids = self._active_epg_source_ids()
-        epg_by_id = {e["id"]: e for e in epg_data_list if e.get("id") is not None}
+        epg_by_id = {e["id"]: e for e in inputs.epg_data_list if e.get("id") is not None}
 
         # M3U group ids already covered by an EPG-match-enabled group: streams in
         # those groups are matched by the per-group path (whose tier-1 resolution
@@ -264,13 +297,9 @@ class StreamFetcher:
         # channel_group_id; the name (which dispatcharr_group ordering rules
         # match on, and which the rule-builder dropdown shows) lives in the
         # groups endpoint.
-        try:
-            dp_group_names = {g.id: g.name for g in client.m3u.list_groups()}
-        except Exception as e:
-            logger.warning("[CHANNEL_SOURCE] Failed to list channel groups: %s", e)
-            dp_group_names = {}
-        # The same endpoint names the streams' M3U groups (#893)
-        m3u_group_names = dp_group_names or self._stored_group_names()
+        dp_group_names = self._group_names(client.m3u)
+        # The same endpoint names the streams' M3U groups (#893).
+        m3u_group_names = dp_group_names
 
         # Pass 1: cheap eligibility from the channel map alone, so the stream
         # detail lookup below covers only the streams that can become
@@ -342,7 +371,9 @@ class StreamFetcher:
                     # The DP CHANNEL's own group (channel organization), distinct from
                     # the M3U stream group above — drives scoping + the sorting rule.
                     "dp_channel_group_id": dp_group_id,
-                    "dp_channel_group": dp_group_names.get(dp_group_id),
+                    "dp_channel_group": dp_group_names.get(dp_group_id)
+                    if dp_group_id is not None
+                    else None,
                     # The DP channel itself (#971) — drives the dispatcharr_channel rule
                     "dp_channel_id": ch.get("id"),
                     "m3u_account_id": account_id,

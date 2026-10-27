@@ -309,6 +309,10 @@ All `update_channel` calls go through `_safe_update_channel`, which checks `Oper
 
 **`_apply_stream_ordering` runs in three phases (#735) — keep them separate.** Phase 1 (serial, one DB connection) recomputes and persists priorities and builds an `_OrderingPlan` per channel; phase 2 (still serial, still DB) takes ONE `get_all_ordered_stream_ids` scan for the post-update active sets and decides what to push; phase 3 runs the PATCHes on a bounded pool (`_ORDERING_PUSH_WORKERS`) **outside** the `with db_factory()` block, so no thread ever touches the connection. Do not move a Dispatcharr call back into the channel loop, and do not move a DB write into the push helper. The bulk reads (`get_all_channel_streams` / `get_all_ordered_stream_ids`) replace two queries per channel; the second takes an explicit `now` so every channel's attach/detach window is evaluated at one instant rather than re-reading the clock per channel. `paginated_get` fetches pages 2..N concurrently once page 1 reports a usable `count`, and on a failed page returns a contiguous **prefix**, never a list with a hole in it — callers cannot tell a hole from a smaller collection. Page size is measured from page 1's length, never assumed from the query string: `/api/epg/epgdata/` ignores `page_size` and answers with every row at once.
 
+## Generation Catalog Reuse
+
+Channel-source candidate fetching and EPG resolution share one successful Dispatcharr channel-map/EPGData snapshot per generation (#1161, `dispatcharr_catalog_inputs`). Exclude managed event and team output channels before assigning stream slots; preserve per-source group/active-guide/overlap filtering, and fetch stream details only for eligible IDs. `clear_epg_resolution_cache` drops both the shared snapshot and derived resolver inputs; `process_all_groups` also clears account/group name caches. Failed catalog reads are not cached. Do not widen stream-detail reads to the whole catalog to implement reuse.
+
 ## Key Subsystems
 
 **Template Engine** (`teamarr/templates/`):
