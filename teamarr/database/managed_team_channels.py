@@ -15,6 +15,7 @@ class ManagedTeamChannel:
     sync_status: str
     sync_message: str | None
     last_verified_at: str | None
+    ordering_owner: str = "teamarr"
 
 
 def _row_to_channel(row) -> ManagedTeamChannel:
@@ -26,6 +27,7 @@ def _row_to_channel(row) -> ManagedTeamChannel:
         sync_status=row["sync_status"],
         sync_message=row["sync_message"],
         last_verified_at=row["last_verified_at"],
+        ordering_owner=row["ordering_owner"] if "ordering_owner" in row.keys() else "teamarr",
     )
 
 
@@ -51,9 +53,7 @@ def list_enabled_managed_teams(conn: Connection) -> list[dict]:
     """
     rows = conn.execute(
         """
-        SELECT t.*, mtc.dispatcharr_channel_id, mtc.dispatcharr_uuid,
-               mtc.channel_number AS allocated_channel_number,
-               mtc.sync_status, mtc.sync_message, mtc.last_verified_at
+        SELECT t.*, mtc.*, mtc.channel_number AS allocated_channel_number
         FROM teams t
         LEFT JOIN managed_team_channels mtc ON mtc.team_id = t.id
         WHERE t.managed_channel_enabled = 1
@@ -70,8 +70,7 @@ def list_owned_enabled_managed_team_channels(conn: Connection) -> list[dict]:
         SELECT t.id AS team_id, t.channel_id, t.team_name, t.team_logo_url,
                t.channel_logo_url, t.primary_league, t.sport,
                t.provider, t.provider_team_id, t.team_abbrev, t.template_id,
-               mtc.dispatcharr_channel_id, mtc.dispatcharr_uuid,
-               mtc.channel_number, mtc.sync_status, mtc.created_at, mtc.updated_at
+               mtc.*
         FROM managed_team_channels mtc
         JOIN teams t ON t.id = mtc.team_id
         WHERE t.managed_channel_enabled = 1 AND mtc.dispatcharr_channel_id IS NOT NULL

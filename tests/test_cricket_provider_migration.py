@@ -65,7 +65,7 @@ def test_versioned_upgrade_preserves_team_channel_identity_and_settings(db_conn)
     ] == ("espn", "1381359")
     pin = conn.execute("SELECT * FROM numbering_exceptions").fetchone()
     assert (pin["provider"], pin["provider_team_id"], pin["start"]) == ("espn", "1381359", 800)
-    assert conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 103
+    assert conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 104
     _run_migrations(conn)
     assert conn.execute("SELECT count(*) FROM teams").fetchone()[0] == 1
 

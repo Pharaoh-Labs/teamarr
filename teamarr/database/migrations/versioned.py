@@ -449,6 +449,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
         )
         current_version = 103
 
+    if current_version < 104:
+        _advance_version(conn, 104, "persistent external stream ordering ownership")
+        current_version = 104
+
 
 # =============================================================================
 # Migration helpers

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from teamarr.dispatcharr.factory import DispatcharrConnection
 from teamarr.services import TeamChannelManager
+from teamarr.services.external_ordering import persist_positions, preserve_live_order
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from teamarr.consumers.generation_pipeline.models import GenerationContext
@@ -187,7 +188,7 @@ def apply_stream_ordering(
             dispatcharr_order: dict[int, list[int]] = {}
             if channel_mgr:
                 try:
-                    for d_channel in channel_mgr.get_channels():
+                    for d_channel in channel_mgr.get_channels(use_cache=False):
                         dispatcharr_order[d_channel.id] = list(d_channel.streams or ())
                 except Exception as e:
                     # Order convergence is best-effort: without it we fall back to
@@ -238,7 +239,16 @@ def apply_stream_ordering(
             # connection; the pushes are batched up and issued afterwards.
             plans: list[_OrderingPlan] = []
 
+            pending_external = {
+                row["id"]
+                for row in conn.execute(
+                    "SELECT id FROM managed_channels WHERE ordering_owner = 'podium' "
+                    "AND external_order_pending IS NOT NULL"
+                )
+            }
             for channel in all_channels:
+                if channel.id in pending_external:
+                    continue
                 streams = streams_by_channel.get(channel.id)
                 if not streams:
                     continue
@@ -261,8 +271,11 @@ def apply_stream_ordering(
                 # push, that would displace the live stream instead of leaving it
                 # alone.
                 pinned_top: int | None = None
-                if not manual and is_channel_event_live(
-                    channel.event_date, channel.scheduled_delete_at
+                external = getattr(channel, "ordering_owner", "teamarr") == "podium"
+                if (
+                    not external
+                    and not manual
+                    and is_channel_event_live(channel.event_date, channel.scheduled_delete_at)
                 ):
                     pre_order = (
                         current_order
@@ -304,7 +317,7 @@ def apply_stream_ordering(
                     channel.league,
                     context=GameContext.from_channel(channel),
                 )
-                if ordering_service.rules:
+                if not external and ordering_service.rules:
                     for stream in streams:
                         new_priority = ordering_service.compute_priority(stream)
                         if stream.priority != new_priority:
@@ -341,6 +354,13 @@ def apply_stream_ordering(
                 # currently out-of-window must be cleared (it re-attaches on a
                 # later run).
                 ordered_ids = list(post_order_by_channel.get(channel.id, []))
+                if getattr(channel, "ordering_owner", "teamarr") == "podium":
+                    if plan.current_order is None:
+                        continue  # Never reconstruct an external order from cached priorities.
+                    ordered_ids = preserve_live_order(plan.current_order, ordered_ids)
+                    persist_positions(
+                        conn, ("managed_channels", "id", {"id": channel.id}), ordered_ids
+                    )
 
                 if (
                     plan.pinned_top is not None

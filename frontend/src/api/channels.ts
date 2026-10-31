@@ -2,6 +2,7 @@ import { api } from "./client"
 
 export interface ManagedChannel {
   id: number
+  ordering_owner: "teamarr" | "podium"
   channel_type: "event" | "team"
   team_id: number | null
   event_epg_group_id: number | null // Source group (provenance, not ownership)
@@ -224,4 +225,9 @@ export interface ChannelStreamsResponse {
 
 export async function getChannelStreams(channelId: number): Promise<ChannelStreamsResponse> {
   return api.get(`/channels/managed/${channelId}/streams`)
+}
+
+
+export async function returnOrderingToTeamarr(dispatcharrId: number): Promise<void> {
+  await api.put(`/channels/by-dispatcharr/${dispatcharrId}/ordering-owner`, {})
 }
