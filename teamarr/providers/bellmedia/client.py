@@ -134,13 +134,17 @@ class BellMediaClient(BaseHTTPClient):
             if (group.get("startDate") or "") <= end.isoformat()
             and (group.get("endDate") or "") >= start.isoformat()
         }
-        monthly_groups = calendar.get("monthlyCalendar") or {}
-        grouping_ids.update(
-            calendar_date
-            for month in monthly_groups.values()
-            for calendar_date in month.get("calendarDates") or []
-            if start.isoformat() <= calendar_date <= end.isoformat()
-        )
+        # Weekly calendars also include monthly dates for display navigation,
+        # but the schedule endpoint accepts only the weekly group ID. Requesting
+        # those dates returns 204 No Content and aborts the whole event fetch.
+        if not weekly_groups:
+            monthly_groups = calendar.get("monthlyCalendar") or {}
+            grouping_ids.update(
+                calendar_date
+                for month in monthly_groups.values()
+                for calendar_date in month.get("calendarDates") or []
+                if start.isoformat() <= calendar_date <= end.isoformat()
+            )
         events: list[dict] = []
         for grouping in sorted(grouping_ids, key=str):
             events.extend(self.get_schedule_group(league, grouping, season))

@@ -22,8 +22,10 @@ unauthenticated API for Canadian Football League and selected hockey data.
 
 Requests include `brand=tsn` and `lang=en`. The provider uses the league
 calendar to resolve a requested date to a weekly or daily schedule group, then filters
-that group locally. Event detail uses the numeric TSN event ID. Hockey `seasonTypeId`
-values are normalized as preseason (0), regular season (1), and postseason (2).
+that group locally. Event detail uses the numeric TSN event ID. `seasonTypeId` values
+are normalized as preseason (0), regular season (1), and postseason (2). The CFL
+scoreboard currently reports playoff games as type 1, so Teamarr also recognizes CFL
+round titles such as semi-finals, division finals, and the Grey Cup as postseason.
 Competitor responses include `seoIdentifier` but no logo URL, so Teamarr uses the TSN
 widget CDN at `https://widgets.sports.bellmedia.ca/img/{league}/{seoIdentifier}.webp`
 for team artwork across Bell Media-supported leagues.
