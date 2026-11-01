@@ -203,8 +203,6 @@ def apply_stream_ordering(
             # pass could open a window partway through and treat two channels
             # sharing a stream inconsistently.
             window_now = now_utc().strftime("%Y-%m-%d %H:%M:%S")
-            streams_by_channel = get_all_channel_streams(conn)
-            pre_order_by_channel = get_all_ordered_stream_ids(conn, now=window_now)
 
             # stats_metric rules score against the cached stream_stats column,
             # and until now that column was only ever refreshed by the streams
@@ -213,6 +211,12 @@ def apply_stream_ordering(
             # happened to be cached, which on a real install means months old or
             # absent entirely. Pull them once, in bulk, before any priority is
             # computed.
+            #
+            # The refresh must land BEFORE the stream rows are read (#1180): the
+            # rows carry the stats the scorer sees, and reading them first meant
+            # every run ordered on the previous run's numbers — a stream attached
+            # this run scored as if it had no stats at all, and the live pin
+            # then held that wrong #1 for the whole event.
             #
             # Skipped outright when no rule reads stats: the fetch buys nothing
             # for a ruleset built from m3u/group/regex, and most are.
@@ -232,6 +236,9 @@ def apply_stream_ordering(
                     refreshed,
                     len(stat_stream_ids),
                 )
+
+            streams_by_channel = get_all_channel_streams(conn)
+            pre_order_by_channel = get_all_ordered_stream_ids(conn, now=window_now)
 
             # Phase 1 (serial, database): recompute and persist priorities.
             # Nothing here touches the network, so it stays on the one
