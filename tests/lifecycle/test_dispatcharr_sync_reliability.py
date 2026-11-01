@@ -793,6 +793,38 @@ class TestReconciliationStreamDrift:
 
         assert reconciler._detect_drift(recon_conn) == []
 
+    def test_order_only_drift_flagged_while_live_when_pin_is_off(self, recon_conn):
+        """#1187: the pin exemption applies only while the setting is on."""
+        recon_conn.execute(
+            "CREATE TABLE settings (id INTEGER PRIMARY KEY, "
+            "pin_top_stream_while_live INTEGER DEFAULT 1)"
+        )
+        recon_conn.execute("INSERT INTO settings (id, pin_top_stream_while_live) VALUES (1, 0)")
+        now = datetime.now(UTC)
+        _insert_ordered_stream_channel(
+            recon_conn,
+            event_date=(now - timedelta(minutes=30)).isoformat(),
+            scheduled_delete_at=(now + timedelta(hours=3)).isoformat(),
+        )
+
+        cm = MagicMock()
+        cm.get_channel.return_value = _make_dispatcharr_channel(
+            streams=(789, 456),
+            channel_profile_ids=None,
+        )
+
+        reconciler = ChannelReconciler(
+            db_factory=lambda: recon_conn,
+            channel_manager=cm,
+        )
+
+        issues = reconciler._detect_drift(recon_conn)
+
+        stream_drift = [
+            d for issue in issues for d in issue.details["drift_fields"] if d["field"] == "streams"
+        ]
+        assert stream_drift == [{"field": "streams", "expected": [456, 789], "actual": [789, 456]}]
+
     def test_membership_drift_still_flagged_while_event_live(self, recon_conn):
         """The pin excuses a reordering, never a missing stream."""
         now = datetime.now(UTC)

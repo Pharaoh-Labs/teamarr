@@ -229,10 +229,14 @@ export interface StreamOrderingRule {
 
 export interface StreamOrderingSettings {
   rules: StreamOrderingRule[]
+  /** #1187: keep a live channel's #1 stream fixed against scheduled runs (#232 pin). */
+  pin_top_stream_while_live: boolean
 }
 
 export interface StreamOrderingSettingsUpdate {
   rules: StreamOrderingRule[]
+  /** Omit to leave the live-pin setting unchanged. */
+  pin_top_stream_while_live?: boolean
 }
 
 export interface StreamOrderingScope {

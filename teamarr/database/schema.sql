@@ -514,6 +514,8 @@ CREATE TABLE IF NOT EXISTS settings (
     -- JSON array of rules: [{"type": "m3u"|"group"|"regex", "value": "...", "priority": 1-99}]
     -- Rules evaluated in priority order; first match wins; non-matching streams get priority 999
     stream_ordering_rules JSON DEFAULT '[]',
+    -- #1187: live-event #1 pin (#232) is a setting; 0 lets rules reorder slot 1 while live
+    pin_top_stream_while_live INTEGER DEFAULT 1,
 
     -- Postponed Event Label
     -- When true, prepends "Postponed: " to channel name, EPG title, subtitle, and description

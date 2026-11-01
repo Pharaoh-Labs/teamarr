@@ -191,6 +191,18 @@ class TestLivePinInteraction:
 
         assert _pushed_streams(cm) == [[456, 789]]
 
+    def test_pin_setting_off_reorders_slot_one_mid_event(self, db_factory, db_conn):
+        """#1187: the pin is a setting; off, a live channel converges on slot 1 too."""
+        event_date, delete_at = self._live_dates()
+        _seed_channel(db_conn, [456, 789], event_date, delete_at)
+        db_conn.execute("UPDATE settings SET pin_top_stream_while_live = 0 WHERE id = 1")
+        db_conn.commit()
+        cm = _fake_manager([789, 456])
+
+        _run(db_factory, cm)
+
+        assert _pushed_streams(cm) == [[456, 789]]
+
 
 class TestStreamAuditSeesOrder:
     """The post-run audit reports order drift instead of declaring success."""
@@ -231,6 +243,21 @@ class TestStreamAuditSeesOrder:
 
         assert "ORDER MISMATCH" not in text
         assert "All channels match" in text
+
+    def test_live_order_drift_is_flagged_when_pin_is_off(self, db_factory, db_conn, caplog):
+        """#1187: with the pin off there is no exemption — live drift is drift."""
+        now = datetime.now(UTC)
+        _seed_channel(
+            db_conn,
+            [456, 789],
+            (now - timedelta(minutes=30)).isoformat(),
+            (now + timedelta(hours=3)).isoformat(),
+        )
+        db_conn.execute("UPDATE settings SET pin_top_stream_while_live = 0 WHERE id = 1")
+        db_conn.commit()
+        text = self._audit_logs(db_factory, _fake_manager([789, 456]), caplog)
+
+        assert "ORDER MISMATCH" in text
 
     def test_membership_mismatch_still_reported(self, db_factory, db_conn, caplog):
         _seed_channel(db_conn, [456, 789])

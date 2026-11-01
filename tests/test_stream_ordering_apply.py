@@ -76,6 +76,23 @@ def test_lock_is_released_after_a_pass(isolated_db, monkeypatch):
     assert generation._generation_running is False
 
 
+def test_pin_setting_round_trips_through_the_api(isolated_db):
+    """#1187: the live-pin flag rides the stream-ordering settings endpoint."""
+    current = client.get("/api/v1/settings/stream-ordering").json()
+    assert current["pin_top_stream_while_live"] is True
+
+    resp = client.put(
+        "/api/v1/settings/stream-ordering",
+        json={"rules": [], "pin_top_stream_while_live": False},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["pin_top_stream_while_live"] is False
+
+    # Omitting the flag leaves it alone (rules-only save).
+    resp = client.put("/api/v1/settings/stream-ordering", json={"rules": []})
+    assert resp.json()["pin_top_stream_while_live"] is False
+
+
 def test_scheduled_caller_keeps_the_live_pin(monkeypatch):
     seen = {}
     monkeypatch.setattr(
