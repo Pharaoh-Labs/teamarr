@@ -280,6 +280,24 @@ def test_ended_event_gets_rule_order(db_factory, db_conn, monkeypatch):
     assert _RecordingChannelManager.pushes == [(555, {"streams": [101, 100]})]
 
 
+def test_pin_setting_off_lets_rules_take_the_top_slot(db_factory, db_conn, monkeypatch):
+    """#1187: with the live pin switched off, a scheduled run orders slot 1 too."""
+    _seed_live_channel(db_conn, live=True)
+    db_conn.execute("UPDATE settings SET pin_top_stream_while_live = 0 WHERE id = 1")
+    db_conn.commit()
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [101, 100]})]
+
+
+def test_pin_setting_defaults_on(db_conn):
+    """A fresh settings row keeps the #232 pin (#1187 default)."""
+    from teamarr.database.settings import get_stream_ordering_settings
+
+    assert get_stream_ordering_settings(db_conn).pin_top_stream_while_live is True
+
+
 # ---------------------------------------------------------------------------
 # _apply_stream_ordering — pre-scoring stats refresh (#576, #616)
 # ---------------------------------------------------------------------------

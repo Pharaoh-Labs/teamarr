@@ -312,6 +312,10 @@ class StreamOrderingSettings:
     """
 
     rules: list[StreamOrderingRule] = field(default_factory=list)
+    # Live-event #1 pin (#232) as a setting (#1187). True = a scheduled run keeps
+    # Dispatcharr's current #1 on a live channel; False = slot 1 is ordered by
+    # the rules like every other slot for the whole live window.
+    pin_top_stream_while_live: bool = True
 
 
 @dataclass

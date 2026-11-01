@@ -20,7 +20,11 @@ from teamarr.dispatcharr import ChannelManager, EPGManager, LogoManager, M3UMana
 from teamarr.dispatcharr.factory import DispatcharrConnection
 
 from .service import ChannelLifecycleService
-from .timing import ChannelLifecycleManager, is_channel_event_live  # noqa: F401 - re-export
+from .timing import (  # noqa: F401 - re-export
+    ChannelLifecycleManager,
+    is_channel_event_live,
+    live_pin_enabled,
+)
 from .types import (
     ChannelCreationResult,
     CreateTiming,

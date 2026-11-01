@@ -444,7 +444,7 @@ class ChannelReconciler:
         - Stream assignment mismatch (DB streams vs Dispatcharr streams)
         - Profile assignment mismatch (DB profiles vs Dispatcharr profiles)
         """
-        from teamarr.consumers.lifecycle import is_channel_event_live
+        from teamarr.consumers.lifecycle import is_channel_event_live, live_pin_enabled
         from teamarr.database.channels import (
             get_all_managed_channels,
             get_ordered_stream_ids,
@@ -452,6 +452,9 @@ class ChannelReconciler:
 
         issues = []
         channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
+        # The live-pin order exemption below is conditional on the setting
+        # (#1187); read once per pass.
+        pin_enabled = live_pin_enabled(conn)
         # Full profile catalog, fetched at most once per pass and only if a
         # channel stores the ALL-profiles sentinel (#910).
         profile_catalog: list[set[int] | None] = []
@@ -514,8 +517,10 @@ class ChannelReconciler:
                 # holding the watched stream at #1 against the DB's rule-truth
                 # order — deliberate, and not ours to "fix" mid-broadcast.
                 order_only = sorted(db_stream_ids) == sorted(dispatcharr_stream_ids)
-                pinned = order_only and is_channel_event_live(
-                    channel.event_date, channel.scheduled_delete_at
+                pinned = (
+                    order_only
+                    and pin_enabled
+                    and is_channel_event_live(channel.event_date, channel.scheduled_delete_at)
                 )
                 if not pinned:
                     drift_fields.append(

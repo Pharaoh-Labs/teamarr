@@ -147,6 +147,10 @@ The pin holds because the top slot is presumed to be what somebody is watching. 
 
 A **manually triggered** generation run bypasses this pin entirely — that's your escape hatch if the pinned stream is the wrong one for any other reason: fix your rules (or remove the bad stream) and hit Generate, or press **Order streams now** on this page.
 
+### Turning the pin off
+
+The pin is a setting: **Keep the top stream fixed once the event starts**, at the bottom of the Global rules, on by default. Switch it off and scheduled runs order the top slot by your rules like every other slot for the whole event. That is the right choice when a stream checker such as Podium or StreamFlow writes fresh [Stream Stats](#rule-types) as streams light up around kickoff and you want the best-measured stream on top as soon as it is known — at the cost that a viewer's stream can change under them mid-event. The dead-or-black release above applies either way, and with the pin off reconciliation and the post-run audit treat a live channel's order like any other.
+
 ## Order streams now
 
 The **Order streams now** button at the bottom of the rules page re-sorts every managed channel by the saved rules without running a generation: it pulls fresh Stream Stats from Dispatcharr, re-applies the rules, and pushes only the channels whose order changed. Nothing else runs — no matching, no EPG rebuild, no media-server refresh — so it finishes in seconds. Like a manual generation it bypasses the live-event #1 pin, and it is unavailable while you have unsaved rule edits or a generation is in progress.

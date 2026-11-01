@@ -260,9 +260,16 @@ def apply_stream_ordering(
                 # whose order has drifted — and now that drift alone triggers a
                 # push, that would displace the live stream instead of leaving it
                 # alone.
+                #
+                # The pin is a setting since #1187 (``pin_top_stream_while_live``,
+                # default on): switched off, slot 1 is ordered by the rules like
+                # every other slot, so a stream a checker just measured as
+                # better can take the top spot mid-event.
                 pinned_top: int | None = None
-                if not manual and is_channel_event_live(
-                    channel.event_date, channel.scheduled_delete_at
+                if (
+                    not manual
+                    and ordering_settings.pin_top_stream_while_live
+                    and is_channel_event_live(channel.event_date, channel.scheduled_delete_at)
                 ):
                     pre_order = (
                         current_order
@@ -458,7 +465,7 @@ def run_stream_audit(
     Logs any channels where the DB and Dispatcharr disagree on stream
     assignments. This is diagnostic-only — no changes are made.
     """
-    from teamarr.consumers.lifecycle import is_channel_event_live
+    from teamarr.consumers.lifecycle import is_channel_event_live, live_pin_enabled
     from teamarr.database.channels import get_all_managed_channels, get_all_ordered_stream_ids
 
     if not dispatcharr_client:
@@ -477,6 +484,8 @@ def run_stream_audit(
         channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
         # One scan for every channel's active set instead of a query each (#735).
         ordered_by_channel = get_all_ordered_stream_ids(conn)
+        # The pin exemption below is conditional on the setting (#1187).
+        pin_enabled = live_pin_enabled(conn)
 
         for channel in channels:
             if not channel.dispatcharr_channel_id:
@@ -522,8 +531,11 @@ def run_stream_audit(
             elif db_stream_ids != d_stream_ids:
                 # Same streams, different order. Expected on a live channel: the
                 # #1 pin (#232) deliberately holds the watched stream on top,
-                # against the DB's rule-truth order, until the event ends.
-                if is_channel_event_live(channel.event_date, channel.scheduled_delete_at):
+                # against the DB's rule-truth order, until the event ends —
+                # only while the pin setting is on (#1187).
+                if pin_enabled and is_channel_event_live(
+                    channel.event_date, channel.scheduled_delete_at
+                ):
                     logger.debug(
                         "[STREAM_AUDIT] pinned order: ch='%s' (d_id=%s) "
                         "db_order=%s vs dispatcharr_order=%s (live event, #232)",

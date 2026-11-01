@@ -471,6 +471,13 @@ class StreamOrderingSettingsModel(BaseModel):
     rules: list[StreamOrderingRuleModel] = Field(
         default_factory=list, description="List of ordering rules, evaluated by priority"
     )
+    pin_top_stream_while_live: bool = Field(
+        True,
+        description=(
+            "Keep the top stream fixed once the event starts (#232 live pin). "
+            "False lets the rules reorder slot 1 during the event (#1187)."
+        ),
+    )
 
 
 class StreamOrderingSettingsUpdate(BaseModel):
@@ -478,6 +485,9 @@ class StreamOrderingSettingsUpdate(BaseModel):
 
     rules: list[StreamOrderingRuleModel] = Field(
         ..., description="Complete list of rules (replaces existing)"
+    )
+    pin_top_stream_while_live: bool | None = Field(
+        None, description="Omit to leave the live-pin setting unchanged"
     )
 
 

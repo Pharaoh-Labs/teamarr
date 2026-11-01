@@ -921,6 +921,8 @@ export function StreamOrderingManager() {
   const [useGlobalScoring, setUseGlobalScoring] = useState(true)
   const [useGlobalPriority, setUseGlobalPriority] = useState(true)
   const [hasChanges, setHasChanges] = useState(false)
+  // #1187: the live-event #1 pin as a setting (global only; default on).
+  const [pinTopWhileLive, setPinTopWhileLive] = useState(true)
   const [scopeDraft, setScopeDraft] = useState<ScopeDraft | null>(null)
   const [isImporting, setIsImporting] = useState(false)
   const [exportWarning, setExportWarning] = useState(false)
@@ -1056,6 +1058,7 @@ export function StreamOrderingManager() {
     setRules(loaded)
     setUseGlobalScoring(activeScope?.use_global_scoring ?? false)
     setUseGlobalPriority(activeScope?.use_global_priority ?? false)
+    setPinTopWhileLive(settings?.pin_top_stream_while_live ?? true)
     setHasChanges(false)
   }
 
@@ -1158,7 +1161,11 @@ export function StreamOrderingManager() {
 
     try {
       if (activeScope) await saveScope(activeScope)
-      else await updateSettings.mutateAsync({ rules: serializedRules() })
+      else
+        await updateSettings.mutateAsync({
+          rules: serializedRules(),
+          pin_top_stream_while_live: pinTopWhileLive,
+        })
       toast.success("Stream ordering rules saved")
       setHasChanges(false)
     } catch {
@@ -1633,6 +1640,26 @@ export function StreamOrderingManager() {
           <p className="text-center text-xs text-muted-foreground pt-1">
             No rules yet — streams keep their addition order.
           </p>
+        )}
+
+        {!isScoped && (
+          <div className="pt-2 border-t space-y-1">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={pinTopWhileLive}
+                onCheckedChange={(checked) => {
+                  setPinTopWhileLive(checked === true)
+                  setHasChanges(true)
+                }}
+              />
+              Keep the top stream fixed once the event starts
+            </label>
+            <p className="text-xs text-muted-foreground pl-6">
+              On: the stream a viewer is watching stays #1 for the whole event. Off: rules can
+              move the top stream during the event, for example when a stream checker reports
+              better stats.
+            </p>
+          </div>
         )}
 
         <div className="flex items-center justify-between gap-3 pt-2 border-t">

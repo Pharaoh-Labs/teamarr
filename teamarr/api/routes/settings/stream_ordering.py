@@ -150,6 +150,7 @@ def update_stream_ordering_settings(update: StreamOrderingSettingsUpdate):
     """
     from teamarr.database.settings import (
         get_stream_ordering_settings,
+        update_stream_ordering_pin_top_while_live,
         update_stream_ordering_rules,
     )
 
@@ -157,6 +158,8 @@ def update_stream_ordering_settings(update: StreamOrderingSettingsUpdate):
 
     with get_db() as conn:
         update_stream_ordering_rules(conn, rules_data)
+        if update.pin_top_stream_while_live is not None:
+            update_stream_ordering_pin_top_while_live(conn, update.pin_top_stream_while_live)
 
     # Return updated settings
     with get_db() as conn:
