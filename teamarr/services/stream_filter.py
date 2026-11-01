@@ -214,6 +214,20 @@ class FilterResult:
     filtered_unsupported_sport: int = 0  # Detected unsupported sport (swimming, diving, etc.)
     passed_count: int = 0
 
+    # Per-stream verdicts for the streams that did NOT pass: Dispatcharr stream
+    # id → reason (stale, placeholder, unsupported_sport, not_event, include,
+    # exclude). The lifecycle cleanup reads this (#1174): a stream that is still
+    # in the M3U but fails the filter is a different fact from one that is gone,
+    # and the counts above cannot say which stream was which.
+    rejected: dict[int, str] = field(default_factory=dict)
+
+
+def _reject(result: FilterResult, stream: dict, reason: str) -> None:
+    """Record why a stream did not pass, keyed on its Dispatcharr id."""
+    sid = stream.get("id")
+    if isinstance(sid, int):
+        result.rejected[sid] = reason
+
 
 @dataclass
 class TeamExtractionResult:
@@ -329,6 +343,7 @@ class StreamFilter:
                     stream.get("id"),
                 )
                 result.filtered_stale += 1
+                _reject(result, stream, "stale")
                 continue
 
             # 2. Built-in eligibility checks (controlled by skip_builtin)
@@ -341,6 +356,7 @@ class StreamFilter:
                         stream.get("id"),
                     )
                     result.filtered_placeholder += 1
+                    _reject(result, stream, "placeholder")
                     continue
 
                 # 2b. Unsupported sport detection
@@ -355,6 +371,7 @@ class StreamFilter:
                         stream.get("id"),
                     )
                     result.filtered_unsupported_sport += 1
+                    _reject(result, stream, "unsupported_sport")
                     continue
 
                 # 2c. Event pattern filter: stream must look like an event (vs, @, date/time)
@@ -366,18 +383,21 @@ class StreamFilter:
                             pass  # Potential TEAM_ONLY candidate — let classifier decide
                         else:
                             result.filtered_not_event += 1
+                            _reject(result, stream, "not_event")
                             continue
 
             # 3. Include filter: stream must match (user-defined, always applies if enabled)
             if self._include_pattern:
                 if not self._include_pattern.search(name):
                     result.filtered_include += 1
+                    _reject(result, stream, "include")
                     continue
 
             # 4. Exclude filter: stream must NOT match (user-defined, always applies if enabled)
             if self._exclude_pattern:
                 if self._exclude_pattern.search(name):
                     result.filtered_exclude += 1
+                    _reject(result, stream, "exclude")
                     continue
 
             # Stream passed all filters

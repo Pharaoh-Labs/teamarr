@@ -695,6 +695,13 @@ class EventGroupProcessor(
                 return result
 
             # Step 1.5: Apply stream filtering (include/exclude regex)
+            # The cleanup pool keeps the UNFILTERED list (#1174): a slot the
+            # provider renamed to "NO EVENT" fails the filter but is still in
+            # the M3U, and reading its absence from a filtered pool as "gone"
+            # detached it mid-game (or, on the zero-match path where absence is
+            # ignored, never detached it at all). The filter verdicts ride
+            # alongside so cleanup can tell "filtered out" from "missing".
+            fetched_streams = streams
             streams, filter_result = self._filter_streams(streams, group)
             result.streams_after_filter = filter_result.passed_count
             result.filtered_stale = filter_result.filtered_stale
@@ -918,8 +925,10 @@ class EventGroupProcessor(
                     feed_cleanup_count,
                 )
 
-            # Build stream dict for cleanup (fingerprint-based content change detection)
-            current_streams = {sid: s for s in streams if (sid := s.get("id"))}
+            # Build stream dict for cleanup (fingerprint-based content change
+            # detection) from the UNFILTERED fetch (#1174, see step 1.5).
+            current_streams = {sid: s for s in fetched_streams if (sid := s.get("id"))}
+            filtered_out = dict(filter_result.rejected)
 
             # The lifecycle step runs on the zero-match path too (#907): a
             # rotated stream — same Dispatcharr id, new content — on a group
@@ -930,7 +939,12 @@ class EventGroupProcessor(
             if matched_streams and status_callback:
                 status_callback(f"Processing {len(matched_streams)} channels...")
             lifecycle_result = self._process_channels(
-                matched_streams, group, conn, current_streams=current_streams
+                matched_streams,
+                group,
+                conn,
+                current_streams=current_streams,
+                filtered_out=filtered_out,
+                event_states=self._event_states(),
             )
             _mark("channels")
             result.channels_created = len(lifecycle_result.created)
@@ -1007,12 +1021,31 @@ class EventGroupProcessor(
         result.completed_at = now_utc()
         return result
 
+    def _event_states(self) -> dict[str, str]:
+        """Event id → provider status state for every event fetched this run.
+
+        Read from the run's shared event cache, so it costs no provider call.
+        The lifecycle cleanup uses it to know whether a channel's event is in
+        progress (#1174) — the channel row itself carries no status.
+        """
+        states: dict[str, str] = {}
+        for entry in self._shared_events.values():
+            events = entry[0] if isinstance(entry, tuple) else entry
+            for event in events or ():
+                status = getattr(event, "status", None)
+                state = getattr(status, "state", None)
+                if state:
+                    states[str(event.id)] = state
+        return states
+
     def _process_channels(
         self,
         matched_streams: list[dict],
         group: EventEPGGroup,
         conn: Connection,
         current_streams: dict[int, dict] | None = None,
+        filtered_out: dict[int, str] | None = None,
+        event_states: dict[str, str] | None = None,
     ) -> StreamProcessResult:
         """Create/update channels via ChannelLifecycleService.
 
@@ -1032,6 +1065,11 @@ class EventGroupProcessor(
             group: Event EPG group
             conn: Database connection
             current_streams: Dict mapping stream_id -> stream_data for cleanup
+                (the UNFILTERED fetch, #1174)
+            filtered_out: stream_id -> filter reason for pool streams that did
+                not pass this group's filters (#1174)
+            event_states: event id -> provider status state for the run's
+                events, so cleanup can hold a live event's streams (#1174)
         """
         from teamarr.consumers.lifecycle import StreamProcessResult
 
@@ -1113,6 +1151,8 @@ class EventGroupProcessor(
                     matched_streams=matched_streams,
                     is_channel_source=bool(getattr(group, "is_channel_source", False)),
                     changed_only=not matched_streams,
+                    filtered_out=filtered_out,
+                    event_states=event_states,
                 )
                 combined_result.merge(cleanup_result)
                 if cleanup_result.deleted:
