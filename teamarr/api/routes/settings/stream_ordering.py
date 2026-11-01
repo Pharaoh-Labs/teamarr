@@ -196,13 +196,13 @@ def update_stream_ordering_settings(update: StreamOrderingSettingsUpdate):
 )
 def get_managed_team_stream_ordering_scope():
     """Get the fixed ruleset for persistent managed team channels."""
-    from teamarr.database.managed_team_channels import list_owned_enabled_managed_team_channels
+    from teamarr.database.managed_team_channels import list_enabled_managed_teams
     from teamarr.database.stream_ordering_scopes import get_managed_team_stream_ordering_scope
 
     with get_db() as conn:
         return _managed_team_scope_model(
             get_managed_team_stream_ordering_scope(conn),
-            bool(list_owned_enabled_managed_team_channels(conn)),
+            bool(list_enabled_managed_teams(conn)),
         )
 
 
@@ -212,7 +212,7 @@ def get_managed_team_stream_ordering_scope():
 )
 def update_managed_team_stream_ordering_scope(update: ManagedTeamStreamOrderingScopeUpdate):
     """Replace the fixed managed-team stream-ordering ruleset."""
-    from teamarr.database.managed_team_channels import list_owned_enabled_managed_team_channels
+    from teamarr.database.managed_team_channels import list_enabled_managed_teams
     from teamarr.database.stream_ordering_scopes import update_managed_team_stream_ordering_scope
 
     rules = _validated_rules(update.rules, allow_channel_team=True)
@@ -224,7 +224,7 @@ def update_managed_team_stream_ordering_scope(update: ManagedTeamStreamOrderingS
             use_global_priority=update.use_global_priority,
         )
         return _managed_team_scope_model(
-            scope, bool(list_owned_enabled_managed_team_channels(conn))
+            scope, bool(list_enabled_managed_teams(conn))
         )
 
 

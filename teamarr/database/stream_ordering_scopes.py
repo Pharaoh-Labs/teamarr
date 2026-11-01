@@ -11,7 +11,7 @@ from sqlite3 import Connection
 
 from teamarr.database.settings.types import StreamOrderingRule
 
-MANAGED_TEAM_SCOPE_NAME = "Managed Team Channels"
+MANAGED_TEAM_SCOPE_NAME = "Team Channels"
 
 
 @dataclass

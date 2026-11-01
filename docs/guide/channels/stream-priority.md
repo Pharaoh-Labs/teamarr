@@ -39,7 +39,7 @@ replace its local rules with an editable snapshot of the current Global rules.
 A scoped tab can,
 for example, keep Global Priority bands while using sport-specific scoring.
 
-When at least one persistent managed team channel exists, **Managed Team Channels**
+When at least one managed team channel is enabled, **Team Channels**
 appears beside Global. This fixed tab cannot be created, renamed, assigned, or
 deleted. It applies before sport and league tabs only to persistent team channels
 and inherits Global scoring and priority rules in the same independent way as

@@ -517,7 +517,7 @@ class StreamOrderingScopeUpdate(BaseModel):
 class ManagedTeamStreamOrderingScopeModel(BaseModel):
     """The fixed stream-ordering ruleset for persistent managed team channels."""
 
-    name: str = "Managed Team Channels"
+    name: str = "Team Channels"
     rules: list[StreamOrderingRuleModel] = Field(default_factory=list)
     use_global_scoring: bool = True
     use_global_priority: bool = True

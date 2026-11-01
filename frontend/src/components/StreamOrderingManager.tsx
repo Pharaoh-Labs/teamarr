@@ -14,6 +14,8 @@ import {
   Pencil,
   Copy,
   ArrowDownUp,
+  Globe,
+  UserRoundCog,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SaveButton } from "@/components/ui/save-button"
@@ -1466,6 +1468,12 @@ export function StreamOrderingManager() {
                   : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
+              {tab.key === "global" && (
+                <Globe className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground/60" />
+              )}
+              {tab.key === "managed-team" && (
+                <UserRoundCog className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground/60" />
+              )}
               {tab.label}
             </button>
           )

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from teamarr.api.app import app
-from teamarr.database import init_db
+from teamarr.database import get_db, init_db
 
 client = TestClient(app)
 
@@ -158,9 +158,20 @@ def test_managed_team_scope_round_trips_channel_team_selector():
         },
     )
     assert response.status_code == 200
-    assert response.json()["name"] == "Managed Team Channels"
+    assert response.json()["name"] == "Team Channels"
     assert response.json()["rules"][0]["value"] == "[channel team]"
     assert client.get(MANAGED_TEAM_SCOPE).json()["use_global_scoring"] is False
+
+
+def test_managed_team_scope_is_visible_for_an_enabled_team_without_a_channel_row():
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO teams "
+            "(provider_team_id, primary_league, sport, team_name, channel_id, "
+            "managed_channel_enabled) VALUES ('team-1', 'mlb', 'baseball', 'Team', 'team-1', 1)"
+        )
+
+    assert client.get(MANAGED_TEAM_SCOPE).json()["has_managed_channels"] is True
 
 
 def test_channel_team_selector_is_rejected_for_non_feed_rules():

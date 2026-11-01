@@ -216,7 +216,7 @@ class TestScopedRules:
 
         rules, scope = resolve_managed_team_stream_ordering_rules(seeded_db)
 
-        assert scope.name == "Managed Team Channels"
+        assert scope.name == "Team Channels"
         assert [(rule.mode, rule.value) for rule in rules] == [
             ("score", "Global"),
             ("priority", "Global"),
