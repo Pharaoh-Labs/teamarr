@@ -1475,10 +1475,10 @@ export function StreamOrderingManager() {
               )}
             >
               {tab.key === "global" && (
-                <Globe className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                <Globe className="mr-1.5 h-3.5 w-3.5 shrink-0 opacity-60" />
               )}
               {tab.key === "managed-team" && (
-                <UserRoundCog className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
+                <UserRoundCog className="mr-1.5 h-3.5 w-3.5 shrink-0 opacity-60" />
               )}
               {tab.label}
             </button>
