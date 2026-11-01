@@ -35,6 +35,11 @@ bd close <id>         # Complete work
 bd dolt push          # Push beads data to remote
 ```
 
+## Matching Performance Defaults
+
+Candidate token indexing (`TEAMARR_TOKEN_INDEX`) and negative match caching (`TEAMARR_NEGATIVE_CACHE`) are enabled when unset. Preserve explicit opt-outs (`=0`, also false/no/off/empty) and the existing case-insensitive truthy parsing. Default-enabled failure caching must retain its measured allowlist, exact failure reasons, generation touch, and alias/team-data invalidation; keep scoped schedule-taught invalidation (#1153). On/off parity tests must set `=0` explicitly for the disabled path, rather than unsetting the variable.
+
+
 ## Non-Interactive Shell Commands
 
 **ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
