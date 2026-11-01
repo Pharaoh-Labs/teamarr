@@ -10,8 +10,11 @@ from teamarr.database.settings.types import (
     VALID_RULE_TYPES,
 )
 from teamarr.database.stream_ordering_scopes import ScopeAssignmentConflict
+from teamarr.services.stream_ordering import CHANNEL_TEAM_SELECTOR
 
 from .models import (
+    ManagedTeamStreamOrderingScopeModel,
+    ManagedTeamStreamOrderingScopeUpdate,
     StreamOrderingScopeModel,
     StreamOrderingScopeUpdate,
     StreamOrderingSettingsModel,
@@ -62,7 +65,7 @@ def apply_stream_ordering():
     return ApplyStreamOrderingResponse(**{k: int(v) for k, v in result.items() if k in fields})
 
 
-def _validated_rules(rules) -> list[dict]:
+def _validated_rules(rules, *, allow_channel_team: bool = False) -> list[dict]:
     """Validate and normalize rule payloads shared by global and scoped settings."""
     for rule in rules:
         if rule.type not in VALID_RULE_TYPES:
@@ -90,6 +93,13 @@ def _validated_rules(rules) -> list[dict]:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="stream_type value must be 'event' or 'team'",
                 )
+        if rule.value.strip() == CHANNEL_TEAM_SELECTOR and (
+            rule.type not in {"team_feed", "not_team_feed"} or not allow_channel_team
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="[channel team] is only valid for Team Feed rules in the managed-team scope",
+            )
     return [
         {
             "type": rule.type,
@@ -105,6 +115,18 @@ def _validated_rules(rules) -> list[dict]:
 
 def _scope_model(scope) -> StreamOrderingScopeModel:
     return StreamOrderingScopeModel(**scope.__dict__)
+
+
+def _managed_team_scope_model(
+    scope, has_managed_channels: bool
+) -> ManagedTeamStreamOrderingScopeModel:
+    return ManagedTeamStreamOrderingScopeModel(
+        name=scope.name,
+        rules=scope.rules,
+        use_global_scoring=scope.use_global_scoring,
+        use_global_priority=scope.use_global_priority,
+        has_managed_channels=has_managed_channels,
+    )
 
 
 def _validate_scope_update(update: StreamOrderingScopeUpdate) -> list[dict]:
@@ -166,6 +188,44 @@ def update_stream_ordering_settings(update: StreamOrderingSettingsUpdate):
         settings = get_stream_ordering_settings(conn)
 
     return to_model(StreamOrderingSettingsModel, settings)
+
+
+@router.get(
+    "/settings/stream-ordering/managed-team-scope",
+    response_model=ManagedTeamStreamOrderingScopeModel,
+)
+def get_managed_team_stream_ordering_scope():
+    """Get the fixed ruleset for persistent managed team channels."""
+    from teamarr.database.managed_team_channels import list_enabled_managed_teams
+    from teamarr.database.stream_ordering_scopes import get_managed_team_stream_ordering_scope
+
+    with get_db() as conn:
+        return _managed_team_scope_model(
+            get_managed_team_stream_ordering_scope(conn),
+            bool(list_enabled_managed_teams(conn)),
+        )
+
+
+@router.put(
+    "/settings/stream-ordering/managed-team-scope",
+    response_model=ManagedTeamStreamOrderingScopeModel,
+)
+def update_managed_team_stream_ordering_scope(update: ManagedTeamStreamOrderingScopeUpdate):
+    """Replace the fixed managed-team stream-ordering ruleset."""
+    from teamarr.database.managed_team_channels import list_enabled_managed_teams
+    from teamarr.database.stream_ordering_scopes import update_managed_team_stream_ordering_scope
+
+    rules = _validated_rules(update.rules, allow_channel_team=True)
+    with get_db() as conn:
+        scope = update_managed_team_stream_ordering_scope(
+            conn,
+            rules=rules,
+            use_global_scoring=update.use_global_scoring,
+            use_global_priority=update.use_global_priority,
+        )
+        return _managed_team_scope_model(
+            scope, bool(list_enabled_managed_teams(conn))
+        )
 
 
 @router.get("/settings/stream-ordering/scopes", response_model=list[StreamOrderingScopeModel])

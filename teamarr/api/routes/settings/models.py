@@ -514,6 +514,24 @@ class StreamOrderingScopeUpdate(BaseModel):
     use_global_priority: bool = True
 
 
+class ManagedTeamStreamOrderingScopeModel(BaseModel):
+    """The fixed stream-ordering ruleset for persistent managed team channels."""
+
+    name: str = "Team Channels"
+    rules: list[StreamOrderingRuleModel] = Field(default_factory=list)
+    use_global_scoring: bool = True
+    use_global_priority: bool = True
+    has_managed_channels: bool = False
+
+
+class ManagedTeamStreamOrderingScopeUpdate(BaseModel):
+    """Replacement payload for the fixed managed-team ruleset."""
+
+    rules: list[StreamOrderingRuleModel] = Field(default_factory=list)
+    use_global_scoring: bool = True
+    use_global_priority: bool = True
+
+
 # =============================================================================
 # UPDATE CHECK SETTINGS
 # =============================================================================

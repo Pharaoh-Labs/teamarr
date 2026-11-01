@@ -13,11 +13,15 @@ from teamarr.database.settings import update_stream_ordering_rules
 from teamarr.database.settings.types import StreamOrderingRule
 from teamarr.database.stream_ordering_scopes import (
     create_stream_ordering_scope,
+    resolve_managed_team_stream_ordering_rules,
     resolve_stream_ordering_rules,
+    update_managed_team_stream_ordering_scope,
 )
 from teamarr.services.stream_ordering import (
     BAND_STRIDE,
+    CHANNEL_TEAM_SELECTOR,
     NO_MATCH_PRIORITY,
+    ManagedTeamContext,
     StreamOrderingService,
 )
 
@@ -188,6 +192,77 @@ class TestScopedRules:
             ("score", "Global"),
             ("score", "Local"),
         ]
+
+    def test_managed_team_scope_inherits_global_families(self, seeded_db):
+        update_stream_ordering_rules(
+            seeded_db,
+            [
+                {"type": "regex", "value": "Global", "priority": 99, "mode": "score", "points": 10},
+                {"type": "m3u", "value": "Global", "priority": 1, "mode": "priority", "points": 0},
+            ],
+        )
+        update_managed_team_stream_ordering_scope(
+            seeded_db,
+            rules=[
+                {
+                    "type": "team_feed",
+                    "value": CHANNEL_TEAM_SELECTOR,
+                    "priority": 2,
+                    "mode": "priority",
+                    "points": 0,
+                }
+            ],
+        )
+
+        rules, scope = resolve_managed_team_stream_ordering_rules(seeded_db)
+
+        assert scope.name == "Team Channels"
+        assert [(rule.mode, rule.value) for rule in rules] == [
+            ("score", "Global"),
+            ("priority", "Global"),
+            ("priority", CHANNEL_TEAM_SELECTOR),
+        ]
+
+
+class TestChannelTeamSelector:
+    @staticmethod
+    def _service():
+        return StreamOrderingService(
+            [StreamOrderingRule("team_feed", CHANNEL_TEAM_SELECTOR, 1)],
+            managed_team=ManagedTeamContext(
+                provider_team_id="16",
+                sport="baseball",
+                team_name="Chicago Cubs",
+                team_abbrev="CHC",
+            ),
+        )
+
+    def test_matches_the_managed_channel_owner_feed(self):
+        stream = _stream("Cubs feed")
+        stream.feed_team_id = "16"
+        assert self._service().compute_priority(stream) == 1
+
+    def test_does_not_match_an_opponent_feed(self):
+        stream = _stream("Pirates feed")
+        stream.feed_team_id = "23"
+        assert self._service().compute_priority(stream) == NO_MATCH_PRIORITY
+
+    def test_does_not_treat_a_generic_team_mention_as_a_feed(self):
+        assert self._service().compute_priority(_stream("Chicago Cubs at Pittsburgh Pirates")) == (
+            NO_MATCH_PRIORITY
+        )
+
+    def test_inverted_selector_demotes_identified_opponents_only(self):
+        service = StreamOrderingService(
+            [StreamOrderingRule("not_team_feed", CHANNEL_TEAM_SELECTOR, 99)],
+            managed_team=ManagedTeamContext(provider_team_id="16", sport="baseball"),
+        )
+        opponent = _stream("Pirates feed")
+        opponent.feed_team_id = "23"
+        unknown = _stream("National broadcast")
+
+        assert service.compute_priority(opponent) == 99
+        assert service.compute_priority(unknown) == NO_MATCH_PRIORITY
 
 
 # ---------------------------------------------------------------------------

@@ -175,7 +175,7 @@ def test_ordering_service_scores_on_the_live_connection(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         "teamarr.services.stream_ordering.get_stream_ordering_service",
-        lambda conn, sport, league: Service(conn),
+        lambda conn, sport, league, **kwargs: Service(conn),
     )
     channels = FakeChannels([RemoteChannel(10, "owned", "Home", "9000", streams=(55, 56))])
 

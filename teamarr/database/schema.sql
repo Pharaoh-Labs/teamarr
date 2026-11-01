@@ -640,7 +640,7 @@ CREATE TABLE IF NOT EXISTS settings (
     plex_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 103
+    schema_version INTEGER DEFAULT 104
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -662,6 +662,17 @@ CREATE TABLE IF NOT EXISTS stream_ordering_scope_assignments (
     PRIMARY KEY (ruleset_id, scope_type, scope_value),
     UNIQUE (scope_type, scope_value),
     FOREIGN KEY (ruleset_id) REFERENCES stream_ordering_scopes(id) ON DELETE CASCADE
+);
+
+-- The fixed scope used only for persistent managed-team channels. Unlike the
+-- user-created scopes above, it has no sport/league assignment and cannot be
+-- duplicated or deleted through scope CRUD.
+CREATE TABLE IF NOT EXISTS managed_team_stream_ordering_scope (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    rules JSON NOT NULL DEFAULT '[]',
+    use_global_scoring BOOLEAN NOT NULL DEFAULT 1,
+    use_global_priority BOOLEAN NOT NULL DEFAULT 1,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Insert default settings

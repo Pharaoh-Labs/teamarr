@@ -38,6 +38,7 @@ Schema changes use the [checkpoint + incremental migration](migrations) system. 
 | `managed_channels` | Event channels created in Dispatcharr (tvg_id, delete_at, profiles); nullable plugin identity/adoption fields distinguish plugin-owned rows from core rows |
 | `managed_team_channels` | Sole ownership records for persistent Team EPG Dispatcharr channels |
 | `managed_team_channel_streams` | Temporary, event-scoped stream memberships for managed team channels |
+| `managed_team_stream_ordering_scope` | Singleton local rules and Global-inheritance settings for persistent managed-team channel ordering |
 | `detection_keywords` | User-defined stream classification patterns |
 | `team_aliases` | Team name aliases for matching |
 | `team_cache` | Cached team data from providers |

@@ -33,7 +33,10 @@ from teamarr.database.groups import get_group_names_by_ids
 from teamarr.database.managed_team_channel_streams import get_assigned_team_streams
 from teamarr.database.managed_team_channels import list_owned_enabled_managed_team_channels
 from teamarr.database.settings import get_dispatcharr_settings, get_epg_settings
-from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
+from teamarr.database.stream_ordering_scopes import (
+    resolve_managed_team_stream_ordering_rules,
+    resolve_stream_ordering_rules,
+)
 from teamarr.database.teams import get_team_xmltv
 from teamarr.dispatcharr import (
     ChannelManager,
@@ -41,7 +44,7 @@ from teamarr.dispatcharr import (
     get_dispatcharr_connection,
 )
 from teamarr.services import create_channel_service, create_default_service
-from teamarr.services.stream_ordering import GameContext, StreamOrderingService
+from teamarr.services.stream_ordering import GameContext, ManagedTeamContext, StreamOrderingService
 from teamarr.services.team_channel_status import find_next_live_window
 from teamarr.utilities.tz import parse_db_timestamp
 
@@ -525,11 +528,18 @@ def get_managed_channel_streams(channel_id: int):
                     team_channel["channel_id"],
                 )
 
-            ordering_rules, ordering_scope = resolve_stream_ordering_rules(
-                conn, team_channel["sport"], team_channel["primary_league"]
+            ordering_rules, ordering_scope = resolve_managed_team_stream_ordering_rules(conn)
+            ordering_service = StreamOrderingService(
+                ordering_rules,
+                conn,
+                managed_team=ManagedTeamContext(
+                    provider_team_id=team_channel["provider_team_id"],
+                    sport=team_channel["sport"],
+                    team_name=team_channel["team_name"],
+                    team_abbrev=team_channel["team_abbrev"],
+                ),
             )
-            ordering_service = StreamOrderingService(ordering_rules, conn)
-            sorting_scope = ordering_scope.name if ordering_scope else "Global"
+            sorting_scope = ordering_scope.name
             has_rules = bool(ordering_service.rules)
             # Fetched before scoring: team streams have no cached stats, and a
             # stats_metric rule scored against None silently dropped its
