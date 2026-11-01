@@ -597,8 +597,9 @@ def expand_mma_segments(
                 )
 
         # Default to main_card if still no segment
-        defaulted = not segment
-        if defaulted:
+        defaulted = False
+        if not segment:
+            defaulted = True
             segment = "main_card"
 
         # Disambiguate "prelims" using time if available
