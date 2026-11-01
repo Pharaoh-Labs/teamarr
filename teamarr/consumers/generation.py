@@ -5,7 +5,6 @@ Both the streaming API endpoint and the background scheduler call this.
 """
 
 import logging
-import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -29,6 +28,7 @@ from teamarr.consumers.generation_pipeline.phases import (
 from teamarr.consumers.generation_pipeline.runner import GenerationStage, StageRunner
 from teamarr.dispatcharr.managers import ChannelManager
 from teamarr.services import create_default_service
+from teamarr.services.ordering_lock import ProcessLock
 from teamarr.services.sports_data import flush_shared_cache
 from teamarr.utilities import call_metrics
 
@@ -48,7 +48,7 @@ __all__ = [
 
 
 # Global lock to prevent concurrent EPG generation runs
-_generation_lock = threading.Lock()
+_generation_lock = ProcessLock("generation")
 _generation_running = False
 
 

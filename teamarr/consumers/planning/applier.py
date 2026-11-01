@@ -486,6 +486,20 @@ class PlanApplier:
         outcome: PlanApplyOutcome,
     ) -> None:
         desired = list(wanted.ordered_stream_ids)
+        if getattr(existing, "ordering_owner", "teamarr") == "podium":
+            from teamarr.services.external_ordering import find_channel, preserve_live_order
+
+            match = find_channel(conn, existing.dispatcharr_channel_id)
+            if match and match[2]["external_order_pending"] is not None:
+                raise RuntimeError("External order is uncertain; retry the external PUT first")
+            if self._channel_manager is None or existing.dispatcharr_channel_id is None:
+                return
+            live = self._channel_manager.get_channel(
+                existing.dispatcharr_channel_id, use_cache=False
+            )
+            if live is None:
+                raise RuntimeError("Cannot read live externally ordered plugin channel")
+            desired = preserve_live_order(list(live.streams), desired)
         current = get_channel_streams(conn, existing.id)
         by_stream_id = {row.dispatcharr_stream_id: row for row in current}
         for priority, stream_id in enumerate(desired):

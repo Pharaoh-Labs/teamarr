@@ -655,6 +655,8 @@ def reorder_channel_streams(
     channel = conn.execute(
         "SELECT * FROM managed_channels WHERE id = ?", (managed_channel_id,)
     ).fetchone()
+    if channel and "ordering_owner" in channel.keys() and channel["ordering_owner"] == "podium":
+        return 0
     ordering_service = get_stream_ordering_service(
         conn,
         channel["sport"] if channel else None,

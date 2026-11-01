@@ -52,6 +52,25 @@ By default the script skips the startup cache refresh for fast restarts. Pass `-
 - If Playwright browser automation can't connect to `localhost:5173`
 - After schema or configuration changes
 
+## External stream ordering contract
+
+Per-channel `ordering_owner` (`teamarr` by default, or `podium`) is durable for
+core/plugin event channels and team channels. All stream writes must pass through
+`ChannelManager.update_channel`; internal writes preserve live surviving order
+and append new members for external owners. Never bypass its channel lock or
+use the external-write bypass outside the recoverable external-order protocol.
+The generation lock is cross-process and lives beside the database: every worker
+must share the database directory and filesystem locking domain. Pending external
+intent fences internal stream writes until an idempotent external PUT confirms
+and finalizes it. Preserve removals in intent across remote-success/local-crash
+recovery. Returning ownership to Teamarr is explicit; disabling Podium does not
+release it. Unknown stream additions and disallowed membership windows must fail
+explicitly, never be filtered. Unmanaged acknowledgements are side-effect free:
+all ownership types and retired/ambiguous mappings must be checked first. Do not
+introduce adoption/import/remapping of unmanaged Dispatcharr IDs during the
+acknowledgement/direct-write handoff; coordination operationally excludes it.
+See docs/guide/channels/stream-priority.md for rollout and API details.
+
 ## Quick Reference Commands
 
 ```bash

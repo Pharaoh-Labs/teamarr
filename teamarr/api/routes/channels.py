@@ -12,7 +12,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Literal, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt, field_validator
 
 from teamarr.consumers.generation_status import is_in_progress
 from teamarr.database import get_db
@@ -83,6 +83,7 @@ class ManagedChannelModel(BaseModel):
     """Managed channel response model."""
 
     id: int
+    ordering_owner: Literal["teamarr", "podium"] = "teamarr"
     channel_type: Literal["event", "team"] = "event"
     team_id: int | None = None
     event_epg_group_id: int | None = None  # Source group (provenance)
@@ -352,6 +353,7 @@ def list_managed_channels(
         team_models.append(
             ManagedChannelModel(
                 id=synthetic_id,
+                ordering_owner=team_channel.get("ordering_owner", "teamarr"),
                 channel_type="team",
                 team_id=team_channel["team_id"],
                 event_id=str(team_channel["team_id"]),
@@ -375,6 +377,7 @@ def list_managed_channels(
         channels=[
             ManagedChannelModel(
                 id=c.id,
+                ordering_owner=getattr(c, "ordering_owner", "teamarr"),
                 channel_type="event",
                 event_epg_group_id=c.event_epg_group_id,
                 event_id=c.event_id,
@@ -426,6 +429,7 @@ def get_managed_channel(channel_id: int):
 
     return ManagedChannelModel(
         id=channel.id,
+        ordering_owner=getattr(channel, "ordering_owner", "teamarr"),
         event_epg_group_id=channel.event_epg_group_id,
         event_id=channel.event_id,
         event_provider=channel.event_provider,
@@ -1228,3 +1232,82 @@ def execute_reset_channels():
         error_count=len(errors),
         errors=errors,
     )
+
+
+class ExternalOrderRequest(BaseModel):
+    owner: Literal["podium"]
+    streams: list[StrictInt]
+
+    @field_validator("streams")
+    @classmethod
+    def unique_streams(cls, streams):
+        if len(streams) != len(set(streams)):
+            raise ValueError("stream IDs must be unique integers")
+        return streams
+
+
+@router.put("/by-dispatcharr/{dispatcharr_channel_id}/external-order")
+def external_order(dispatcharr_channel_id: int, request: ExternalOrderRequest):
+    from teamarr.consumers.generation import _generation_lock
+    from teamarr.services.external_ordering import (
+        OrderingConflict,
+        apply_external_order,
+        channel_order_lock,
+        find_channel,
+    )
+
+    if not _generation_lock.acquire(blocking=False):
+        raise HTTPException(409, "Generation or ordering is busy")
+    try:
+        with channel_order_lock(dispatcharr_channel_id):
+            # No connection probe (or any remote side effect) for unmanaged IDs.
+            with get_db() as conn:
+                match = find_channel(conn, dispatcharr_channel_id)
+            if match is None:
+                return {"managed": False, "applied": False}
+            connection = get_dispatcharr_connection(get_db)
+            return apply_external_order(
+                dispatcharr_channel_id,
+                request.streams,
+                connection.channels if connection else None,
+                get_db,
+            )
+    except OrderingConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        logger.exception("[ORDERING] External order failed")
+        raise HTTPException(502, "External order could not be confirmed; retry the PUT") from exc
+    finally:
+        _generation_lock.release()
+
+
+@router.put("/by-dispatcharr/{dispatcharr_channel_id}/ordering-owner")
+def return_ordering_to_teamarr(dispatcharr_channel_id: int):
+    """Explicit release: the next ordering pass may use Teamarr rules again."""
+    from teamarr.consumers.generation import _generation_lock
+    from teamarr.services.external_ordering import (
+        OrderingConflict,
+        channel_order_lock,
+        find_channel,
+    )
+
+    if not _generation_lock.acquire(blocking=False):
+        raise HTTPException(409, "Generation or ordering is busy")
+    try:
+        with channel_order_lock(dispatcharr_channel_id), get_db() as conn:
+            match = find_channel(conn, dispatcharr_channel_id)
+            if match is None:
+                raise HTTPException(404, "Managed channel not found")
+            table, key, row = match
+            conn.execute(
+                f"UPDATE {table} SET ordering_owner = 'teamarr', external_order_pending = NULL "
+                f"WHERE {key} = ?",
+                (row[key],),
+            )
+        return {"ordering_owner": "teamarr"}
+    except OrderingConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    finally:
+        _generation_lock.release()

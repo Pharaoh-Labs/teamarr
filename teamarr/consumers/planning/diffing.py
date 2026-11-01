@@ -197,9 +197,15 @@ def plan_field_reasons(
         reasons.append("delete_at")
     desired = list(wanted.ordered_stream_ids)
     current_streams = [s.dispatcharr_stream_id for s in get_channel_streams(conn, existing.id)]
-    if desired != current_streams:
+    external = getattr(existing, "ordering_owner", "teamarr") == "podium"
+    membership_changed = set(desired) != set(current_streams)
+    if membership_changed or (not external and desired != current_streams):
         reasons.append("ordered_stream_ids")
-    elif remote_stream_orders is not None and existing.dispatcharr_channel_id is not None:
+    elif (
+        not external
+        and remote_stream_orders is not None
+        and existing.dispatcharr_channel_id is not None
+    ):
         remote = remote_stream_orders.get(existing.dispatcharr_channel_id)
         if remote is not None and desired != list(remote):
             reasons.append("ordered_stream_ids")

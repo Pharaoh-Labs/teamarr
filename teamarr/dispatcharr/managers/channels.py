@@ -351,6 +351,34 @@ class ChannelManager:
         self,
         channel_id: int,
         data: dict,
+        *,
+        external_order: bool = False,
+    ) -> OperationResult:
+        """Fence every stream write, including lifecycle, plugins and drift repair.
+
+        External callers already hold the channel lock and use the recoverable
+        ownership protocol; all other paths preserve the live surviving order.
+        """
+        if "streams" not in data or external_order:
+            return self._update_channel(channel_id, data)
+        from teamarr.services.external_ordering import (
+            channel_order_lock,
+            prepare_internal_order,
+        )
+
+        try:
+            with channel_order_lock(channel_id):
+                payload = dict(data)
+                payload["streams"] = prepare_internal_order(self, channel_id, list(data["streams"]))
+                return self._update_channel(channel_id, payload)
+        except Exception as exc:
+            logger.warning("[ORDERING] Refused stream write for %s: %s", channel_id, exc)
+            return OperationResult(success=False, error=str(exc))
+
+    def _update_channel(
+        self,
+        channel_id: int,
+        data: dict,
     ) -> OperationResult:
         """Update an existing channel.
 

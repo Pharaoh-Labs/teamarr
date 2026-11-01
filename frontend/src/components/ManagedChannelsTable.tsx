@@ -39,7 +39,7 @@ import {
 import { useGroups } from "@/hooks/useGroups"
 import { useQuery } from "@tanstack/react-query"
 import { getLeagues } from "@/api/teams"
-import { deleteManagedChannel, getChannelStreams } from "@/api/channels"
+import { deleteManagedChannel, getChannelStreams, returnOrderingToTeamarr } from "@/api/channels"
 import type { ManagedChannel, ChannelStreamEntry, ChannelStreamsResponse, StreamRuleMatch } from "@/api/channels"
 import { OrphansDialog } from "@/components/managed-channels/OrphansDialog"
 import { ResetAllDialog } from "@/components/managed-channels/ResetAllDialog"
@@ -502,6 +502,7 @@ interface ChannelRowProps {
   groupTitle: string | undefined
   onToggleExpand: (id: number) => void
   onToggleSelect: (id: number) => void
+  onReturnOrdering: (channel: ManagedChannel) => void
   onDelete: (channel: ManagedChannel) => void
 }
 
@@ -521,6 +522,7 @@ const ChannelRow = React.memo(function ChannelRow({
   onToggleExpand,
   onToggleSelect,
   onDelete,
+  onReturnOrdering,
 }: ChannelRowProps) {
   const { formatDateTime, formatRelativeTime, timezone } = useDateFormat()
   const isTeamChannel = channel.channel_type === "team"
@@ -556,6 +558,15 @@ const ChannelRow = React.memo(function ChannelRow({
             )}
             <div>
               <div className="font-medium">{channel.channel_name}</div>
+              {channel.ordering_owner === "podium" && (
+                <div className="text-xs text-muted-foreground">
+                  Ordered by Podium · <button
+                    className="underline hover:text-foreground"
+                    disabled={isGenerating}
+                    onClick={() => onReturnOrdering(channel)}
+                  >Return ordering to Teamarr</button>
+                </div>
+              )}
               <div className="text-xs text-muted-foreground">
                 {channel.channel_number ? `#${channel.channel_number}` : ""}{" "}
                 {channel.tvg_id}
@@ -951,6 +962,17 @@ export function ManagedChannelsTable() {
     )
   }
 
+  const handleReturnOrdering = useCallback(async (channel: ManagedChannel) => {
+    if (channel.dispatcharr_channel_id === null) return
+    try {
+      await returnOrderingToTeamarr(channel.dispatcharr_channel_id)
+      await queryClient.invalidateQueries({ queryKey: ["managedChannels"] })
+      toast.success("Teamarr will apply its ordering rules on the next pass")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to return ordering to Teamarr")
+    }
+  }, [queryClient])
+
   const renderChannelRows = (channels: ManagedChannel[]) => channels.map((channel) => (
     <ChannelRow
       key={channel.id}
@@ -967,6 +989,7 @@ export function ManagedChannelsTable() {
       onToggleExpand={handleToggleExpand}
       onToggleSelect={toggleSelect}
       onDelete={setDeleteConfirm}
+      onReturnOrdering={handleReturnOrdering}
     />
   ))
 
