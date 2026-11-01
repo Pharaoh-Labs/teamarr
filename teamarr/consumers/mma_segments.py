@@ -548,6 +548,9 @@ def expand_mma_segments(
     # Group MMA streams by event ID and segment
     # {event_id: {segment: [streams]}}
     cards_by_segment: dict[str, dict[str, list[dict]]] = {}
+    # Matches whose segment was defaulted or 'combined', i.e. the stream named
+    # no segment itself (#1179).
+    inferred_matches: set[int] = set()
 
     for match in matched_streams:
         event = match.get("event")
@@ -578,7 +581,8 @@ def expand_mma_segments(
         stream_name = stream.get("name", "")
 
         # Combined streams go to main_card
-        if segment == "combined":
+        combined = segment == "combined"
+        if combined:
             segment = "main_card"
 
         # If no segment keyword detected, try to determine from time
@@ -593,7 +597,9 @@ def expand_mma_segments(
                 )
 
         # Default to main_card if still no segment
+        defaulted = False
         if not segment:
+            defaulted = True
             segment = "main_card"
 
         # Disambiguate "prelims" using time if available
@@ -620,6 +626,8 @@ def expand_mma_segments(
             cards_by_segment[event_id][segment] = []
 
         cards_by_segment[event_id][segment].append(match)
+        if combined or defaulted:
+            inferred_matches.add(id(match))
 
     # Create segment entries for each MMA card
     for event_id, segments in cards_by_segment.items():
@@ -638,8 +646,23 @@ def expand_mma_segments(
             if not streams_for_segment:
                 continue
 
-            # Get exact segment timing from ESPN data
-            start_time, end_time = get_segment_times(event, segment, sport_durations)
+            # Get exact segment timing from ESPN data. With NO segment data at
+            # all (TSDB promotions, an ESPN card without bout times) the
+            # estimate splits the configured duration into thirds and files
+            # the main card in the last one — 3h20m late for a single-card
+            # show whose keyword-less streams all defaulted to main_card
+            # (#1179). A segment nobody NAMED is the whole event; an explicit
+            # prelims/main card keyword keeps the estimate, since the stream
+            # is saying the card is split and a guess beats a full-window
+            # duplicate.
+            if not event.segment_times and all(
+                id(m) in inferred_matches for m in streams_for_segment
+            ):
+                mma_hours = (sport_durations or {}).get("mma", 5.0)
+                start_time = event.start_time
+                end_time = start_time + timedelta(hours=mma_hours)
+            else:
+                start_time, end_time = get_segment_times(event, segment, sport_durations)
 
             # Create segment entry with metadata. Spread the original match so
             # matcher fields survive expansion — match_method in particular
