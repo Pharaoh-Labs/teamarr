@@ -159,7 +159,11 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
     )
     monkeypatch.setattr(channels, "get_db", lambda: _connection(conn))
     monkeypatch.setattr(channels, "get_group_names_by_ids", lambda *_args: {3: "Sports"})
-    monkeypatch.setattr(channels, "resolve_stream_ordering_rules", lambda *_args: ([], None))
+    monkeypatch.setattr(
+        channels,
+        "resolve_managed_team_stream_ordering_rules",
+        lambda *_args: ([], SimpleNamespace(name="Managed Team Channels")),
+    )
     monkeypatch.setattr(channels, "get_stream_match_details", lambda *_args: {})
     monkeypatch.setattr(channels, "get_dispatcharr_client", lambda *_args: None)
     monkeypatch.setattr(

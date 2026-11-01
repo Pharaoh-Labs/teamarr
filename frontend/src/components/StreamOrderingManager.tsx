@@ -41,6 +41,8 @@ import {
   useCreateStreamOrderingScope,
   useUpdateStreamOrderingScope,
   useDeleteStreamOrderingScope,
+  useManagedTeamStreamOrderingScope,
+  useUpdateManagedTeamStreamOrderingScope,
   useTeamFilterSettings,
   useApplyStreamOrdering,
 } from "@/hooks/useSettings"
@@ -472,6 +474,7 @@ function RuleRow({
   groupNames,
   dpGroupNames,
   dpChannels,
+  managedTeamScope = false,
   disabled = false,
 }: {
   rule: RuleFormData
@@ -482,6 +485,7 @@ function RuleRow({
   groupNames: string[]
   dpGroupNames: string[]
   dpChannels: ChannelSourceChannel[]
+  managedTeamScope?: boolean
   disabled?: boolean
 }) {
   const isCatchAll = rule.type === "catch_all"
@@ -661,6 +665,17 @@ function RuleRow({
             )
           })() : TEAM_FEED_FAMILY.has(rule.type) ? (
             <div className="flex items-center gap-2">
+              {managedTeamScope && (
+                <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
+                  <Checkbox
+                    checked={rule.value === "[channel team]"}
+                    onCheckedChange={(checked) =>
+                      onUpdate(index, { ...rule, value: checked ? "[channel team]" : "" })
+                    }
+                  />
+                  <span className="text-sm text-muted-foreground">[channel team]</span>
+                </label>
+              )}
               <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
                 <Checkbox
                   checked={rule.type === "not_team_feed"}
@@ -676,10 +691,12 @@ function RuleRow({
                   <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
                 </RichTooltip>
               </label>
-              <TeamMultiSelect
-                selected={rule.value ? rule.value.split(",") : []}
-                onChange={(ids) => onUpdate(index, { ...rule, value: ids.join(",") })}
-              />
+              {rule.value !== "[channel team]" && (
+                <TeamMultiSelect
+                  selected={rule.value ? rule.value.split(",") : []}
+                  onChange={(ids) => onUpdate(index, { ...rule, value: ids.join(",") })}
+                />
+              )}
             </div>
           ) : FEED_SIDE_FAMILY.has(rule.type) ? (
             <div className="flex items-center gap-2">
@@ -913,6 +930,8 @@ export function StreamOrderingManager() {
   const createScope = useCreateStreamOrderingScope()
   const updateScope = useUpdateStreamOrderingScope()
   const deleteScope = useDeleteStreamOrderingScope()
+  const { data: managedTeamScope } = useManagedTeamStreamOrderingScope()
+  const updateManagedTeamScope = useUpdateManagedTeamStreamOrderingScope()
   const { data: groupsData } = useGroups(true) // Include disabled groups
   const { data: subscription } = useSubscription()
 
@@ -928,12 +947,13 @@ export function StreamOrderingManager() {
   const [exportWarning, setExportWarning] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const activeScope = activeTab === "global"
+  const isManagedTeamScope = activeTab === "managed-team"
+  const activeScope = activeTab === "global" || isManagedTeamScope
     ? undefined
     : scopes.find((scope) => scope.id === Number(activeTab.slice("scope-".length)))
-  const isScoped = !!activeScope
+  const isScoped = !!activeScope || isManagedTeamScope
 
-  if (activeTab !== "global" && !activeScope && !scopesLoading) {
+  if (activeTab !== "global" && !isManagedTeamScope && !activeScope && !scopesLoading) {
     setActiveTab("global")
   }
 
@@ -1036,8 +1056,11 @@ export function StreamOrderingManager() {
   // catch_all baseline is optional — no longer auto-injected.
   // (render-time "adjust state when props change" pattern — see
   // DispatcharrOutputSettings.tsx).
-  const currentRules = activeScope?.rules ?? settings?.rules
-  const currentSource = activeScope ?? settings
+  const currentRules = isManagedTeamScope
+    ? managedTeamScope?.rules
+    : activeScope?.rules ?? settings?.rules
+  const currentSource = isManagedTeamScope ? managedTeamScope : activeScope ?? settings
+  const scopedSource = isManagedTeamScope ? managedTeamScope : activeScope
   const globalRuleForms = useMemo<RuleFormData[]>(() => (settings?.rules ?? []).map((rule) => ({
     ...rule,
     _id: allocateId(),
@@ -1056,8 +1079,8 @@ export function StreamOrderingManager() {
       condition: r.condition ?? "",
     }))
     setRules(loaded)
-    setUseGlobalScoring(activeScope?.use_global_scoring ?? false)
-    setUseGlobalPriority(activeScope?.use_global_priority ?? false)
+    setUseGlobalScoring(scopedSource?.use_global_scoring ?? false)
+    setUseGlobalPriority(scopedSource?.use_global_priority ?? false)
     setPinTopWhileLive(settings?.pin_top_stream_while_live ?? true)
     setHasChanges(false)
   }
@@ -1161,7 +1184,13 @@ export function StreamOrderingManager() {
 
     try {
       if (activeScope) await saveScope(activeScope)
-      else
+      else if (isManagedTeamScope) {
+        await updateManagedTeamScope.mutateAsync({
+          rules: serializedRules(),
+          use_global_scoring: useGlobalScoring,
+          use_global_priority: useGlobalPriority,
+        })
+      } else
         await updateSettings.mutateAsync({
           rules: serializedRules(),
           pin_top_stream_while_live: pinTopWhileLive,
@@ -1289,6 +1318,12 @@ export function StreamOrderingManager() {
           use_global_scoring: false,
           use_global_priority: false,
         })
+      } else if (isManagedTeamScope) {
+        await updateManagedTeamScope.mutateAsync({
+          rules: clean,
+          use_global_scoring: false,
+          use_global_priority: false,
+        })
       } else {
         await updateSettings.mutateAsync({ rules: clean })
       }
@@ -1396,10 +1431,11 @@ export function StreamOrderingManager() {
       onUpdate={handleUpdateRule}
       onDelete={handleDeleteRule}
       m3uAccounts={m3uAccounts}
-      groupNames={groupNames}
-      dpGroupNames={dpGroupNames}
-      dpChannels={dpChannels ?? EMPTY_DP_CHANNELS}
-      disabled={isScoped && globalRuleForms.includes(rule)}
+       groupNames={groupNames}
+       dpGroupNames={dpGroupNames}
+       dpChannels={dpChannels ?? EMPTY_DP_CHANNELS}
+       managedTeamScope={isManagedTeamScope}
+       disabled={isScoped && globalRuleForms.includes(rule)}
     />
   )
 
@@ -1409,6 +1445,9 @@ export function StreamOrderingManager() {
       <div role="tablist" aria-label="Stream priority rulesets" className="-mb-px flex flex-wrap items-end gap-1">
         {[
           { key: "global", label: "Global" },
+          ...(managedTeamScope?.has_managed_channels
+            ? [{ key: "managed-team", label: managedTeamScope.name }]
+            : []),
           ...scopes.map((scope) => ({ key: `scope-${scope.id}`, label: scope.name })),
         ].map((tab) => {
           const isActive = activeTab === tab.key
@@ -1689,7 +1728,7 @@ export function StreamOrderingManager() {
           </RichTooltip>
           <SaveButton
             onClick={handleSave}
-            pending={updateSettings.isPending || updateScope.isPending}
+            pending={updateSettings.isPending || updateScope.isPending || updateManagedTeamScope.isPending}
             disabled={!hasChanges}
           />
         </div>

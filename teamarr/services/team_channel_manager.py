@@ -1028,6 +1028,7 @@ class TeamChannelManager:
         from teamarr.database.channels.streams import fetch_stream_stats_by_ids
         from teamarr.database.channels.types import ManagedChannelStream
         from teamarr.services.stream_ordering import (
+            ManagedTeamContext,
             get_stream_ordering_service,
             uses_stats_rules,
         )
@@ -1051,7 +1052,15 @@ class TeamChannelManager:
                     (team["id"],),
                 ).fetchall()
                 service = get_stream_ordering_service(
-                    conn, team.get("sport"), team.get("primary_league")
+                    conn,
+                    team.get("sport"),
+                    team.get("primary_league"),
+                    managed_team=ManagedTeamContext(
+                        provider_team_id=team.get("provider_team_id"),
+                        sport=team.get("sport"),
+                        team_name=team.get("team_name"),
+                        team_abbrev=team.get("team_abbrev"),
+                    ),
                 )
                 plans.append((team, service, rows))
 

@@ -15,6 +15,7 @@ client = TestClient(app)
 
 STREAM_ORDERING = "/api/v1/settings/stream-ordering"
 STREAM_ORDERING_SCOPES = f"{STREAM_ORDERING}/scopes"
+MANAGED_TEAM_SCOPE = f"{STREAM_ORDERING}/managed-team-scope"
 
 
 @pytest.fixture(autouse=True)
@@ -134,6 +135,65 @@ def test_scoped_ruleset_requires_a_sport_or_league():
             "rules": [],
             "use_global_scoring": True,
             "use_global_priority": True,
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_managed_team_scope_round_trips_channel_team_selector():
+    response = client.put(
+        MANAGED_TEAM_SCOPE,
+        json={
+            "rules": [
+                {
+                    "type": "not_team_feed",
+                    "value": "[channel team]",
+                    "priority": 99,
+                    "mode": "priority",
+                    "points": 0,
+                }
+            ],
+            "use_global_scoring": False,
+            "use_global_priority": True,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "Managed Team Channels"
+    assert response.json()["rules"][0]["value"] == "[channel team]"
+    assert client.get(MANAGED_TEAM_SCOPE).json()["use_global_scoring"] is False
+
+
+def test_channel_team_selector_is_rejected_for_non_feed_rules():
+    response = client.put(
+        MANAGED_TEAM_SCOPE,
+        json={
+            "rules": [
+                {
+                    "type": "regex",
+                    "value": "[channel team]",
+                    "priority": 1,
+                    "mode": "priority",
+                    "points": 0,
+                }
+            ]
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_channel_team_selector_is_rejected_outside_the_managed_team_scope():
+    response = client.put(
+        STREAM_ORDERING,
+        json={
+            "rules": [
+                {
+                    "type": "team_feed",
+                    "value": "[channel team]",
+                    "priority": 1,
+                    "mode": "priority",
+                    "points": 0,
+                }
+            ]
         },
     )
     assert response.status_code == 400

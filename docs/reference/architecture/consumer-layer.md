@@ -84,7 +84,7 @@ The `event_group_processor/` package handles the core matching and channel lifec
 
 ### Managed Team Channels (`services/team_channel_manager.py`)
 
-`TeamChannelManager` creates and synchronizes persistent Dispatcharr channels for active teams with managed channels enabled. It runs before the EPG refresh, associates the refreshed Team EPG afterward, and applies team-channel stream ordering during generation.
+`TeamChannelManager` creates and synchronizes persistent Dispatcharr channels for active teams with managed channels enabled. It runs before the EPG refresh, associates the refreshed Team EPG afterward, and applies the fixed managed-team stream-ordering scope during generation. The ordering service receives the owning team's provider identity and can resolve a `[channel team]` feed selector without putting static team IDs in the ruleset.
 
 - Ownership is established only by a `managed_team_channels` record. A same-`tvg_id` Dispatcharr channel without that mapping is manual and is left untouched; a conflict is reported rather than adopted.
 - Matched event streams are persisted in `managed_team_channel_streams`, then attached only while their membership window is active. This is independent of event-channel create/delete timing.

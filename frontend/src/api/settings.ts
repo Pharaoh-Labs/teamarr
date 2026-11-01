@@ -258,6 +258,20 @@ export interface StreamOrderingScopeUpdate {
   use_global_priority: boolean
 }
 
+export interface ManagedTeamStreamOrderingScope {
+  name: string
+  rules: StreamOrderingRule[]
+  use_global_scoring: boolean
+  use_global_priority: boolean
+  has_managed_channels: boolean
+}
+
+export interface ManagedTeamStreamOrderingScopeUpdate {
+  rules: StreamOrderingRule[]
+  use_global_scoring: boolean
+  use_global_priority: boolean
+}
+
 export interface UpdateCheckSettings {
   enabled: boolean
   notify_stable: boolean
@@ -752,6 +766,16 @@ export async function updateStreamOrderingScope(
 
 export async function deleteStreamOrderingScope(id: number): Promise<void> {
   return api.delete(`/settings/stream-ordering/scopes/${id}`)
+}
+
+export async function getManagedTeamStreamOrderingScope(): Promise<ManagedTeamStreamOrderingScope> {
+  return api.get("/settings/stream-ordering/managed-team-scope")
+}
+
+export async function updateManagedTeamStreamOrderingScope(
+  data: ManagedTeamStreamOrderingScopeUpdate,
+): Promise<ManagedTeamStreamOrderingScope> {
+  return api.put("/settings/stream-ordering/managed-team-scope", data)
 }
 
 // Update Check Settings API
