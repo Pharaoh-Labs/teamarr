@@ -1468,17 +1468,17 @@ export function StreamOrderingManager() {
               aria-controls="stream-priority-panel"
               onClick={() => setActiveTab(tab.key)}
               className={cn(
-                "rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-medium transition-colors",
+                "inline-flex items-center rounded-t-md border border-b-0 px-3 py-1.5 text-sm font-medium transition-colors",
                 isActive
                   ? "border-border bg-card text-foreground"
                   : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {tab.key === "global" && (
-                <Globe className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground/60" />
+                <Globe className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
               )}
               {tab.key === "managed-team" && (
-                <UserRoundCog className="mr-1.5 inline h-3.5 w-3.5 text-muted-foreground/60" />
+                <UserRoundCog className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
               )}
               {tab.label}
             </button>
