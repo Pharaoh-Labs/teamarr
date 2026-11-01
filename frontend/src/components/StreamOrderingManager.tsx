@@ -675,7 +675,13 @@ function RuleRow({
                       onUpdate(index, { ...rule, value: checked ? "[channel team]" : "" })
                     }
                   />
-                  <span className="text-sm text-muted-foreground">[channel team]</span>
+                  <span className="text-sm text-muted-foreground">Managed Team</span>
+                  <RichTooltip
+                    content="Matches the team that owns each persistent Team Channel. Use Invert to demote identified opponent feeds while leaving ambiguous streams untouched."
+                    side="top"
+                  >
+                    <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                  </RichTooltip>
                 </label>
               )}
               <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
