@@ -13,7 +13,7 @@ from teamarr.core.sports import get_sport_display_names_from_db
 logger = logging.getLogger(__name__)
 
 
-def invalidate_team_identity_caches() -> None:
+def invalidate_team_identity_caches(*, clear_failed: bool = True) -> None:
     """Drop every in-memory cache derived from ``team_cache``.
 
     Call this after any write to the table. Two caches read from it and neither
@@ -31,27 +31,101 @@ def invalidate_team_identity_caches() -> None:
       the same rows, so they are dropped together rather than leaving callers to
       remember which caches are which.
 
-    One PERSISTED cache is dropped too (#757): the negative match cache's failed
-    entries. They are the same hazard as the index above and for the same
-    reason — a cached ``FIXTURE_NOT_IN_LEAGUE`` short-circuits before the
-    newly-refreshed identity is ever consulted, so the refresh appears to do
-    nothing for up to its TTL. Successful matches are left alone; they are
-    validated on read.
+    One PERSISTED cache is dropped too when ``clear_failed`` is left on (#757):
+    the negative match cache's failed entries. They are the same hazard as the
+    index above and for the same reason — a cached ``FIXTURE_NOT_IN_LEAGUE``
+    short-circuits before the newly-refreshed identity is ever consulted, so the
+    refresh appears to do nothing for up to its TTL. Successful matches are left
+    alone; they are validated on read.
+
+    That full clear is for USER-DRIVEN changes with no diff to scope by: an
+    alias edit, a league reset. The cache refresh passes ``clear_failed=False``
+    and does its own scoped clear through ``clear_failed_matches_naming``
+    (#1184): it rewrites every league's rows on every container start and once
+    a day, and a wipe each time cost two or three runs of re-scoring ~2,000
+    never-matching streams on a real install, for a refresh that usually
+    changed nothing.
 
     Imports are function-local: both consumers import from this module, so
     module-level imports would be circular.
     """
     from teamarr.consumers.matching.team_matcher import reset_identity_index_cache
-    from teamarr.consumers.stream_match_cache import StreamMatchCache
-    from teamarr.database.connection import get_db
     from teamarr.services.sports_data import clear_team_identity_memo
 
     reset_identity_index_cache()
     clear_team_identity_memo()
+    if not clear_failed:
+        return
+    from teamarr.consumers.stream_match_cache import StreamMatchCache
+    from teamarr.database.connection import get_db
+
     try:
         StreamMatchCache(get_db).clear_failed()
     except Exception as e:  # noqa: BLE001 — invalidation must never break a refresh
         logger.warning("[TEAM_CACHE] Could not clear cached failures: %s", e)
+
+
+TeamIdentityRow = tuple[str, str | None, str | None, str, str]
+"""``(team_name, team_short_name, team_abbrev, league, sport)`` — one cached team."""
+
+
+def read_team_identity_rows(
+    conn: Connection, provider: str | None = None, league: str | None = None
+) -> set[TeamIdentityRow]:
+    """Snapshot the identity surfaces of the cached teams, for a before/after diff (#1184).
+
+    Both refresh save paths rewrite ``team_cache`` by delete-then-insert, so
+    the only way to know what a refresh CHANGED is to read the rows on either
+    side of it. A renamed team shows up as a new tuple; a removed team shows
+    up as nothing, which is right — a team that is gone cannot make a failing
+    stream match.
+    """
+    sql = "SELECT team_name, team_short_name, team_abbrev, league, sport FROM team_cache"
+    clauses: list[str] = []
+    params: list[str] = []
+    if provider is not None:
+        clauses.append("provider = ?")
+        params.append(provider)
+    if league is not None:
+        clauses.append("league = ?")
+        params.append(league)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    return {
+        (r["team_name"], r["team_short_name"], r["team_abbrev"], r["league"], r["sport"])
+        for r in conn.execute(sql, params).fetchall()
+        if r["team_name"]
+    }
+
+
+def clear_failed_matches_naming(
+    teams: "set[TeamIdentityRow] | list[TeamIdentityRow]",
+    db_factory=None,
+) -> int:
+    """Drop the cached failures whose stream name carries one of these teams (#1184).
+
+    The refresh-path counterpart of the schedule-taught clear (#1153): a team
+    the cache did not have before can only flip a verdict on a stream that
+    could name it, so only those rows go. ``teams`` is the set difference of
+    two ``read_team_identity_rows`` snapshots; an empty set clears nothing.
+    """
+    if not teams:
+        return 0
+    from teamarr.consumers.matching.team_matcher import _team_surfaces
+    from teamarr.consumers.stream_match_cache import StreamMatchCache
+    from teamarr.database.connection import get_db
+
+    phrases: set[str] = set()
+    codes: set[str] = set()
+    for name, short_name, abbrev, league, sport in teams:
+        team_phrases, team_codes = _team_surfaces((name, short_name, abbrev, None, league, sport))
+        phrases |= team_phrases
+        codes |= team_codes
+    try:
+        return StreamMatchCache(db_factory or get_db).clear_failed_naming(phrases, codes)
+    except Exception as e:  # noqa: BLE001 — invalidation must never break a refresh
+        logger.warning("[TEAM_CACHE] Could not clear cached failures by name: %s", e)
+        return 0
 
 
 def get_team_name_by_id(
