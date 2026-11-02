@@ -526,6 +526,31 @@ class TestDetectRacingSeriesLeagues:
         assert detect_racing_series_leagues("Formula E - Berlin ePrix") == ("formula-feeder",)
         assert detect_racing_series_leagues("F1 | Monaco Grand Prix") == ("f1",)
 
+    def test_f1_academy_is_a_feeder_and_drops_the_f1_scope(self):
+        # #1159: "F1 Academy" carries the F1 signature inside its own name,
+        # and F1 TV's channel brand puts "F1" on every stream. Naming the
+        # support series must leave only the blocking sentinel, or the US GP
+        # qualifying channel collects the academy races.
+        assert detect_racing_series_leagues(
+            "CA (TSN+ 034): F1 Academy: United States   Race 2 (2026-10-24 18:55:00) [1080p]"
+        ) == ("formula-feeder",)
+        assert detect_racing_series_leagues(
+            "F1 TV 53: [4K] 2618 United States GP - F1A Race 1 @ 23 Oct 10:50 PM"
+        ) == ("formula-feeder",)
+        assert detect_racing_series_leagues(
+            "F1 TV 54: 2618 United States GP - F1A Race 1 @ 23 Oct 10:50 PM"
+        ) == ("formula-feeder",)
+        # The channel brand alone still names F1.
+        assert detect_racing_series_leagues(
+            "F1 TV 05: 2618 United States GP - Qualifying @ 24 Oct 05:00 PM"
+        ) == ("f1",)
+        assert detect_racing_series_leagues("F1 TV 05: F1 LIVE @ 6 Sep 01:00 PM") == ("f1",)
+
+    def test_moto_feeder_drops_the_motogp_scope(self):
+        # Same shape for the MotoGP brand carrying a Moto2/Moto3 session.
+        assert detect_racing_series_leagues("MotoGP | Moto2 Race - Germany") == ("moto-feeder",)
+        assert detect_racing_series_leagues("MotoGP | Race - Germany") == ("motogp",)
+
     def test_generic_grand_prix_is_unscoped(self):
         # "grand prix" is racing evidence but names no series — must stay
         # unscoped so a bare "Monaco Grand Prix" stream can still match F1.
