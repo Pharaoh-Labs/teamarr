@@ -8,6 +8,7 @@ and dedupe (streams already owned by an EPG-match-enabled M3U group).
 
 from contextlib import contextmanager
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -60,7 +61,7 @@ def _make_processor(
     client = SimpleNamespace(
         map_exclusions=[],
         channels=SimpleNamespace(
-            get_stream_channel_map=_map,
+            get_channel_maps=lambda exclude_channel_ids=None: (_map(exclude_channel_ids), {}),
             get_epg_data_list=lambda: epg_data_list,
         ),
         m3u=SimpleNamespace(
@@ -483,3 +484,114 @@ def test_scoped_row_feeds_only_its_leagues(db_conn):
     unscoped = proc._resolve_subscription_leagues(db_conn, get_group(db_conn, rows[1222].id))
     assert scoped == ["nfl"]
     assert sorted(unscoped) == ["mlb", "nba", "nfl"]
+
+
+# Shared catalogs (#1161): group selection and stream detail reads stay scoped.
+
+
+def test_channel_sources_and_epg_resolution_share_catalogs(monkeypatch):
+    proc = _two_group_processor(monkeypatch)
+    monkeypatch.setattr(
+        "teamarr.database.settings.get_epg_settings",
+        lambda conn: SimpleNamespace(epg_channel_source_groups=[]),
+    )
+    client = proc._dispatcharr_client
+    client.channels.get_channel_maps = Mock(wraps=client.channels.get_channel_maps)
+    client.channels.get_epg_data_list = Mock(wraps=client.channels.get_epg_data_list)
+    client.m3u.list_groups = Mock(wraps=client.m3u.list_groups)
+    detail_ids = []
+    real_details = client.m3u.get_streams_by_ids
+
+    def details(ids):
+        ids = list(ids)
+        detail_ids.append(ids)
+        return real_details(ids)
+
+    client.m3u.get_streams_by_ids = Mock(side_effect=details)
+    us = SimpleNamespace(dispatcharr_channel_group_id=7)
+    uk = SimpleNamespace(dispatcharr_channel_group_id=9)
+
+    # Resolution can warm the shared catalogs before any channel-source row.
+    resolution = proc._epg_resolution_inputs()
+    us_streams = proc._fetch_channel_source_streams(us)
+    uk_streams = proc._fetch_channel_source_streams(uk)
+    assert proc._epg_resolution_inputs() is resolution
+    client.channels.get_channel_maps.assert_called_once_with(exclude_channel_ids=set())
+    client.channels.get_epg_data_list.assert_called_once_with()
+    client.m3u.list_groups.assert_called_once_with()
+    assert [s["id"] for s in us_streams] == [500]
+    assert [s["id"] for s in uk_streams] == [501]
+    assert [s["dp_channel_group"] for s in us_streams + uk_streams] == ["US Sports", "UK Sports"]
+    # Never fetch the entire stream catalog or details outside the row's scope.
+    assert client.m3u.get_streams_by_ids.call_count == 2
+    assert detail_ids == [[500], [501]]
+
+    # Fresh-catalog reads produce identical complete candidates, not just ids.
+    proc.clear_epg_resolution_cache()
+    assert proc._fetch_channel_source_streams(us) == us_streams
+    proc.clear_epg_resolution_cache()
+    assert proc._fetch_channel_source_streams(uk) == uk_streams
+
+
+def test_channel_source_catalog_warms_epg_resolution(monkeypatch):
+    proc = _two_group_processor(monkeypatch)
+    client = proc._dispatcharr_client
+    client.channels.get_channel_maps = Mock(wraps=client.channels.get_channel_maps)
+    client.channels.get_epg_data_list = Mock(wraps=client.channels.get_epg_data_list)
+    proc._fetch_channel_source_streams(SimpleNamespace(dispatcharr_channel_group_id=7))
+    inputs = proc._epg_resolution_inputs()
+    assert inputs.stream_channels[501]["channel_group_id"] == 9
+    client.channels.get_channel_maps.assert_called_once()
+    client.channels.get_epg_data_list.assert_called_once()
+
+
+@pytest.mark.parametrize("failing_method", ["get_epg_data_list", "get_channel_maps"])
+def test_channel_source_catalog_failure_is_retried(monkeypatch, failing_method):
+    proc = _two_group_processor(monkeypatch)
+    manager = proc._dispatcharr_client.channels
+    real_fetch = getattr(manager, failing_method)
+    flaky = Mock(side_effect=[RuntimeError("temporary outage"), real_fetch()])
+    monkeypatch.setattr(manager, failing_method, flaky)
+    group = SimpleNamespace(dispatcharr_channel_group_id=7)
+
+    assert proc._fetch_channel_source_streams(group) == []
+    assert [s["id"] for s in proc._fetch_channel_source_streams(group)] == [500]
+    assert [s["id"] for s in proc._fetch_channel_source_streams(group)] == [500]
+    assert flaky.call_count == 2
+
+
+def test_reused_processor_refreshes_catalogs_and_names_on_new_generation(monkeypatch):
+    proc = _two_group_processor(monkeypatch)
+    client = proc._dispatcharr_client
+    client.m3u.list_groups = Mock(wraps=client.m3u.list_groups)
+    client.channels.get_epg_data_list = Mock(wraps=client.channels.get_epg_data_list)
+    group = SimpleNamespace(dispatcharr_channel_group_id=7)
+    before = proc._fetch_channel_source_streams(group)
+    assert before[0]["tvg_id"] == "ESPN.us"
+    client.channels.get_epg_data_list = Mock(
+        return_value=[{"id": 1, "tvg_id": "NEW.us", "epg_source": 10}]
+    )
+    client.m3u.list_groups = Mock(return_value=[SimpleNamespace(id=7, name="Renamed Sports")])
+    proc._shared_events = {}
+    proc._sync_channel_source_rows = lambda conn: None
+
+    # Empty groups avoid writes while exercising the actual run-start reset.
+    monkeypatch.setattr(
+        "teamarr.consumers.event_group_processor.processor.get_all_groups",
+        lambda conn, **kwargs: [],
+    )
+    proc.process_all_groups(run_enforcement=False)
+    after = proc._fetch_channel_source_streams(group)
+    assert after[0]["tvg_id"] == "NEW.us"
+    assert after[0]["dp_channel_group"] == "Renamed Sports"
+    client.channels.get_epg_data_list.assert_called_once()
+    client.m3u.list_groups.assert_called_once()
+
+
+def test_empty_channel_source_catalog_is_reused(monkeypatch):
+    proc = _make_processor({}, [], [], [], [], monkeypatch)
+    manager = proc._dispatcharr_client.channels
+    manager.get_channel_maps = Mock(wraps=manager.get_channel_maps)
+    assert proc._fetch_channel_source_streams() == []
+    assert proc._fetch_channel_source_streams() == []
+    manager.get_channel_maps.assert_called_once()

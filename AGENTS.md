@@ -19,6 +19,10 @@ Support-bundle v2 adds `owner_type` and the nullable plugin identity/adoption fi
 > source of truth; don't `bd import` during normal operation; don't
 > reach for third-party Dolt hosting before trying the default).
 
+## Generation Catalog Reuse
+
+Channel-source candidate fetching and EPG resolution share one successful Dispatcharr channel-map/EPGData snapshot per generation (#1161, `dispatcharr_catalog_inputs`). Exclude managed event and team output channels before assigning stream slots; preserve per-source group/active-guide/overlap filtering, and fetch stream details only for eligible IDs. `clear_epg_resolution_cache` drops both the shared snapshot and derived resolver inputs; `process_all_groups` also clears account/group name caches. Failed catalog reads are not cached. Do not widen stream-detail reads to the whole catalog to implement reuse.
+
 ## Quick Reference
 
 Franchise cricket (#1069): IPL, BBL, SA20 and MLC use ESPN numeric series IDs.

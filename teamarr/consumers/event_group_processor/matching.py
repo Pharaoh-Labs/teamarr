@@ -12,7 +12,7 @@ from sqlite3 import Connection
 from typing import TYPE_CHECKING, Any
 
 from teamarr.consumers.event_group_processor.stream_fetcher import (
-    managed_channel_ids,
+    dispatcharr_catalog_inputs,
 )
 from teamarr.consumers.matching import (
     MATCH_WINDOW_DAYS,
@@ -349,13 +349,10 @@ class StreamMatching:
             return cached
 
         try:
-            epg_data_list = self._dispatcharr_client.channels.get_epg_data_list()
-            # Teamarr's own output channels must not claim stream->channel slots
-            # (#512): last-write-wins would let them mask a shared stream's
-            # curated channel and break tier-1 (curated) EPG resolution.
-            stream_channels, channel_by_uuid = self._dispatcharr_client.channels.get_channel_maps(
-                exclude_channel_ids=managed_channel_ids(self._db_factory)
-            )
+            shared = dispatcharr_catalog_inputs(self)
+            epg_data_list = shared.epg_data_list
+            stream_channels = shared.stream_channels
+            channel_by_uuid = shared.channel_by_uuid
         except Exception as e:
             logger.warning("[EPG-MATCH] Failed to load EPG resolution data: %s", e)
             return None
@@ -382,8 +379,9 @@ class StreamMatching:
         return inputs
 
     def clear_epg_resolution_cache(self) -> None:
-        """Drop the run-scoped EPG resolution inputs (#734)."""
+        """Drop the shared catalogs and derived resolution inputs for the next run."""
         self._epg_inputs_cache = None
+        self._dispatcharr_catalog_cache = None
 
     def _own_epg_source_id(self) -> "int | None":
         """The app's OWN configured EPG-source id (``dispatcharr_epg_id`` setting).
