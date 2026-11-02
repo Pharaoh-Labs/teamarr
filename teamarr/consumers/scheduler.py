@@ -15,9 +15,11 @@ import threading
 import time
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from croniter import croniter
 
+from teamarr.config import Config
 from teamarr.dispatcharr import ChannelManager, get_dispatcharr_client, get_dispatcharr_connection
 from teamarr.services import create_cache_service
 
@@ -32,6 +34,49 @@ SOURCE_DISCOVERY_CRON = "0 11 * * *"
 # How long the discovery task waits for a generation due in the same minute
 # to mark itself running before it starts its own scan (#1081).
 GENERATION_START_GRACE_SECONDS = 60
+
+
+def scheduler_timezone() -> ZoneInfo:
+    """The wall clock every cron expression is read in.
+
+    A cron line means local wall time, and "local" here is the timezone the UI
+    shows (``TZ`` when set and valid, else the EPG timezone) — the one the user
+    sees next to the schedule. Before #1185 the loops read a NAIVE
+    ``datetime.now()``, which is the container clock with no idea of DST: at
+    fall-back the repeated 01:00 hour was computed as "next run 02:00", the
+    wall clock jumped back an hour, and the second 01:00 never fired (prod lost
+    the 06:00 UTC run on 2026-11-01); spring-forward skips a slot the same way.
+    """
+    return Config.get_ui_timezone()
+
+
+def scheduler_now() -> datetime:
+    """An aware ``now`` in :func:`scheduler_timezone`; the only clock the loops read."""
+    return datetime.now(scheduler_timezone())
+
+
+def next_cron_run(cron_expression: str, now: datetime) -> datetime:
+    """The first firing of ``cron_expression`` strictly after ``now``.
+
+    ``now`` must be timezone-aware with a real zone (``ZoneInfo``, not a fixed
+    offset): croniter then resolves the repeated hour at fall-back (an hourly
+    cron fires at 01:00 EDT and again at 01:00 EST) and the missing hour at
+    spring-forward (02:00 does not exist, so 03:00 is next) by itself. Pure, so
+    the DST behaviour is pinned without threads or sleeps.
+    """
+    return croniter(cron_expression, now).get_next(datetime)
+
+
+def seconds_until(target: datetime, now: datetime) -> float:
+    """Real seconds from ``now`` to ``target``, both aware.
+
+    Deliberately NOT ``(target - now).total_seconds()``: when two aware
+    datetimes share one tzinfo, Python subtracts their WALL times and ignores
+    the fold, so at fall-back "01:00 EST minus 01:00 EDT" is zero and the loop
+    would fire the repeated hour at once; at spring-forward "03:00 EDT minus
+    01:00 EST" reads two hours for one real hour. Epoch seconds honour both.
+    """
+    return target.timestamp() - now.timestamp()
 
 
 def generation_due_this_minute(cron_expression: str, now: datetime) -> bool:
@@ -118,18 +163,17 @@ class SubTaskScheduler:
 
     def _run_loop(self) -> None:
         while not self._stop_event.is_set():
-            cron = croniter(self._cron, datetime.now())
-            self._next_run = cron.get_next(datetime)
-            wait_seconds = (self._next_run - datetime.now()).total_seconds()
+            self._next_run = next_cron_run(self._cron, scheduler_now())
+            wait_seconds = seconds_until(self._next_run, scheduler_now())
             logger.debug(
                 "[CRON:%s] Next run: %s (%.0fs)",
                 self._name,
-                self._next_run.strftime("%Y-%m-%d %H:%M:%S"),
+                self._next_run.strftime("%Y-%m-%d %H:%M:%S %Z"),
                 wait_seconds,
             )
             while wait_seconds > 0 and not self._stop_event.is_set():
                 self._stop_event.wait(min(1.0, wait_seconds))
-                wait_seconds = (self._next_run - datetime.now()).total_seconds()
+                wait_seconds = seconds_until(self._next_run, scheduler_now())
             if self._stop_event.is_set():
                 return
             try:
@@ -371,21 +415,20 @@ class CronScheduler:
                 logger.exception("[CRON] Error in initial run: %s", e)
 
         while not self._stop_event.is_set():
-            # Calculate next run time
-            cron = croniter(self._cron_expression, datetime.now())
-            self._next_run = cron.get_next(datetime)
+            # Calculate next run time on the aware scheduler clock (#1185)
+            self._next_run = next_cron_run(self._cron_expression, scheduler_now())
 
-            wait_seconds = (self._next_run - datetime.now()).total_seconds()
+            wait_seconds = seconds_until(self._next_run, scheduler_now())
             logger.debug(
                 "[CRON] Next run: %s (%.0fs)",
-                self._next_run.strftime("%Y-%m-%d %H:%M:%S"),
+                self._next_run.strftime("%Y-%m-%d %H:%M:%S %Z"),
                 wait_seconds,
             )
 
             # Wait until next run time (checking stop event every second)
             while wait_seconds > 0 and not self._stop_event.is_set():
                 self._stop_event.wait(min(1.0, wait_seconds))
-                wait_seconds = (self._next_run - datetime.now()).total_seconds()
+                wait_seconds = seconds_until(self._next_run, scheduler_now())
 
             if self._stop_event.is_set():
                 return
@@ -439,7 +482,7 @@ class CronScheduler:
         from teamarr.consumers import generation_status
         from teamarr.consumers.source_lifecycle import run_discovery_scan
 
-        if generation_due_this_minute(self._cron_expression, datetime.now()):
+        if generation_due_this_minute(self._cron_expression, scheduler_now()):
             # Both crons fire in the same second (11:00 on an hourly default);
             # the scan's "wait for a running generation" check sees nothing
             # yet and the two overlap. Let the run start first (#1081).

@@ -62,6 +62,8 @@ Override the order for one league on the [per-league table](../channels/output.m
 
 Enable automatic EPG generation on a cron schedule. A status badge shows whether the scheduler is **Running** or **Stopped**, along with the last run time.
 
+Cron times are read in the **UI Display** timezone above, and a daylight-saving change neither skips a slot nor runs one late.
+
 ### Cron Expression
 
 Standard cron format. Presets are one click away:
