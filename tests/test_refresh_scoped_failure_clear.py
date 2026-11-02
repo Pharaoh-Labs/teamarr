@@ -15,6 +15,11 @@ edit, league reset) keep the full clear, because there is no diff to scope by.
 
 The refresher holds its own connection across the save (#938), so these use
 the real ``get_db`` factory, whose connections close on exit.
+
+The league reset keeps the full clear but must run it on its OWN connection
+(#1197): the purge runs inside the caller's open write transaction, and a
+second connection cannot clear rows while that lock is held — it waits out
+``busy_timeout`` and fails, so the reset never cleared a cached failure.
 """
 
 from __future__ import annotations
@@ -177,9 +182,8 @@ class TestUserDrivenPathsKeepTheFullClear:
     def test_league_reset_asks_for_the_full_clear(self, db_factory, monkeypatch):
         """A reset has no before/after diff to scope by, so it keeps #757's full clear.
 
-        Pinned on the call rather than the rows: the purge runs inside the
-        caller's open write transaction, and a second connection cannot clear
-        rows while that lock is held (pre-existing, not changed here).
+        Pinned on the call: the purge must hand its own connection to the
+        clear (#1197), see ``TestLeagueReset`` for the rows.
         """
         import teamarr.consumers.cache.refresh as refresh_mod
         import teamarr.database.team_cache as team_cache_mod
@@ -200,4 +204,57 @@ class TestUserDrivenPathsKeepTheFullClear:
         with db_factory() as conn:
             purge_league_cache_rows(conn, "nba")
 
-        assert calls == [{}], "the league reset must keep the full clear"
+        assert calls == [{"conn": conn}], (
+            "the league reset must keep the full clear, on its own connection"
+        )
+
+
+class TestLeagueReset:
+    """The league reset's full clear must ride the caller's transaction (#1197)."""
+
+    def test_reset_inside_a_write_transaction_clears_every_failure(
+        self, db_factory, db_path, monkeypatch
+    ):
+        # The old path opened a second connection through the bare ``get_db()``;
+        # point it at this test's database so the lock it hits is this one's.
+        monkeypatch.setenv("DATABASE_PATH", str(db_path))
+        _refresh_league(db_factory, [_team("Boston Celtics")])
+        _seed_failures(db_factory)
+
+        with db_factory() as conn:
+            teams, _ = purge_league_cache_rows(conn, "nba")
+            assert teams == 1
+
+        assert _failed_names(db_factory) == set(), (
+            "a second connection waited on the caller's write lock and cleared nothing"
+        )
+
+    def test_reset_clear_rolls_back_with_the_callers_transaction(self, db_factory):
+        _refresh_league(db_factory, [_team("Boston Celtics")])
+        _seed_failures(db_factory)
+
+        try:
+            with db_factory() as conn:
+                purge_league_cache_rows(conn, "nba")
+                raise RuntimeError("abort the reset")
+        except RuntimeError:
+            pass
+
+        assert _failed_names(db_factory) == ALL, "an aborted reset must not clear the cache"
+        with db_factory() as conn:
+            kept = conn.execute("SELECT COUNT(*) FROM team_cache WHERE league = 'nba'").fetchone()[
+                0
+            ]
+        assert kept == 1
+
+
+class TestClearFailedOnConnection:
+    def test_clear_on_a_passed_connection_does_not_commit(self, db_factory, db_conn):
+        _seed_failures(db_factory)
+
+        cleared = StreamMatchCache(db_factory).clear_failed(conn=db_conn)
+
+        assert cleared == 3
+        assert _failed_names(db_factory) == ALL, "the caller owns the commit"
+        db_conn.commit()
+        assert _failed_names(db_factory) == set()

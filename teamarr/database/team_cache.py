@@ -13,7 +13,9 @@ from teamarr.core.sports import get_sport_display_names_from_db
 logger = logging.getLogger(__name__)
 
 
-def invalidate_team_identity_caches(*, clear_failed: bool = True) -> None:
+def invalidate_team_identity_caches(
+    *, clear_failed: bool = True, conn: Connection | None = None
+) -> None:
     """Drop every in-memory cache derived from ``team_cache``.
 
     Call this after any write to the table. Two caches read from it and neither
@@ -46,6 +48,14 @@ def invalidate_team_identity_caches(*, clear_failed: bool = True) -> None:
     never-matching streams on a real install, for a refresh that usually
     changed nothing.
 
+    A caller inside an open write transaction MUST pass its ``conn`` (#1197).
+    The full clear used to open a second connection unconditionally; from
+    inside the league reset's transaction that connection waited out
+    ``busy_timeout`` on the caller's write lock, failed with "database is
+    locked", and the warning below was the only trace — the reset never
+    cleared a cached failure. With ``conn`` the delete rides the caller's
+    transaction and commits with it.
+
     Imports are function-local: both consumers import from this module, so
     module-level imports would be circular.
     """
@@ -60,7 +70,7 @@ def invalidate_team_identity_caches(*, clear_failed: bool = True) -> None:
     from teamarr.database.connection import get_db
 
     try:
-        StreamMatchCache(get_db).clear_failed()
+        StreamMatchCache(get_db).clear_failed(conn=conn)
     except Exception as e:  # noqa: BLE001 — invalidation must never break a refresh
         logger.warning("[TEAM_CACHE] Could not clear cached failures: %s", e)
 
