@@ -162,7 +162,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 103** (not every version number has a migration block — column-only versions are handled by reconciliation)
+**Current schema version: 104** (not every version number has a migration block — column-only versions are handled by reconciliation)
 
 | Version | Type | Description |
 |---------|------|-------------|
