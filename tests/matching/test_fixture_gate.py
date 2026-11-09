@@ -674,3 +674,203 @@ class TestAliasWidensAnExactIdentity:
         assert result.category is ResultCategory.MATCHED
         result_multi = _match_multi(stream, event, db_factory)
         assert result_multi.category is ResultCategory.MATCHED
+
+
+HOCKEY = "mens-college-hockey"
+BBALL = "mens-college-basketball"
+
+# Schools the loose reading of "W. Michigan" / "N. Dakota" lands on, none of
+# which plays NCAA men's hockey in this cache (#1155).
+_NCAAH_TEAMS = [
+    ("Western Michigan Broncos", "Western Michigan", "WMU", HOCKEY, "hockey"),
+    ("North Dakota Fighting Hawks", "North Dakota", "UND", HOCKEY, "hockey"),
+    ("Michigan Wolverines", "Michigan", "MICH", "mens-college-basketball", "basketball"),
+    ("Dakota State Trojans", "Dakota State", "DSU", "mens-college-basketball", "basketball"),
+]
+
+WMU_UND = _event(
+    _team("North Dakota Fighting Hawks", "North Dakota", "UND", HOCKEY, "hockey"),
+    _team("Western Michigan Broncos", "Western Michigan", "WMU", HOCKEY, "hockey"),
+    "ncaah-wmu-und",
+)
+
+
+def _seed_aliases(db_factory, rows):
+    """Replace team_aliases with the real column set and add (alias, canonical) rows."""
+    with db_factory() as conn:
+        conn.execute("DROP TABLE IF EXISTS team_aliases")
+        conn.execute(
+            """
+            CREATE TABLE team_aliases (
+                id INTEGER PRIMARY KEY, alias TEXT, league TEXT, provider TEXT,
+                team_id TEXT, team_name TEXT, created_at TEXT
+            )
+            """
+        )
+        add_aliases(db_factory, rows)
+
+
+def add_aliases(db_factory, rows):
+    with db_factory() as conn:
+        conn.executemany(
+            "INSERT INTO team_aliases (alias, league, provider, team_id, team_name)"
+            " VALUES (?, ?, 'espn', 'x', ?)",
+            rows,
+        )
+        conn.commit()
+
+
+@pytest.fixture
+def hockey_db(db_factory):
+    with db_factory() as conn:
+        conn.executemany("INSERT INTO team_cache VALUES (?,?,?,?,?)", _NCAAH_TEAMS)
+        conn.commit()
+    _seed_aliases(db_factory, [])
+    return db_factory
+
+
+def _ctx(stream_name: str) -> MatchContext:
+    classified = classify_stream(stream_name)
+    return MatchContext(
+        stream_name=stream_name,
+        stream_id=1,
+        group_id=1,
+        target_date=TODAY,
+        generation=1,
+        user_tz=ZoneInfo("UTC"),
+        classified=classified,
+        team1=classified.team1,
+        team2=classified.team2,
+    )
+
+
+class TestUserAliasCountsAtTheLeagueGate:
+    """An alias for a name the index only reads loosely (#1155). The gate used to
+    veto before the scorer ever read the alias; it now widens the gate's league
+    set by the leagues the user's aliases name, and never narrows it."""
+
+    ALIASES = [
+        ("W. Michigan", HOCKEY, "Western Michigan Broncos"),
+        ("N. Dakota", HOCKEY, "North Dakota Fighting Hawks"),
+    ]
+
+    def test_aliased_stream_matches_the_hockey_event(self, hockey_db):
+        add_aliases(hockey_db, self.ALIASES)
+        result = _match("W. Michigan vs N. Dakota", WMU_UND, HOCKEY, hockey_db)
+        assert result.category is ResultCategory.MATCHED
+        assert result.event.id == WMU_UND.id
+
+    def test_aliased_stream_matches_in_the_multi_league_path(self, hockey_db):
+        add_aliases(hockey_db, self.ALIASES)
+        result = _match_multi("W. Michigan vs N. Dakota", WMU_UND, hockey_db)
+        assert result.category is ResultCategory.MATCHED
+
+    def test_without_the_alias_the_gate_still_vetoes(self, hockey_db):
+        result = _match("W. Michigan vs N. Dakota", WMU_UND, HOCKEY, hockey_db)
+        assert result.category is not ResultCategory.MATCHED
+
+    def test_alias_only_widens_leagues_the_index_already_gives(self, hockey_db):
+        """#874: an alias never removes a league. Atlanta/Kansas City pairs keep
+        mlb with an unrelated alias, and a hockey-league alias on one side leaves
+        the index's own answer in the set."""
+        add_aliases(hockey_db, [("Rays Fan", "mlb", "Tampa Bay Rays"), *self.ALIASES])
+        matcher = make_team_matcher(db_factory=hockey_db)
+        index = matcher._get_identity_index()
+        for stream in ("Kansas City @ Toronto", "Tampa Bay Rays vs Detroit Tigers"):
+            ctx = _ctx(stream)
+            base = index.fixture_leagues(ctx.team1, ctx.team2)
+            assert base
+            assert base <= matcher._fixture_leagues(ctx)
+        # The index can't read "Rays Fan", so it says None and the gate defers:
+        # an alias never turns a defer into a set, which would only add vetoes.
+        ctx = _ctx("Rays Fan vs Detroit Tigers")
+        assert matcher._fixture_leagues(ctx) is None
+
+    def test_alias_adds_its_league_to_a_set_the_index_gave(self, hockey_db):
+        """The union branch: the index gives basketball for the loose reading
+        of both names; the aliases add hockey and keep basketball."""
+        matcher = make_team_matcher(db_factory=hockey_db)
+        ctx = _ctx("W. Michigan vs N. Dakota")
+        before = matcher._fixture_leagues(ctx)
+        assert before == {"mens-college-basketball"}
+        add_aliases(hockey_db, self.ALIASES)
+        matcher.reload_aliases()
+        assert matcher._fixture_leagues(ctx) == {"mens-college-basketball", HOCKEY}
+
+    def test_alias_on_an_unreadable_side_does_not_add_a_veto(self, hockey_db):
+        """A misspelled name the index can't read, aliased to hockey, against a
+        basketball event: the index defers (None) and the alias must not turn
+        that into {hockey}, which would veto the basketball candidate."""
+        with hockey_db() as conn:
+            conn.executemany(
+                "INSERT INTO team_cache VALUES (?,?,?,?,?)",
+                [
+                    ("Western Michigan Broncos", "Western Michigan", "WMU", BBALL, "basketball"),
+                    ("North Dakota Fighting Hawks", "North Dakota", "UND", BBALL, "basketball"),
+                ],
+            )
+            conn.commit()
+        add_aliases(hockey_db, [("Westrn Michigan", HOCKEY, "Western Michigan Broncos")])
+        stream = "Westrn Michigan vs North Dakota"
+        matcher = make_team_matcher(db_factory=hockey_db)
+        assert matcher._fixture_leagues(_ctx(stream)) is None
+        event = _event(
+            _team("North Dakota Fighting Hawks", "North Dakota", "UND", BBALL, "basketball"),
+            _team("Western Michigan Broncos", "Western Michigan", "WMU", BBALL, "basketball"),
+            "bb-wmu-und",
+        )
+        for result in (
+            _match(stream, event, BBALL, hockey_db),
+            _match_multi(stream, event, hockey_db),
+        ):
+            assert result.failed_reason is not FailedReason.FIXTURE_NOT_IN_LEAGUE
+
+    def test_unresolvable_stream_stays_none(self, hockey_db):
+        add_aliases(hockey_db, self.ALIASES)
+        matcher = make_team_matcher(db_factory=hockey_db)
+        assert matcher._fixture_leagues(_ctx("Qwerty Zxcvb vs Plugh Xyzzy")) is None
+
+    def test_alias_edit_counts_at_once_after_reload(self, hockey_db):
+        """#757: the same matcher, no rebuild — only reload_aliases()."""
+        matcher = make_team_matcher(db_factory=hockey_db)
+        ctx = _ctx("W. Michigan vs N. Dakota")
+        before = matcher._fixture_leagues(ctx)
+        assert before is None or HOCKEY not in before
+        assert matcher._fixture_vetoes(before, HOCKEY) is (before is not None)
+
+        add_aliases(hockey_db, self.ALIASES)
+        matcher.reload_aliases()
+        after = matcher._fixture_leagues(ctx)
+        assert after is not None and HOCKEY in after
+        assert matcher._fixture_vetoes(after, HOCKEY) is False
+
+
+class TestOneSidedAlias:
+    """`W. Michigan at Michigan` (#1155): only the first side is aliased, and
+    the index's answer for the pair has no hockey in it."""
+
+    @pytest.fixture
+    def db(self, hockey_db):
+        with hockey_db() as conn:
+            conn.executemany(
+                "INSERT INTO team_cache VALUES (?,?,?,?,?)",
+                [("Michigan Wolverines", "Wolverines", "MICH", HOCKEY, "hockey")],
+            )
+            conn.commit()
+        add_aliases(hockey_db, [("W. Michigan", HOCKEY, "Western Michigan Broncos")])
+        return hockey_db
+
+    EVENT = _event(
+        _team("Michigan Wolverines", "Wolverines", "MICH", HOCKEY, "hockey"),
+        _team("Western Michigan Broncos", "Western Michigan", "WMU", HOCKEY, "hockey"),
+        "ncaah-wmu-mich",
+    )
+
+    def test_single_league_path_matches(self, db):
+        result = _match("W. Michigan at Michigan", self.EVENT, HOCKEY, db)
+        assert result.category is ResultCategory.MATCHED
+        assert result.event.id == self.EVENT.id
+
+    def test_multi_league_path_matches(self, db):
+        result = _match_multi("W. Michigan at Michigan", self.EVENT, db)
+        assert result.category is ResultCategory.MATCHED

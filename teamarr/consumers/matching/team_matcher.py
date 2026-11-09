@@ -2823,7 +2823,51 @@ class TeamMatcher:
         index = self._get_identity_index()
         if index is None:
             return None
-        return index.fixture_leagues(ctx.team1, ctx.team2)
+        base = index.fixture_leagues(ctx.team1, ctx.team2)
+        if base is None:
+            # The index can't say, so the gate defers (#619). The set is only
+            # ever used to veto, so turning None into a set would ADD vetoes
+            # against every other league; an alias may only add to a set the
+            # index already gave.
+            return None
+        return base | self._alias_fixture_leagues(index, ctx.team1, ctx.team2)
+
+    def _alias_fixture_leagues(
+        self, index: TeamIdentityIndex, team1: str | None, team2: str | None
+    ) -> set[str]:
+        """Leagues the user's aliases say these two sides could meet in (#1155).
+
+        "W. Michigan" resolves loosely to a Michigan that plays no hockey, so
+        the index vetoes the hockey league before the scorer ever reads the
+        user's alias. Each alias is league-scoped, so the sides are re-read as
+        their canonical names and only the alias's own league can be added.
+        Resolved here rather than registered in the shared index, which stays
+        free of per-user rows. Widen-only (#874): the caller unions this into a
+        set the index already gave, never removes a league from it, and never
+        calls it when the index could not say (the gate keeps deferring).
+        """
+        if not self._reverse_aliases or not team1 or not team2:
+            return set()
+        norm1, norm2 = normalize_text(team1), normalize_text(team2)
+        alias1 = self._reverse_aliases.get(norm1, [])
+        alias2 = self._reverse_aliases.get(norm2, [])
+        if not alias1 and not alias2:
+            return set()
+        # (text, leagues the alias pins it to; None = the side as written)
+        reads1: list[tuple[str, str | None]] = [(team1, None)] + [(c, lg) for c, lg in alias1]
+        reads2: list[tuple[str, str | None]] = [(team2, None)] + [(c, lg) for c, lg in alias2]
+        found: set[str] = set()
+        for text1, league1 in reads1:
+            for text2, league2 in reads2:
+                if league1 is None and league2 is None:
+                    continue  # nothing aliased: the index already answered
+                pinned = {lg for lg in (league1, league2) if lg}
+                if len(pinned) > 1:
+                    continue  # the two aliases name different leagues
+                leagues = index.fixture_leagues(text1, text2)
+                if leagues:
+                    found |= leagues & pinned
+        return found
 
     def _identity_leagues(self, team: str | None) -> set[str] | None:
         """Leagues a team-only stream's one side is known to play in (#1108).
