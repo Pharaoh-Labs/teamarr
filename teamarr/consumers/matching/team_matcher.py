@@ -2854,8 +2854,10 @@ class TeamMatcher:
         if not alias1 and not alias2:
             return set()
         # (text, leagues the alias pins it to; None = the side as written)
-        reads1: list[tuple[str, str | None]] = [(team1, None)] + [(c, lg) for c, lg in alias1]
-        reads2: list[tuple[str, str | None]] = [(team2, None)] + [(c, lg) for c, lg in alias2]
+        reads1: list[tuple[str, str | None]] = [(team1, None)]
+        reads1.extend(alias1)
+        reads2: list[tuple[str, str | None]] = [(team2, None)]
+        reads2.extend(alias2)
         found: set[str] = set()
         for text1, league1 in reads1:
             for text2, league2 in reads2:
