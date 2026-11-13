@@ -90,6 +90,13 @@ _PROXY_STREAM_UUID = re.compile(
 # happen (see _resolvable below).
 _SYNTHETIC_EVENT_TVG_PREFIXES = ("teamarr-event-", "apex-event-")
 
+# Set on a candidate stream dict whose ``tvg_id`` is not its own: the stream
+# carried none, and ``resolve_program_tvg_ids`` gave it the guide id its
+# Dispatcharr channel or its name resolved to (#1215). Run-local — the dict is
+# this run's candidate, never written back. Readers that need the PROVIDER's
+# id (the Xtream guide fallback) must skip a stream carrying this flag.
+BORROWED_TVG_ID_KEY = "tvg_id_borrowed"
+
 
 @dataclass(frozen=True)
 class EpgCatalogIndex:
@@ -184,6 +191,11 @@ def resolve_program_tvg_ids(
             are built from ``epg_data_list`` and ``active_source_ids``, which is
             what every single-batch caller wants.
 
+    A stream with NO ``tvg_id`` (#1215) is resolved by the channel and name
+    steps alone and, on a hit, is given that guide id as its ``tvg_id`` IN
+    PLACE (flagged ``BORROWED_TVG_ID_KEY``), so the matcher has a key to look
+    its programmes up by. ``stats["borrowed"]`` counts them.
+
     Returns:
         (resolution, stats) where ``resolution`` is ``{stream_tvg_id:
         program_tvg_id}`` and ``stats`` counts hits per strategy plus
@@ -224,15 +236,13 @@ def resolve_program_tvg_ids(
         "loopback": 0,
         "direct": 0,
         "name": 0,
+        "borrowed": 0,
         "unresolved": 0,
         "ambiguous_name": 0,
     }
 
-    for s in streams:
-        s_tvg = s.get("tvg_id")
-        if not s_tvg or s_tvg in resolution:
-            continue
-
+    def _channel_guide(s: dict) -> tuple[str, str] | None:
+        """(guide tvg_id, strategy) from the stream's channel or loopback url."""
         # 1. Channel (curated mapping — most trusted).
         sid = s.get("id")
         ch = stream_channel_map.get(sid) if sid is not None else None
@@ -240,9 +250,7 @@ def resolve_program_tvg_ids(
             eid = ch.get("effective_epg_data_id") or ch.get("epg_data_id")
             resolved = _resolved_tvg(epgdata_by_id.get(eid))
             if resolved:
-                resolution[s_tvg] = resolved
-                stats["channel"] += 1
-                continue
+                return resolved, "channel"
 
         # 1b. Loopback: the stream URL names its source channel by uuid.
         if channel_by_uuid:
@@ -252,9 +260,29 @@ def resolve_program_tvg_ids(
                 eid = ch.get("effective_epg_data_id") or ch.get("epg_data_id")
                 resolved = _resolved_tvg(epgdata_by_id.get(eid))
                 if resolved:
-                    resolution[s_tvg] = resolved
-                    stats["loopback"] += 1
-                    continue
+                    return resolved, "loopback"
+        return None
+
+    def _name_guide(s: dict) -> str | None:
+        """Guide tvg_id by strict, unambiguous normalized-name match (step 3)."""
+        norm = normalize_channel_name(s.get("name") or "")
+        candidates = name_to_tvgids.get(norm)
+        if candidates:
+            if len(candidates) == 1:
+                return next(iter(candidates))
+            stats["ambiguous_name"] += 1
+        return None
+
+    for s in streams:
+        s_tvg = s.get("tvg_id")
+        if not s_tvg or s_tvg in resolution:
+            continue
+
+        via_channel = _channel_guide(s)
+        if via_channel:
+            resolution[s_tvg] = via_channel[0]
+            stats[via_channel[1]] += 1
+            continue
 
         # 2. Direct: the stream tvg_id is itself an active imported-EPG tvg_id.
         if s_tvg in epgdata_tvgids:
@@ -262,26 +290,45 @@ def resolve_program_tvg_ids(
             stats["direct"] += 1
             continue
 
-        # 3. Name: strict, unambiguous normalized-name match.
-        norm = normalize_channel_name(s.get("name") or "")
-        candidates = name_to_tvgids.get(norm)
-        if candidates:
-            if len(candidates) == 1:
-                resolution[s_tvg] = next(iter(candidates))
-                stats["name"] += 1
-                continue
-            stats["ambiguous_name"] += 1
+        by_name = _name_guide(s)
+        if by_name:
+            resolution[s_tvg] = by_name
+            stats["name"] += 1
+            continue
 
         stats["unresolved"] += 1
 
+    # Streams with NO tvg_id (#1215). The channel and name steps never needed
+    # one, but the whole EPG path is keyed on the stream tvg_id, so such a
+    # stream used to be skipped outright — "stream carries no tvg-id" for a
+    # stream sitting on a channel with a guide assigned. It borrows the guide
+    # id those steps resolve to as its key for the run (what channel-source
+    # mode already does when it builds its candidates). A second pass, so a
+    # stream that really carries that id as its own tvg_id has already claimed
+    # the key: when that key maps to a DIFFERENT guide, borrowing it would read
+    # the wrong channel's programmes, so the stream is left unresolved.
+    for s in streams:
+        if s.get("tvg_id"):
+            continue
+        via_channel = _channel_guide(s)
+        guide = via_channel[0] if via_channel else _name_guide(s)
+        if not guide or resolution.get(guide, guide) != guide:
+            stats["unresolved"] += 1
+            continue
+        resolution[guide] = guide
+        s["tvg_id"] = guide
+        s[BORROWED_TVG_ID_KEY] = True
+        stats["borrowed"] += 1
+
     logger.info(
         "[EPG-RESOLVE] resolved %d stream tvg_ids (channel=%d loopback=%d direct=%d "
-        "name=%d ambiguous_name=%d unresolved=%d)",
+        "name=%d borrowed=%d ambiguous_name=%d unresolved=%d)",
         len(resolution),
         stats["channel"],
         stats["loopback"],
         stats["direct"],
         stats["name"],
+        stats["borrowed"],
         stats["ambiguous_name"],
         stats["unresolved"],
     )
