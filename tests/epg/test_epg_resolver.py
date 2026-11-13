@@ -5,6 +5,7 @@ and the strict-name guardrails that keep "ESPN" from resolving to "ESPN2".
 """
 
 from teamarr.consumers.matching.epg_resolver import (
+    BORROWED_TVG_ID_KEY,
     normalize_channel_name,
     resolve_program_tvg_ids,
 )
@@ -176,11 +177,83 @@ def test_unresolved_when_nothing_matches():
     assert stats["unresolved"] == 1
 
 
-def test_streams_without_tvg_id_are_ignored():
-    streams = [{"id": 7, "name": "FS1 HD", "tvg_id": ""}]
-    epg = _epgdata([(100, "82547", "FS1 HD")])
-    res, _ = resolve_program_tvg_ids(streams, epg, {})
+def test_stream_without_tvg_id_and_no_other_evidence_stays_unresolved():
+    epg = _epgdata([(1, "espn.us", "ESPN")])
+    streams = [{"id": 10, "name": "Nothing Like It", "tvg_id": None}]
+    res, stats = resolve_program_tvg_ids(streams, epg, {})
     assert res == {}
+    assert stats["borrowed"] == 0
+    assert stats["unresolved"] == 1
+    assert streams[0]["tvg_id"] is None
+    assert BORROWED_TVG_ID_KEY not in streams[0]
+
+
+# ===================================================== tvg-less streams (#1215)
+
+
+def test_tvgless_stream_borrows_its_channels_guide():
+    """The reported shape: no tvg-id in the M3U, guide assigned on the channel."""
+    epg = _epgdata([(1, "SportsnetOne.ca", "Sportsnet ONE HD")])
+    streams = [{"id": 10, "name": "4K: Sportsnet ONE", "tvg_id": ""}]
+    res, stats = resolve_program_tvg_ids(streams, epg, {10: {"epg_data_id": 1}})
+    assert res == {"SportsnetOne.ca": "SportsnetOne.ca"}
+    assert streams[0]["tvg_id"] == "SportsnetOne.ca"
+    assert streams[0][BORROWED_TVG_ID_KEY] is True
+    assert stats["borrowed"] == 1
+    assert stats["unresolved"] == 0
+
+
+def test_tvgless_stream_borrows_by_unambiguous_name():
+    epg = _epgdata([(1, "SportsnetOne.ca", "Sportsnet ONE")])
+    streams = [{"id": 10, "name": "4K: Sportsnet ONE", "tvg_id": None}]
+    res, stats = resolve_program_tvg_ids(streams, epg, {})
+    assert res == {"SportsnetOne.ca": "SportsnetOne.ca"}
+    assert streams[0]["tvg_id"] == "SportsnetOne.ca"
+    assert stats["borrowed"] == 1
+
+
+def test_tvgless_stream_with_ambiguous_name_is_not_guessed():
+    epg = _epgdata([(1, "sn1.east", "Sportsnet ONE"), (2, "sn1.west", "Sportsnet ONE HD")])
+    streams = [{"id": 10, "name": "4K: Sportsnet ONE", "tvg_id": None}]
+    res, stats = resolve_program_tvg_ids(streams, epg, {})
+    assert res == {}
+    assert streams[0]["tvg_id"] is None
+    assert stats["ambiguous_name"] == 1
+    assert stats["unresolved"] == 1
+
+
+def test_tvgless_stream_never_borrows_a_generated_event_guide():
+    """A stream consolidated onto a managed event channel must not borrow it."""
+    epg = _epgdata([(1, "teamarr-event-401", "Bills at Vikings")])
+    streams = [{"id": 10, "name": "4K: Sportsnet ONE", "tvg_id": None}]
+    res, _ = resolve_program_tvg_ids(streams, epg, {10: {"epg_data_id": 1}})
+    assert res == {}
+    assert streams[0]["tvg_id"] is None
+
+
+def test_tvgless_stream_does_not_take_a_key_another_stream_maps_elsewhere():
+    """Stream B's own tvg-id "X" is curated to guide "Y". A tvg-less stream
+    whose name resolves to guide "X" must not read Y's programmes under X."""
+    epg = _epgdata([(1, "X", "Sportsnet ONE"), (2, "Y", "Other Channel")])
+    streams = [
+        {"id": 10, "name": "4K: Sportsnet ONE", "tvg_id": None},
+        {"id": 11, "name": "Something", "tvg_id": "X"},
+    ]
+    res, stats = resolve_program_tvg_ids(streams, epg, {11: {"epg_data_id": 2}})
+    assert res == {"X": "Y"}
+    assert streams[0]["tvg_id"] is None
+    assert stats["borrowed"] == 0
+
+
+def test_borrowing_is_stable_when_the_same_dicts_are_resolved_again():
+    epg = _epgdata([(1, "SportsnetOne.ca", "Sportsnet ONE HD")])
+    streams = [{"id": 10, "name": "4K: Sportsnet ONE", "tvg_id": None}]
+    channels = {10: {"epg_data_id": 1}}
+    first, _ = resolve_program_tvg_ids(streams, epg, channels)
+    second, stats = resolve_program_tvg_ids(streams, epg, channels)
+    assert first == second == {"SportsnetOne.ca": "SportsnetOne.ca"}
+    assert streams[0][BORROWED_TVG_ID_KEY] is True
+    assert stats["borrowed"] == 0  # already keyed; resolved as its channel
 
 
 def test_first_stream_wins_for_shared_tvg_id():

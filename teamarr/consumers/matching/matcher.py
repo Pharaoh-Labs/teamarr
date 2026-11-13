@@ -1562,8 +1562,10 @@ class StreamMatcher:
     def _mark_no_epg_channel(results: list[MatchedStreamResult], tvg_id: str | None) -> None:
         """Say that the EPG path had no guide to read for this stream (#877).
 
-        In an EPG-enabled group a stream with no tvg-id, or one whose tvg-id
-        resolved to no programmes, never reaches the programme matcher — and
+        In an EPG-enabled group a stream with no tvg-id that neither its
+        Dispatcharr channel nor its name could supply one for (#1215), or one
+        whose tvg-id resolved to no programmes, never reaches the programme
+        matcher — and
         the stored reason used to be whatever the NAME path left behind:
         "ITV1 HD RT" persisted as skipped:team_streams_disabled, a setting
         that has nothing to do with why a linear channel found no game. Only
@@ -1577,7 +1579,8 @@ class StreamMatcher:
             r.detail = (
                 f"EPG: tvg-id '{tvg_id}' has no guide programmes in the window"
                 if tvg_id
-                else "EPG: stream carries no tvg-id"
+                else "EPG: stream carries no tvg-id, and no Dispatcharr channel guide or "
+                "unambiguous guide name was found for it"
             ) + (f" (name path: {r.exclusion_reason})" if r.exclusion_reason else "")
 
     def _reconcile_epg(
