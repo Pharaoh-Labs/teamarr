@@ -18,7 +18,7 @@ from teamarr.consumers.matching.classifier import (
 )
 from teamarr.consumers.matching.result import FailedReason
 from teamarr.consumers.matching.tennis_matcher import TennisMatcher
-from teamarr.core.types import Event, EventStatus, Team
+from teamarr.core.types import Event, EventStatus, Team, Venue
 from teamarr.providers.espn.tennis import TennisParserMixin, _tennis_surnames
 from teamarr.services.detection_keywords import DetectionKeywordService
 from teamarr.utilities.fuzzy_match import normalize_text
@@ -1662,3 +1662,129 @@ def test_epg_programme_naming_tournament_without_pair_or_court_falls_through(mon
     )
     assert not any(r.matched for r in results)
     assert routed, "programme must fall through to ordinary routing"
+
+
+# ---------------------------------------------------------------------------
+# #1178 — a feed named by the venue city (not the tournament's name)
+# ---------------------------------------------------------------------------
+
+_VIENNA_FEED = "TSN+ 01: ATP 500 Tennis: Vienna - Quarterfinals"
+
+
+def _venue_event(eid, tournament, tid, venue, start):
+    e = _tournament_event(eid, tournament, "Court 1", start, round_name="Quarterfinals")
+    e.tournament_id = tid
+    e.venue = Venue(name=venue) if venue else None
+    return e
+
+
+def _run_feed(events, stream, tz, day):
+    tm = TennisMatcher(service=_PoolService(events), cache=_NoCache())
+    c = classify_stream(stream, league_event_type="event", event_league_sport="tennis")
+    outcomes = tm.match_feed(c, ["atp"], day.date(), stream_id=1, user_tz=tz)
+    return {o.event.id for o in outcomes if o.is_matched}
+
+
+def test_feed_named_by_venue_city_binds_only_that_tournament():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 10, 23, 8, 0, tzinfo=tz)
+    events = [
+        _venue_event("vie1", "Erste Bank Open", "900", "Vienna, Austria", day),
+        _venue_event("bas1", "Swiss Indoors Basel", "901", "Basel, Switzerland", day),
+    ]
+    assert _run_feed(events, _VIENNA_FEED, tz, day) == {"vie1"}
+
+
+def test_multiword_venue_city_names_tournament():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 10, 23, 8, 0, tzinfo=tz)
+    events = [
+        _venue_event("hk1", "Prudential Championships", "910", "Hong Kong, China", day),
+        _venue_event("sd1", "Pacific Series", "911", "San Diego, United States", day),
+    ]
+    stream = "TSN+ 02: ATP 250 Tennis: Hong Kong - Quarterfinals"
+    assert _run_feed(events, stream, tz, day) == {"hk1"}
+    # whole phrase only: "Hong" alone does not name Hong Kong
+    stream = "TSN+ 02: ATP 250 Tennis: Hong Kong - Quarterfinals".replace("Hong Kong", "Hong")
+    assert _run_feed(events, stream, tz, day) == {"hk1", "sd1"}
+
+
+def test_common_first_token_of_city_does_not_name_tournament():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 10, 23, 8, 0, tzinfo=tz)
+    events = [
+        _venue_event("ny1", "Some Classic Series", "920", "New York, United States", day),
+        _venue_event("sd1", "Pacific Series", "921", "San Diego, United States", day),
+    ]
+    stream = "TSN+ 06: ATP 250 Tennis: New Haven - Quarterfinals"
+    assert _run_feed(events, stream, tz, day) == {"ny1", "sd1"}
+
+
+def test_venue_city_does_not_open_epg_gate():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 8, 1, 13, 0, tzinfo=tz)
+    events = [
+        _venue_event("dc1", "Mubadala Citi DC Open", "800", "Washington, DC", day),
+        _venue_event("tor1", "National Bank Open", "801", "Toronto, Canada", day),
+        _venue_event("la1", "Some Tourney", "803", "Los Angeles, United States", day),
+    ]
+    from teamarr.consumers.matching.tennis_matcher import _named_tournaments
+
+    tm = TennisMatcher(service=_PoolService(events), cache=_NoCache())
+    for t in (
+        "NHL Hockey: Washington Capitals at Toronto Maple Leafs",
+        "NBA: Los Angeles Lakers vs Golden State Warriors",
+    ):
+        assert not tm.names_tournament(t, ["atp"], day, tz)
+        assert _named_tournaments(normalize_text(t), events) == set()
+
+
+def test_venue_city_feed_without_any_name_stays_unfiltered():
+    """Veto-only: a stream naming no tournament and no city keeps the pool."""
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 10, 23, 8, 0, tzinfo=tz)
+    events = [
+        _venue_event("vie1", "Erste Bank Open", "900", "Vienna, Austria", day),
+        _venue_event("bas1", "Swiss Indoors Basel", "901", "Basel, Switzerland", day),
+    ]
+    stream = "TSN+ 01: ATP 500 Tennis - Quarterfinals"
+    assert _run_feed(events, stream, tz, day) == {"vie1", "bas1"}
+
+
+def test_venue_none_behaves_as_before():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 10, 23, 8, 0, tzinfo=tz)
+    events = [
+        _venue_event("a1", "Erste Bank Open", "900", None, day),
+        _venue_event("b1", "Swiss Indoors Basel", "901", None, day),
+    ]
+    # no venue → city unknown → nothing named → unfiltered (as before)
+    assert _run_feed(events, _VIENNA_FEED, tz, day) == {"a1", "b1"}
+    # tournament still nameable by its own name
+    stream = "TSN+ 03: ATP 500 Tennis: Basel - Quarterfinals"
+    assert _run_feed(events, stream, tz, day) == {"b1"}
+
+
+def test_venue_without_comma_adds_no_city_tokens():
+    """A bare stadium name must not become a 'city' that matches court words."""
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 10, 23, 8, 0, tzinfo=tz)
+    events = [
+        _venue_event("a1", "Erste Bank Open", "900", "Stadthalle Court", day),
+        _venue_event("b1", "Swiss Indoors Basel", "901", "Basel, Switzerland", day),
+    ]
+    stream = "TSN+ 04: ATP 500 Tennis: Stadthalle Court 1 - Quarterfinals"
+    assert _run_feed(events, stream, tz, day) == {"a1", "b1"}
+
+
+def test_generic_court_word_city_does_not_name_tournament():
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 10, 23, 8, 0, tzinfo=tz)
+    events = [
+        _venue_event("a1", "Erste Bank Open", "900", "Centre Court, Austria", day),
+        _venue_event("b1", "Swiss Indoors Basel", "901", "Basel, Switzerland", day),
+    ]
+    for e in events:
+        e.court = "Centre Court"
+    stream = "TSN+ 05: ATP 500 Tennis: Centre Court - Quarterfinals"
+    assert _run_feed(events, stream, tz, day) == {"a1", "b1"}

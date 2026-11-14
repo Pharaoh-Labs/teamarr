@@ -113,6 +113,13 @@ _GENERIC_TOURNAMENT_TOKENS = frozenset(
     }
 )
 
+# Court/arena words a venue "city" must never contribute: a court feed's own
+# text carries them ("Centre Court", "Stadium 2"), so they would name every
+# tournament whose venue string happened to include one (#1178).
+_VENUE_COURT_WORDS = frozenset(
+    {"court", "courts", "centre", "center", "stadium", "arena", "show", "grandstand"}
+)
+
 # Draw hints a feed stream can declare ("Ladies' Singles Semifinals").
 # normalize_text strips apostrophes, so match the flattened token forms.
 _DRAW_GENDER_HINTS = [
@@ -155,7 +162,22 @@ def _tournament_key(event: Event) -> str:
     return event.tournament_id or event.tournament_name or ""
 
 
-def _named_tournaments(text: str, pool: list[Event]) -> set[str]:
+def _venue_city(event: Event) -> str:
+    """Normalized city of an event's venue ("Vienna, Austria" -> "vienna").
+
+    ESPN tennis carries "City, Country" on every match's venue. Only the text
+    before the first comma counts: a comma-less venue is a bare stadium name,
+    not a city. Returns "" when there is no usable city.
+    """
+    venue_name = event.venue.name if event.venue else ""
+    if "," not in (venue_name or ""):
+        return ""
+    return normalize_text(venue_name.split(",", 1)[0])
+
+
+def _named_tournaments(
+    text: str, pool: list[Event], *, include_venue_city: bool = False
+) -> set[str]:
     """Tournament keys the (normalized) stream text names, out of the pool.
 
     The hint set is derived from the candidate pool itself: a tournament is
@@ -168,6 +190,14 @@ def _named_tournaments(text: str, pool: list[Event]) -> set[str]:
     reduces to the lone token "us", which every "US:"-prefixed stream carries,
     so the guard vetoed all other tournaments for any US-region stream. The
     phrase rule ("us open") keeps such short-token names nameable.
+
+    With include_venue_city (feed guard only), the venue city (text before
+    the comma in "Vienna, Austria") also names the tournament, matched as a
+    WHOLE phrase, never per token: "new"/"san"/"los" would otherwise name
+    every "New York"/"San Diego" tournament. A city made only of generic or
+    court words never counts. The EPG programme gate leaves it off, so
+    ordinary "Washington Capitals at Toronto Maple Leafs" programmes cannot
+    open the tennis gate (#1178). Still veto-only.
     """
     text_tokens = set(text.split())
     padded_text = f" {text} "
@@ -183,7 +213,19 @@ def _named_tournaments(text: str, pool: list[Event]) -> set[str]:
         distinctive = {
             tok for tok in tnorm.split() if tok not in _GENERIC_TOURNAMENT_TOKENS and len(tok) >= 3
         }
-        if (distinctive & text_tokens) or (tnorm and f" {tnorm} " in padded_text):
+        city = _venue_city(event) if include_venue_city else ""
+        # Whole phrase only: "new"/"san"/"los" must not name "New York" etc.
+        city_ok = any(
+            tok not in _GENERIC_TOURNAMENT_TOKENS
+            and tok not in _VENUE_COURT_WORDS
+            and len(tok) >= 3
+            for tok in city.split()
+        )
+        if (
+            (distinctive & text_tokens)
+            or (tnorm and f" {tnorm} " in padded_text)
+            or (city_ok and f" {city} " in padded_text)
+        ):
             named.add(key)
     return named
 
@@ -197,7 +239,7 @@ def _tournament_guard(text: str, pool: list[Event]) -> tuple[list[Event], list[E
     not bind to a same-day Zheng match elsewhere (#283). Veto-only: when the
     stream names no pooled tournament, everything is kept.
     """
-    named = _named_tournaments(text, pool)
+    named = _named_tournaments(text, pool, include_venue_city=True)
     if not named:
         return pool, []
     kept = [e for e in pool if _tournament_key(e) in named]
