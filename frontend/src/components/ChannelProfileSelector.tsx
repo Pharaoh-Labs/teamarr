@@ -11,10 +11,11 @@ import { useChannelProfiles, useCreateChannelProfile } from "@/hooks/useDispatch
 const WILDCARD_OPTIONS = [
   { value: "{sport}", label: "{sport}", description: "Add channels to a profile by sport name (e.g., Basketball). Profile created if it doesn't exist." },
   { value: "{league}", label: "{league}", description: "Add channels to a profile by league name (e.g., NBA, NFL). Profile created if it doesn't exist." },
+  { value: "{league_abbrev}", label: "{league_abbrev}", description: "Add channels to a profile by compact league code (e.g., NCAAH for college hockey, EPL). Profile created if it doesn't exist." },
 ] as const
 
 // Check if a string is a preset wildcard
-const PRESET_WILDCARDS = ["{sport}", "{league}"]
+const PRESET_WILDCARDS = ["{sport}", "{league}", "{league_abbrev}"]
 
 interface ChannelProfileSelectorProps {
   /** Currently selected profile IDs and/or wildcards */
@@ -88,10 +89,13 @@ export function ChannelProfileSelector({
   const addCustomPattern = () => {
     if (!customPattern.trim()) return
     const allowed = allowKeywordWildcard
-      ? ["{sport}", "{league}", "{exception_keyword}"]
-      : ["{sport}", "{league}"]
+      ? ["{sport}", "{league}", "{league_abbrev}", "{exception_keyword}"]
+      : ["{sport}", "{league}", "{league_abbrev}"]
     // A wildcard may carry a |filter chain (#1050): {sport|upper} still counts.
-    const names = allowKeywordWildcard ? "sport|league|exception_keyword" : "sport|league"
+    // league_abbrev precedes league so the alternation cannot stop short at the prefix.
+    const names = allowKeywordWildcard
+      ? "sport|league_abbrev|league|exception_keyword"
+      : "sport|league_abbrev|league"
     const wildcard = new RegExp(`\\{(${names})(\\|[A-Za-z_]+)*\\}`)
     if (!wildcard.test(customPattern)) {
       toast.error(`Pattern must include ${allowed.join(" or ")}`)
@@ -385,6 +389,7 @@ export function ChannelProfileSelector({
 
           <div className="px-3 py-1.5 text-xs text-muted-foreground">
             Available: <code className="bg-muted px-1 rounded">{"{sport}"}</code>, <code className="bg-muted px-1 rounded">{"{league}"}</code>
+            , <code className="bg-muted px-1 rounded">{"{league_abbrev}"}</code>
             {allowKeywordWildcard && (
               <>, <code className="bg-muted px-1 rounded">{"{exception_keyword}"}</code></>
             )}
