@@ -341,7 +341,8 @@ function LeagueConfigRow({
                       className="w-64 mt-2"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      {"{sport}"}, {"{league}"}, plus {"{conference}"}, {"{conference_abbrev}"}, and{" "}
+                      {"{sport}"}, {"{league}"}, {"{league_abbrev}"}, plus {"{conference}"},
+                      {"{conference_abbrev}"}, and{" "}
                       {"{division}"} for NCAA leagues — "{"{league}"} | {"{conference_abbrev}"}"
                       buckets college football as "NCAAF | SEC". {"{exception_keyword}"} is the
                       matched exception keyword ("{"{exception_keyword}"}: {"{league}"}" → "Spanish: EPL").
