@@ -205,6 +205,10 @@ TEAM_ALIASES: dict[str, str] = {
     # reading and gains the soccer side.
     "ireland": "republic of ireland",
     "holland": "netherlands",
+    # Widening only (#874): the bare town is also the women's side's full
+    # ESPN name (eng.w.fa) — without this it exact-hits only that team and
+    # vetoes every men's eng.5 fixture.
+    "kidderminster": "kidderminster harriers",
 }
 
 
