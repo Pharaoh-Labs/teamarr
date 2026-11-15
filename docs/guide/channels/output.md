@@ -18,7 +18,7 @@ Dispatcharr **connection** (URL, credentials), the **EPG source**, and **logo cl
 
 Which Dispatcharr profiles new Teamarr channels are assigned to. These defaults apply to all sources unless overridden per league. Profile assignment is re-enforced on every EPG generation run.
 
-The selector lists your existing profiles as checkboxes, plus two **dynamic profile** entries — `{sport}` and `{league}` — and an **Add custom pattern…** input for combined patterns (a custom pattern must contain `{sport}` or `{league}`). Dynamic profiles are created in Dispatcharr on demand: check `{sport}` and every channel is also added to a profile named for its sport.
+The selector lists your existing profiles as checkboxes, plus three **dynamic profile** entries — `{sport}`, `{league}`, and `{league_abbrev}` — and an **Add custom pattern…** input for combined patterns (a custom pattern must contain `{sport}`, `{league}`, or `{league_abbrev}`). Dynamic profiles are created in Dispatcharr on demand: check `{sport}` and every channel is also added to a profile named for its sport.
 
 ## Default Stream Profile
 
@@ -39,11 +39,11 @@ Pick a static group from the dropdown. By default the list hides M3U-sourced gro
 | **Static** | All channels go to the selected group above |
 | **Dynamic by Sport** | Auto-creates and assigns groups named by sport |
 | **Dynamic by League** | Auto-creates and assigns groups named by league |
-| **Custom pattern** | Define a pattern using `{sport}`, `{league}`, `{conference}`, `{conference_abbrev}`, `{division}`, and `{exception_keyword}` placeholders. A value with no placeholder is taken as a group name as it stands |
+| **Custom pattern** | Define a pattern using `{sport}`, `{league}`, `{league_abbrev}`, `{conference}`, `{conference_abbrev}`, `{division}`, and `{exception_keyword}` placeholders. A value with no placeholder is taken as a group name as it stands |
 
 When **Custom pattern** is selected, a pattern field appears. For example, `{sport} | {league}` creates groups like "Hockey | NHL". Teamarr creates these dynamic groups in Dispatcharr automatically.
 
-In group patterns, `{sport}` resolves to the sport's display name ("Hockey"), and `{league}` to the league's **short alias** — "EPL", not "English Premier League". `{conference}` resolves to the home team's conference name for NCAA football/basketball events ("Southeastern Conference"), `{conference_abbrev}` to its compact form ("SEC", "ACC", "Big Ten"), and `{division}` to that conference's division — **FBS** or **FCS** for college football, **Division I** for college basketball. Events without conference data fall back to the static group.
+In group patterns, `{sport}` resolves to the sport's display name ("Hockey"), and `{league}` to the league's **short alias** — "EPL", not "English Premier League". `{league_abbrev}` abbreviates that alias the same way the [`{league_abbrev}` template variable](../epg/variables.md) does — existing capitals plus the first letter of every word — so leagues whose alias is a phrase get a compact name: "NCAA Hockey" → `NCAAH`, "NCAA W Hockey" → `NCAAWH`, where `{league}` spells them out. The same wildcard works in channel profile patterns. `{conference}` resolves to the home team's conference name for NCAA football/basketball events ("Southeastern Conference"), `{conference_abbrev}` to its compact form ("SEC", "ACC", "Big Ten"), and `{division}` to that conference's division — **FBS** or **FCS** for college football, **Division I** for college basketball. Events without conference data fall back to the static group.
 
 Every wildcard takes the same `|filter` chain as [template variables](../epg/variables.md#filters-transforming-variable-values): `{sport|upper} | {league}` names groups "HOCKEY | NHL" and "BASEBALL | MLB" instead of mixing "Hockey" with "NHL"; `{league|lower}`, `{sport|title}` and `|slug` work the same way, and filters chain left to right. A misspelled filter leaves the wildcard unresolved, so the channel lands in the static group rather than in a group named after the typo.
 

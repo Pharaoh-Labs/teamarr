@@ -83,6 +83,11 @@ CACHED_TEAMS = [
     ("Kosovo", "Kosovo", "KOS", "uefa.nations", "soccer"),
     ("Netherlands", "Netherlands", "NED", "uefa.nations", "soccer"),
     ("Germany", "Germany", "GER", "uefa.nations", "soccer"),
+    # "Kidderminster" is also the women's side's full ESPN name (eng.w.fa);
+    # the alias widens the bare town to the men's club (#874).
+    ("Kidderminster Harriers", "Kid'minster", "KID", "eng.5", "soccer"),
+    ("FC Halifax Town", "Halifax", "HAL", "eng.5", "soccer"),
+    ("Kidderminster", "Harries", "KMIN", "eng.w.fa", "soccer"),
 ]
 
 
@@ -874,3 +879,40 @@ class TestOneSidedAlias:
     def test_multi_league_path_matches(self, db):
         result = _match_multi("W. Michigan at Michigan", self.EVENT, db)
         assert result.category is ResultCategory.MATCHED
+
+
+class TestAliasWidensTheWomensSideCollision:
+    """2026-11-14 report: "Kidderminster vs. FC Halifax Town" failed
+    fixture_not_in_league all season — the bare town is the women's side's
+    full ESPN name (eng.w.fa) and exact-hits only that team. The alias widens
+    the reading (#874) without taking the women's one away.
+    """
+
+    def test_bare_town_carries_both_readings(self):
+        resolution = TeamIdentityIndex(CACHED_TEAMS).resolve("Kidderminster")
+        assert resolution.exact  # the women's row really is named "Kidderminster"
+        leagues = {i.league for i in resolution.identities}
+        assert "eng.w.fa" in leagues  # the exact full-name hit
+        assert "eng.5" in leagues  # carried via the alias
+
+    def test_national_league_pair_finds_eng5(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        assert index.fixture_leagues("Kidderminster", "FC Halifax Town") == {"eng.5"}
+
+    def test_womens_side_keeps_its_own_fixture(self):
+        index = TeamIdentityIndex(CACHED_TEAMS)
+        leagues = index.fixture_leagues("Kidderminster", "Kidderminster")
+        assert leagues is not None and "eng.w.fa" in leagues
+
+    def test_national_league_stream_matches_the_eng5_event(self, db_factory):
+        event = _event(
+            _team("FC Halifax Town", "Halifax", "HAL", "eng.5", "soccer"),
+            _team("Kidderminster Harriers", "Kid'minster", "KID", "eng.5", "soccer"),
+            "eng5-hal-kid",
+        )
+        # The date tracks TODAY so the trusted-stream-date gate never fires.
+        stream = f"DAZN US 12: Kidderminster vs. FC Halifax Town @ {TODAY:%b %-d} 10:00AM ET"
+        result = _match(stream, event, "eng.5", db_factory)
+        assert result.category is ResultCategory.MATCHED, result.failed_reason
+        result_multi = _match_multi(stream, event, db_factory)
+        assert result_multi.category is ResultCategory.MATCHED, result_multi.failed_reason

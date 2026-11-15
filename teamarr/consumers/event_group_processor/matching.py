@@ -21,6 +21,7 @@ from teamarr.consumers.matching import (
     StreamMatcher,
 )
 from teamarr.consumers.matching.epg_resolver import (
+    BORROWED_TVG_ID_KEY,
     EpgCatalogIndex,
     build_epg_catalog_index,
 )
@@ -244,6 +245,11 @@ class StreamMatching:
         be pre-built into an EPG-linked Dispatcharr channel. Programs are fetched
         by the resolved tvg_id but indexed by the stream tvg_id for matcher
         lookup.
+
+        A stream with no tvg_id at all still goes through the channel and name
+        steps (#1215): the resolver gives it the guide id they find as its key
+        for this run, in place, so there is no early exit for a source whose
+        streams carry none.
         """
         if not group.epg_match_enabled:
             return None
@@ -252,10 +258,6 @@ class StreamMatching:
 
         if not self._dispatcharr_client:
             return EPGProgramIndex({}, unavailable="no Dispatcharr connection")
-
-        if not any(s.get("tvg_id") for s in streams):
-            # Nothing to look a guide up by: each stream is marked no_epg_channel.
-            return EPGProgramIndex({})
 
         from datetime import datetime, time
 
@@ -447,7 +449,11 @@ class StreamMatching:
             return
 
         already = set(index.tvg_ids())
-        wanted = {s.get("tvg_id") for s in streams if s.get("tvg_id")} - already
+        # A borrowed id (#1215) is the Dispatcharr guide's, not the provider's:
+        # this fallback matches on the provider's own ids only.
+        wanted = {
+            s.get("tvg_id") for s in streams if s.get("tvg_id") and not s.get(BORROWED_TVG_ID_KEY)
+        } - already
         if not wanted:
             return
 
