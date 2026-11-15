@@ -120,7 +120,7 @@ def _make_fetch_processor(streams, accounts, calls=None):
         return accounts
 
     m3u = SimpleNamespace(
-        list_streams=lambda group_id=None: streams,
+        list_streams=lambda group_id=None, account_id=None: streams,
         list_accounts=list_accounts,
     )
     return make_bare_processor(_dispatcharr_client=SimpleNamespace(m3u=m3u))
@@ -135,7 +135,7 @@ def test_fetch_streams_stamps_per_stream_account_name():
     accounts = [SimpleNamespace(id=1, name="Login 1"), SimpleNamespace(id=2, name="Login 2")]
     proc = _make_fetch_processor(streams, accounts)
 
-    group = SimpleNamespace(is_channel_source=False, m3u_group_id=7)
+    group = SimpleNamespace(is_channel_source=False, m3u_group_id=7, m3u_account_id=None)
     dicts = proc._fetch_streams(group)
 
     by_id = {d["id"]: d for d in dicts}
@@ -148,7 +148,8 @@ def test_fetch_streams_unknown_account_yields_none():
     accounts = [SimpleNamespace(id=1, name="Login 1")]
     proc = _make_fetch_processor(streams, accounts)
 
-    dicts = proc._fetch_streams(SimpleNamespace(is_channel_source=False, m3u_group_id=7))
+    group = SimpleNamespace(is_channel_source=False, m3u_group_id=7, m3u_account_id=None)
+    dicts = proc._fetch_streams(group)
     assert dicts[0]["m3u_account_name"] is None
 
 
@@ -158,7 +159,7 @@ def test_account_lookup_cached_per_processor():
     accounts = [SimpleNamespace(id=1, name="Login 1")]
     proc = _make_fetch_processor(streams, accounts, calls)
 
-    group = SimpleNamespace(is_channel_source=False, m3u_group_id=7)
+    group = SimpleNamespace(is_channel_source=False, m3u_group_id=7, m3u_account_id=None)
     proc._fetch_streams(group)
     proc._fetch_streams(group)
     assert len(calls) == 1  # one list_accounts call across both fetches
@@ -172,9 +173,12 @@ def test_account_lookup_failure_does_not_break_fetch():
     def boom(include_custom=False):
         raise RuntimeError("dispatcharr down")
 
-    m3u = SimpleNamespace(list_streams=lambda group_id=None: streams, list_accounts=boom)
+    m3u = SimpleNamespace(
+        list_streams=lambda group_id=None, account_id=None: streams, list_accounts=boom
+    )
     proc = make_bare_processor(_dispatcharr_client=SimpleNamespace(m3u=m3u))
 
-    dicts = proc._fetch_streams(SimpleNamespace(is_channel_source=False, m3u_group_id=7))
+    group = SimpleNamespace(is_channel_source=False, m3u_group_id=7, m3u_account_id=None)
+    dicts = proc._fetch_streams(group)
     assert len(dicts) == 1
     assert dicts[0]["m3u_account_name"] is None

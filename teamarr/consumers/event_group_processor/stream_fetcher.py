@@ -168,7 +168,7 @@ class StreamFetcher:
     def _fetch_streams(self, group: EventEPGGroup) -> list[dict]:
         """Fetch M3U streams from Dispatcharr for the group.
 
-        Uses group's m3u_group_id to filter streams. The system-managed
+        Uses the group's M3U group and account bindings to filter streams. The system-managed
         channel-source group (183.9) instead draws its candidates from the
         streams curated onto Dispatcharr channels.
         """
@@ -193,7 +193,10 @@ class StreamFetcher:
                     group.id,
                 )
                 return []
-            streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
+            streams = m3u_manager.list_streams(
+                group_id=group.m3u_group_id,
+                account_id=group.m3u_account_id,
+            )
 
             # Convert to dicts for matcher (sorted by name for consistent order)
             account_names = self._account_names()

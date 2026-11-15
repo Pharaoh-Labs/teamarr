@@ -65,6 +65,10 @@ Preview lists each unmatched stream with what the classifier actually read out o
 
 Click **Add Stream Source** to open the import screen. It lists your Dispatcharr M3U accounts in a sidebar; selecting one shows its stream groups with stream counts.
 
+Each imported source reads that group's streams from the selected M3U account.
+If several accounts share a group name, import it separately for each account
+whose streams you want to use.
+
 ![The import screen — M3U account sidebar and stream group list](../../assets/images/sources-import.png)
 
 From there:
