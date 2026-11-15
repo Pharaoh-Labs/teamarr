@@ -129,6 +129,10 @@ class FakeChannel:
     event_epg_group_id: int | None = 1
     event_id: str | None = None
     feed_team_id: str | None = None
+    # #1174: the liveness guard reads these (None = unknown = never live)
+    event_date: str | None = None
+    event_end_estimate: str | None = None
+    sport: str | None = None
 
 
 @dataclass

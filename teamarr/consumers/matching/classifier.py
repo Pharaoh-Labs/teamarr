@@ -1411,7 +1411,14 @@ _RACING_SERIES_SIGNATURES: "tuple[tuple[Pattern[str], tuple[str, ...]], ...]" = 
     # cross-series shape this table exists to block, at a much higher
     # collision rate (every F1 weekend). No corresponding league exists in
     # schema.sql, so like supercross below this maps to a blocking sentinel.
-    (re.compile(r"\b(?:formula\s*[23e]|f[23])\b", re.IGNORECASE), ("formula-feeder",)),
+    # F1 Academy (#1159) is the same support series, but its name CONTAINS
+    # the F1 signature ("F1 Academy: United States Race 2", F1 TV's
+    # "United States GP - F1A Race 1"), so naming it must also drop the f1
+    # scope the parent pattern adds — see _FEEDER_PARENTS.
+    (
+        re.compile(r"\b(?:formula\s*[23e]|f[23]|f1\s*academy|f1a)\b", re.IGNORECASE),
+        ("formula-feeder",),
+    ),
     (
         re.compile(r"\bnascar\b", re.IGNORECASE),
         ("nascar-cup", "nascar-xfinity", "nascar-truck"),
@@ -1427,6 +1434,18 @@ _RACING_SERIES_SIGNATURES: "tuple[tuple[Pattern[str], tuple[str, ...]], ...]" = 
     (re.compile(r"\b(?:wec|world\s+endurance)\b", re.IGNORECASE), ("wec",)),
     (re.compile(r"\b(?:supercross|motocross)\b", re.IGNORECASE), ("supercross",)),
 )
+
+# A support series named alongside its parent is the support series, not the
+# parent: "F1 Academy" carries the F1 signature inside its own name, and a
+# provider's channel brand ("F1 TV 53: ... - F1A Race 1", "MotoGP | Moto2
+# Race") names the parent on every stream. When a feeder sentinel fires, the
+# parent's leagues leave the scope instead of joining it (#1159) — otherwise
+# the sentinel blocked nothing, because scoping keeps any league that was
+# named and the parent's one weekend event was still eligible.
+_FEEDER_PARENTS: dict[str, tuple[str, ...]] = {
+    "formula-feeder": ("f1",),
+    "moto-feeder": ("motogp",),
+}
 
 
 def detect_racing_series_leagues(text: str) -> "tuple[str, ...] | None":
@@ -1444,6 +1463,9 @@ def detect_racing_series_leagues(text: str) -> "tuple[str, ...] | None":
     for pattern, leagues in _RACING_SERIES_SIGNATURES:
         if pattern.search(text):
             hits.extend(leagues)
+    for feeder, parents in _FEEDER_PARENTS.items():
+        if feeder in hits:
+            hits = [lg for lg in hits if lg not in parents]
     return tuple(hits) or None
 
 

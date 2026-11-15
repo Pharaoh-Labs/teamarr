@@ -280,6 +280,24 @@ def test_ended_event_gets_rule_order(db_factory, db_conn, monkeypatch):
     assert _RecordingChannelManager.pushes == [(555, {"streams": [101, 100]})]
 
 
+def test_pin_setting_off_lets_rules_take_the_top_slot(db_factory, db_conn, monkeypatch):
+    """#1187: with the live pin switched off, a scheduled run orders slot 1 too."""
+    _seed_live_channel(db_conn, live=True)
+    db_conn.execute("UPDATE settings SET pin_top_stream_while_live = 0 WHERE id = 1")
+    db_conn.commit()
+
+    _run_ordering_with_recorder(db_factory, monkeypatch, manual=False)
+
+    assert _RecordingChannelManager.pushes == [(555, {"streams": [101, 100]})]
+
+
+def test_pin_setting_defaults_on(db_conn):
+    """A fresh settings row keeps the #232 pin (#1187 default)."""
+    from teamarr.database.settings import get_stream_ordering_settings
+
+    assert get_stream_ordering_settings(db_conn).pin_top_stream_while_live is True
+
+
 # ---------------------------------------------------------------------------
 # _apply_stream_ordering — pre-scoring stats refresh (#576, #616)
 # ---------------------------------------------------------------------------
@@ -332,12 +350,20 @@ def test_ordering_refreshes_stats_once_before_scoring(db_factory, db_conn, monke
     # One bulk call for the whole pass, not one per channel.
     assert stub.calls == [[100, 101]]
     assert result["stats_refreshed"] == 1
-    # And the freshly pulled number is what got scored.
-    assert json.loads(
-        db_conn.execute(
-            "SELECT stream_stats FROM managed_channel_streams WHERE dispatcharr_stream_id = 100"
-        ).fetchone()["stream_stats"]
-    ) == {"ffmpeg_output_bitrate": 9000}
+    # And the freshly pulled number is what got scored — not merely persisted
+    # (#1180): the rows used to be read before the refresh, so the pass
+    # ordered on the previous run's stats and a stream with none cached
+    # scored as if it had none at all.
+    rows = {
+        r["dispatcharr_stream_id"]: (r["priority"], r["stream_stats"])
+        for r in db_conn.execute(
+            "SELECT dispatcharr_stream_id, priority, stream_stats FROM managed_channel_streams"
+        ).fetchall()
+    }
+    assert json.loads(rows[100][1]) == {"ffmpeg_output_bitrate": 9000}
+    assert rows[101][1] is None
+    # 100 cleared the bitrate rule on this pass's numbers; 101 did not.
+    assert rows[100][0] < rows[101][0]
 
 
 def test_ordering_skips_the_fetch_when_no_rule_reads_stats(db_factory, db_conn, monkeypatch):

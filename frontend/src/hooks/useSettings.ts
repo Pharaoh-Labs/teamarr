@@ -33,6 +33,8 @@ import {
   createStreamOrderingScope,
   updateStreamOrderingScope,
   deleteStreamOrderingScope,
+  getManagedTeamStreamOrderingScope,
+  updateManagedTeamStreamOrderingScope,
   getUpdateCheckSettings,
   updateUpdateCheckSettings,
   checkForUpdates,
@@ -130,6 +132,15 @@ export const useManagedTeamChannelSettings = settingsQueryHook(
 export const useUpdateManagedTeamChannelSettings = settingsMutationHook(
   updateManagedTeamChannelSettings,
   [["settings", "managed-team-channels"]],
+)
+
+export const useManagedTeamStreamOrderingScope = settingsQueryHook(
+  "stream-ordering-managed-team-scope",
+  getManagedTeamStreamOrderingScope,
+)
+export const useUpdateManagedTeamStreamOrderingScope = settingsMutationHook(
+  updateManagedTeamStreamOrderingScope,
+  [["settings", "stream-ordering-managed-team-scope"]],
 )
 
 export const useSchedulerSettings = settingsQueryHook("scheduler", getSchedulerSettings)

@@ -35,14 +35,26 @@ FeedBehavior = Literal["consolidate", "separate", "ignore"]
 
 # The feed-variant vocabulary. Measured over a 121,957-stream install
 # (2026-09-12): tracker 107, mixed 99, timing/data 94, pit lane 94,
-# on-board 111. Six words; providers phrase them a handful of ways.
+# on-board 111. Seven words; providers phrase them a handful of ways. Sky
+# Sports+ writes "F1 More From The Pit Wall <Onboard Mix|Timings|
+# Multiscreen>" (#1159); the rows are managed, so a term a provider uses has
+# to live here — a user's edit does not survive a refresh.
 VARIANT_FEEDS: tuple[tuple[str, str, str], ...] = (
     # (feed_key suffix, label, match terms)
     ("pit-lane", "Pit Lane", "Pit Lane, Pitlane, Bonus Pit Lane"),
     ("driver-tracker", "Driver Tracker", "Driver Tracker, Tracker"),
-    ("timing", "Timing", "Timing Channel, Live Timing, Data Channel, Driver Data, F1-DATA"),
-    ("mixed-onboard", "Mixed Onboard", "Mixed On-Board, Mixed Onboard, Mixed On Board"),
+    (
+        "timing",
+        "Timing",
+        "Timing Channel, Live Timing, Timings, Data Channel, Driver Data, F1-DATA",
+    ),
+    (
+        "mixed-onboard",
+        "Mixed Onboard",
+        "Mixed On-Board, Mixed Onboard, Mixed On Board, Onboard Mix",
+    ),
     ("team-radio", "Team Radio", "Team Radio"),
+    ("multiscreen", "Multiscreen", "Multiscreen, Multi-Screen, Multi Screen"),
     # Generic onboard with no driver named (Viaplay: "Onboard | Motorsport").
     # Listed LAST so a driver row wins for any stream that names one.
     ("onboard", "Onboard", "On-Board Camera, Onboard, On-Board, On Board"),

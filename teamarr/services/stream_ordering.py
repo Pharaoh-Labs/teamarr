@@ -45,6 +45,7 @@ _SCORE_CLAMP = BAND_STRIDE // 2 - 1
 # containing the word "the"). Deliberately conservative — words like "city",
 # "united", "real" are kept because they distinguish real clubs.
 _TEAM_TERM_STOPWORDS = frozenset({"the", "and", "for", "with"})
+CHANNEL_TEAM_SELECTOR = "[channel team]"
 
 
 @dataclass
@@ -103,6 +104,16 @@ class GameContext:
         )
 
 
+@dataclass(frozen=True)
+class ManagedTeamContext:
+    """Identity of the persistent team channel being ordered."""
+
+    provider_team_id: str | None = None
+    sport: str | None = None
+    team_name: str | None = None
+    team_abbrev: str | None = None
+
+
 def _tie_break(stream: ManagedChannelStream) -> tuple:
     """Order inside a band: source id, then attach time (#1109).
 
@@ -127,6 +138,7 @@ class StreamOrderingService:
         rules: list[StreamOrderingRule],
         conn: Connection | None = None,
         context: GameContext | None = None,
+        managed_team: ManagedTeamContext | None = None,
     ):
         """Initialize the service.
 
@@ -135,8 +147,11 @@ class StreamOrderingService:
             conn: Database connection (optional, needed for group name lookups)
             context: The channel's game, for rules with an "Only when"
                 condition (#539). None = nothing known, so those rules are inert.
+            managed_team: The persistent channel owner, enabling the
+                ``[channel team]`` feed selector.
         """
         self.context = context or GameContext()
+        self.managed_team = managed_team
         self.rules = sorted(rules, key=lambda r: r.priority)
         self.conn = conn
         # Only widen the priority scale when scoring is actually in play; a
@@ -459,6 +474,8 @@ class StreamOrderingService:
         name regex can't see. Rows without one (NULL) fall back to the name
         regex, so pre-column rows and unresolved streams keep working.
         """
+        if rule_value == CHANNEL_TEAM_SELECTOR:
+            return self._match_channel_team_feed(stream)
         if stream.feed_team_id:
             team_ids = self._get_team_feed_ids(rule_value)
             return team_ids is not None and self._feed_team_selected(stream, team_ids)
@@ -476,6 +493,15 @@ class StreamOrderingService:
         it belongs to a different team than the rule selects. NULL falls back
         to the regex path, which requires an explicit feed indicator first.
         """
+        if rule_value == CHANNEL_TEAM_SELECTOR:
+            if not self.managed_team or not self.managed_team.provider_team_id:
+                return False
+            if stream.feed_team_id:
+                return str(stream.feed_team_id) != str(self.managed_team.provider_team_id)
+            if not stream.stream_name or not self._FEED_INDICATOR_RE.search(stream.stream_name):
+                return False
+            pattern = self._channel_team_feed_pattern()
+            return pattern is not None and not bool(pattern.search(stream.stream_name))
         if stream.feed_team_id:
             team_ids = self._get_team_feed_ids(rule_value)
             return team_ids is not None and not self._feed_team_selected(stream, team_ids)
@@ -487,6 +513,48 @@ class StreamOrderingService:
         if pattern is None:
             return False
         return not bool(pattern.search(stream.stream_name))
+
+    def _match_channel_team_feed(self, stream: ManagedChannelStream) -> bool:
+        """Match a feed to this persistent channel's owner team."""
+        if not self.managed_team or not self.managed_team.provider_team_id:
+            return False
+        if stream.feed_team_id:
+            return str(stream.feed_team_id) == str(self.managed_team.provider_team_id)
+        if not stream.stream_name:
+            return False
+        pattern = self._channel_team_feed_pattern()
+        return pattern is not None and bool(pattern.search(stream.stream_name))
+
+    def _channel_team_feed_pattern(self) -> re.Pattern | None:
+        """Build the name fallback for ``[channel team]`` from owner metadata."""
+        cache_key = CHANNEL_TEAM_SELECTOR
+        if cache_key in self._team_feed_patterns:
+            return self._team_feed_patterns[cache_key]
+        team = self.managed_team
+        if not team:
+            self._team_feed_patterns[cache_key] = None
+            return None
+        terms = self._build_team_terms(
+            [{"team_name": team.team_name or "", "team_abbrev": team.team_abbrev or ""}]
+        )
+        if not terms:
+            self._team_feed_patterns[cache_key] = None
+            return None
+        try:
+            team_alt = "|".join(sorted(terms, key=len, reverse=True))
+            pattern = re.compile(
+                r"(?i)(?=.*\b(?P<team>" + team_alt + r")\b)"
+                r"(?:.*(?:vs|at|@).*(?P=team).*(?:home|\(home\)|cam\s*0?1)"
+                r"|.*(?P=team).*(?:vs|at|@).*(?:away|cam\s*0?2)"
+                r"|.*\((?P=team)\s+(?:feed|in[-\s]?arena)\b.*"
+                r"|.*home\s*feed.*:\s*\S+\s+(?:vs|at|@)\s+(?P=team)\b"
+                r"|.*away\s*feed.*:\s*(?P=team)\s+(?:vs|at|@)\s+\S+)"
+            )
+        except re.error as exc:
+            logger.warning("[STREAM_ORDER] Failed to compile channel-team feed pattern: %s", exc)
+            pattern = None
+        self._team_feed_patterns[cache_key] = pattern
+        return pattern
 
     @staticmethod
     def _match_feed_side(stream: ManagedChannelStream, side: str) -> bool:
@@ -1030,6 +1098,7 @@ def get_stream_ordering_service(
     sport: str | None = None,
     league: str | None = None,
     context: GameContext | None = None,
+    managed_team: ManagedTeamContext | None = None,
 ) -> StreamOrderingService:
     """Factory function to create a StreamOrderingService with rules from database.
 
@@ -1037,12 +1106,20 @@ def get_stream_ordering_service(
         conn: Database connection
         sport / league: The channel's, to pick its scoped ruleset
         context: The channel's game, for "Only when" rule conditions (#539)
+        managed_team: The persistent team-channel owner. Its fixed scope takes
+            precedence over sport and league scopes.
 
     Returns:
         Configured StreamOrderingService
     """
 
-    from teamarr.database.stream_ordering_scopes import resolve_stream_ordering_rules
+    from teamarr.database.stream_ordering_scopes import (
+        resolve_managed_team_stream_ordering_rules,
+        resolve_stream_ordering_rules,
+    )
 
-    rules, _ = resolve_stream_ordering_rules(conn, sport, league)
-    return StreamOrderingService(rules=rules, conn=conn, context=context)
+    if managed_team:
+        rules, _ = resolve_managed_team_stream_ordering_rules(conn)
+    else:
+        rules, _ = resolve_stream_ordering_rules(conn, sport, league)
+    return StreamOrderingService(rules=rules, conn=conn, context=context, managed_team=managed_team)

@@ -516,6 +516,14 @@ def update_stream_ordering_rules(
     return False
 
 
+def update_stream_ordering_pin_top_while_live(conn: Connection, enabled: bool) -> bool:
+    """Set whether a live channel's #1 stream is pinned against scheduled runs (#1187)."""
+    if _apply(conn, "stream_ordering", {"pin_top_stream_while_live": bool(enabled)}):
+        logger.info("[STREAM_ORDER] pin_top_stream_while_live = %s", bool(enabled))
+        return True
+    return False
+
+
 def update_update_check_settings(
     conn: Connection,
     enabled: bool | None = None,

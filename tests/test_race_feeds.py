@@ -119,6 +119,21 @@ class TestUpsert:
         assert [f.kind for f in feeds][: len(ROSTER)] == ["driver"] * len(ROSTER)
         assert feeds[-1].feed_key == "variant:onboard"
 
+    def test_a_new_variant_reaches_an_existing_install_on_refresh(self, conn):
+        # #1159: a vocabulary row added in code must appear on the next
+        # refresh of an install that already has the older rows.
+        upsert_roster(conn, "f1", ROSTER)
+        conn.execute(
+            "DELETE FROM race_feeds WHERE league = 'f1' AND feed_key = 'variant:multiscreen'"
+        )
+        conn.commit()
+        assert "variant:multiscreen" not in {f.feed_key for f in list_race_feeds(conn, "f1")}
+        result = upsert_roster(conn, "f1", ROSTER)
+        assert result["inserted"] == 1
+        feeds = {f.feed_key: f for f in list_race_feeds(conn, "f1")}
+        assert feeds["variant:multiscreen"].behavior == "ignore"
+        assert feeds["variant:multiscreen"].managed
+
     def test_refresh_keeps_the_users_choices(self, conn):
         upsert_roster(conn, "f1", ROSTER)
         leclerc = next(f for f in list_race_feeds(conn, "f1") if f.label == "Charles Leclerc")
@@ -197,6 +212,28 @@ class TestScopedKeywords:
                 "ignore",
             ),
             ("F1 TV 07: [4K] TRACKER @ 6 Sep 01:00 PM", "Driver Tracker", "ignore"),
+            # Sky Sports+ (#1159): the Driver Tracker variant already routed;
+            # the other three sat on the main session channel.
+            (
+                "Sky Sports + 37: F1 More From The Pit Wall Driver Tracker @ 24 Oct 05:00 PM",
+                "Driver Tracker",
+                "ignore",
+            ),
+            (
+                "Sky Sports + 38: F1 More From The Pit Wall Multiscreen @ 24 Oct 05:00 PM London",
+                "Multiscreen",
+                "ignore",
+            ),
+            (
+                "Sky Sports + 39: F1 More From The Pit Wall Onboard Mix @ 24 Oct 05:00 PM London",
+                "Mixed Onboard",
+                "ignore",
+            ),
+            (
+                "Sky Sports + 40: F1 More From The Pit Wall Timings @ 24 Oct 05:00 PM London",
+                "Timing",
+                "ignore",
+            ),
             ("F1 TV 09: DATA @ 6 Sep 01:00 PM", None, None),  # bare DATA is not a term (too common)
             ("DK|ViaPlay 4 - Onboard | Motorsport", "Onboard", "ignore"),
             ("F1 TV 05: F1 LIVE @ 6 Sep 01:00 PM", None, None),  # main feed: no keyword

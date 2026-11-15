@@ -11,7 +11,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from teamarr.core import SportsProvider
 from teamarr.database import get_db
-from teamarr.database.team_cache import invalidate_team_identity_caches
+from teamarr.database.team_cache import (
+    clear_failed_matches_naming,
+    invalidate_team_identity_caches,
+    read_team_identity_rows,
+)
 from teamarr.providers import ProviderRegistry
 from teamarr.providers.espn.client import ESPNClient
 from teamarr.utilities import call_metrics
@@ -523,6 +527,7 @@ class CacheRefresher:
 
         with self._db() as conn:
             cursor = conn.cursor()
+            before = read_team_identity_rows(conn, provider_name, league_code)
             cursor.execute(
                 "DELETE FROM team_cache WHERE provider = ? AND league = ?",
                 (provider_name, league_code),
@@ -536,6 +541,7 @@ class CacheRefresher:
                 """,
                 rows,
             )
+            added = read_team_identity_rows(conn, provider_name, league_code) - before
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO league_cache
@@ -559,7 +565,14 @@ class CacheRefresher:
         # silently missing match. Waiting out its TTL would regress the
         # refresh-then-generate sequence, which used to see every write
         # immediately because the index was rebuilt per group.
-        invalidate_team_identity_caches()
+        #
+        # The persisted negative cache is cleared only for the teams this
+        # refresh ADDED or RENAMED (#1184): this path runs on every container
+        # start and once a day, and a full clear each time re-scored every
+        # never-matching stream for the next two or three runs even when the
+        # rows came back identical.
+        invalidate_team_identity_caches(clear_failed=False)
+        clear_failed_matches_naming(added, self._db)
 
         return len(rows)
 
@@ -839,6 +852,8 @@ class CacheRefresher:
         with self._db() as conn:
             cursor = conn.cursor()
 
+            before = read_team_identity_rows(conn)
+
             # Clear old data
             cursor.execute("DELETE FROM team_cache")
             cursor.execute("DELETE FROM league_cache")
@@ -912,10 +927,13 @@ class CacheRefresher:
                 len(leagues),
                 len(unique_teams),
             )
+            added = read_team_identity_rows(conn) - before
 
         # See the note in _save_league_teams: the fixture gate's shared index
-        # must not outlive the rows it was built from.
-        invalidate_team_identity_caches()
+        # must not outlive the rows it was built from, and only the teams this
+        # refresh added or renamed clear cached failures (#1184).
+        invalidate_team_identity_caches(clear_failed=False)
+        clear_failed_matches_naming(added, self._db)
 
     def _update_leagues_team_counts(self, cursor, leagues: list[dict]) -> None:
         """Update cached_team_count in the leagues table.

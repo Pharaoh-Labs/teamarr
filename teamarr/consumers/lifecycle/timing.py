@@ -120,6 +120,21 @@ def is_channel_event_live(
     return start <= now <= end
 
 
+def live_pin_enabled(conn) -> bool:
+    """Whether the live-event #1 pin (#232) is switched on (#1187).
+
+    Reads ``settings.pin_top_stream_while_live``. Default True — a database
+    without the column (older schema, a minimal test fixture) keeps the pin,
+    because the pin is the conservative behaviour.
+    """
+    try:
+        from teamarr.database.settings import get_stream_ordering_settings
+
+        return bool(get_stream_ordering_settings(conn).pin_top_stream_while_live)
+    except Exception:  # noqa: BLE001 — an unreadable setting keeps the default
+        return True
+
+
 def _parse_channel_dt(value: "str | datetime | None") -> datetime | None:
     """Parse a managed_channels timestamp (ISO string from ``.isoformat()``).
 

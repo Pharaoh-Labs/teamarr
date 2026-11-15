@@ -229,10 +229,14 @@ export interface StreamOrderingRule {
 
 export interface StreamOrderingSettings {
   rules: StreamOrderingRule[]
+  /** #1187: keep a live channel's #1 stream fixed against scheduled runs (#232 pin). */
+  pin_top_stream_while_live: boolean
 }
 
 export interface StreamOrderingSettingsUpdate {
   rules: StreamOrderingRule[]
+  /** Omit to leave the live-pin setting unchanged. */
+  pin_top_stream_while_live?: boolean
 }
 
 export interface StreamOrderingScope {
@@ -249,6 +253,20 @@ export interface StreamOrderingScopeUpdate {
   name: string
   sports: string[]
   leagues: string[]
+  rules: StreamOrderingRule[]
+  use_global_scoring: boolean
+  use_global_priority: boolean
+}
+
+export interface ManagedTeamStreamOrderingScope {
+  name: string
+  rules: StreamOrderingRule[]
+  use_global_scoring: boolean
+  use_global_priority: boolean
+  has_managed_channels: boolean
+}
+
+export interface ManagedTeamStreamOrderingScopeUpdate {
   rules: StreamOrderingRule[]
   use_global_scoring: boolean
   use_global_priority: boolean
@@ -748,6 +766,16 @@ export async function updateStreamOrderingScope(
 
 export async function deleteStreamOrderingScope(id: number): Promise<void> {
   return api.delete(`/settings/stream-ordering/scopes/${id}`)
+}
+
+export async function getManagedTeamStreamOrderingScope(): Promise<ManagedTeamStreamOrderingScope> {
+  return api.get("/settings/stream-ordering/managed-team-scope")
+}
+
+export async function updateManagedTeamStreamOrderingScope(
+  data: ManagedTeamStreamOrderingScopeUpdate,
+): Promise<ManagedTeamStreamOrderingScope> {
+  return api.put("/settings/stream-ordering/managed-team-scope", data)
 }
 
 // Update Check Settings API

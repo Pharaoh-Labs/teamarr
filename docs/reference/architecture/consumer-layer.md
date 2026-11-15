@@ -61,9 +61,21 @@ The `event_group_processor/` package handles the core matching and channel lifec
 
 | Method | Description |
 |--------|-------------|
-| `process_group(group_id)` | Full processing for one group — returns match/channel/EPG stats |
-| `process_all_groups(callback)` | Parallel processing of all groups with ThreadPoolExecutor |
+| `process_all_groups(callback)` | Sequential processing of enabled groups, sharing run-scoped catalogs and event caches |
 | `preview_group(group_id)` | Test matching without persisting — returns match details |
+
+### Shared Dispatcharr Catalogs
+
+Channel-source candidate fetching and EPG resolution share one successful channel-map
+and EPGData catalog snapshot per generation. Managed event and team output channels
+are excluded before assigning stream-to-channel slots. Each source still applies
+its own channel-group selection, active-guide checks, and overlap exclusions;
+stream details are fetched only for that source's eligible stream IDs.
+
+The processor clears the snapshot and account/group name caches at the start of
+each generation, including when reusing a processor instance. Catalog reads that
+raise an error are not cached, so later sources can retry. This does not cache
+programme timelines or match decisions across sources or generations.
 
 ### Subscription Leagues
 
@@ -84,7 +96,7 @@ The `event_group_processor/` package handles the core matching and channel lifec
 
 ### Managed Team Channels (`services/team_channel_manager.py`)
 
-`TeamChannelManager` creates and synchronizes persistent Dispatcharr channels for active teams with managed channels enabled. It runs before the EPG refresh, associates the refreshed Team EPG afterward, and applies team-channel stream ordering during generation.
+`TeamChannelManager` creates and synchronizes persistent Dispatcharr channels for active teams with managed channels enabled. It runs before the EPG refresh, associates the refreshed Team EPG afterward, and applies the fixed managed-team stream-ordering scope during generation. The ordering service receives the owning team's provider identity and can resolve a `[channel team]` feed selector without putting static team IDs in the ruleset.
 
 - Ownership is established only by a `managed_team_channels` record. A same-`tvg_id` Dispatcharr channel without that mapping is manual and is left untouched; a conflict is reported rather than adopted.
 - Matched event streams are persisted in `managed_team_channel_streams`, then attached only while their membership window is active. This is independent of event-channel create/delete timing.

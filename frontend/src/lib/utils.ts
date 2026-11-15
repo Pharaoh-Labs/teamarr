@@ -13,6 +13,7 @@ export const SPORT_EMOJIS: Record<string, string> = {
   basketball: "🏀",
   baseball: "⚾",
   hockey: "🏒",
+  "field hockey": "🏑",
   soccer: "⚽",
   mma: "🥊",
   boxing: "🥊",

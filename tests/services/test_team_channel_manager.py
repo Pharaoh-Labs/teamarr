@@ -1159,15 +1159,16 @@ def test_stream_ordering_uses_team_scope_and_excludes_closed_windows(monkeypatch
 
     monkeypatch.setattr(
         "teamarr.services.stream_ordering.get_stream_ordering_service",
-        lambda conn, sport, league: (
-            seen.append((sport, league)) or SimpleNamespace(compute_priority=priority)
+        lambda conn, sport, league, **kwargs: (
+            seen.append((sport, league, kwargs["managed_team"].provider_team_id))
+            or SimpleNamespace(compute_priority=priority)
         ),
     )
     channels = FakeChannels([RemoteChannel(10, "owned", "Home", "9000", streams=(55, 56, 57))])
 
     result = TeamChannelManager(_factory(database), channels).sync_stream_ordering()
 
-    assert ("basketball", "nba") in seen
+    assert ("basketball", "nba", "home") in seen
     assert result == {"channels": 1, "streams": 3, "errors": 0}
     assert channels.updated == [(10, {"streams": [56, 55]})]
     database.close()
@@ -1221,7 +1222,7 @@ def test_stream_ordering_scores_team_streams_with_stream_stats(monkeypatch):
 
     monkeypatch.setattr(
         "teamarr.services.stream_ordering.get_stream_ordering_service",
-        lambda conn, sport, league: SimpleNamespace(
+            lambda conn, sport, league, **kwargs: SimpleNamespace(
             rules=[SimpleNamespace(type="stats_metric")], compute_priority=priority
         ),
     )
@@ -1243,7 +1244,7 @@ def test_stream_ordering_skips_stats_fetch_without_stats_rules(monkeypatch):
     )
     monkeypatch.setattr(
         "teamarr.services.stream_ordering.get_stream_ordering_service",
-        lambda conn, sport, league: SimpleNamespace(
+            lambda conn, sport, league, **kwargs: SimpleNamespace(
             rules=[SimpleNamespace(type="m3u")], compute_priority=lambda stream: 1
         ),
     )

@@ -11,6 +11,8 @@ from sqlite3 import Connection
 
 from teamarr.database.settings.types import StreamOrderingRule
 
+MANAGED_TEAM_SCOPE_NAME = "Team Channels"
+
 
 @dataclass
 class StreamOrderingScope:
@@ -23,6 +25,16 @@ class StreamOrderingScope:
     rules: list[dict] = field(default_factory=list)
     use_global_scoring: bool = True
     use_global_priority: bool = True
+
+
+@dataclass
+class ManagedTeamStreamOrderingScope:
+    """The fixed ruleset applied only to persistent managed-team channels."""
+
+    rules: list[dict] = field(default_factory=list)
+    use_global_scoring: bool = True
+    use_global_priority: bool = True
+    name: str = MANAGED_TEAM_SCOPE_NAME
 
 
 class ScopeAssignmentConflict(ValueError):
@@ -148,6 +160,57 @@ def delete_stream_ordering_scope(conn: Connection, ruleset_id: int) -> bool:
     )
 
 
+def get_managed_team_stream_ordering_scope(conn: Connection) -> ManagedTeamStreamOrderingScope:
+    """Return the fixed managed-team ruleset, creating its default row lazily."""
+    conn.execute("INSERT OR IGNORE INTO managed_team_stream_ordering_scope (id) VALUES (1)")
+    row = conn.execute(
+        "SELECT rules, use_global_scoring, use_global_priority "
+        "FROM managed_team_stream_ordering_scope WHERE id = 1"
+    ).fetchone()
+    assert row is not None
+    return ManagedTeamStreamOrderingScope(
+        rules=json.loads(row["rules"] or "[]"),
+        use_global_scoring=bool(row["use_global_scoring"]),
+        use_global_priority=bool(row["use_global_priority"]),
+    )
+
+
+def update_managed_team_stream_ordering_scope(
+    conn: Connection,
+    *,
+    rules: list[dict],
+    use_global_scoring: bool = True,
+    use_global_priority: bool = True,
+) -> ManagedTeamStreamOrderingScope:
+    """Replace the fixed managed-team ruleset configuration."""
+    conn.execute(
+        "INSERT INTO managed_team_stream_ordering_scope "
+        "(id, rules, use_global_scoring, use_global_priority) VALUES (1, ?, ?, ?) "
+        "ON CONFLICT(id) DO UPDATE SET rules = excluded.rules, "
+        "use_global_scoring = excluded.use_global_scoring, "
+        "use_global_priority = excluded.use_global_priority, updated_at = CURRENT_TIMESTAMP",
+        (json.dumps(rules), int(use_global_scoring), int(use_global_priority)),
+    )
+    return get_managed_team_stream_ordering_scope(conn)
+
+
+def _merge_rules(
+    global_rules: list[StreamOrderingRule],
+    rules: list[dict],
+    use_global_scoring: bool,
+    use_global_priority: bool,
+) -> list[StreamOrderingRule]:
+    local_rules = [StreamOrderingRule(**rule) for rule in rules]
+    global_scoring = [rule for rule in global_rules if rule.mode == "score"]
+    global_priority = [rule for rule in global_rules if rule.mode != "score"]
+    local_scoring = [rule for rule in local_rules if rule.mode == "score"]
+    local_priority = [rule for rule in local_rules if rule.mode != "score"]
+    return (
+        (global_scoring + local_scoring if use_global_scoring else local_scoring)
+        + (global_priority + local_priority if use_global_priority else local_priority)
+    )
+
+
 def resolve_stream_ordering_rules(
     conn: Connection,
     sport: str | None,
@@ -170,13 +233,21 @@ def resolve_stream_ordering_rules(
     if scope is None:
         return global_rules, None
 
-    local_rules = [StreamOrderingRule(**rule) for rule in scope.rules]
-    global_scoring = [rule for rule in global_rules if rule.mode == "score"]
-    global_priority = [rule for rule in global_rules if rule.mode != "score"]
-    local_scoring = [rule for rule in local_rules if rule.mode == "score"]
-    local_priority = [rule for rule in local_rules if rule.mode != "score"]
-    return (
-        (global_scoring + local_scoring if scope.use_global_scoring else local_scoring)
-        + (global_priority + local_priority if scope.use_global_priority else local_priority),
-        scope,
-    )
+    return _merge_rules(
+        global_rules, scope.rules, scope.use_global_scoring, scope.use_global_priority
+    ), scope
+
+
+def resolve_managed_team_stream_ordering_rules(
+    conn: Connection,
+) -> tuple[list[StreamOrderingRule], ManagedTeamStreamOrderingScope]:
+    """Resolve the fixed managed-team scope against Global rule families."""
+    from teamarr.database.settings import get_stream_ordering_settings
+
+    scope = get_managed_team_stream_ordering_scope(conn)
+    return _merge_rules(
+        get_stream_ordering_settings(conn).rules,
+        scope.rules,
+        scope.use_global_scoring,
+        scope.use_global_priority,
+    ), scope

@@ -652,7 +652,7 @@ class StreamMatchCache:
             return set()
         return {row["fingerprint"] for row in rows}
 
-    def clear_failed(self) -> int:
+    def clear_failed(self, conn: sqlite3.Connection | None = None) -> int:
         """Drop every cached FAILURE, leaving successes and pins untouched (#757).
 
         Cached failures are derived from team identity, aliases and league
@@ -665,29 +665,42 @@ class StreamMatchCache:
         and clearing them would throw away the bulk of the cache for no
         correctness gain. User corrections are pinned and never cleared.
 
+        A caller that is already inside a write transaction passes its own
+        ``conn`` (#1197): the delete then rides that transaction and commits
+        with it. Opening a second connection from inside one is not an option —
+        the first holds the write lock, so the second waits out ``busy_timeout``
+        and fails with "database is locked", and the clear silently never
+        happens.
+
         Returns:
             Number of entries cleared
         """
         try:
-            with self._conn() as conn:
-                cursor = conn.execute(
-                    """
-                    DELETE FROM stream_match_cache
-                    WHERE event_id = ? AND user_corrected = 0
-                    """,
-                    (FAILED_MATCH_EVENT_ID,),
-                )
-                cleared = cursor.rowcount
-                self._commit(conn)
-                if cleared:
-                    logger.info(
-                        "[STREAM_CACHE] Cleared %d cached failure(s) after a config change",
-                        cleared,
-                    )
-                return cleared
+            if conn is not None:
+                return self._clear_failed_on(conn, commit=False)
+            with self._conn() as own:
+                return self._clear_failed_on(own, commit=True)
         except sqlite3.Error as e:
             logger.warning("[STREAM_CACHE_ERROR] Clear failed entries: %s", e)
             return 0
+
+    def _clear_failed_on(self, conn: sqlite3.Connection, *, commit: bool) -> int:
+        cursor = conn.execute(
+            """
+            DELETE FROM stream_match_cache
+            WHERE event_id = ? AND user_corrected = 0
+            """,
+            (FAILED_MATCH_EVENT_ID,),
+        )
+        cleared = cursor.rowcount
+        if commit:
+            self._commit(conn)
+        if cleared:
+            logger.info(
+                "[STREAM_CACHE] Cleared %d cached failure(s) after a config change",
+                cleared,
+            )
+        return cleared
 
     def clear_failed_naming(self, phrases: "Iterable[str]", codes: "Iterable[str]" = ()) -> int:
         """Drop the cached FAILURES whose stream name carries one of these surfaces (#1153).

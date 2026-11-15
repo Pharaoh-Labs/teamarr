@@ -56,10 +56,10 @@ def test_a_database_that_never_had_the_pattern_columns_is_untouched(db_conn):
     assert _enabled(conn) == {"plain": True}
 
 
-def test_versioned_upgrade_lands_on_103(db_conn):
+def test_versioned_upgrade_lands_on_104(db_conn):
     _add_pattern_columns(db_conn)
     _source(db_conn, "unbound", group_id=None, pattern_on=True)
     db_conn.execute("UPDATE settings SET schema_version = 102")
     _run_migrations(db_conn)
-    assert db_conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 103
+    assert db_conn.execute("SELECT schema_version FROM settings").fetchone()[0] == 104
     assert _enabled(db_conn) == {"unbound": False}

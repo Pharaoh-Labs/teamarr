@@ -18,7 +18,12 @@ from teamarr.utilities.sports import template_duration_override
 from ._host import _LifecycleHost
 from .feed_side import resolve_feed_side
 from .stream_profiles import resolve_stream_profile_for_group
-from .timing import compute_stream_window, is_channel_event_live, is_stream_in_window
+from .timing import (
+    compute_stream_window,
+    is_channel_event_live,
+    is_stream_in_window,
+    live_pin_enabled,
+)
 from .types import (
     ChannelCreationResult,
     StreamProcessResult,
@@ -863,9 +868,12 @@ class ChannelCreator(_LifecycleHost):
                     # the one a viewer is watching. Slot it in right below #1
                     # instead; rule-truth priorities stay in the DB, so normal
                     # order resumes on the first post-event push.
+                    # Conditional on the pin setting (#1187): with it off, the
+                    # ordering pass later in the run puts slot 1 in rule order.
                     if (
                         len(ordered_streams) > 1
                         and ordered_streams[0] == stream_id
+                        and live_pin_enabled(conn)
                         and is_channel_event_live(existing.event_date, existing.scheduled_delete_at)
                     ):
                         ordered_streams[0], ordered_streams[1] = (

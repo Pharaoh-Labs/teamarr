@@ -383,8 +383,11 @@ def purge_league_cache_rows(conn: sqlite3.Connection, league_code: str) -> tuple
     ).rowcount
     if teams:
         # Same reasoning as the refresh paths: the fixture gate's shared index
-        # must not keep vetoing against rows that no longer exist (#609).
+        # must not keep vetoing against rows that no longer exist (#609). The
+        # cached-failure clear must ride THIS connection: the deletes above
+        # hold the write lock until the caller commits, and a second
+        # connection would only wait on it and fail (#1197).
         from teamarr.database.team_cache import invalidate_team_identity_caches
 
-        invalidate_team_identity_caches()
+        invalidate_team_identity_caches(conn=conn)
     return teams, leagues

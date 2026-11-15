@@ -21,6 +21,17 @@ logger = logging.getLogger(__name__)
 
 _WIDGET_LOGO_URL = "https://widgets.sports.bellmedia.ca/img/{league}/{team}.webp"
 
+# The CFL scoreboard currently marks playoff games with seasonTypeId 1, the
+# same value it uses for regular-season games. Their round titles are reliable
+# enough to correct that upstream classification.
+_CFL_POSTSEASON_TITLE_MARKERS = (
+    "semi final",
+    "semifinal",
+    "eastern final",
+    "western final",
+    "grey cup",
+)
+
 
 class BellMediaProvider(SportsProvider):
     """Bell Media implementation of SportsProvider."""
@@ -144,16 +155,7 @@ class BellMediaProvider(SportsProvider):
                 return None
             status = self._parse_status(payload)
             broadcasts = self._broadcasts(payload)
-            season_type_id = row.get("seasonTypeId")
-            season_type = (
-                {
-                    0: SEASON_PRESEASON,
-                    1: SEASON_REGULAR,
-                    2: SEASON_POSTSEASON,
-                }.get(season_type_id)
-                if isinstance(season_type_id, int)
-                else None
-            )
+            season_type = self._parse_season_type(row, league)
             return Event(
                 id=str(event_id),
                 provider=self.name,
@@ -215,6 +217,24 @@ class BellMediaProvider(SportsProvider):
         if "cancel" in status:
             return EventStatus(state="cancelled", detail=payload.get("formattedTime") or None)
         return EventStatus(state="scheduled", detail=payload.get("formattedTime") or None)
+
+    @staticmethod
+    def _parse_season_type(row: dict, league: str) -> str | None:
+        """Map Bell Media season types, correcting its CFL playoff mislabeling."""
+        season_type_id = row.get("seasonTypeId")
+        season_type = (
+            {
+                0: SEASON_PRESEASON,
+                1: SEASON_REGULAR,
+                2: SEASON_POSTSEASON,
+            }.get(season_type_id)
+            if isinstance(season_type_id, int)
+            else None
+        )
+        title = ((row.get("event") or {}).get("title") or "").casefold()
+        if league == "cfl" and any(marker in title for marker in _CFL_POSTSEASON_TITLE_MARKERS):
+            return SEASON_POSTSEASON
+        return season_type
 
     @staticmethod
     def _score(team: dict | None, status: EventStatus) -> int | None:

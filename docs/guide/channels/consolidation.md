@@ -90,7 +90,7 @@ Keyword placement is **enforced every generation**: if a stream should move betw
 
 ## Race Feeds
 
-Race weekends come with many simultaneous views of the same session — a camera on every driver, the pit lane, the driver tracker, live timing, team radio. Teamarr keeps a **Race Feeds** list for each racing league it has a roster for (Formula 1 today), one row per driver and one per feed type, and every row works like an exception keyword scoped to that league:
+Race weekends come with many simultaneous views of the same session — a camera on every driver, the pit lane, the driver tracker, live timing, team radio, a mixed onboard, a multiscreen. Teamarr keeps a **Race Feeds** list for each racing league it has a roster for (Formula 1 today), one row per driver and one per feed type, and every row works like an exception keyword scoped to that league:
 
 | Behavior | What happens to a matching stream |
 |----------|-----------------------------------|

@@ -6,7 +6,7 @@ nav_order: 1
 
 # Supported Sports & Leagues
 
-Teamarr supports **178 pre-configured leagues** across 15 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
+Teamarr supports **180 pre-configured leagues** across 16 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -205,6 +205,7 @@ Teamarr automatically discovers **~228 soccer leagues** from ESPN's API during c
 | UEFA Champions League | `ucl` | ESPN |
 | UEFA Europa League | `uel` | ESPN |
 | UEFA Europa Conference League | `uecl` | ESPN |
+| UEFA Women's Champions League | `uwcl` | ESPN |
 
 ### South America
 
@@ -421,6 +422,16 @@ AFL is served by the Squiggle provider — free, no API key required. Includes t
 |--------|-----|----------|
 | NCAA Men's Volleyball | `ncaavb` | ESPN |
 | NCAA Women's Volleyball | `ncaawvb` | ESPN |
+
+---
+
+## Field Hockey
+
+| League | ID | Provider | Support |
+|--------|-----|----------|---------|
+| NCAA Women's Field Hockey | `ncaawfh` | ESPN | Event Only |
+
+ESPN publishes no team roster for field hockey, so there is no team import; the matcher learns team identities from the scoreboard (#912).
 
 ---
 

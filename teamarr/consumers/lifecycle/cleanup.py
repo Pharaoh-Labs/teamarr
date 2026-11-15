@@ -5,7 +5,9 @@ stream cleanup, orphan Dispatcharr channels and disabled-group cleanup.
 """
 
 import logging
+from datetime import UTC, datetime, timedelta
 from sqlite3 import Connection
+from typing import Any
 
 from teamarr.utilities.sports import get_sport_duration
 from teamarr.utilities.time_blocks import crosses_midnight
@@ -267,6 +269,159 @@ class ChannelCleanup(_LifecycleHost):
 
         return updated_count
 
+    def _event_in_progress(
+        self,
+        channel: Any,
+        event_states: dict[str, str],
+        now: datetime,
+    ) -> bool:
+        """Whether the channel's event has started and is not over (#1174).
+
+        The provider's status for this run is the authority when the run saw
+        the event: ``live`` is in progress; ``final``/``cancelled``/``postponed``
+        is not, whatever the clock says. A ``scheduled`` event is in progress
+        only when the clock says it has started — some providers flip to live
+        late. When the run did not see the event at all (status unknown), the
+        fallback is the clock alone: started, and before the end estimate the
+        channel was created with (session-aware, #522) or, lacking that, start
+        plus the sport's configured duration. This is deliberately NOT the
+        #232 live-window (``event_date``..``scheduled_delete_at``): that
+        window includes the post-game buffer, and a finished game must release
+        its re-slotted stream during the buffer, not hold it.
+        """
+        from .timing import _parse_channel_dt
+
+        start = _parse_channel_dt(getattr(channel, "event_date", None))
+        if start is None:
+            return False
+        if now < start:
+            return False
+
+        event_id = getattr(channel, "event_id", None)
+        state = None
+        if event_id:
+            eid = str(event_id)
+            state = event_states.get(eid)
+            if state is None and "-" in eid:
+                # Segment channels carry "<event>-<segment>" (#514).
+                state = event_states.get(eid.rsplit("-", 1)[0])
+        if state == "live":
+            return True
+        if state in ("final", "cancelled", "postponed"):
+            return False
+
+        end = _parse_channel_dt(getattr(channel, "event_end_estimate", None))
+        if end is None:
+            sport = getattr(channel, "sport", None)
+            timing = getattr(self, "_timing_manager", None)
+            durations = getattr(timing, "sport_durations", None) or {}
+            default_hours = getattr(timing, "default_duration_hours", None) or 3.0
+            hours = get_sport_duration(sport, durations, default_hours) if sport else default_hours
+            end = start + timedelta(hours=hours)
+        return now < end
+
+    @staticmethod
+    def _stream_verdict(
+        s: Any,
+        *,
+        stream_id: int,
+        group_id: int,
+        channel_event_id: str | None,
+        current_streams: dict[int, dict],
+        current_ids_set: set[int],
+        filtered_out: dict[int, str],
+        stream_event_map: dict[int, set[str]],
+        is_channel_source: bool,
+        changed_only: bool,
+    ) -> tuple[str, Any]:
+        """Classify one attached stream against this run's pool.
+
+        Returns ``("valid", None)``, ``("renamed", new_name)``,
+        ``("missing", None)`` or ``("changed", {...})`` where the dict carries
+        ``reason`` in {event_rotated, content_changed, filtered}. Pure: the
+        caller decides what to do with the verdict (a live event defers it).
+        """
+        from teamarr.consumers.stream_match_cache import compute_fingerprint
+
+        stored_name = getattr(s, "stream_name", None)
+
+        def _changed(reason: str, new_name: str) -> tuple[str, dict]:
+            return (
+                "changed",
+                {"stream": s, "old_name": stored_name, "new_name": new_name, "reason": reason},
+            )
+
+        def _rotated_elsewhere() -> set[str] | None:
+            if stream_event_map and channel_event_id:
+                matched_events = stream_event_map.get(stream_id)
+                if matched_events and channel_event_id not in matched_events:
+                    return matched_events
+            return None
+
+        # Cross-group stream: not in this group's M3U pool
+        is_cross_group = s.source_group_id is not None and s.source_group_id != group_id
+        if is_cross_group or is_channel_source:
+            # No authoritative M3U pool for this stream (other group's stream,
+            # or channel-source derived pool): skip the "missing from M3U"
+            # check. But still check event rotation if we have match data.
+            rotated = _rotated_elsewhere()
+            if rotated:
+                return _changed("event_rotated", f"rotated: {sorted(rotated)[0]}")
+            return ("valid", None)
+
+        if stream_id not in current_ids_set:
+            if changed_only:
+                # Absence is not evidence on the zero-match path.
+                return ("valid", None)
+            return ("missing", None)
+
+        # Stream exists in M3U — check for event rotation or name change
+        current_stream = current_streams.get(stream_id, {})
+        current_name = current_stream.get("name", "")
+
+        # Still in the M3U but failing this group's filters (#1174). On the
+        # normal path that is an explicit removal (a user's exclude regex, a
+        # stale flag); on the zero-match path only a changed name counts.
+        filter_reason = filtered_out.get(stream_id)
+        if filter_reason is not None:
+            if not changed_only:
+                return _changed("filtered", filter_reason)
+            if stored_name and current_name and stored_name != current_name:
+                stored_fp = compute_fingerprint(group_id, stream_id, stored_name)
+                current_fp = compute_fingerprint(group_id, stream_id, current_name)
+                if stored_fp != current_fp:
+                    return _changed("content_changed", current_name)
+            return ("valid", None)
+
+        # Event-aware validation (when match data available). Rotation = the
+        # stream's current match set no longer CONTAINS this channel's event
+        # (fanned feeds match many).
+        rotated = _rotated_elsewhere()
+        if rotated:
+            logger.debug(
+                "[LIFECYCLE] Stream %d rotated: channel event=%s, now matched to=%s",
+                stream_id,
+                channel_event_id,
+                sorted(rotated),
+            )
+            return _changed("event_rotated", current_name)
+
+        # Name change detection
+        if stored_name and current_name and stored_name != current_name:
+            # Name changed — check if it's still the same event
+            if stream_event_map:
+                matched_events = stream_event_map.get(stream_id)
+                if matched_events and (not channel_event_id or channel_event_id in matched_events):
+                    return ("renamed", current_name)
+
+            # Fingerprint-based fallback (no match data or unmatched stream)
+            stored_fp = compute_fingerprint(group_id, stream_id, stored_name)
+            current_fp = compute_fingerprint(group_id, stream_id, current_name)
+            if stored_fp != current_fp:
+                return _changed("content_changed", current_name)
+
+        return ("valid", None)
+
     def cleanup_deleted_streams(
         self,
         group_id: int,
@@ -275,6 +430,8 @@ class ChannelCleanup(_LifecycleHost):
         *,
         is_channel_source: bool = False,
         changed_only: bool = False,
+        filtered_out: dict[int, str] | None = None,
+        event_states: dict[str, str] | None = None,
     ) -> StreamProcessResult:
         """Clean up channels for streams that no longer exist, changed content, or rotated events.
 
@@ -309,11 +466,24 @@ class ChannelCleanup(_LifecycleHost):
                 zero-match pool is also exactly what a pattern mis-bind or a
                 half-refreshed M3U looks like (#450), so on this path the
                 pool is evidence of what a stream IS, never of what is gone.
+            filtered_out: stream_id -> filter reason for streams that ARE in
+                ``current_streams`` (the unfiltered M3U list, #1174) but did
+                not pass this group's filters. On the normal path such a
+                stream is detached with an explicit ``filtered`` reason — a
+                user's exclude regex must still take effect — which is what
+                its absence from the old, filtered pool used to do by
+                accident. On the ``changed_only`` path a filter verdict alone
+                is never evidence; only a changed name (content) is.
+            event_states: event id -> provider status state for this run's
+                events. A channel whose event is in progress keeps every
+                stream it has (#1174): a provider that re-slots its numbered
+                streams for tomorrow while tonight's game is still on renames
+                the stream, but the stream keeps carrying tonight's game until
+                it ends. Detachment happens on the first run after the event.
 
         Returns:
             StreamProcessResult with deleted channels and errors
         """
-        from teamarr.consumers.stream_match_cache import compute_fingerprint
         from teamarr.database.channel_numbers import get_global_consolidation_mode
         from teamarr.database.channels import (
             get_channel_streams,
@@ -325,6 +495,9 @@ class ChannelCleanup(_LifecycleHost):
 
         result = StreamProcessResult()
         current_ids_set = set(current_streams.keys())
+        filtered_out = filtered_out or {}
+        event_states = event_states or {}
+        now = datetime.now(UTC)
 
         # Reverse index: stream_id → event_ids (from current match results).
         # Multi-valued (#316): a fanned stream (tennis court/round feed, EPG
@@ -364,10 +537,14 @@ class ChannelCleanup(_LifecycleHost):
                     # Get streams associated with this channel
                     streams = get_channel_streams(conn, channel.id)
 
+                    # A live event holds on to its streams (#1174): nothing
+                    # below detaches from a channel whose event is in progress.
+                    live = self._event_in_progress(channel, event_states, now)
+
                     if not streams:
                         # Legacy fallback: check primary_stream_id
                         primary_id = getattr(channel, "primary_stream_id", None)
-                        if changed_only:
+                        if changed_only or live:
                             continue
                         if primary_id and primary_id not in current_ids_set:
                             success = self.delete_managed_channel(
@@ -398,102 +575,42 @@ class ChannelCleanup(_LifecycleHost):
 
                     for s in streams:
                         stream_id = getattr(s, "dispatcharr_stream_id", None)
-                        stored_name = getattr(s, "stream_name", None)
-
                         if not stream_id:
                             continue
-
-                        # Cross-group stream: not in this group's M3U pool
-                        is_cross_group = (
-                            s.source_group_id is not None and s.source_group_id != group_id
+                        verdict, payload = self._stream_verdict(
+                            s,
+                            stream_id=stream_id,
+                            group_id=group_id,
+                            channel_event_id=channel_event_id,
+                            current_streams=current_streams,
+                            current_ids_set=current_ids_set,
+                            filtered_out=filtered_out,
+                            stream_event_map=stream_event_map,
+                            is_channel_source=is_channel_source,
+                            changed_only=changed_only,
                         )
-
-                        if is_cross_group or is_channel_source:
-                            # No authoritative M3U pool for this stream (other
-                            # group's stream, or channel-source derived pool):
-                            # skip the "missing from M3U" check.
-                            # But still check event rotation if we have match data
-                            if stream_event_map and channel_event_id:
-                                matched_events = stream_event_map.get(stream_id)
-                                if matched_events and channel_event_id not in matched_events:
-                                    changed_streams.append(
-                                        {
-                                            "stream": s,
-                                            "old_name": stored_name,
-                                            "new_name": f"rotated: {sorted(matched_events)[0]}",
-                                            "reason": "event_rotated",
-                                        }
-                                    )
-                                    continue
+                        if verdict == "valid":
                             valid_streams.append(s)
-                            continue
-
-                        if stream_id not in current_ids_set:
-                            if changed_only:
-                                # Absence is not evidence on the zero-match path.
-                                valid_streams.append(s)
-                                continue
-                            # Stream no longer in M3U
+                        elif verdict == "renamed":
+                            # Same event, just renamed — update stored name, keep
+                            update_stream_name(conn, channel.id, stream_id, payload)
+                            valid_streams.append(s)
+                        elif live:
+                            # Mid-event: the stream still carries this game no
+                            # matter what its name says now (#1174). Hold it;
+                            # the first run after the event applies the verdict.
+                            logger.info(
+                                "[LIFECYCLE] Stream %d kept on live event %s ('%s'): %s deferred",
+                                stream_id,
+                                channel_event_id,
+                                channel.channel_name,
+                                verdict if verdict == "missing" else payload.get("reason"),
+                            )
+                            valid_streams.append(s)
+                        elif verdict == "missing":
                             missing_streams.append(s)
-                            continue
-
-                        # Stream exists in M3U — check for event rotation or name change
-                        current_stream = current_streams.get(stream_id, {})
-                        current_name = current_stream.get("name", "")
-
-                        # Event-aware validation (when match data available).
-                        # Rotation = the stream's current match set no longer
-                        # CONTAINS this channel's event (fanned feeds match many).
-                        if stream_event_map and channel_event_id:
-                            matched_events = stream_event_map.get(stream_id)
-                            if matched_events and channel_event_id not in matched_events:
-                                # Stream now matches different event(s) → content rotated
-                                changed_streams.append(
-                                    {
-                                        "stream": s,
-                                        "old_name": stored_name,
-                                        "new_name": current_name,
-                                        "reason": "event_rotated",
-                                    }
-                                )
-                                logger.debug(
-                                    "[LIFECYCLE] Stream %d rotated: "
-                                    "channel event=%s, now matched to=%s",
-                                    stream_id,
-                                    channel_event_id,
-                                    sorted(matched_events),
-                                )
-                                continue
-
-                        # Name change detection
-                        if stored_name and current_name and stored_name != current_name:
-                            # Name changed — check if it's still the same event
-                            if stream_event_map:
-                                matched_events = stream_event_map.get(stream_id)
-                                if matched_events and (
-                                    not channel_event_id or channel_event_id in matched_events
-                                ):
-                                    # Same event, just renamed — update stored name, keep
-                                    update_stream_name(conn, channel.id, stream_id, current_name)
-                                    valid_streams.append(s)
-                                    continue
-
-                            # Fingerprint-based fallback (no match data or unmatched stream)
-                            stored_fp = compute_fingerprint(group_id, stream_id, stored_name)
-                            current_fp = compute_fingerprint(group_id, stream_id, current_name)
-
-                            if stored_fp != current_fp:
-                                changed_streams.append(
-                                    {
-                                        "stream": s,
-                                        "old_name": stored_name,
-                                        "new_name": current_name,
-                                        "reason": "content_changed",
-                                    }
-                                )
-                                continue
-
-                        valid_streams.append(s)
+                        else:
+                            changed_streams.append(payload)
 
                     # Combine missing and changed streams for removal
                     streams_to_remove = missing_streams + [c["stream"] for c in changed_streams]
@@ -535,10 +652,13 @@ class ChannelCleanup(_LifecycleHost):
                         content = [
                             c for c in changed_streams if c.get("reason") == "content_changed"
                         ]
+                        filtered = [c for c in changed_streams if c.get("reason") == "filtered"]
                         if rotated:
                             reasons.append(f"{len(rotated)} rotated")
                         if content:
                             reasons.append(f"{len(content)} content-changed")
+                        if filtered:
+                            reasons.append(f"{len(filtered)} filtered")
                         reason_str = ", ".join(reasons) or "all streams removed"
 
                         success = self.delete_managed_channel(
@@ -595,6 +715,10 @@ class ChannelCleanup(_LifecycleHost):
                                     )
                                 if reason == "event_rotated":
                                     notes = f"Stream {stream_id} rotated to different event"
+                                elif reason == "filtered":
+                                    notes = (
+                                        f"Stream {stream_id} filtered out: {changed['new_name']}"  # noqa: E501
+                                    )
                                 else:
                                     notes = f"Stream {stream_id} content changed: '{changed['old_name']}' -> '{changed['new_name']}'"  # noqa: E501
                                 log_channel_history(

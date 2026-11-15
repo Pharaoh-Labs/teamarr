@@ -514,6 +514,8 @@ CREATE TABLE IF NOT EXISTS settings (
     -- JSON array of rules: [{"type": "m3u"|"group"|"regex", "value": "...", "priority": 1-99}]
     -- Rules evaluated in priority order; first match wins; non-matching streams get priority 999
     stream_ordering_rules JSON DEFAULT '[]',
+    -- #1187: live-event #1 pin (#232) is a setting; 0 lets rules reorder slot 1 while live
+    pin_top_stream_while_live INTEGER DEFAULT 1,
 
     -- Postponed Event Label
     -- When true, prepends "Postponed: " to channel name, EPG title, subtitle, and description
@@ -638,7 +640,7 @@ CREATE TABLE IF NOT EXISTS settings (
     plex_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 103
+    schema_version INTEGER DEFAULT 104
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -660,6 +662,17 @@ CREATE TABLE IF NOT EXISTS stream_ordering_scope_assignments (
     PRIMARY KEY (ruleset_id, scope_type, scope_value),
     UNIQUE (scope_type, scope_value),
     FOREIGN KEY (ruleset_id) REFERENCES stream_ordering_scopes(id) ON DELETE CASCADE
+);
+
+-- The fixed scope used only for persistent managed-team channels. Unlike the
+-- user-created scopes above, it has no sport/league assignment and cannot be
+-- duplicated or deleted through scope CRUD.
+CREATE TABLE IF NOT EXISTS managed_team_stream_ordering_scope (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    rules JSON NOT NULL DEFAULT '[]',
+    use_global_scoring BOOLEAN NOT NULL DEFAULT 1,
+    use_global_priority BOOLEAN NOT NULL DEFAULT 1,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Insert default settings
@@ -1069,6 +1082,7 @@ INSERT OR REPLACE INTO sports (sport_code, display_name) VALUES
     ('football', 'Football'),
     ('basketball', 'Basketball'),
     ('hockey', 'Hockey'),
+    ('field hockey', 'Field Hockey'),
     ('baseball', 'Baseball'),
     ('softball', 'Softball'),
     ('soccer', 'Soccer'),
@@ -1381,6 +1395,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('fra.1', 'espn', 'soccer/fra.1', NULL, 'Ligue 1', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/9.png', NULL, 1, NULL, 'ligue1', 'team_vs_team', 'Ligue 1 Soccer', NULL, NULL, NULL, 1),
     ('fra.coupe_de_france', 'espn', 'soccer/fra.coupe_de_france', NULL, 'Coupe de France', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/192.png', NULL, 1, NULL, 'coupe-de-france', 'team_vs_team', 'Coupe de France Soccer', NULL, NULL, NULL, 1),
     ('uefa.champions', 'espn', 'soccer/uefa.champions', NULL, 'UEFA Champions League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2.png', NULL, 1, 'UCL', 'ucl', 'team_vs_team', 'UEFA Champions League Soccer', NULL, NULL, NULL, 1),
+    ('uefa.wchampions', 'espn', 'soccer/uefa.wchampions', NULL, 'UEFA Women''s Champions League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2408.png', NULL, 1, 'UWCL', 'uwcl', 'team_vs_team', 'UEFA Women''s Champions League Soccer', NULL, NULL, NULL, 1),
     ('ksa.1', 'espn', 'soccer/ksa.1', NULL, 'Saudi Pro League', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/2488.png', NULL, 1, 'SPL', 'spl', 'team_vs_team', 'Saudi Pro League Soccer', NULL, NULL, NULL, 1),
     -- Additional European Leagues
     ('ned.1', 'espn', 'soccer/ned.1', NULL, 'Eredivisie', 'soccer', 'https://a.espncdn.com/i/leaguelogos/soccer/500/35.png', NULL, 1, NULL, 'eredivisie', 'team_vs_team', 'Eredivisie Soccer', NULL, NULL, NULL, 1),
@@ -1467,6 +1482,9 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     -- Volleyball (ESPN)
     ('mens-college-volleyball', 'espn', 'volleyball/mens-college-volleyball', NULL, 'NCAA Men''s Volleyball', 'volleyball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png', NULL, 1, 'NCAA Volleyball', 'ncaavb', 'team_vs_team', 'Men''s College Volleyball', NULL, NULL, NULL, 1),
     ('womens-college-volleyball', 'espn', 'volleyball/womens-college-volleyball', NULL, 'NCAA Women''s Volleyball', 'volleyball', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/volleyball.png', NULL, 1, 'NCAA W Volleyball', 'ncaawvb', 'team_vs_team', 'Women''s College Volleyball', NULL, NULL, NULL, 1),
+
+    -- Field Hockey (ESPN) - Teams learned from scoreboards; /teams is empty.
+    ('womens-college-field-hockey', 'espn', 'field-hockey/womens-college-field-hockey', NULL, 'NCAA Women''s Field Hockey', 'field hockey', 'https://a.espncdn.com/combiner/i?img=/redesign/assets/img/icons/ESPN-icon-field-hockey.png', NULL, 0, 'NCAAWFH', 'ncaawfh', 'team_vs_team', 'Women''s College Field Hockey', NULL, NULL, NULL, 1),
 
     -- Lacrosse - NCAA (ESPN)
     ('mens-college-lacrosse', 'espn', 'lacrosse/mens-college-lacrosse', NULL, 'NCAA Men''s Lacrosse', 'lacrosse', 'https://www.ncaa.com/modules/custom/casablanca_core/img/sportbanners/lacrosse.png', NULL, 1, 'NCAA Lacrosse', 'ncaalax', 'team_vs_team', NULL, NULL, NULL, NULL, 1),

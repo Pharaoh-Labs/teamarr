@@ -419,3 +419,63 @@ def test_a_real_event_is_never_vetoed_from_its_own_league(corpus, case) -> None:
 
     after = index.fixture_leagues(case["side_a"], case["side_b"])
     assert after is None or case["league"] in after
+
+
+@pytest.mark.parametrize(
+    ("league", "sport", "home", "away", "stream"),
+    [
+        (
+            "womens-college-field-hockey",
+            "field hockey",
+            "Yale",
+            "Pennsylvania",
+            "ESPN+ 51: Pennsylvania vs. Yale",
+        ),
+        (
+            "womens-college-field-hockey",
+            "field hockey",
+            "Michigan",
+            "Iowa",
+            "BTN+ | Field Hockey: Iowa at Michigan",
+        ),
+        (
+            "uefa.wchampions",
+            "soccer",
+            "Real Madrid",
+            "Manchester City",
+            "Disney+ Events 09: En Español-Manchester City vs. Real Madrid CF",
+        ),
+    ],
+)
+def test_new_espn_leagues_match_schedule_taught_teams(
+    db_factory, league, sport, home, away, stream
+):
+    game = _event(
+        _team(home, home, "HOME", league, sport),
+        _team(away, away, "AWAY", league, sport),
+        "requested-league-game",
+    )
+    matcher = make_team_matcher(db_factory=db_factory)
+    outcome = matcher._match_against_events(_ctx(stream), [game], league)
+    assert outcome.is_matched, outcome.failed_reason
+    assert outcome.event.id == game.id
+
+
+def test_field_hockey_hint_excludes_a_same_school_football_fixture(db_factory):
+    league = "womens-college-field-hockey"
+    field_hockey = _event(
+        _team("Yale", "Yale", "YALE", league, "field hockey"),
+        _team("Pennsylvania", "Pennsylvania", "PENN", league, "field hockey"),
+        "field-hockey-penn-yale",
+    )
+    football = _event(
+        _team("Yale Bulldogs", "Yale", "YALE", "college-football", "football"),
+        _team("Pennsylvania Quakers", "Pennsylvania", "PENN", "college-football", "football"),
+        "football-penn-yale",
+    )
+    outcome = make_team_matcher(db_factory=db_factory)._match_against_multi_league_events(
+        _ctx("Field Hockey: Pennsylvania vs. Yale"),
+        [("college-football", football), (league, field_hockey)],
+    )
+    assert outcome.is_matched, outcome.failed_reason
+    assert outcome.event.id == field_hockey.id

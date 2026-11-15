@@ -124,6 +124,17 @@ class TestTeamIdentityHook:
         assert failed == 0
         assert total == 2, "successes and pins survive a team-cache refresh"
 
+    def test_clear_failed_false_keeps_cached_failures(self, db_factory, db_path, monkeypatch):
+        """The refresh paths drop the in-memory caches only and scope the rest (#1184)."""
+        monkeypatch.setenv("DATABASE_PATH", str(db_path))
+        _seed(db_factory)
+
+        from teamarr.database.team_cache import invalidate_team_identity_caches
+
+        invalidate_team_identity_caches(clear_failed=False)
+
+        assert _counts(db_factory) == (4, 2, 1)
+
     def test_hook_survives_a_cache_error(self, monkeypatch):
         """Invalidation must never break the refresh that triggered it."""
         import teamarr.consumers.stream_match_cache as smc

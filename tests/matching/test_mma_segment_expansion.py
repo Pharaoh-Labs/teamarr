@@ -103,3 +103,81 @@ def test_non_ufc_stream_passes_through_untouched():
     assert len(expanded) == 1
     assert expanded[0]["match_method"] == "epg"
     assert "segment_start" not in expanded[0]
+
+
+# ---------------------------------------------------------------------------
+# No segment data at all (#1179): a segment nobody named is the whole event
+# ---------------------------------------------------------------------------
+
+
+def _no_data_event():
+    return FakeUFCEvent(
+        id="tsdb-2620139",
+        name="ONE Friday Fights 176",
+        league="one",
+        start_time=datetime(2026, 10, 30, 13, 30, tzinfo=UTC),
+        segment_times=None,
+        main_card_start=None,
+    )
+
+
+def test_keyword_less_stream_on_no_data_event_spans_the_whole_event():
+    event = _no_data_event()
+    matched = [_matched("LIVE EVENT 01 - 9:30am ONE Friday Fights 176 Khunsuk v YodUdon", event)]
+
+    (entry,) = expand_mma_segments(matched, sport_durations={"mma": 5.0})
+
+    assert entry["segment"] == "main_card"
+    assert entry["segment_start"] == event.start_time
+    assert entry["segment_end"] == event.start_time + timedelta(hours=5)
+
+
+def test_combined_stream_on_no_data_event_spans_the_whole_event():
+    event = _no_data_event()
+    matched = [_matched("ONE Friday Fights 176 (Combined)", event, card_segment="combined")]
+
+    (entry,) = expand_mma_segments(matched, sport_durations={"mma": 5.0})
+
+    assert entry["segment"] == "main_card"
+    assert entry["segment_start"] == event.start_time
+    assert entry["segment_end"] == event.start_time + timedelta(hours=5)
+
+
+def test_explicit_keyword_on_no_data_event_keeps_the_estimate():
+    """A stream that says the card is split keeps the thirds estimate."""
+    event = _no_data_event()
+    matched = [
+        _matched("ONE Friday Fights 176 Prelims", event, card_segment="prelims"),
+        _matched("ONE Friday Fights 176 Main Card", event, card_segment="main_card"),
+    ]
+
+    expanded = {e["segment"]: e for e in expand_mma_segments(matched, sport_durations={"mma": 6.0})}
+
+    assert expanded["prelims"]["segment_start"] == event.start_time + timedelta(hours=2)
+    assert expanded["main_card"]["segment_start"] == event.start_time + timedelta(hours=4)
+
+
+def test_named_stream_keeps_the_estimate_for_a_defaulted_sibling():
+    """One explicit main-card stream means the segment is split; defaulted siblings share it."""
+    event = _no_data_event()
+    matched = [
+        _matched("ONE Friday Fights 176", event),
+        _matched("ONE Friday Fights 176 Main Card", event, card_segment="main_card"),
+    ]
+
+    expanded = expand_mma_segments(matched, sport_durations={"mma": 6.0})
+
+    assert {e["segment_start"] for e in expanded} == {event.start_time + timedelta(hours=4)}
+
+
+def test_espn_segment_data_unchanged_by_the_fallback_rule():
+    event = FakeUFCEvent(
+        segment_times={
+            "prelims": datetime(2026, 7, 11, 22, 0, tzinfo=UTC),
+            "main_card": datetime(2026, 7, 12, 0, 0, tzinfo=UTC),
+        }
+    )
+    (entry,) = expand_mma_segments([_matched("UFC 329 Full Card", event)])
+
+    assert entry["segment"] == "main_card"
+    assert entry["segment_start"] == datetime(2026, 7, 12, 0, 0, tzinfo=UTC)
