@@ -1788,3 +1788,47 @@ def test_generic_court_word_city_does_not_name_tournament():
         e.court = "Centre Court"
     stream = "TSN+ 05: ATP 500 Tennis: Centre Court - Quarterfinals"
     assert _run_feed(events, stream, tz, day) == {"a1", "b1"}
+
+
+def test_pair_stream_player_named_like_a_venue_city_is_not_vetoed():
+    """The venue city names a tournament for court feeds only.
+
+    A pair stream's text carries player names: "Santiago Rodriguez Taverna"
+    playing in Acapulco must not be read as naming the Chile Open, whose
+    venue is "Santiago, Chile" and which runs the same week.
+    """
+    tz = ZoneInfo("America/New_York")
+    day = datetime(2026, 2, 25, 15, 0, tzinfo=tz)
+    aca = _tennis_event(
+        "aca-match",
+        _player("Santiago Rodriguez Taverna", "Rodriguez Taverna"),
+        _player("Cameron Norrie", "Norrie"),
+        day,
+    )
+    aca.tournament_id = "2"
+    aca.tournament_name = "Abierto Mexicano Telcel presentado por HSBC"
+    aca.venue = Venue(name="Acapulco, Mexico")
+    san = _tennis_event(
+        "san-match",
+        _player("Francisco Cerundolo", "Cerundolo"),
+        _player("Alejandro Tabilo", "Tabilo"),
+        day,
+    )
+    san.tournament_id = "1"
+    san.tournament_name = "BCI Seguros Chile Open"
+    san.venue = Venue(name="Santiago, Chile")
+    for e in (aca, san):
+        e.league = "atp"
+        e.draw_type = "Men's Singles"
+
+    tm = TennisMatcher(service=_PoolService([aca, san]), cache=_NoCache())
+    out = tm.match(
+        _pair_stream("ESPN+ 12: Santiago Rodriguez Taverna vs Cameron Norrie"),
+        "atp",
+        date(2026, 2, 25),
+        group_id=1,
+        stream_id=1,
+        generation=1,
+        user_tz=tz,
+    )
+    assert out.is_matched and out.event.id == "aca-match"

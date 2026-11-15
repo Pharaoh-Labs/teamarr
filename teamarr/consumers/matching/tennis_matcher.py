@@ -230,7 +230,9 @@ def _named_tournaments(
     return named
 
 
-def _tournament_guard(text: str, pool: list[Event]) -> tuple[list[Event], list[Event]]:
+def _tournament_guard(
+    text: str, pool: list[Event], *, include_venue_city: bool = False
+) -> tuple[list[Event], list[Event]]:
     """Split the pool into (kept, vetoed) by the tournaments the stream names.
 
     A court feed says "Wimbledon Day #8 No 1 Court" — without this, its
@@ -238,8 +240,13 @@ def _tournament_guard(text: str, pool: list[Event]) -> tuple[list[Event], list[E
     (#316); a player-pair stream "Wimbledon: Zheng vs Norrie" likewise must
     not bind to a same-day Zheng match elsewhere (#283). Veto-only: when the
     stream names no pooled tournament, everything is kept.
+
+    include_venue_city is for court/round feeds only (#1178). A player-pair
+    stream carries player names, and a first name that is another
+    tournament's city ("Santiago Rodriguez Taverna" in Acapulco the week
+    Santiago hosts the Chile Open) would veto the player's own match.
     """
-    named = _named_tournaments(text, pool, include_venue_city=True)
+    named = _named_tournaments(text, pool, include_venue_city=include_venue_city)
     if not named:
         return pool, []
     kept = [e for e in pool if _tournament_key(e) in named]
@@ -488,7 +495,7 @@ class TennisMatcher:
 
         # Tournament guard (#316): "Wimbledon ... No 1 Court" must not join
         # Court 1 at other tournaments running the same day.
-        pool, _vetoed = _tournament_guard(text, pool)
+        pool, _vetoed = _tournament_guard(text, pool, include_venue_city=True)
 
         # Draw guard (#316): a round feed that declares its draw ("Ladies'
         # Singles Semifinals") must not fan onto other groupings. Court feeds
