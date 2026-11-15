@@ -20,6 +20,10 @@ event: ``ESPN UNLTD 444: NCAA Football: MORG vs. ASU`` really is
 ``abbreviation`` takes that to **0 of 635**. Alias-expanded names were measured
 too and add nothing on top, so they are deliberately not indexed.
 
+That is about the EVENT side. On the stream side the caller adds the words of
+every canonical name an alias gives either side (``TeamMatcher._alias_tokens``,
+#1163): a stream written as two nickname aliases shares no word with its event.
+
 Do not "simplify" this back to full names.
 
 SCOPE
