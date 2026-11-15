@@ -1582,6 +1582,12 @@ class TeamMatcher:
           index for one stream would cost more than the scan it saves.
         * **No tokens, no opinion.** A stream that tokenizes to nothing keeps
           the full list rather than matching nothing.
+        * **An aliased side also brings its canonical name's words.** A
+          nickname alias shares no word with the event ("Kzoo" for Western
+          Michigan), and when both sides are written that way the stream's
+          own tokens select nothing, so the alias the scorer would have
+          applied never got a candidate to apply it to. Adding tokens can
+          only widen the shortlist.
         """
         if not _token_index_enabled():
             return events
@@ -1593,6 +1599,7 @@ class TeamMatcher:
         tokens = tokenize(f"{ctx.team1 or ''} {ctx.team2 or ''}")
         if not tokens:
             return events
+        tokens |= self._alias_tokens(ctx.team1) | self._alias_tokens(ctx.team2)
 
         index = self._token_index_memo.get(id(events))
         if index is None:
@@ -1601,6 +1608,20 @@ class TeamMatcher:
 
         narrowed = index.narrow(tokens, events)
         return events if narrowed is None else narrowed
+
+    def _alias_tokens(self, side: str | None) -> set[str]:
+        """Words of every canonical name an alias gives this side, built-in or user."""
+        if not side:
+            return set()
+        key = normalize_text(side)
+        names = [canonical for canonical, _league in self._reverse_aliases.get(key, [])]
+        builtin = _NORMALIZED_TEAM_ALIASES.get(key)
+        if builtin:
+            names.append(builtin)
+        found: set[str] = set()
+        for name in names:
+            found |= tokenize(name)
+        return found
 
     def _match_against_candidates(
         self,
