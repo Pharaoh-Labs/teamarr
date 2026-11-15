@@ -1,4 +1,4 @@
-"""Failed matches are remembered between runs (#754, flag-gated).
+"""Failed matches are remembered between runs (#754, enabled by default).
 
 49% of match time went to streams that never match, and the same streams failed
 identically every run. `StreamMatchCache` already had `set_failed`,
@@ -27,7 +27,8 @@ from teamarr.consumers.stream_match_cache import FAILED_MATCH_EVENT_ID, StreamMa
 
 @pytest.fixture
 def on(monkeypatch):
-    monkeypatch.setenv("TEAMARR_NEGATIVE_CACHE", "1")
+    # Exercise the normal default-enabled path throughout the cache regressions.
+    monkeypatch.delenv("TEAMARR_NEGATIVE_CACHE", raising=False)
 
 
 def _matcher(db_factory, **kw):
@@ -60,9 +61,14 @@ def _matched_outcome():
 
 
 class TestFlag:
-    def test_off_by_default(self, monkeypatch):
+    def test_on_by_default(self, monkeypatch):
         monkeypatch.delenv("TEAMARR_NEGATIVE_CACHE", raising=False)
-        assert _negative_cache_enabled() is False
+        assert _negative_cache_enabled() is True
+
+    @pytest.mark.parametrize("v", ["1", "true", "yes", "on", " TRUE ", "On"])
+    def test_truthy_values_stay_on(self, monkeypatch, v):
+        monkeypatch.setenv("TEAMARR_NEGATIVE_CACHE", v)
+        assert _negative_cache_enabled() is True
 
     @pytest.mark.parametrize("v", ["0", "false", "no", "off", ""])
     def test_falsey_values_stay_off(self, monkeypatch, v):
@@ -70,7 +76,7 @@ class TestFlag:
         assert _negative_cache_enabled() is False
 
     def test_nothing_written_when_off(self, monkeypatch, db_factory):
-        monkeypatch.delenv("TEAMARR_NEGATIVE_CACHE", raising=False)
+        monkeypatch.setenv("TEAMARR_NEGATIVE_CACHE", "0")
         m = _matcher(db_factory)
         m._remember_failure([_failed(FailedReason.NO_EVENT_FOUND)], 1, "S")
         with db_factory() as c:
@@ -182,7 +188,7 @@ class TestReadBack:
     def test_hit_is_ignored_when_the_flag_is_off(self, on, db_factory, monkeypatch):
         m = _matcher(db_factory)
         m._remember_failure([_failed(FailedReason.NO_EVENT_FOUND)], 1, "S")
-        monkeypatch.delenv("TEAMARR_NEGATIVE_CACHE", raising=False)
+        monkeypatch.setenv("TEAMARR_NEGATIVE_CACHE", "0")
         assert m._cached_failure(self._classified(), 1, "S") is None
 
     def test_a_reason_no_longer_allowlisted_is_re_matched(self, on, db_factory):
@@ -228,3 +234,38 @@ class TestNoDatabase:
 
         assert m._cached_failure(classify_stream("Rays vs Tigers"), 1, "S") is None
         m._remember_failure([_failed(FailedReason.NO_EVENT_FOUND)], 1, "S")  # no raise
+
+
+@pytest.mark.parametrize("change", ["alias", "team_cache"])
+def test_default_cached_failure_is_rechecked_after_config_change(
+    monkeypatch, db_factory, db_path, change
+):
+    from fastapi.testclient import TestClient
+
+    from teamarr.api.app import app
+    from teamarr.consumers.matching.classifier import classify_stream
+    from teamarr.database.team_cache import invalidate_team_identity_caches
+
+    monkeypatch.delenv("TEAMARR_NEGATIVE_CACHE", raising=False)
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    matcher = _matcher(db_factory)
+    name = "Rays vs Tigers"
+    classified = classify_stream(name)
+    matcher._remember_failure([_failed(FailedReason.NO_EVENT_FOUND)], 1, name)
+    assert matcher._cached_failure(classified, 1, name) is not None
+
+    if change == "alias":
+        response = TestClient(app).post(
+            "/api/v1/aliases",
+            json={
+                "alias": "D-backs",
+                "league": "mlb",
+                "team_id": "29",
+                "team_name": "Arizona Diamondbacks",
+            },
+        )
+        assert response.status_code == 201, response.text
+    else:
+        invalidate_team_identity_caches()
+
+    assert matcher._cached_failure(classified, 1, name) is None

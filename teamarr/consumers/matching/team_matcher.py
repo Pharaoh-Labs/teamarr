@@ -178,14 +178,13 @@ class _DateWindow:
 # team_cache refresh is picked up without a restart; the window is generous
 # because team identity barely moves and a generation run is far shorter.
 def _token_index_enabled() -> bool:
-    """Whether candidate narrowing is on (#747). Default OFF.
+    """Whether candidate narrowing is on (#747). Default ON; explicit 0 opts out.
 
-    Read per call rather than captured at import so a soak can be started and
-    stopped by restarting the process, and so tests can toggle it with
-    monkeypatch without reloading the module. Matches the ``ESPN_MAX_WORKERS``
-    convention for perf knobs that are not user-facing settings.
+    Read per call rather than captured at import so overrides and tests can
+    toggle it without reloading the module. Matches the ``ESPN_MAX_WORKERS``
+    convention for performance knobs.
     """
-    return os.environ.get("TEAMARR_TOKEN_INDEX", "").strip().lower() in {"1", "true", "yes", "on"}
+    return os.environ.get("TEAMARR_TOKEN_INDEX", "1").strip().lower() in {"1", "true", "yes", "on"}
 
 
 _IDENTITY_INDEX_TTL = 900.0  # seconds
@@ -1572,7 +1571,7 @@ class TeamMatcher:
 
         Deliberately narrow in scope:
 
-        * **Off by default** — gated on ``TEAMARR_TOKEN_INDEX``.
+        * **On by default** — ``TEAMARR_TOKEN_INDEX=0`` opts out.
         * **TEAM_VS_TEAM only.** Tennis, racing and event-card streams match
           through their own routes, and the safety measurement behind this did
           not cover them; they keep the full scan.
@@ -1583,6 +1582,12 @@ class TeamMatcher:
           index for one stream would cost more than the scan it saves.
         * **No tokens, no opinion.** A stream that tokenizes to nothing keeps
           the full list rather than matching nothing.
+        * **An aliased side also brings its canonical name's words.** A
+          nickname alias shares no word with the event ("Kzoo" for Western
+          Michigan), and when both sides are written that way the stream's
+          own tokens select nothing, so the alias the scorer would have
+          applied never got a candidate to apply it to. Adding tokens can
+          only widen the shortlist.
         """
         if not _token_index_enabled():
             return events
@@ -1594,6 +1599,7 @@ class TeamMatcher:
         tokens = tokenize(f"{ctx.team1 or ''} {ctx.team2 or ''}")
         if not tokens:
             return events
+        tokens |= self._alias_tokens(ctx.team1) | self._alias_tokens(ctx.team2)
 
         index = self._token_index_memo.get(id(events))
         if index is None:
@@ -1602,6 +1608,20 @@ class TeamMatcher:
 
         narrowed = index.narrow(tokens, events)
         return events if narrowed is None else narrowed
+
+    def _alias_tokens(self, side: str | None) -> set[str]:
+        """Words of every canonical name an alias gives this side, built-in or user."""
+        if not side:
+            return set()
+        key = normalize_text(side)
+        names = [canonical for canonical, _league in self._reverse_aliases.get(key, [])]
+        builtin = _NORMALIZED_TEAM_ALIASES.get(key)
+        if builtin:
+            names.append(builtin)
+        found: set[str] = set()
+        for name in names:
+            found |= tokenize(name)
+        return found
 
     def _match_against_candidates(
         self,

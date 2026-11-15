@@ -31,6 +31,14 @@ docker compose up -d
 | `latest` | Stable release |
 | `dev` | Development builds |
 
+## Matching Performance
+
+Candidate token indexing and negative match caching are enabled by default.
+To disable either optimization, set `TEAMARR_TOKEN_INDEX=0` or
+`TEAMARR_NEGATIVE_CACHE=0` in the container environment and restart Teamarr.
+See [matching performance overrides](docs/guide/settings/advanced.md#matching-performance-overrides)
+for details.
+
 ## Documentation
 
 **Official Docs**: [pharaoh-labs.github.io/teamarr](https://pharaoh-labs.github.io/teamarr/) — User Guide, Technical Reference, Supported Leagues

@@ -916,3 +916,34 @@ class TestAliasWidensTheWomensSideCollision:
         assert result.category is ResultCategory.MATCHED, result.failed_reason
         result_multi = _match_multi(stream, event, db_factory)
         assert result_multi.category is ResultCategory.MATCHED, result_multi.failed_reason
+
+
+class TestAliasedSidesSurviveCandidateNarrowing:
+    """Both sides written as nickname aliases share no word with the event, so
+    the stream's own tokens select nothing from the token index (#747). The
+    canonical names' words must join the lookup, or turning the index on by
+    default (#1163) loses a match the full scan makes."""
+
+    @pytest.mark.parametrize("flag", ["1", "0"])
+    def test_two_nickname_aliases_match_with_and_without_the_index(
+        self, hockey_db, monkeypatch, flag
+    ):
+        monkeypatch.setenv("TEAMARR_TOKEN_INDEX", flag)
+        add_aliases(
+            hockey_db,
+            [
+                ("Kzoo", HOCKEY, "Western Michigan Broncos"),
+                ("Fargo U", HOCKEY, "North Dakota Fighting Hawks"),
+            ],
+        )
+        other = _event(
+            _team("Michigan Wolverines", "Michigan", "MICH", BBALL, "basketball"),
+            _team("Dakota State Trojans", "Dakota State", "DSU", BBALL, "basketball"),
+            "bb-1",
+        )
+        matcher = make_team_matcher(db_factory=hockey_db)
+        # A tuple, like the shared prefetched candidates: only a tuple is narrowed.
+        candidates = ((WMU_UND.league, WMU_UND), (other.league, other))
+        result = matcher._match_against_multi_league_events(_ctx("Kzoo vs Fargo U"), candidates)
+        assert result.category is ResultCategory.MATCHED
+        assert result.event.id == WMU_UND.id
