@@ -771,7 +771,9 @@ def _maintain(live=(1,), evidence=None):
 
     summary = ScanSummary()
     with get_db() as conn:
-        maintain_managed_sources(conn, now_utc(), set(live), evidence or {}, summary)
+        # Callers key their evidence by group; the scan keys it by group and account.
+        keyed = {(e.m3u_group_id, e.m3u_account_id or 0): e for e in (evidence or {}).values()}
+        maintain_managed_sources(conn, now_utc(), set(live), keyed, summary)
     return summary
 
 

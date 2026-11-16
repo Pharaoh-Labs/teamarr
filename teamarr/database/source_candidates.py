@@ -1,8 +1,13 @@
 """Evidence store for source discovery (#997).
 
-A candidate is an M3U group that is not a source. Each scan appends one row of
-evidence for it; whether the group is worth suggesting is decided over a window
-of scans, because a single day sees most real sources as empty or placeholders.
+A candidate is one M3U account's streams in one M3U group that no source reads
+(#1226): a group two accounts carry is two candidates, because a source reads
+one account's streams and each half is suggested, accepted and dismissed on its
+own. Each scan appends one row of evidence for it; whether it is worth
+suggesting is decided over a window of scans, because a single day sees most
+real sources as empty or placeholders.
+
+``m3u_account_id`` 0 stands for streams that carry no account.
 """
 
 import json
@@ -24,6 +29,7 @@ class ScanEvidence:
     m3u_group_name: str
     m3u_account_ids: list[int] = field(default_factory=list)
     stream_count: int = 0
+    m3u_account_id: int | None = None
     streams_read: int = 0
     game_matches: int = 0
     team_only_matches: int = 0
@@ -32,6 +38,23 @@ class ScanEvidence:
     event_ids: set[str] = field(default_factory=set)
     name_leagues: list[str] = field(default_factory=list)
     replay: bool = False
+
+    def __post_init__(self) -> None:
+        self.m3u_account_id, self.m3u_account_ids = _one_account(
+            self.m3u_account_id, self.m3u_account_ids
+        )
+
+
+def _one_account(account_id: int | None, account_ids: list[int]) -> tuple[int | None, list[int]]:
+    """A candidate has one account; the list form is kept for the API and callers."""
+    if account_id is None and account_ids:
+        account_id = account_ids[0]
+    return account_id, ([account_id] if account_id else [])
+
+
+def account_key(account_id: int | None) -> int:
+    """The stored form of an account id: 0 for "no account"."""
+    return account_id or 0
 
 
 @dataclass
@@ -60,6 +83,12 @@ class CandidateEvidence:
     leagues: dict[str, int] = field(default_factory=dict)  # best per league
     team_leagues: dict[str, int] = field(default_factory=dict)  # best per league
     event_ids: set[str] = field(default_factory=set)  # every event matched in the window
+    m3u_account_id: int | None = None
+
+    def __post_init__(self) -> None:
+        self.m3u_account_id, self.m3u_account_ids = _one_account(
+            self.m3u_account_id, self.m3u_account_ids
+        )
 
 
 def record_scan(conn: Connection, evidence: list[ScanEvidence], scanned_at: datetime) -> None:
@@ -72,12 +101,11 @@ def record_scan(conn: Connection, evidence: list[ScanEvidence], scanned_at: date
     for ev in evidence:
         conn.execute(
             """INSERT INTO source_candidates
-                   (m3u_group_id, m3u_group_name, m3u_account_ids, stream_count,
+                   (m3u_group_id, m3u_group_name, m3u_account_id, stream_count,
                     name_leagues, last_seen_at, replay)
                VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(m3u_group_id) DO UPDATE SET
+               ON CONFLICT(m3u_group_id, m3u_account_id) DO UPDATE SET
                    m3u_group_name = excluded.m3u_group_name,
-                   m3u_account_ids = excluded.m3u_account_ids,
                    stream_count = excluded.stream_count,
                    name_leagues = excluded.name_leagues,
                    last_seen_at = excluded.last_seen_at,
@@ -85,7 +113,7 @@ def record_scan(conn: Connection, evidence: list[ScanEvidence], scanned_at: date
             (
                 ev.m3u_group_id,
                 ev.m3u_group_name,
-                json.dumps(sorted(ev.m3u_account_ids)),
+                account_key(ev.m3u_account_id),
                 ev.stream_count,
                 json.dumps(sorted(ev.name_leagues)),
                 stamp,
@@ -93,7 +121,8 @@ def record_scan(conn: Connection, evidence: list[ScanEvidence], scanned_at: date
             ),
         )
         candidate_id = conn.execute(
-            "SELECT id FROM source_candidates WHERE m3u_group_id = ?", (ev.m3u_group_id,)
+            "SELECT id FROM source_candidates WHERE m3u_group_id = ? AND m3u_account_id = ?",
+            (ev.m3u_group_id, account_key(ev.m3u_account_id)),
         ).fetchone()[0]
         conn.execute(
             """INSERT INTO source_candidate_scans
@@ -139,7 +168,8 @@ def get_candidates(
             id=row["id"],
             m3u_group_id=row["m3u_group_id"],
             m3u_group_name=row["m3u_group_name"],
-            m3u_account_ids=json.loads(row["m3u_account_ids"] or "[]"),
+            m3u_account_ids=[],
+            m3u_account_id=row["m3u_account_id"] or None,
             stream_count=row["stream_count"] or 0,
             name_leagues=json.loads(row["name_leagues"] or "[]"),
             status=row["status"],
@@ -186,11 +216,11 @@ def upsert_accepted_candidate(
     *,
     m3u_group_id: int,
     m3u_group_name: str,
-    m3u_account_ids: list[int],
+    m3u_account_id: int | None,
     name_leagues: list[str],
     source_group_id: int,
 ) -> None:
-    """Record a group as an accepted candidate linked to ``source_group_id``.
+    """Record a group's account as an accepted candidate linked to ``source_group_id``.
 
     The Automate switch (#1079) gives a source the user made the row a
     discovered source has. An existing row keeps its scan history; only its
@@ -198,10 +228,10 @@ def upsert_accepted_candidate(
     """
     conn.execute(
         """INSERT INTO source_candidates
-               (m3u_group_id, m3u_group_name, m3u_account_ids, name_leagues,
+               (m3u_group_id, m3u_group_name, m3u_account_id, name_leagues,
                 status, source_group_id)
            VALUES (?, ?, ?, ?, 'accepted', ?)
-           ON CONFLICT(m3u_group_id) DO UPDATE SET
+           ON CONFLICT(m3u_group_id, m3u_account_id) DO UPDATE SET
                m3u_group_name = excluded.m3u_group_name,
                name_leagues = excluded.name_leagues,
                status = 'accepted',
@@ -209,7 +239,7 @@ def upsert_accepted_candidate(
         (
             m3u_group_id,
             m3u_group_name,
-            json.dumps(sorted(m3u_account_ids)),
+            account_key(m3u_account_id),
             json.dumps(sorted(name_leagues)),
             source_group_id,
         ),
@@ -229,25 +259,33 @@ def set_candidate_status(
     return cursor.rowcount > 0
 
 
-def dismissed_groups(conn: Connection) -> tuple[set[int], set[str]]:
-    """Dismissed M3U groups as ``(ids, names)`` — a scan does not read them again.
+def dismissed_groups(conn: Connection) -> tuple[set[tuple[int, int]], set[tuple[str, int]]]:
+    """Dismissed candidates as ``({(group id, account)}, {(group name, account)})``.
 
-    Names as well as ids: a provider rename gives the group a new id in
-    Dispatcharr, and the user's "no" has to survive that.
+    A scan does not record them again. Names as well as ids: a provider rename
+    gives the group a new id in Dispatcharr, and the user's "no" has to survive
+    that. The account is part of both: saying no to one account's copy of a
+    group says nothing about another account's.
     """
     rows = conn.execute(
-        "SELECT m3u_group_id, m3u_group_name FROM source_candidates WHERE status = 'dismissed'"
+        "SELECT m3u_group_id, m3u_group_name, m3u_account_id FROM source_candidates "
+        "WHERE status = 'dismissed'"
     ).fetchall()
-    return {row[0] for row in rows}, {(row[1] or "").strip().lower() for row in rows}
+    return (
+        {(row[0], row[2] or 0) for row in rows},
+        {((row[1] or "").strip().lower(), row[2] or 0) for row in rows},
+    )
 
 
-def dismiss_group(conn: Connection, m3u_group_id: int, m3u_group_name: str) -> None:
-    """Record a group as dismissed, creating its candidate row when it has none."""
+def dismiss_group(
+    conn: Connection, m3u_group_id: int, m3u_group_name: str, m3u_account_id: int | None = None
+) -> None:
+    """Record a group's account as dismissed, creating its candidate row when it has none."""
     conn.execute(
-        """INSERT INTO source_candidates (m3u_group_id, m3u_group_name, status)
-           VALUES (?, ?, 'dismissed')
-           ON CONFLICT(m3u_group_id) DO UPDATE SET status = 'dismissed'""",
-        (m3u_group_id, m3u_group_name),
+        """INSERT INTO source_candidates (m3u_group_id, m3u_group_name, m3u_account_id, status)
+           VALUES (?, ?, ?, 'dismissed')
+           ON CONFLICT(m3u_group_id, m3u_account_id) DO UPDATE SET status = 'dismissed'""",
+        (m3u_group_id, m3u_group_name, account_key(m3u_account_id)),
     )
 
 

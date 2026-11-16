@@ -20,6 +20,7 @@ def run_pre_migrations(conn: sqlite3.Connection) -> None:
     _migrate_detection_keywords_check(conn)
     _migrate_stream_match_cache_check(conn)
     _migrate_channel_history_check(conn)
+    _migrate_source_candidates_per_account(conn)
 
 
 def _rename_league_id_column_if_needed(conn: sqlite3.Connection) -> None:
@@ -260,3 +261,35 @@ def _migrate_channel_history_check(conn: sqlite3.Connection) -> None:
     logger.info(
         "[PRE-MIGRATE] managed_channel_history dropped to refresh stale change_source CHECK"
     )
+
+
+def _migrate_source_candidates_per_account(conn: sqlite3.Connection) -> None:
+    """Pre-migration: rebuild source_candidates keyed by group AND account (#1226).
+
+    A candidate used to be an M3U group (``m3u_group_id UNIQUE``, with the
+    accounts that carry it as a JSON list). A source reads one account's
+    streams, so a candidate is now one account's half of a group and the key is
+    ``UNIQUE(m3u_group_id, m3u_account_id)`` — a constraint change, which SQLite
+    cannot alter in place. The table is dropped so executescript recreates it;
+    its rows and the scan rows that hang off it (ON DELETE CASCADE) are backed
+    up and restored, split per account, in _run_migrations.
+    """
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='source_candidates'"
+        ).fetchone()
+    except Exception:
+        return  # Table doesn't exist yet (fresh install)
+    if not row or not row[0]:
+        return
+    if "m3u_account_ids" not in row[0]:
+        return  # Already per account — nothing to do
+
+    conn.execute("DROP TABLE IF EXISTS _source_candidate_scans_backup")
+    conn.execute(
+        "CREATE TABLE _source_candidate_scans_backup AS SELECT * FROM source_candidate_scans"
+    )
+    conn.execute("DROP TABLE IF EXISTS _source_candidates_backup")
+    conn.execute("CREATE TABLE _source_candidates_backup AS SELECT * FROM source_candidates")
+    conn.execute("DROP TABLE source_candidates")
+    logger.info("[PRE-MIGRATE] source_candidates dropped to re-key it by group and account")

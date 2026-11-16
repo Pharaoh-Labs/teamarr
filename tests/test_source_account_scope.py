@@ -59,7 +59,9 @@ def _fetcher(rows):
     manager._groups_cache = [DispatcharrChannelGroup(id=303, name="Shared group")]
     fetcher = StreamFetcher.__new__(StreamFetcher)
     fetcher._dispatcharr_client = SimpleNamespace(m3u=manager)
-    fetcher._account_name_cache = {101: "Account A", 202: "Account B"}
+    # 999 is a live account with no streams in the group; an id Dispatcharr no
+    # longer lists is a different case (#628) and falls back to the whole group.
+    fetcher._account_name_cache = {101: "Account A", 202: "Account B", 999: "Account C"}
     fetcher._group_name_cache = {303: "Shared group"}
     return fetcher, api
 
@@ -69,9 +71,7 @@ def _fetcher(rows):
     [(101, [1001]), (202, [1002]), (999, []), (None, [1001, 1002])],
 )
 def test_source_reads_its_group_and_bound_account(account_id, expected_ids):
-    fetcher, api = _fetcher(
-        [_row(1002, 202), _row(1001, 101), _row(1003, 101, 404, "Other group")]
-    )
+    fetcher, api = _fetcher([_row(1002, 202), _row(1001, 101), _row(1003, 101, 404, "Other group")])
     group = EventEPGGroup(id=1, name="Source", m3u_group_id=303, m3u_account_id=account_id)
 
     streams = fetcher._fetch_streams(group)

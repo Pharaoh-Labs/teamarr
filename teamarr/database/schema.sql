@@ -640,7 +640,7 @@ CREATE TABLE IF NOT EXISTS settings (
     plex_servers JSON,
 
     -- Schema Version
-    schema_version INTEGER DEFAULT 104
+    schema_version INTEGER DEFAULT 105
 );
 
 -- Scoped stream-ordering rulesets. Runtime resolution intentionally remains
@@ -2029,17 +2029,18 @@ CREATE INDEX IF NOT EXISTS idx_race_feeds_league ON race_feeds(league, enabled);
 CREATE TABLE IF NOT EXISTS source_candidates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    m3u_group_id INTEGER NOT NULL UNIQUE,     -- Dispatcharr channel-group id of the M3U group
+    m3u_group_id INTEGER NOT NULL,            -- Dispatcharr channel-group id of the M3U group
     m3u_group_name TEXT NOT NULL,
-    m3u_account_ids TEXT NOT NULL DEFAULT '[]',  -- JSON list of M3U account ids carrying the group
-    stream_count INTEGER DEFAULT 0,           -- streams in the group at the last scan
+    m3u_account_id INTEGER NOT NULL DEFAULT 0,  -- the one M3U account this candidate is (#1226); 0 = streams with no account
+    stream_count INTEGER DEFAULT 0,           -- that account's streams in the group at the last scan
     name_leagues TEXT NOT NULL DEFAULT '[]',  -- JSON: subscribed leagues the group NAME mentions
     status TEXT NOT NULL DEFAULT 'new'
         CHECK(status IN ('new', 'accepted', 'dismissed')),
     source_group_id INTEGER,                  -- event_epg_groups.id created when accepted (NULL while accepted = approved, source since removed)
     replay BOOLEAN DEFAULT 0,                 -- group name or most stream names say "replay": never suggested
     last_seen_at TIMESTAMP,                   -- last scan that still listed the group
-    last_matched_at TIMESTAMP                 -- last scan with a two-sided game match
+    last_matched_at TIMESTAMP,                -- last scan with a two-sided game match
+    UNIQUE(m3u_group_id, m3u_account_id)      -- a group two accounts carry is two candidates
 );
 
 CREATE TABLE IF NOT EXISTS source_candidate_scans (

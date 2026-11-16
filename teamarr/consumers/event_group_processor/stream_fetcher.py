@@ -197,9 +197,30 @@ class StreamFetcher:
                 group_id=group.m3u_group_id,
                 account_id=group.m3u_account_id,
             )
+            account_names = self._account_names()
+            # A re-imported M3U account gets a NEW id in Dispatcharr, leaving
+            # the source bound to one that no longer exists (#628). The
+            # by-name heal runs after the fetch, in the stream-audit stage, so
+            # without this the source reads nothing for a run — or for good,
+            # when the account's name changed too. Only an id Dispatcharr no
+            # longer lists falls back: an account that exists and has no
+            # streams in the group reads nothing, never another account's.
+            if (
+                not streams
+                and group.m3u_account_id is not None
+                and account_names
+                and group.m3u_account_id not in account_names
+            ):
+                logger.warning(
+                    "[EVENT_EPG] Source %r (id=%s) is bound to M3U account %s, which "
+                    "Dispatcharr no longer lists - reading the whole group this run",
+                    group.name,
+                    group.id,
+                    group.m3u_account_id,
+                )
+                streams = m3u_manager.list_streams(group_id=group.m3u_group_id)
 
             # Convert to dicts for matcher (sorted by name for consistent order)
-            account_names = self._account_names()
             group_names = self._group_names(m3u_manager)
             stream_dicts = []
             for s in streams:
