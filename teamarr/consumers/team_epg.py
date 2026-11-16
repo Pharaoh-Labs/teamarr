@@ -168,7 +168,9 @@ class TeamEPGGenerator:
         """Render one resolved event through the Team EPG template."""
         if not options.template:
             return None
-        context = self._context_builder.build_for_event(event, team_id, league)
+        context = self._context_builder.build_for_event(
+            event, team_id, event.league or league, team_league=league
+        )
         return self._event_to_programme(event, context, channel_id, logo_url, options)
 
     def generate(
@@ -300,11 +302,15 @@ class TeamEPGGenerator:
             next_event = sorted_events[i + 1] if i + 1 < len(sorted_events) else None
             last_event = sorted_events[i - 1] if i > 0 else None
 
-            # Build template context (always build for .next/.last vars)
+            # Build template context (always build for .next/.last vars).
+            # The league variables describe the game, so they read the event's
+            # own league: a team that follows several used to label every game
+            # with its primary one (#1220). `league` stays the team's league.
             context = self._context_builder.build_for_event(
                 event=event,
                 team_id=team_id,
-                league=league,
+                league=event.league or league,
+                team_league=league,
                 team_stats=team_stats,
                 next_event=next_event,
                 last_event=last_event,

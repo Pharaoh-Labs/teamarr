@@ -323,6 +323,7 @@ Channel-source candidate fetching and EPG resolution share one successful Dispat
 - 274 variables in `variables/` (20 categories); chainable `|filter` transforms in `filters.py` (lower/upper/title/pascal/slug/urlencode) with permanent legacy aliases for 10 retired transform variables
 - 35 condition evaluators in `conditions.py`
 - Suffix rules: `.next`, `.last` for multi-game scenarios
+- **On a team channel the league variables describe the game (#1220).** `TeamEPGGenerator` passes `event.league` as the context league and the team's own league as `team_league` to `ContextBuilder.build_for_event`; team stats and `{soccer_primary_league_id}` stay on `team_league`, and the next/last game contexts use their own event's league (it is where the opponent's stats live). It used to pass the team's primary league for every game, so a multi-league team's cup night read as its domestic league in `{league}`, `{league_name}`, `{league_id}`, `{league_code}` and `{gracenote_category}` — the stock team title. Filler keeps the team's league. An event channel passes no `team_league` and is unchanged.
 - Template scope: each variable is tagged `TemplateScope.ALL` / `TEAM_ONLY` / `EVENT_ONLY` — gates variable picker by template type via `GET /variables?template_type=…`
 
 **Settings Registry** (`teamarr/database/settings/`, bead `teamarr-iua3.8`):
