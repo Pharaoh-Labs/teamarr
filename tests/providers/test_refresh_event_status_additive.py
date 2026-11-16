@@ -259,3 +259,67 @@ class TestRefreshCacheInvalidation:
             # so a popular event matched to many channels fetches once per run.
             service.refresh_event_status(original)
             assert mock_delete.call_count == 1
+
+
+class TestOddsOverlay:
+    """Odds overlay is usefulness-aware, not truthiness-aware (#1228).
+
+    ESPN reshaped the NFL summary's competition odds: moneylines survive
+    top-level while details/spread/over-under moved under current.*, so the
+    fresh odds dict stays truthy but hollow. The old falsy check let that
+    hollow dict clobber the scoreboard's complete odds on every generation —
+    NFL channels rendered blank odds while college (healthy summary) worked.
+    """
+
+    FULL_ODDS = {
+        "provider": "DraftKings",
+        "spread": -4.5,
+        "over_under": 38.5,
+        "details": "BAL -4.5",
+        "home_moneyline": -225,
+        "away_moneyline": 185,
+    }
+    HOLLOW_ODDS = {
+        # What the reshaped summary parses to: moneylines only.
+        "provider": "",
+        "spread": 0.0,
+        "over_under": 0.0,
+        "details": "",
+        "home_moneyline": -225,
+        "away_moneyline": 185,
+    }
+
+    def _refresh(self, orig_odds, fresh_odds):
+        original = _make_event(odds_data=orig_odds)
+        fresh = _make_event(odds_data=fresh_odds)
+        service = SportsDataService(providers=[])
+        with (
+            patch.object(service, "get_event", return_value=fresh),
+            patch.object(service._cache, "delete"),
+        ):
+            return service.refresh_event_status(original)
+
+    def test_hollow_fresh_never_clobbers_full_cached_odds(self):
+        result = self._refresh(dict(self.FULL_ODDS), dict(self.HOLLOW_ODDS))
+        assert result.odds_data == self.FULL_ODDS
+
+    def test_full_fresh_replaces_cached_odds(self):
+        moved = dict(self.FULL_ODDS, details="BAL -3.5", over_under=39.5)
+        result = self._refresh(dict(self.FULL_ODDS), moved)
+        assert result.odds_data == moved
+
+    def test_any_fresh_odds_fill_a_gap(self):
+        result = self._refresh(None, dict(self.HOLLOW_ODDS))
+        assert result.odds_data == self.HOLLOW_ODDS
+
+    def test_missing_fresh_keeps_cached_odds(self):
+        result = self._refresh(dict(self.FULL_ODDS), None)
+        assert result.odds_data == self.FULL_ODDS
+
+    def test_hollow_fresh_wins_when_cache_had_nothing_better(self):
+        result = self._refresh(dict(self.HOLLOW_ODDS), dict(self.HOLLOW_ODDS))
+        assert result.odds_data == self.HOLLOW_ODDS
+
+    def test_no_odds_either_side_stays_none(self):
+        result = self._refresh(None, None)
+        assert result.odds_data is None

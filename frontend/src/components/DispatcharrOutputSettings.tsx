@@ -339,8 +339,9 @@ export function DispatcharrOutputSettings() {
             </Select>
             <p className="text-xs text-muted-foreground">
               Static uses the group above. Dynamic modes auto-create groups named by sport or league.
-              Custom lets you define a pattern with {"{sport}"}, {"{league}"}, {"{league_abbrev}"},
-              {"{conference}"}, {"{conference_abbrev}"}, {"{division}"} (the middle three NCAA), and {"{exception_keyword}"} placeholders.
+              Custom lets you define a pattern with {"{sport}"}, {"{league}"}, {"{league_abbrev}"},{" "}
+              {"{league_id}"}, {"{exception_keyword}"}, and for NCAA leagues {"{conference}"},{" "}
+              {"{conference_abbrev}"} and {"{division}"} placeholders.
             </p>
           </div>
 
@@ -357,13 +358,14 @@ export function DispatcharrOutputSettings() {
                 className="w-64"
               />
               <p className="text-xs text-muted-foreground">
-                Use {"{sport}"}, {"{league}"}, {"{league_abbrev}"}, {"{conference}"},
+                Use {"{sport}"}, {"{league}"}, {"{league_abbrev}"}, {"{league_id}"}, {"{conference}"},{" "}
                 {"{conference_abbrev}"}, and{" "}
                 {"{division}"} (the last three NCAA only) as placeholders. Example:{" "}
                 "{"{sport}"} | {"{league}"}" creates groups like "Hockey | NHL";{" "}
                 "{"{league}"} | {"{conference_abbrev}"}" buckets college football by "NCAAF | SEC"
-                instead of the full conference name. {"{league_abbrev}"} is the compact league
-                code ("NCAA Hockey" → "NCAAH"). {"{exception_keyword}"} is the matched
+                instead of the full conference name. {"{league_abbrev}"} is the league's short
+                code in capitals ("NCAA Hockey" → "NCAAH") and {"{league_id}"} the same code as
+                stored ("ncaah"). {"{exception_keyword}"} is the matched
                 exception keyword ("Spanish: Rugby"). Add |upper, |lower or |title to any
                 placeholder to change its case: "{"{sport|upper}"} | {"{league}"}" gives
                 "HOCKEY | NHL" and "BASEBALL | MLB" instead of mixing "Hockey" with "NHL".

@@ -313,6 +313,19 @@ class Event:
     is_major: bool = False  # ESPN tournament major flag (grand slams)
 
 
+def odds_data_has_lines(odds: dict | None) -> bool:
+    """True when parsed odds carry the line fields the odds variables read.
+
+    ESPN reshaped the NFL summary's competition odds (#1228): moneylines can
+    survive top-level while details/spread/over-under moved under `current.*`,
+    leaving a truthy-but-hollow dict. A 0 spread can be a real pick'em line,
+    so hollowness is judged on details and over-under only.
+    """
+    if not odds:
+        return False
+    return bool(odds.get("details")) or bool(odds.get("over_under"))
+
+
 @dataclass(frozen=True)
 class TeamStats:
     """Team statistics for template variables.

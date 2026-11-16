@@ -580,6 +580,8 @@ The knockout variables read ESPN's structured leg and series data (UEFA Champion
 {: .note }
 Soccer teams often play in multiple competitions (domestic league, cups, Champions League). The `soccer_match_league` variables tell you which competition a specific game is in, while `soccer_primary_league` is the team's home league.
 
+On a team channel the general league variables — `{league}`, `{league_name}`, `{league_abbrev}`, `{league_id}`, `{league_code}` and `{gracenote_category}` — describe the league of the game being shown, for every sport: a Champions League night on an EPL club's channel reads "UCL", not "EPL". The team's own league is `{soccer_primary_league_id}`. Pregame, postgame and idle filler describe the channel between games and keep the team's league.
+
 ---
 
 ## Combat Sports

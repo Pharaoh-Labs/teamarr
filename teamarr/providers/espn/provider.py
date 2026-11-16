@@ -858,9 +858,23 @@ class ESPNProvider(
                 "address": venue_data.get("address", {}),
             }
 
-        # Summary endpoint has odds in pickcenter, not competition.odds
+        # Summary endpoint has odds in pickcenter, not competition.odds.
+        # ESPN reshaped the NFL summary's competition odds (#1228): the flat
+        # details/spread/overUnder fields _parse_odds reads moved under
+        # `current.*`, leaving moneylines top-level — a truthy-but-hollow
+        # block. Pickcenter still carries the flat shape, so it wins whenever
+        # it is the richer source, not only when the competition block is
+        # absent. A spread of 0 can be a real pick'em, so hollowness is judged
+        # on details and over-under only.
         pickcenter = data.get("pickcenter", [])
-        if pickcenter and not competition.get("odds"):
+        if (
+            pickcenter
+            and self._odds_entry_has_lines(pickcenter)
+            and (
+                not competition.get("odds")
+                or not self._odds_entry_has_lines(competition["odds"])
+            )
+        ):
             # Convert pickcenter format to scoreboard odds format
             competition["odds"] = pickcenter
 
@@ -1359,6 +1373,21 @@ class ESPNProvider(
         if not isinstance(season_type_num, int):
             return None
         return self._SEASON_TYPE_NUM_MAP.get(season_type_num)
+
+    @staticmethod
+    def _odds_entry_has_lines(odds_list: list) -> bool:
+        """True when the first odds entry carries the flat line fields.
+
+        _parse_odds reads top-level details/spread/overUnder. ESPN's reshaped
+        NFL summary competition odds (#1228) keep moneylines top-level while
+        the line fields moved under `current.*` — parseable but hollow. A
+        spread of 0 can be a real pick'em, so hollowness is judged on details
+        and over-under only.
+        """
+        if not odds_list:
+            return False
+        entry = odds_list[0]
+        return bool(entry.get("details")) or bool(entry.get("overUnder"))
 
     def _parse_odds(self, odds_list: list) -> dict | None:
         """Parse ESPN odds data into structured dict.

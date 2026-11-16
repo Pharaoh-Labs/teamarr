@@ -1,6 +1,6 @@
 """Dynamic channel group and profile resolver.
 
-Resolves {sport}, {league}, {league_abbrev}, {conference}, {conference_abbrev},
+Resolves {sport}, {league}, {league_id}, {league_abbrev}, {conference}, {conference_abbrev},
 {division} and {exception_keyword} wildcards to actual Dispatcharr
 group/profile IDs. Auto-creates groups/profiles in Dispatcharr if they don't
 exist.
@@ -15,16 +15,15 @@ from typing import Any
 from teamarr.core.sports import get_sport_display_names_from_db
 from teamarr.dispatcharr.factory import get_dispatcharr_connection
 from teamarr.templates.filters import FILTERS
-from teamarr.templates.variables.identity import construct_league_abbrev
 
 logger = logging.getLogger(__name__)
 
 # A wildcard in a group or profile pattern, with an optional chain of the
 # template filters (#1050): ``{sport|upper}`` → HOCKEY, ``{league|lower}``.
-# ``conference_abbrev`` and ``league_abbrev`` are listed before the wildcards
+# ``conference_abbrev``, ``league_abbrev`` and ``league_id`` are listed before the wildcards
 # they extend so the alternation cannot stop short at the prefix.
 WILDCARD_PATTERN = re.compile(
-    r"\{(sport|league_abbrev|league|conference_abbrev|conference|division|exception_keyword)"
+    r"\{(sport|league_abbrev|league_id|league|conference_abbrev|conference|division|exception_keyword)"
     r"((?:\|[A-Za-z_]+)*)\}"
 )
 
@@ -87,6 +86,7 @@ class DynamicResolver:
     _group_by_team: dict = field(default_factory=dict)
     _league_display_names: dict[str, str] = field(default_factory=dict)
     _league_aliases: dict[str, str] = field(default_factory=dict)
+    _league_ids: dict[str, str] = field(default_factory=dict)
     # Resolutions already announced at INFO. Group resolution is answered from
     # _groups_by_name, so the same mapping is re-derived once per channel — 722
     # lines in one observed run, 330 of them character-identical. The DISTINCT
@@ -132,6 +132,7 @@ class DynamicResolver:
         self._sport_display_names = {}
         self._league_display_names = {}
         self._league_aliases = {}
+        self._league_ids = {}
 
     def _ensure_initialized(self) -> None:
         """Lazy initialization of caches."""
@@ -182,9 +183,13 @@ class DynamicResolver:
         """Sport and league display names, for the {sport}/{league} wildcards."""
         self._sport_display_names = get_sport_display_names_from_db(conn)
 
-        cursor = conn.execute("SELECT league_code, display_name, league_alias FROM leagues")
+        cursor = conn.execute(
+            "SELECT league_code, display_name, league_alias, league_id FROM leagues"
+        )
         for row in cursor.fetchall():
             self._league_display_names[row["league_code"]] = row["display_name"]
+            if row["league_id"]:
+                self._league_ids[row["league_code"]] = row["league_id"]
             # league_alias with fallback to display_name (matches {league} template variable)
             alias = row["league_alias"] or row["display_name"]
             if alias:
@@ -241,23 +246,29 @@ class DynamicResolver:
         self._ensure_initialized()
         return self._league_aliases.get(league_code, league_code.upper())
 
-    def get_league_abbrev(self, league_code: str) -> str:
-        """Get compact abbreviation for a league code (#1207).
+    def get_league_id(self, league_code: str) -> str:
+        """The league's stored short code, as the {league_id} template variable gives it.
 
-        The same value the {league_abbrev} template variable resolves
-        (``construct_league_abbrev`` over the {league} alias — existing
-        capitals plus the first letter of every word), so "NCAA Hockey"
-        abbreviates to NCAAH where {league} spells it out, and a profile or
-        group pattern can match a Dispatcharr name like "NCAAH". Falls back
-        to the raw league code when nothing names the league, like the
-        template variable does.
+        ``leagues.league_id`` ("ncaah", "epl", "bundesliga") — lowercase, and
+        unique across the leagues table. A league the table does not carry (a
+        discovered one) falls back to its own code, like the template variable.
         """
         self._ensure_initialized()
-        alias = self.get_league_alias(league_code)
-        abbrev = construct_league_abbrev(alias or "")
-        if abbrev:
-            return abbrev
-        return construct_league_abbrev(league_code or "")
+        return self._league_ids.get(league_code, league_code)
+
+    def get_league_abbrev(self, league_code: str) -> str:
+        """The league's stored short code, uppercased (#1207).
+
+        "NCAA Hockey" spells out under {league}; this gives NCAAH, in the case
+        {league} and {conference_abbrev} already use (NCAAF, SEC). It is the
+        stored code and NOT ``construct_league_abbrev`` over the alias, which is
+        what the {league_abbrev} *template* variable does: that keeps capitals
+        and word initials, so one-word leagues collapse to a letter and 43 of
+        180 leagues shared 15 values (Bundesliga, Brasileirao and Boxing were
+        all "B") — fine in a programme title, wrong for a group or profile
+        name, where it silently merges unrelated leagues.
+        """
+        return self.get_league_id(league_code).upper()
 
     def _get_event_group(self, event: Any) -> dict | None:
         """The home team's cached provider group (conference), or None.
@@ -356,6 +367,7 @@ class DynamicResolver:
         sources = {
             "sport": lambda: self.get_sport_display_name(event_sport) if event_sport else None,
             "league": lambda: self.get_league_alias(event_league) if event_league else None,
+            "league_id": lambda: self.get_league_id(event_league) if event_league else None,
             "league_abbrev": lambda: self.get_league_abbrev(event_league) if event_league else None,
             "conference": lambda: conference,
             "division": lambda: division,
@@ -522,8 +534,8 @@ class DynamicResolver:
 
         Args:
             mode: 'static' or pattern string containing
-                {sport}/{league}/{league_abbrev}/{conference}/{conference_abbrev}/
-                {division}/{exception_keyword}
+                {sport}/{league}/{league_id}/{league_abbrev}/{conference}/
+                {conference_abbrev}/{division}/{exception_keyword}
             static_group_id: Group ID to use for 'static' mode
             event_sport: Event's sport code
             event_league: Event's league code
@@ -569,7 +581,7 @@ class DynamicResolver:
             )
             return group_id
 
-        # Pattern mode: resolve {sport}/{league}/{league_abbrev}/{conference}/{division} wildcards
+        # Pattern mode: resolve {sport}/{league}/{league_id}/{conference}/{division} wildcards
         if "{" in mode:
             conference = (
                 self.get_event_conference(event) if pattern_uses(mode, "conference") else None
@@ -644,7 +656,7 @@ class DynamicResolver:
 
         Args:
             profile_ids: List of profile IDs, wildcards ("{sport}", "{league}",
-                "{league_abbrev}"), or custom patterns
+                "{league_id}", "{league_abbrev}"), or custom patterns
             event_sport: Event's sport code
             event_league: Event's league code
             exception_keyword: Label for the {exception_keyword} wildcard;
