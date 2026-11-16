@@ -808,8 +808,8 @@ function AddBlockDialog({
           </div>
           <p className="text-xs text-muted-foreground -mt-2">
             A season limits the block to those games; the rest number as if the block were
-            not there. A channel group — a plain name, or a pattern with {"{sport}"}, {" "}
-            {"{league}"} or {"{league_abbrev}"} — sends these channels there instead of the
+            not there. A channel group — a plain name, or a pattern with {"{sport}"},{" "}
+            {"{league}"}, {"{league_abbrev}"} or {"{league_id}"} — sends these channels there instead of the
             group they would otherwise use, created in Dispatcharr if needed.
           </p>
 
