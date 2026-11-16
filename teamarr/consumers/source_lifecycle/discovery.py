@@ -53,6 +53,7 @@ from teamarr.database.groups import (
 from teamarr.database.source_candidates import (
     CandidateEvidence,
     ScanEvidence,
+    account_key,
     dismiss_group,
     dismissed_groups,
     forget_removed_source,
@@ -267,26 +268,73 @@ class SourceDiscovery:
         self._m3u = dispatcharr.m3u
         self._processor = processor
 
-    def _source_group_ids(self, conn: Connection, live_groups: list) -> set[int]:
-        """M3U group ids some source already reads."""
-        taken: set[int] = set()
+    def _taken_accounts(self, conn: Connection) -> dict[int, set[int | None]]:
+        """M3U group id -> the accounts some source already reads there (#1226).
+
+        A source reads one account's streams in its group, so a group two
+        accounts carry is taken only for the accounts that have a source.
+        ``None`` in the set is a source with no account binding: it reads the
+        whole group, which is then taken outright.
+        """
+        taken: dict[int, set[int | None]] = {}
         for source in get_all_groups(conn, include_disabled=True):
             # A managed source that was retired is scanned again: games in its
             # group are what bring it back.
             if source.managed and not source.enabled:
                 continue
             if source.m3u_group_id:
-                taken.add(source.m3u_group_id)
+                taken.setdefault(source.m3u_group_id, set()).add(source.m3u_account_id)
         return taken
 
-    def _scan_group(self, group: Any, leagues: list[str], today: date) -> ScanEvidence:
+    @staticmethod
+    def _nothing_new(group: Any, accounts: set[int]) -> bool:
+        """Whether a group with decided accounts can be skipped without reading it.
+
+        ``accounts`` are the ones a source reads or the user dismissed. The
+        newer group listing gives a stream count per carrying account but not
+        which account each count belongs to, so the only case decided here is
+        the common one: at most one account has streams in the group, and one
+        is already decided. A group more accounts carry is read, and its
+        streams say whose they are.
+        """
+        entries = getattr(group, "m3u_accounts", None) or []
+        if any(not isinstance(e, dict) for e in entries):
+            # Older Dispatcharr lists bare account ids: an exact answer.
+            return not ({e for e in entries if isinstance(e, int)} - accounts)
+        return sum(1 for e in entries if (e.get("stream_count") or 0) > 0) <= 1
+
+    def _scan_group(
+        self,
+        group: Any,
+        leagues: list[str],
+        today: date,
+        skip: Callable[[int], bool] = lambda account: False,
+    ) -> list[ScanEvidence]:
+        """One evidence row per account that carries the group (#1226).
+
+        The group is read once and its streams are split by the account they
+        belong to: no extra Dispatcharr call. ``skip`` says which accounts the
+        caller does not want (a source already reads them, or the user said
+        no); their streams are not matched.
+        """
         raw = self._m3u.list_streams(group_id=group.id)
+        by_account: dict[int, list[Any]] = {}
+        for stream in raw:
+            by_account.setdefault(account_key(stream.m3u_account_id), []).append(stream)
+        return [
+            self._scan_account(group, account, streams, leagues, today)
+            for account, streams in sorted(by_account.items())
+            if not skip(account)
+        ]
+
+    def _scan_account(
+        self, group: Any, account: int, raw: list[Any], leagues: list[str], today: date
+    ) -> ScanEvidence:
         evidence = ScanEvidence(
             m3u_group_id=group.id,
             m3u_group_name=group.name,
-            # The group listing does not say which accounts carry it; its streams do.
-            m3u_account_ids=sorted({s.m3u_account_id for s in raw if s.m3u_account_id}),
-            stream_count=_stream_count(group) or len(raw),
+            m3u_account_id=account or None,
+            stream_count=len(raw),
         )
         streams = [
             {"id": s.id, "name": s.name, "tvg_id": s.tvg_id, "is_stale": s.is_stale}
@@ -389,27 +437,59 @@ class SourceDiscovery:
         summary.groups_total = len(live_groups)
 
         with self._db_factory() as conn:
-            taken = self._source_group_ids(conn, live_groups)
+            taken = self._taken_accounts(conn)
             dismissed, dismissed_names = dismissed_groups(conn)
             leagues = self._processor._get_subscription_leagues(conn, None)
             surfaces = league_name_surfaces(conn, leagues)
 
+        dismissed_by_group: dict[int, set[int]] = {}
+        for group_id, account in dismissed:
+            dismissed_by_group.setdefault(group_id, set()).add(account)
+        dismissed_by_name: dict[str, set[int]] = {}
+        for name, account in dismissed_names:
+            dismissed_by_name.setdefault(name, set()).add(account)
+
+        # A dismissed candidate back under a new group id (a provider rename
+        # makes Dispatcharr create a new group): still dismissed.
+        renamed: list[tuple[Any, int]] = []
+
         todo = []
-        renamed: list[Any] = []
         for group in live_groups:
-            if group.id in taken:
+            name = (group.name or "").strip().lower()
+            sourced = taken.get(group.id, set())
+            said_no = dismissed_by_group.get(group.id, set())
+            said_no_by_name = dismissed_by_name.get(name, set()) - said_no
+            decided = {account_key(a) for a in sourced} | said_no | said_no_by_name
+            if None in sourced:
                 summary.skipped_sources += 1
-            elif group.id in dismissed:
-                summary.skipped_dismissed += 1
-            elif (group.name or "").strip().lower() in dismissed_names:
-                # A dismissed group back under a new id (a provider rename
-                # makes Dispatcharr create a new group): still dismissed.
-                renamed.append(group)
-                summary.skipped_dismissed += 1
+            elif decided and self._nothing_new(group, decided):
+                if sourced:
+                    summary.skipped_sources += 1
+                else:
+                    summary.skipped_dismissed += 1
+                    renamed.extend((group, account) for account in said_no_by_name)
             elif _stream_count(group) == 0:
                 summary.skipped_empty += 1
             else:
                 todo.append(group)
+
+        def unwanted(group: Any) -> Callable[[int], bool]:
+            name = (group.name or "").strip().lower()
+            sourced = taken.get(group.id, set())
+
+            def skip(account: int) -> bool:
+                if (account or None) in sourced:
+                    return True
+                if (group.id, account) in dismissed:
+                    summary.skipped_dismissed += 1
+                    return True
+                if (name, account) in dismissed_names:
+                    renamed.append((group, account))
+                    summary.skipped_dismissed += 1
+                    return True
+                return False
+
+            return skip
 
         found: list[ScanEvidence] = []
         if leagues:
@@ -425,29 +505,35 @@ class SourceDiscovery:
                         progress(index, len(todo), group.name)
                     self._yield_to_generation()
                     try:
-                        evidence = self._scan_group(group, leagues, now.date())
+                        rows = self._scan_group(group, leagues, now.date(), unwanted(group))
                     except Exception:
                         # One unreadable group must not cost the rest of the scan.
                         logger.exception("[DISCOVERY] Failed to scan group %r", group.name)
                         summary.errors += 1
                         continue
-                    evidence.name_leagues = leagues_named_by(group.name, surfaces)
-                    summary.groups_scanned += 1
-                    if evidence.replay:
-                        summary.skipped_replay += 1
-                    summary.streams_matched_against += evidence.streams_read
-                    if evidence.game_matches:
-                        summary.groups_with_games += 1
-                    found.append(evidence)
+                    named = leagues_named_by(group.name, surfaces)
+                    for evidence in rows:
+                        evidence.name_leagues = named
+                        summary.groups_scanned += 1
+                        if evidence.replay:
+                            summary.skipped_replay += 1
+                        summary.streams_matched_against += evidence.streams_read
+                        if evidence.game_matches:
+                            summary.groups_with_games += 1
+                        found.append(evidence)
 
         with self._db_factory() as conn:
-            for group in renamed:
-                dismiss_group(conn, group.id, group.name)
+            for group, account in renamed:
+                dismiss_group(conn, group.id, group.name, account or None)
             record_scan(conn, found, now)
             readd_approved_sources(conn, now, summary)
             auto_add_sources(conn, now, summary)
             maintain_managed_sources(
-                conn, now, {g.id for g in live_groups}, {e.m3u_group_id: e for e in found}, summary
+                conn,
+                now,
+                {g.id for g in live_groups},
+                {(e.m3u_group_id, account_key(e.m3u_account_id)): e for e in found},
+                summary,
             )
 
         summary.duration_seconds = round((now_utc() - started).total_seconds(), 1)
@@ -482,7 +568,8 @@ def accept_candidate(
     name_match = candidate.best_game_matches > 0 or not team_streams
     name = candidate.m3u_group_name
     suffix = 2
-    while get_group_by_name(conn, name) is not None:
+    # A name is unique per account, so two accounts' halves of one group share it.
+    while get_group_by_name(conn, name, candidate.m3u_account_id) is not None:
         name = f"{candidate.m3u_group_name} ({suffix})"
         suffix += 1
     source_id = create_group(
@@ -491,7 +578,7 @@ def accept_candidate(
         leagues=[],
         m3u_group_id=candidate.m3u_group_id,
         m3u_group_name=candidate.m3u_group_name,
-        m3u_account_id=candidate.m3u_account_ids[0] if candidate.m3u_account_ids else None,
+        m3u_account_id=candidate.m3u_account_id,
         name_match_enabled=name_match,
         team_streams_enabled=team_streams,
     )
@@ -526,7 +613,7 @@ def adopt_source(conn: Connection, source: EventEPGGroup) -> None:
             conn,
             m3u_group_id=source.m3u_group_id,
             m3u_group_name=source.m3u_group_name or source.name,
-            m3u_account_ids=[source.m3u_account_id] if source.m3u_account_id else [],
+            m3u_account_id=source.m3u_account_id,
             name_leagues=named,
             source_group_id=source.id,
         )
@@ -631,7 +718,7 @@ def maintain_managed_sources(
     conn: Connection,
     now: datetime,
     live_group_ids: set[int],
-    evidence: dict[int, ScanEvidence],
+    evidence: dict[tuple[int, int], ScanEvidence],
     summary: ScanSummary,
     policy: SourceLifecyclePolicy | None = None,
 ) -> None:
@@ -646,8 +733,9 @@ def maintain_managed_sources(
     """
     policy = policy or load_policy(conn)
     named = {
-        c.m3u_group_id: bool(c.name_leagues)
+        c.source_group_id: bool(c.name_leagues)
         for c in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted")
+        if c.source_group_id is not None
     }
     created = {
         row["id"]: row["created_at"]
@@ -666,7 +754,7 @@ def maintain_managed_sources(
         group_live = source.m3u_group_id in live_group_ids
         if source.enabled:
             idle = _age_days(source.last_matched_at or created.get(source.id), now)
-            limit = policy.idle_days_named if named.get(source.m3u_group_id) else policy.idle_days
+            limit = policy.idle_days_named if named.get(source.id) else policy.idle_days
             if idle is not None and idle >= limit:
                 set_managed_source_enabled(conn, source.id, False)
                 summary.sources_disabled += 1
@@ -676,7 +764,7 @@ def maintain_managed_sources(
                     int(idle),
                 )
             continue
-        found = evidence.get(source.m3u_group_id)
+        found = _evidence_for(source, evidence)
         if group_live:
             # Generation runs stop looking at a disabled source, so the scan
             # keeps its "last seen" current; "gone" is counted from here.
@@ -703,6 +791,22 @@ def maintain_managed_sources(
                     int(gone),
                 )
     conn.commit()
+
+
+def _evidence_for(
+    source: EventEPGGroup, evidence: dict[tuple[int, int], ScanEvidence]
+) -> ScanEvidence | None:
+    """This scan's evidence for the streams a retired managed source would read.
+
+    Its own account's half of the group; for a source with no account binding,
+    the busiest half the scan read.
+    """
+    if source.m3u_group_id is None:
+        return None
+    if source.m3u_account_id:
+        return evidence.get((source.m3u_group_id, source.m3u_account_id))
+    halves = [e for (group_id, _), e in evidence.items() if group_id == source.m3u_group_id]
+    return max(halves, key=lambda e: (e.game_matches, e.team_only_matches), default=None)
 
 
 def _stream_count(group: Any) -> int | None:

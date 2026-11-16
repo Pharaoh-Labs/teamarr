@@ -163,6 +163,7 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _migrate_detection_keywords_restore_if_needed(conn)
     _migrate_stream_match_cache_restore_if_needed(conn)
     _migrate_channel_history_restore_if_needed(conn)
+    _migrate_source_candidates_per_account_if_needed(conn)
     if current_version < 65:
         _advance_version(conn, 65, "event-anchored lifecycle timing")
         current_version = 65
@@ -452,6 +453,12 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     if current_version < 104:
         _advance_version(conn, 104, "managed-team stream-ordering scope")
         current_version = 104
+
+    if current_version < 105:
+        # The data work is _migrate_source_candidates_per_account_if_needed
+        # above, keyed off the pre-migration's backup tables.
+        _advance_version(conn, 105, "source candidates per M3U account")
+        current_version = 105
 
 
 # =============================================================================
@@ -1178,6 +1185,163 @@ def _migrate_channel_history_restore_if_needed(conn: sqlite3.Connection) -> None
     except Exception as e:
         logger.warning("[MIGRATE] managed_channel_history restore failed: %s", e)
         conn.execute("DROP TABLE IF EXISTS _managed_channel_history_backup")
+
+
+def _migrate_source_candidates_per_account_if_needed(conn: sqlite3.Connection) -> None:
+    """Restore source_candidates one row per group AND account (#1226, v105).
+
+    Keyed off the pre-migration's backup tables. An old row named a group and
+    listed every account that carried it. Its id and scan history go to one
+    account — the linked source's, else the first listed — and the other
+    accounts get what keeps the user's decisions and the user's streams:
+
+    * dismissed: a dismissed row each. The "no" was said about the group.
+    * accepted with a managed source: a sibling source each, a copy of the
+      original bound to that account. A discovered source was bound to the
+      lowest account id and read every account's streams anyway; now that a
+      source reads its own account only (#1227), the other accounts' streams
+      would stop being read the moment the upgrade ran. The stored account
+      list dates from the last scan before the group became a source: an
+      account that has since left gets an empty sibling the idle rule retires,
+      one that has since joined shows up as a normal suggestion.
+    * accepted with its source removed: an approved row each, so the halves
+      come back together when the group does.
+    * new: nothing. The next scan records each account on its own evidence.
+
+    A source the user made and then automated lists only its own account, so
+    it gets no sibling: its account was the user's choice.
+    """
+    has_backup = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='_source_candidates_backup'"
+    ).fetchone()[0]
+    if not has_backup:
+        return
+
+    try:
+        siblings = _restore_source_candidates_per_account(conn)
+        logger.info(
+            "[MIGRATE] Restored source_candidates per account (%d sibling source(s) created)",
+            siblings,
+        )
+    except Exception:
+        logger.exception("[MIGRATE] source_candidates per-account restore failed")
+    conn.execute("DROP TABLE IF EXISTS _source_candidates_backup")
+    conn.execute("DROP TABLE IF EXISTS _source_candidate_scans_backup")
+
+
+def _restore_source_candidates_per_account(conn: sqlite3.Connection) -> int:
+    backup_cols = [r[1] for r in conn.execute("PRAGMA table_info(_source_candidates_backup)")]
+    new_cols = [r[1] for r in conn.execute("PRAGMA table_info(source_candidates)")]
+    carried = [c for c in new_cols if c in backup_cols]
+
+    def insert(values: dict) -> None:
+        cols = list(values)
+        conn.execute(
+            f"INSERT OR IGNORE INTO source_candidates ({', '.join(cols)}) "
+            f"VALUES ({', '.join('?' for _ in cols)})",
+            [values[c] for c in cols],
+        )
+
+    # Two passes: every old row goes back under its own id first, so a row
+    # added for another account can never take an id an old row still needs
+    # (the scan history hangs off those ids).
+    split: list[tuple[dict, list[int], int, sqlite3.Row | None]] = []
+    for row in conn.execute("SELECT * FROM _source_candidates_backup ORDER BY id").fetchall():
+        old = dict(zip(backup_cols, row, strict=True))
+        try:
+            accounts = [int(a) for a in json.loads(old.get("m3u_account_ids") or "[]") if a]
+        except (TypeError, ValueError):
+            accounts = []
+        source = None
+        if old.get("source_group_id") is not None:
+            source = conn.execute(
+                "SELECT id, m3u_account_id, managed FROM event_epg_groups WHERE id = ?",
+                (old["source_group_id"],),
+            ).fetchone()
+        own = (source[1] if source and source[1] else (accounts[0] if accounts else 0)) or 0
+        insert({**{c: old[c] for c in carried}, "m3u_account_id": own})
+        split.append((old, accounts, own, source))
+
+    siblings = 0
+    for old, accounts, own, source in split:
+        shared = {
+            "m3u_group_id": old["m3u_group_id"],
+            "m3u_group_name": old["m3u_group_name"],
+            "name_leagues": old.get("name_leagues") or "[]",
+            "replay": old.get("replay") or 0,
+            "last_seen_at": old.get("last_seen_at"),
+        }
+        for account in accounts:
+            if account == own:
+                continue
+            if old["status"] == "dismissed":
+                insert({**shared, "m3u_account_id": account, "status": "dismissed"})
+            elif old["status"] == "accepted" and old.get("source_group_id") is None:
+                insert({**shared, "m3u_account_id": account, "status": "accepted"})
+            elif old["status"] == "accepted" and source is not None and source[2]:
+                sibling_id = _create_account_sibling_source(
+                    conn, source[0], old["m3u_group_id"], account
+                )
+                if sibling_id is not None:
+                    insert(
+                        {
+                            **shared,
+                            "m3u_account_id": account,
+                            "status": "accepted",
+                            "source_group_id": sibling_id,
+                        }
+                    )
+                    siblings += 1
+
+    scan_cols = [r[1] for r in conn.execute("PRAGMA table_info(source_candidate_scans)")]
+    backup_scan_cols = [
+        r[1] for r in conn.execute("PRAGMA table_info(_source_candidate_scans_backup)")
+    ]
+    col_list = ", ".join(c for c in scan_cols if c in backup_scan_cols)
+    conn.execute(
+        f"INSERT OR IGNORE INTO source_candidate_scans ({col_list}) "
+        f"SELECT {col_list} FROM _source_candidate_scans_backup "
+        "WHERE candidate_id IN (SELECT id FROM source_candidates)"
+    )
+    return siblings
+
+
+def _create_account_sibling_source(
+    conn: sqlite3.Connection, source_id: int, m3u_group_id: int, account_id: int
+) -> int | None:
+    """Copy a managed source for another account that carries its group (#1226).
+
+    Every setting is copied; only the account differs. Returns None when some
+    source already reads that account's half, or the whole group.
+    """
+    taken = conn.execute(
+        "SELECT 1 FROM event_epg_groups WHERE m3u_group_id = ? "
+        "AND (m3u_account_id = ? OR m3u_account_id IS NULL) "
+        "AND COALESCE(is_channel_source, 0) = 0",
+        (m3u_group_id, account_id),
+    ).fetchone()
+    if taken:
+        return None
+    account_name = conn.execute(
+        "SELECT m3u_account_name FROM event_epg_groups "
+        "WHERE m3u_account_id = ? AND m3u_account_name IS NOT NULL LIMIT 1",
+        (account_id,),
+    ).fetchone()
+    own = {"id", "created_at", "updated_at", "m3u_account_id", "m3u_account_name"}
+    copied = [r[1] for r in conn.execute("PRAGMA table_info(event_epg_groups)") if r[1] not in own]
+    col_list = ", ".join(copied)
+    cursor = conn.execute(
+        f"INSERT INTO event_epg_groups ({col_list}, m3u_account_id, m3u_account_name) "
+        f"SELECT {col_list}, ?, ? FROM event_epg_groups WHERE id = ?",
+        (account_id, account_name[0] if account_name else None, source_id),
+    )
+    logger.info(
+        "[MIGRATE] Created sibling source id=%s of source id=%s for M3U account %s",
+        cursor.lastrowid,
+        source_id,
+        account_id,
+    )
+    return cursor.lastrowid
 
 
 def _migrate_stream_match_cache_restore_if_needed(conn: sqlite3.Connection) -> None:
