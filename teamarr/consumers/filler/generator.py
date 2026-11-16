@@ -302,6 +302,7 @@ class FillerGenerator:
                     team_stats=team_stats,
                     next_event=first_game,
                     last_event=last_past_event,
+                    framed_event=first_game,
                 )
 
                 pregame_progs = self._create_filler_programmes(
@@ -344,6 +345,7 @@ class FillerGenerator:
                     team_stats=team_stats,
                     next_event=next_game,
                     last_event=last_game,
+                    framed_event=last_game,
                 )
 
                 postgame_progs = self._create_filler_programmes(
@@ -393,6 +395,7 @@ class FillerGenerator:
                             team_stats=team_stats,
                             next_event=next_future_event,
                             last_event=prev_day_last_event,
+                            framed_event=prev_day_last_event,
                         )
                         postgame_progs = self._create_filler_programmes(
                             start_dt=day_start,
@@ -648,12 +651,28 @@ class FillerGenerator:
         team_stats: TeamStats | None,
         next_event: Event | None = None,
         last_event: Event | None = None,
+        framed_event: Event | None = None,
     ) -> TemplateContext:
         """Build template context for filler content.
 
         For filler, game_context is None (no current game).
         .next and .last contexts are populated from next/last events.
+
+        ``framed_event`` is the game a pregame or postgame filler is about. Its
+        league is what {league}, {league_name}, {gracenote_category} and the
+        other league variables name, so "Coming up" before a cup game says the
+        cup like the game programme after it does (#1220). Idle filler frames
+        no game and keeps the team's own league, which stays available either
+        way as {soccer_primary_league_id}.
         """
+        if framed_event and framed_event.league and framed_event.league != team_config.league:
+            team_config = dc_replace(
+                team_config,
+                league=framed_event.league,
+                soccer_primary_league_id=(
+                    team_config.soccer_primary_league_id or team_config.league
+                ),
+            )
         next_game = None
         if next_event:
             # The game's own league (#1220): it is where the opponent's
