@@ -656,8 +656,10 @@ class FillerGenerator:
         """
         next_game = None
         if next_event:
+            # The game's own league (#1220): it is where the opponent's
+            # stats live when the team follows several leagues.
             next_game = self._build_game_context(
-                next_event, team_config.team_id, team_config.league
+                next_event, team_config.team_id, next_event.league or team_config.league
             )
             logger.debug(
                 f"Built next_game context: opponent={next_game.opponent.name if next_game.opponent else 'None'}, "  # noqa: E501
@@ -667,7 +669,7 @@ class FillerGenerator:
         last_game = None
         if last_event:
             last_game = self._build_game_context(
-                last_event, team_config.team_id, team_config.league
+                last_event, team_config.team_id, last_event.league or team_config.league
             )
 
         return TemplateContext(

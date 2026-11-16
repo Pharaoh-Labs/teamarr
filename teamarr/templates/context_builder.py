@@ -70,17 +70,25 @@ class ContextBuilder:
         next_event: Event | None = None,
         last_event: Event | None = None,
         card_segment: str | None = None,
+        team_league: str | None = None,
     ) -> TemplateContext:
         """Build complete template context for an event.
 
         Args:
             event: The current game/event
             team_id: ID of the team this context is for
-            league: League identifier
+            league: League the event is played in — what {league},
+                {league_name}, {gracenote_category} and the other league
+                variables describe
             team_stats: Pre-fetched team stats (optional, will fetch if None)
             next_event: Next scheduled game (optional)
             last_event: Last completed game (optional)
             card_segment: UFC card segment code (early_prelims, prelims, main_card)
+            team_league: The team's own (primary) league, when the context is
+                for a team channel whose team plays in several (#1220). The
+                team's stats and {soccer_primary_league_id} stay on it, and
+                the next/last games are described by their own leagues. None
+                (event channels) means the team is described by `league`.
 
         Returns:
             Complete TemplateContext ready for template resolution
@@ -97,11 +105,12 @@ class ContextBuilder:
             team_name=team.name,
             team_abbrev=team.abbreviation,
             team_short_name=team.short_name,
+            soccer_primary_league_id=team_league,
         )
 
         # Fetch team stats if not provided
         if team_stats is None:
-            team_stats = self._get_team_stats(team_id, league)
+            team_stats = self._get_team_stats(team_id, team_league or league)
 
         # Build game context for current event
         game_context = self._build_game_context(
@@ -117,7 +126,7 @@ class ContextBuilder:
             next_game = self._build_game_context(
                 event=next_event,
                 team_id=team_id,
-                league=league,
+                league=(next_event.league or league) if team_league else league,
             )
 
         last_game = None
@@ -125,7 +134,7 @@ class ContextBuilder:
             last_game = self._build_game_context(
                 event=last_event,
                 team_id=team_id,
-                league=league,
+                league=(last_event.league or league) if team_league else league,
             )
 
         return TemplateContext(
