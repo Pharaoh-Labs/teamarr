@@ -162,7 +162,7 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 
 ## Version History
 
-**Current schema version: 104** (not every version number has a migration block — column-only versions are handled by reconciliation)
+**Current schema version: 105** (not every version number has a migration block — column-only versions are handled by reconciliation)
 
 | Version | Type | Description |
 |---------|------|-------------|
@@ -179,3 +179,4 @@ This means "add a new column" is no longer coupled to a schema version bump — 
 | 101 | Data | Migrates recognized franchise cricket team identities and selections from TSDB to ESPN, preserving channel configuration and clearing provider caches (#1069) |
 | 102 | Data | Removes the LFA league (#1083): ESPN's `mma/lfa` slug stopped listing cards after June 2026; drops the row, subscriptions to it and its cache rows |
 | 103 | Data | Disables sources that were bound by group-name pattern only and have no `m3u_group_id` (#1089): #1056 left them reading every stream in Dispatcharr |
+| 105 | Rebuild + data | Re-keys `source_candidates` on `(m3u_group_id, m3u_account_id)` (#1226): a candidate is one M3U account's streams in a group. Rows keep their ids and scan history; a dismissal is carried to every account that carried the group; each discovery-managed source gets a sibling source per other account, so no stream stops being read now that a source reads its own account only |
