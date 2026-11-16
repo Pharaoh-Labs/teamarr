@@ -189,3 +189,40 @@ class TestFillerOpponentStats:
         )
 
         assert asked == [("ucl-1", CUP), ("epl-1", PRIMARY)]
+
+
+class TestFillerNamesTheGameItFrames:
+    """Pregame says the next game's league, postgame the last game's, idle the team's."""
+
+    @staticmethod
+    def _context(framed):
+        filler = FillerGenerator.__new__(FillerGenerator)
+        filler._context_builder = ContextBuilder(_service())
+        team_config = TeamChannelContext(
+            team_id="359", league=PRIMARY, sport="soccer", team_name="Arsenal"
+        )
+        context = filler._build_filler_context(
+            team_config,
+            None,
+            next_event=_event("ucl-1", CUP, "Bayern Munich"),
+            last_event=_event("epl-1", PRIMARY, "Chelsea"),
+            framed_event=framed,
+        )
+        return context, team_config
+
+    def test_pregame_before_a_cup_game_names_the_cup(self):
+        context, _ = self._context(_event("ucl-1", CUP, "Bayern Munich"))
+        assert _render(context) == _expected(CUP)
+        assert _render(context, "{soccer_primary_league_id}") == [PRIMARY]
+
+    def test_postgame_after_a_league_game_names_the_league(self):
+        context, _ = self._context(_event("epl-1", PRIMARY, "Chelsea"))
+        assert _render(context) == _expected(PRIMARY)
+
+    def test_idle_keeps_the_team_league(self):
+        context, _ = self._context(None)
+        assert _render(context) == _expected(PRIMARY)
+
+    def test_the_team_config_passed_in_is_not_changed(self):
+        _, team_config = self._context(_event("ucl-1", CUP, "Bayern Munich"))
+        assert team_config.league == PRIMARY
