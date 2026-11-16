@@ -54,8 +54,10 @@ def names_db(tmp_path):
         """
         CREATE TABLE sports (sport_code TEXT, display_name TEXT);
         INSERT INTO sports VALUES ('football', 'Football');
-        CREATE TABLE leagues (league_code TEXT, display_name TEXT, league_alias TEXT, sport TEXT);
-        INSERT INTO leagues VALUES ('nfl', 'National Football League', 'NFL', 'football');
+        CREATE TABLE leagues (
+            league_code TEXT, display_name TEXT, league_alias TEXT, sport TEXT, league_id TEXT
+        );
+        INSERT INTO leagues VALUES ('nfl', 'National Football League', 'NFL', 'football', 'nfl');
         CREATE TABLE league_cache (league_slug TEXT, league_name TEXT);
         INSERT INTO league_cache VALUES ('esp.3', 'Primera Federación');
         """
