@@ -18,6 +18,7 @@ from teamarr.core.types import (
     TeamStats,
     TemplateConfig,
     Venue,
+    odds_data_has_lines,
 )
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "KNOCKOUT_FIELDS",
     "LeagueMapping",
     "LeagueMappingSource",
+    "odds_data_has_lines",
     "Programme",
     "RacingResult",
     "RacingSession",

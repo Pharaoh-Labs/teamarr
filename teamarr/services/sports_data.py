@@ -24,6 +24,7 @@ from teamarr.core import (
     SportsProvider,
     Team,
     TeamStats,
+    odds_data_has_lines,
 )
 from teamarr.database import get_db
 from teamarr.database.provider_cache import (
@@ -803,6 +804,19 @@ class SportsDataService:
                     overlay[field_name] = orig_val
                 else:
                     overlay[field_name] = orig_val or fresh_val
+            elif field_name == "odds_data":
+                # Odds are only an upgrade when they carry the lines the odds
+                # variables read (details / over-under). ESPN reshaped the NFL
+                # summary's competition odds (#1228): the fresh dict stayed
+                # truthy (moneylines survived top-level) while the flat fields
+                # moved under `current.*`, so the hollow fetch clobbered the
+                # scoreboard's complete odds here on every generation. Same
+                # principle as the score branch above: a degraded value never
+                # erases richer cached data; a fuller fresh dict still wins.
+                if odds_data_has_lines(fresh_val) or not orig_val:
+                    overlay[field_name] = fresh_val if fresh_val else orig_val
+                else:
+                    overlay[field_name] = orig_val
             else:
                 overlay[field_name] = fresh_val if fresh_val else orig_val
         return replace(event, **overlay)
