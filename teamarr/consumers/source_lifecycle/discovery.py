@@ -801,6 +801,8 @@ def _evidence_for(
     Its own account's half of the group; for a source with no account binding,
     the busiest half the scan read.
     """
+    if source.m3u_group_id is None:
+        return None
     if source.m3u_account_id:
         return evidence.get((source.m3u_group_id, source.m3u_account_id))
     halves = [e for (group_id, _), e in evidence.items() if group_id == source.m3u_group_id]
