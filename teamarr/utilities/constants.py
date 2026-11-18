@@ -474,6 +474,11 @@ LEAGUE_HINT_PATTERNS: list[tuple[str, str | list[str]]] = [
     (r"\bbundesliga[:\s-]", ["ger.1", "ger.2"]),  # Umbrella for all Bundesliga
     (r"\bserie\s+a[:\s-]", "ita.1"),
     (r"\bligue\s+1[:\s-]", "fra.1"),
+    # UEFA Women's Champions League must precede the men's UCL patterns because
+    # unanchored "champions league" would otherwise match inside "Women's Champions League".
+    (r"\buefa\s+women'?s\s+champions\s+league(?:\s+soccer)?[:\s-]", "uefa.wchampions"),
+    (r"\bwomen'?s\s+champions\s+league(?:\s+soccer)?[:\s-]", "uefa.wchampions"),
+    (r"\buwcl[:\s-]", "uefa.wchampions"),
     (r"\buefa\s+champions\s+league[:\s-]", "uefa.champions"),
     (r"\bucl[:\s-]", "uefa.champions"),
     (r"\bchampions\s+league[:\s-]", "uefa.champions"),
