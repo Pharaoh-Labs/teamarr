@@ -7,11 +7,13 @@ channels via `_create_channel`.
 """
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from sqlite3 import Connection
 from typing import Any
 
 from teamarr.core import Event
+from teamarr.database.channels import ManagedChannel
 from teamarr.utilities.broadcasts import has_local_broadcast
 from teamarr.utilities.sports import template_duration_override
 
@@ -33,12 +35,22 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class PendingStreamPush:
+    remote_streams: tuple[int, ...] | None = None
+    added_streams: dict[int, str] = field(default_factory=dict)
+    drifted_streams: set[int] = field(default_factory=set)
+
+
 class ChannelCreator(_LifecycleHost):
     """Creates channels from matched streams and handles duplicate modes.
 
     Mixin for ChannelLifecycleService — relies on the coordinator's managers,
     lock, timing manager, dynamic resolver and helper methods.
     """
+
+    _settings_synced_ids: set[int]
+    _pending_stream_pushes: dict[int, PendingStreamPush]
 
     def process_matched_streams(
         self,
@@ -67,6 +79,8 @@ class ChannelCreator(_LifecycleHost):
         )
 
         result = StreamProcessResult()
+        failures_before = self._dispatcharr_failure_count
+        drift_before = self._stream_drift_fix_count
 
         # Clear logo cache at start of batch to avoid stale references
         # Logos may have been deleted/changed in Dispatcharr since last run
@@ -477,6 +491,7 @@ class ChannelCreator(_LifecycleHost):
                                 change_source="epg_generation",
                                 notes=f"Created from stream '{stream_name}'",
                             )
+                            conn.commit()
                         else:
                             logger.warning(
                                 f"Failed to create channel for '{stream_name}': "
@@ -491,6 +506,7 @@ class ChannelCreator(_LifecycleHost):
                             )
 
                     except Exception as stream_err:
+                        conn.rollback()
                         event_id = matched.get("event")
                         if event_id is not None and hasattr(event_id, "id"):
                             event_id = event_id.id
@@ -510,6 +526,8 @@ class ChannelCreator(_LifecycleHost):
                         )
                         continue
 
+                self._flush_pending_stream_pushes(conn, result)
+
                 # Apply all pending profile changes in bulk
                 self._apply_pending_profile_changes(conn)
 
@@ -526,15 +544,17 @@ class ChannelCreator(_LifecycleHost):
                 )
 
         # Populate observability counters
-        result.dispatcharr_failures += self._dispatcharr_failure_count
-        result.stream_drift_fixes += self._stream_drift_fix_count
+        failures = self._dispatcharr_failure_count - failures_before
+        drifts = self._stream_drift_fix_count - drift_before
+        result.dispatcharr_failures += failures
+        result.stream_drift_fixes += drifts
 
         # Summary log for generation run visibility
-        if self._dispatcharr_failure_count or self._stream_drift_fix_count:
+        if failures or drifts:
             logger.warning(
                 "[LIFECYCLE] Generation: %d Dispatcharr API failure(s), %d stream drift fix(es)",
-                self._dispatcharr_failure_count,
-                self._stream_drift_fix_count,
+                failures,
+                drifts,
             )
 
         return result
@@ -678,6 +698,104 @@ class ChannelCreator(_LifecycleHost):
             )
         return phantoms
 
+    def _sync_settings_once(
+        self, conn: Connection, existing: ManagedChannel, **kwargs
+    ) -> StreamProcessResult:
+        if existing.id in self._settings_synced_ids:
+            return StreamProcessResult()
+        self._settings_synced_ids.add(existing.id)
+        return self._sync_channel_settings(conn=conn, existing=existing, **kwargs)
+
+    def _queue_stream_push(self, channel: ManagedChannel, remote_channel: Any) -> PendingStreamPush:
+        if channel.id not in self._pending_stream_pushes:
+            self._pending_stream_pushes[channel.id] = PendingStreamPush()
+        pending = self._pending_stream_pushes[channel.id]
+        if pending.remote_streams is None and remote_channel:
+            pending.remote_streams = tuple(remote_channel.streams)
+        return pending
+
+    def _record_stream_add(
+        self, conn: Connection, result: StreamProcessResult, channel: ManagedChannel, name: str
+    ) -> None:
+        from teamarr.database.channels import log_channel_history
+
+        log_channel_history(
+            conn=conn,
+            managed_channel_id=channel.id,
+            change_type="stream_added",
+            change_source="epg_generation",
+            notes=f"Added stream '{name}' (consolidate mode)",
+        )
+        result.streams_added.append(
+            {
+                "stream": name,
+                "channel_id": channel.dispatcharr_channel_id,
+                "channel_name": channel.channel_name,
+            }
+        )
+
+    def _flush_pending_stream_pushes(self, conn: Connection, result: StreamProcessResult) -> None:
+        from teamarr.database.channels import (
+            get_channel_streams,
+            get_managed_channel,
+            get_ordered_stream_ids,
+            remove_stream_from_channel,
+        )
+
+        pending, self._pending_stream_pushes = self._pending_stream_pushes, {}
+        for channel_id, record in pending.items():
+            channel = get_managed_channel(conn, channel_id)
+            if not channel or channel.deleted_at:
+                continue
+
+            added_streams = {
+                row.dispatcharr_stream_id: record.added_streams[row.dispatcharr_stream_id]
+                for row in get_channel_streams(conn, channel.id)
+                if row.dispatcharr_stream_id in record.added_streams
+            }
+            ordered = get_ordered_stream_ids(conn, channel.id)
+            remote = record.remote_streams
+            if remote is not None and not added_streams:
+                # Drift repair adds missing known members to the live list.
+                ordered = list(remote) + [sid for sid in ordered if sid in record.drifted_streams]
+            elif remote is not None:
+                phantoms = self._purge_phantom_streams(
+                    conn, channel, ordered, set(remote) | added_streams.keys()
+                )
+                if phantoms:
+                    ordered = [stream_id for stream_id in ordered if stream_id not in phantoms]
+
+            # Keep the feed viewers are watching in slot 1 during a live event.
+            if (
+                remote
+                and remote[0] in ordered
+                and live_pin_enabled(conn)
+                and is_channel_event_live(channel.event_date, channel.scheduled_delete_at)
+            ):
+                ordered.remove(remote[0])
+                ordered.insert(0, remote[0])
+
+            # A confirmed phantom purge is durable independently of the PATCH.
+            conn.commit()
+            if ordered and tuple(ordered) != remote:
+                with self._dispatcharr_lock:
+                    success = self._safe_update_channel(
+                        channel.dispatcharr_channel_id, {"streams": ordered}, "consolidate streams"
+                    )
+                if not success:
+                    for stream_id in added_streams:
+                        remove_stream_from_channel(conn, channel.id, stream_id)
+                    conn.commit()
+                    result.errors.append(
+                        {"channel_id": channel.id, "error": "Stream update failed"}
+                    )
+                    continue
+                self._stream_drift_fix_count += len(record.drifted_streams.intersection(ordered))
+
+            for name in added_streams.values():
+                self._record_stream_add(conn, result, channel, name)
+            conn.commit()
+
     def _handle_existing_channel(
         self,
         conn: Connection,
@@ -707,10 +825,8 @@ class ChannelCreator(_LifecycleHost):
             add_stream_to_channel,
             compute_stream_priority_from_rules,
             get_next_stream_priority,
-            get_ordered_stream_ids,
             log_channel_history,
             mark_channel_deleted,
-            remove_stream_from_channel,
             stream_exists_on_channel,
             update_stream_account_name,
             update_stream_channel_source_group,
@@ -758,6 +874,7 @@ class ChannelCreator(_LifecycleHost):
                         change_source="lifecycle",
                         notes="Channel missing from Dispatcharr, marked for cleanup",
                     )
+                    conn.commit()
                     # Return None to signal caller to create new channel
                     return None
                 if disp_channel is None:
@@ -781,7 +898,7 @@ class ChannelCreator(_LifecycleHost):
                 }
             )
             # Still sync channel settings even for ignored duplicates
-            settings_result = self._sync_channel_settings(
+            settings_result = self._sync_settings_once(
                 conn=conn,
                 existing=existing,
                 stream=stream,
@@ -846,84 +963,17 @@ class ChannelCreator(_LifecycleHost):
                     detach_at=detach_at,
                 )
 
-                # Sync with Dispatcharr - use ordered stream list to respect rules
-                if self._channel_manager:
-                    ordered_streams = get_ordered_stream_ids(conn, existing.id)
-
-                    # Purge phantom streams: IDs in our DB that Dispatcharr
-                    # no longer knows about (e.g. after M3U re-import).
-                    # Sending them causes "Invalid pk" and blocks ALL updates.
-                    if disp_channel:
-                        phantoms = self._purge_phantom_streams(
-                            conn,
-                            existing,
-                            ordered_streams,
-                            set(disp_channel.streams) | {stream_id},
-                        )
-                        if phantoms:
-                            ordered_streams = [s for s in ordered_streams if s not in phantoms]
-
-                    # Live-event #1 pin (#232): a stream that arrives while the
-                    # event is airing may out-prioritize the current top slot —
-                    # the one a viewer is watching. Slot it in right below #1
-                    # instead; rule-truth priorities stay in the DB, so normal
-                    # order resumes on the first post-event push.
-                    # Conditional on the pin setting (#1187): with it off, the
-                    # ordering pass later in the run puts slot 1 in rule order.
-                    if (
-                        len(ordered_streams) > 1
-                        and ordered_streams[0] == stream_id
-                        and live_pin_enabled(conn)
-                        and is_channel_event_live(existing.event_date, existing.scheduled_delete_at)
-                    ):
-                        ordered_streams[0], ordered_streams[1] = (
-                            ordered_streams[1],
-                            ordered_streams[0],
-                        )
-                        logger.info(
-                            "[STREAM_AUDIT] pin: ch='%s' live event — new stream %d "
-                            "slotted below current #1 %d (#232)",
-                            existing.channel_name,
-                            stream_id,
-                            ordered_streams[0],
-                        )
-
-                    logger.info(
-                        "[STREAM_AUDIT] consolidate add: ch='%s' (db_id=%d, d_id=%s) "
-                        "added stream_id=%d, db_ordered=%s",
-                        existing.channel_name,
-                        existing.id,
-                        existing.dispatcharr_channel_id,
-                        stream_id,
-                        ordered_streams,
-                    )
-                    with self._dispatcharr_lock:
-                        api_ok = self._safe_update_channel(
-                            existing.dispatcharr_channel_id,
-                            {"streams": ordered_streams},
-                            "consolidate stream add",
-                        )
-                    if not api_ok:
-                        # Roll back the DB insert so drift is retried next run
-                        remove_stream_from_channel(conn, existing.id, stream_id)
-
-                # Log history
-                log_channel_history(
-                    conn=conn,
-                    managed_channel_id=existing.id,
-                    change_type="stream_added",
-                    change_source="epg_generation",
-                    notes=f"Added stream '{stream_name}' (consolidate mode)",
-                )
-
-                result.streams_added.append(
-                    {
-                        "stream": stream_name,
-                        "channel_id": existing.dispatcharr_channel_id,
-                        "channel_name": existing.channel_name,
-                    }
-                )
+                if self._channel_manager and existing.dispatcharr_channel_id:
+                    pending = self._queue_stream_push(existing, disp_channel)
+                    pending.added_streams[stream_id] = stream_name
+                else:
+                    self._record_stream_add(conn, result, existing, stream_name)
             else:
+                if disp_channel and attach_at is None and stream_id not in disp_channel.streams:
+                    pending = self._queue_stream_push(existing, disp_channel)
+                    if stream_id not in pending.added_streams:
+                        pending.drifted_streams.add(stream_id)
+
                 # Stream already attached: self-heal the stored M3U account name
                 # (#297) — rows attached before per-stream account resolution carry
                 # the group's single account name, mislabeling multi-login streams.
@@ -998,8 +1048,11 @@ class ChannelCreator(_LifecycleHost):
                 conn, existing.id, stream_id, dp_channel_group_id, stream.get("dp_channel_id")
             )
 
+        # Persist membership and metadata before settings resolution can do HTTP.
+        conn.commit()
+
         # Sync channel settings
-        settings_result = self._sync_channel_settings(
+        settings_result = self._sync_settings_once(
             conn=conn,
             existing=existing,
             stream=stream,
@@ -1008,6 +1061,7 @@ class ChannelCreator(_LifecycleHost):
             template=template,
             segment=segment,
             stream_windowed=attach_at is not None,
+            sync_stream=effective_mode != "consolidate",
         )
         result.merge(settings_result)
 
@@ -1373,6 +1427,7 @@ class ChannelCreator(_LifecycleHost):
             conn.commit()
 
         except Exception as e:
+            conn.rollback()
             # DB insert failed - clean up the Dispatcharr channel to prevent orphans
             logger.error("[LIFECYCLE] DB insert failed for channel '%s': %s", channel_name, e)
             if dispatcharr_channel_id and self._channel_manager:

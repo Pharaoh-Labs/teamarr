@@ -1248,3 +1248,50 @@ class TestExistingChannelVerificationSafety:
         # Channel left intact: not deleted, and not signalled for recreate.
         assert result is not None
         mock_del.assert_not_called()
+
+
+def test_unresolved_group_allows_other_settings_to_sync(db_conn, db_factory):
+    cm = MagicMock()
+    cm.get_channel.return_value = _make_dispatcharr_channel(name="Old Name")
+    cm.update_channel.return_value = OperationResult(success=True)
+    service = _make_service(cm)
+    service._db_factory = db_factory
+
+    with (
+        patch.object(service, "_generate_channel_name", return_value="New Name"),
+        patch.object(service, "_sync_channel_profiles"),
+        patch.object(service, "_sync_channel_logo"),
+        patch.object(service, "_sync_stream_profile"),
+        patch.object(service._dynamic_resolver, "resolve_channel_group", return_value=None),
+        patch("teamarr.database.channels.update_managed_channel"),
+    ):
+        service._sync_channel_settings(
+            db_conn,
+            FakeManagedChannel(),
+            {"id": 456},
+            FakeEvent(start_time=datetime.now(UTC)),
+            {},
+            None,
+        )
+
+    cm.update_channel.assert_called_once()
+    updates = cm.update_channel.call_args.args[1]
+    assert updates["name"] == "New Name"
+    assert "channel_group_id" not in updates
+
+
+def test_matched_pass_failure_counts_are_per_call(db_factory, caplog):
+    service = _make_service()
+    service._db_factory = db_factory
+
+    def record_failure(_conn, _result):
+        service._dispatcharr_failure_count += 1
+
+    with patch.object(service, "_flush_pending_stream_pushes", side_effect=record_failure):
+        first = service.process_matched_streams([], {})
+    second = service.process_matched_streams([], {})
+
+    assert first.errors == second.errors == []
+    assert first.dispatcharr_failures == 1
+    assert second.dispatcharr_failures == 0
+    assert caplog.text.count("Generation: 1 Dispatcharr API failure(s)") == 1

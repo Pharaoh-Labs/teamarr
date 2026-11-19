@@ -4,7 +4,6 @@ import logging
 from sqlite3 import Connection
 from typing import TYPE_CHECKING, Any
 
-from teamarr.consumers.channel_lifecycle import create_lifecycle_service
 from teamarr.consumers.matching.team_matcher import is_all_star_event
 from teamarr.core import SEASON_POSTSEASON, Event
 from teamarr.database.groups import EventEPGGroup
@@ -15,15 +14,16 @@ logger = logging.getLogger(__name__)
 class TeamFiltering:
     """Applies team include/exclude filters and cleans up filtered channels.
 
-    Mixin for EventGroupProcessor — relies on the coordinator's
-    ``_db_factory``, ``_dispatcharr_client`` and ``_service`` attributes.
+    Mixin for EventGroupProcessor — uses the coordinator's lifecycle service.
     """
 
     if TYPE_CHECKING:
         # Provided by the EventGroupProcessor coordinator / sibling mixins.
         # Declared for type-checkers only — no runtime effect.
         _db_factory: Any
-        _dispatcharr_client: Any
+
+        def _get_lifecycle_service(self) -> Any: ...
+
         _service: Any
 
     def _filter_by_teams(
@@ -343,52 +343,10 @@ class TeamFiltering:
         Returns:
             True if deleted successfully
         """
-        from teamarr.database.channels import (
-            log_channel_history,
-            mark_channel_deleted,
-        )
-
         try:
-            # Soft delete in our database
-            mark_channel_deleted(conn, channel.id, reason=reason)
-
-            # Delete from Dispatcharr BEFORE writing history (#1065): the
-            # history row is bookkeeping, and a rejected insert used to leave
-            # the channel soft-deleted here but still live in Dispatcharr.
-            if self._dispatcharr_client and channel.dispatcharr_channel_id:
-                try:
-                    lifecycle_service = create_lifecycle_service(
-                        self._db_factory,
-                        self._service,
-                        self._dispatcharr_client,
-                    )
-                    if lifecycle_service._channel_manager:
-                        lifecycle_service._channel_manager.delete_channel(
-                            channel.dispatcharr_channel_id
-                        )
-                except Exception as e:
-                    logger.warning(
-                        "[EVENT_EPG] Failed to delete channel %d from Dispatcharr: %s",
-                        channel.dispatcharr_channel_id,
-                        e,
-                    )
-
-            try:
-                log_channel_history(
-                    conn=conn,
-                    managed_channel_id=channel.id,
-                    change_type="deleted",
-                    change_source=change_source,
-                    notes=f"Channel deleted: {reason}",
-                )
-            except Exception as e:
-                logger.warning(
-                    "[EVENT_EPG] Channel %d deleted but history not recorded: %s",
-                    channel.id,
-                    e,
-                )
-
-            return True
+            return self._get_lifecycle_service().delete_managed_channel(
+                conn, channel.id, reason=reason, change_source=change_source
+            )
         except Exception as e:
             logger.error(
                 "[EVENT_EPG] Failed to delete channel %d for team filter: %s",

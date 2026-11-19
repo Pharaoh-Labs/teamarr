@@ -1229,4 +1229,5 @@ def mark_matched_streams_excluded(
            WHERE run_id = ? AND group_id = ? AND stream_id = ? AND event_id = ?""",
         [(reason, run_id, group_id, stream_id, event_id) for stream_id, event_id in pairs],
     )
+    conn.commit()
     return cursor.rowcount

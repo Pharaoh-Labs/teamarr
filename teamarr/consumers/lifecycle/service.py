@@ -223,6 +223,8 @@ class ChannelLifecycleService(
         # Per-run counters for observability (reset in clear_caches)
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
+        self._settings_synced_ids = set()
+        self._pending_stream_pushes = {}
 
     def _safe_update_channel(
         self,
@@ -323,6 +325,8 @@ class ChannelLifecycleService(
         self._stale_profile_ids_warned = set()
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
+        self._settings_synced_ids.clear()
+        self._pending_stream_pushes.clear()
 
     def _collect_profile_change(
         self,
