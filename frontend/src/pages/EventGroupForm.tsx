@@ -26,6 +26,7 @@ import { LeaguePicker } from "@/components/LeaguePicker"
 import { SoccerModeSelector, type SoccerMode } from "@/components/SoccerModeSelector"
 import { getLeagues } from "@/api/teams"
 import { getSubscription } from "@/api/subscription"
+import { useSubscription } from "@/hooks/useSubscription"
 import type { SoccerFollowedTeam } from "@/api/types"
 
 export function EventGroupForm() {
@@ -92,6 +93,11 @@ export function EventGroupForm() {
   // downstream hook dependency (react-hooks/exhaustive-deps).
   const leaguesList = leaguesData?.leagues
   const allLeagues = useMemo(() => leaguesList ?? [], [leaguesList])
+
+  const { data: globalSubscription } = useSubscription()
+  const teamPickerLeagues = useGlobalSubscription
+    ? globalSubscription?.leagues ?? []
+    : [...overrideNonSoccerLeagues, ...overrideSoccerLeagues]
 
   const matchGlobal = useCallback(async () => {
     setMatchingGlobal(true)
@@ -287,6 +293,21 @@ export function EventGroupForm() {
           }
           if (shouldClear(group.stream_timezone, data.stream_timezone)) {
             updateData.clear_stream_timezone = true
+          }
+          if (shouldClear(group.bypass_filter_for_playoffs, data.bypass_filter_for_playoffs)) {
+            updateData.clear_bypass_filter_for_playoffs = true
+          }
+          updateData.clear_include_teams = !!group.include_teams?.length && !data.include_teams?.length
+          updateData.clear_exclude_teams = !!group.exclude_teams?.length && !data.exclude_teams?.length
+          const regexFields = [
+            "stream_include_regex", "stream_exclude_regex", "custom_regex_teams", "custom_regex_date",
+            "custom_regex_month", "custom_regex_day", "custom_regex_time", "custom_regex_league",
+            "custom_regex_fighters", "custom_regex_event_name",
+          ] as const
+          for (const field of regexFields) {
+            if (shouldClear(group[field], submitData[field])) {
+              updateData[`clear_${field}`] = true
+            }
           }
           // Clear subscription override when switching back to global
           if (useGlobalSubscription && group.subscription_leagues !== null) {
@@ -707,7 +728,7 @@ export function EventGroupForm() {
 
                       {/* Team picker */}
                       <TeamPicker
-                        leagues={formData.leagues}
+                        leagues={teamPickerLeagues}
                         selectedTeams={
                           formData.team_filter_mode === "include"
                             ? (formData.include_teams || [])

@@ -630,6 +630,7 @@ def create_group(
     include_teams: list[dict] | None = None,
     exclude_teams: list[dict] | None = None,
     team_filter_mode: str = "include",
+    bypass_filter_for_playoffs: bool | None = None,
     # Multi-sport enhancements (Phase 3)
     channel_sort_order: str = "time",
     overlap_handling: str = "add_stream",
@@ -687,10 +688,10 @@ def create_group(
             custom_regex_event_name, custom_regex_event_name_enabled,
             skip_builtin_filter, name_match_enabled, team_streams_enabled, epg_match_enabled,
             is_channel_source,
-            include_teams, exclude_teams, team_filter_mode,
+            include_teams, exclude_teams, team_filter_mode, bypass_filter_for_playoffs,
             channel_sort_order, overlap_handling, enabled,
             subscription_leagues, subscription_soccer_mode, subscription_soccer_followed_teams
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",  # noqa: E501
         (
             name,
             display_name,
@@ -736,6 +737,7 @@ def create_group(
             json.dumps(include_teams) if include_teams else None,
             json.dumps(exclude_teams) if exclude_teams else None,
             team_filter_mode,
+            bypass_filter_for_playoffs,
             channel_sort_order,
             overlap_handling,
             int(enabled),
