@@ -95,7 +95,9 @@ The list is flat and organized by the M3U account each group comes from. When tw
 
 **Decisions are remembered.** A dismissed group is not suggested or scanned again unless you restore it from *Show dismissed groups*, also when the provider renames it and it comes back under the same name. Deleting a source you added from a suggestion counts as dismissing its group. A source you added is never offered again; if it is later removed because its group disappeared, it is added back when the group returns.
 
-A renamed group is handled here too: the old source goes missing (see Remove), and the new group is suggested, or added on its own under Add, as soon as a scan sees games in it.
+If a provider changes a day or date at the end of a group name, discovery treats the versions from the same accounts as one group. For example, `Conference League (Wed)` and `Conference League (Thur)` share scan evidence. They still need matches on two different scan days for automatic addition. Dismissing one version also dismisses its replacements.
+
+When an automated source loses its group, the next discovery scan can link it to the replacement without changing its settings. If you added the source yourself, turn on **Automate** to let it follow those changes. Other name changes can still leave the old source missing and show the new group as a separate suggestion.
 
 ### Add
 
