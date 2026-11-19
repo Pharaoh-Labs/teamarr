@@ -207,7 +207,7 @@ def test_seam_caches_the_filtered_slate():
     service.get_events("boxing", date(2026, 8, 22))
 
     (cached,) = _resolved(service).values()
-    assert [e["id"] for e in cached] == ["sat"]
+    assert [e.id for e in cached] == ["sat"]
 
 
 def test_cache_key_carries_tz_and_namespace_version():

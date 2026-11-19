@@ -78,6 +78,30 @@ def configure_provider_request_policy(
     )
 
 
+class _ProviderCooldown:
+    """One shared wait for responses from the same wave of requests."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._epoch = 0
+
+    def wait(self) -> int:
+        with self._lock:
+            return self._epoch
+
+    def backoff(self, delay: float, observed_epoch: int) -> None:
+        # New requests wait on this lock. Responses sent before the wait
+        # reuse it instead of each starting a new delay.
+        with self._lock:
+            if self._epoch == observed_epoch:
+                time.sleep(max(0.0, delay))
+                self._epoch += 1
+
+
+_cooldowns: dict[str, _ProviderCooldown] = {}
+_cooldowns_lock = threading.Lock()
+
+
 class BaseHTTPClient:
     """Thread-safe pooled HTTP client with retry, backoff, and 429 handling."""
 
@@ -92,6 +116,10 @@ class BaseHTTPClient:
         max_keepalive_connections: int | None = None,
         headers: dict[str, str] | None = None,
     ):
+        with _cooldowns_lock:
+            if self.PROVIDER not in _cooldowns:
+                _cooldowns[self.PROVIDER] = _ProviderCooldown()
+            self._cooldown = _cooldowns[self.PROVIDER]
         self._timeout = timeout
         self._retry_count = retry_count
         self._max_connections = max_connections
@@ -161,6 +189,7 @@ class BaseHTTPClient:
         rate_limit_retries = 0
 
         for attempt in range(self._retry_count + RATE_LIMIT_MAX_RETRIES):
+            epoch = self._cooldown.wait()
             try:
                 client = self._get_client()
                 response = client.get(url, params=params)
@@ -200,7 +229,7 @@ class BaseHTTPClient:
                         delay,
                         url,
                     )
-                    time.sleep(delay)
+                    self._cooldown.backoff(delay, epoch)
                     continue
 
                 response.raise_for_status()
@@ -217,7 +246,7 @@ class BaseHTTPClient:
                     call_metrics.record_failure(self.PROVIDER, label, str(e.response.status_code))
                     return None
                 if attempt < self._retry_count - 1:
-                    time.sleep(self._calculate_delay(attempt))
+                    self._cooldown.backoff(self._calculate_delay(attempt), epoch)
                     continue
                 call_metrics.record_failure(self.PROVIDER, label, str(e.response.status_code))
                 return None
@@ -229,7 +258,7 @@ class BaseHTTPClient:
                 # Don't reset client here - causes race conditions in parallel
                 # processing; the httpx pool handles stale connections itself
                 if attempt < self._retry_count - 1:
-                    time.sleep(self._calculate_delay(attempt))
+                    self._cooldown.backoff(self._calculate_delay(attempt), epoch)
                     continue
                 call_metrics.record_failure(self.PROVIDER, label, "connection")
                 return None
