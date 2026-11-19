@@ -45,8 +45,8 @@ def _run(service, streams, current_streams, matched, mode="consolidate"):
     with (
         patch("teamarr.database.channels.get_managed_channels_for_group", return_value=[channel]),
         patch(
-            "teamarr.database.channels.get_channel_streams",
-            side_effect=lambda conn, cid, include_removed=False: streams,
+            "teamarr.database.channels.get_all_channel_streams",
+            return_value={channel.id: streams},
         ),
         patch("teamarr.database.channels.remove_stream_from_channel", remove),
         patch("teamarr.database.channels.update_stream_name"),
