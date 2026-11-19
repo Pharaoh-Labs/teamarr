@@ -486,7 +486,7 @@ class ChannelCleanup(_LifecycleHost):
         """
         from teamarr.database.channel_numbers import get_global_consolidation_mode
         from teamarr.database.channels import (
-            get_channel_streams,
+            get_all_channel_streams,
             get_managed_channels_for_group,
             log_channel_history,
             remove_stream_from_channel,
@@ -533,9 +533,9 @@ class ChannelCleanup(_LifecycleHost):
                 # channel of its own, so there is nothing to keep this one for.
                 consolidating = get_global_consolidation_mode(conn) == "consolidate"
 
+                members = get_all_channel_streams(conn, [channel.id for channel in channels])
                 for channel in channels:
-                    # Get streams associated with this channel
-                    streams = get_channel_streams(conn, channel.id)
+                    streams = members.get(channel.id, [])
 
                     # A live event holds on to its streams (#1174): nothing
                     # below detaches from a channel whose event is in progress.

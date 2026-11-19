@@ -447,11 +447,12 @@ class ChannelReconciler:
         from teamarr.consumers.lifecycle import is_channel_event_live, live_pin_enabled
         from teamarr.database.channels import (
             get_all_managed_channels,
-            get_ordered_stream_ids,
+            get_all_ordered_stream_ids,
         )
 
         issues = []
         channels = get_all_managed_channels(conn, include_deleted=False, core_only=True)
+        ordered_streams = get_all_ordered_stream_ids(conn)
         # The live-pin order exemption below is conditional on the setting
         # (#1187); read once per pass.
         pin_enabled = live_pin_enabled(conn)
@@ -510,7 +511,7 @@ class ChannelReconciler:
             # order — which actively destroyed the priority order on any channel
             # it "fixed". The expected value is the priority order, and that is
             # what the fix must write.
-            db_stream_ids = get_ordered_stream_ids(conn, channel.id)
+            db_stream_ids = ordered_streams.get(channel.id, [])
             dispatcharr_stream_ids = list(dispatcharr_channel.streams or ())
             if db_stream_ids and db_stream_ids != dispatcharr_stream_ids:
                 # An order-only difference on a LIVE channel is the #232 pin

@@ -244,6 +244,7 @@ def apply_stream_ordering(
             # Nothing here touches the network, so it stays on the one
             # connection; the pushes are batched up and issued afterwards.
             plans: list[_OrderingPlan] = []
+            ordering_cache: dict = {}
 
             for channel in all_channels:
                 streams = streams_by_channel.get(channel.id)
@@ -317,6 +318,7 @@ def apply_stream_ordering(
                     channel.sport,
                     channel.league,
                     context=GameContext.from_channel(channel),
+                    cache=ordering_cache,
                 )
                 if ordering_service.rules:
                     for stream in streams:

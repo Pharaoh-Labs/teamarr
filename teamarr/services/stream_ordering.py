@@ -1099,6 +1099,8 @@ def get_stream_ordering_service(
     league: str | None = None,
     context: GameContext | None = None,
     managed_team: ManagedTeamContext | None = None,
+    *,
+    cache: dict | None = None,
 ) -> StreamOrderingService:
     """Factory function to create a StreamOrderingService with rules from database.
 
@@ -1118,8 +1120,18 @@ def get_stream_ordering_service(
         resolve_stream_ordering_rules,
     )
 
+    # Callers scope this cache to the connection used by the service.
+    key = (sport, league, context, managed_team)
+    if cache is not None and key in cache:
+        return cache[key]
+
     if managed_team:
         rules, _ = resolve_managed_team_stream_ordering_rules(conn)
     else:
         rules, _ = resolve_stream_ordering_rules(conn, sport, league)
-    return StreamOrderingService(rules=rules, conn=conn, context=context, managed_team=managed_team)
+    service = StreamOrderingService(
+        rules=rules, conn=conn, context=context, managed_team=managed_team
+    )
+    if cache is not None:
+        cache[key] = service
+    return service

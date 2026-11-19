@@ -126,6 +126,7 @@ class ChannelCreator(_LifecycleHost):
 
                 default_stream_profile_id = dispatcharr_settings.default_stream_profile_id
 
+                ordering_cache: dict = {}
                 for matched in matched_streams:
                     try:
                         stream = matched.get("stream", {})
@@ -350,6 +351,7 @@ class ChannelCreator(_LifecycleHost):
                                 stream_feed_side=stream_feed_side,
                                 attach_at=attach_at,
                                 detach_at=detach_at,
+                                ordering_cache=ordering_cache,
                             )
                             # None means Dispatcharr channel missing - fall through to create new
                             if channel_result is not None:
@@ -696,6 +698,8 @@ class ChannelCreator(_LifecycleHost):
         stream_feed_side: str | None = None,
         attach_at: str | None = None,
         detach_at: str | None = None,
+        *,
+        ordering_cache: dict | None = None,
     ) -> StreamProcessResult | None:
         """Handle an existing channel based on duplicate mode.
 
@@ -817,6 +821,7 @@ class ChannelCreator(_LifecycleHost):
                     dispatcharr_source_channel_id=stream.get("dp_channel_id"),
                     season_type=getattr(event, "season_type", None),
                     has_local_broadcast=has_local_broadcast(event),
+                    ordering_cache=ordering_cache,
                 )
                 if priority is None:
                     priority = get_next_stream_priority(conn, existing.id)
