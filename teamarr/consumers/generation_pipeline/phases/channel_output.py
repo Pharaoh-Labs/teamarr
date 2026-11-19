@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -95,28 +96,47 @@ def reassign_global_channels(
             global_result["channels_moved"],
         )
 
-        if not dispatcharr_client:
-            return force_reset
-
-        synced = 0
-        for channel in global_result.get("drift_details", []):
-            dispatcharr_id = channel.get("dispatcharr_channel_id")
-            new_number = channel.get("new_number")
-            if dispatcharr_id and new_number:
-                try:
-                    dispatcharr_client.channels.update_channel(
-                        dispatcharr_id, {"channel_number": new_number}
-                    )
-                    synced += 1
-                except Exception as exc:  # noqa: BLE001 - per-channel isolation
-                    logger.warning(
-                        "[GENERATION] Failed to sync channel %s to Dispatcharr: %s",
-                        channel.get("channel_name"),
-                        exc,
-                    )
-        if synced:
-            logger.info("[GENERATION] Synced %d channel numbers to Dispatcharr", synced)
+    if not dispatcharr_client:
         return force_reset
+
+    moves = [
+        move
+        for move in global_result.get("drift_details", [])
+        if move.get("dispatcharr_channel_id") and move.get("new_number")
+    ]
+
+    def push(move: dict) -> bool:
+        try:
+            outcome = dispatcharr_client.channels.update_channel(
+                move["dispatcharr_channel_id"], {"channel_number": move["new_number"]}
+            )
+            if outcome.success:
+                return True
+            logger.warning(
+                "[GENERATION] Failed to sync channel %s to Dispatcharr: %s",
+                move.get("channel_name"),
+                outcome.error,
+            )
+        except Exception as exc:  # noqa: BLE001 - per-channel isolation
+            logger.warning(
+                "[GENERATION] Failed to sync channel %s to Dispatcharr: %s",
+                move.get("channel_name"),
+                exc,
+            )
+        return False
+
+    old_numbers = {move.get("old_number") for move in moves}
+    new_numbers = {move["new_number"] for move in moves}
+    # Moves that need an occupied slot retain the allocator's serial order.
+    independent = None not in old_numbers and not old_numbers.intersection(new_numbers)
+    if len(moves) > 1 and independent and len(new_numbers) == len(moves):
+        with ThreadPoolExecutor(max_workers=8, thread_name_prefix="channel-number") as executor:
+            synced = sum(executor.map(push, moves))
+    else:
+        synced = sum(map(push, moves))
+    if synced:
+        logger.info("[GENERATION] Synced %d channel numbers to Dispatcharr", synced)
+    return force_reset
 
 
 __all__ = ["reassign_global_channels", "stage_channel_reassign", "stage_xmltv_save"]

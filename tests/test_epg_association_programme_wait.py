@@ -15,6 +15,7 @@ run waits, bounded, until the newly linked channels have programmes.
 """
 
 from contextlib import nullcontext
+from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
@@ -215,6 +216,19 @@ class TestProgrammeWait:
         assert clock.sleeps == [3.0, 3.0]
         # The channel that was ready on the first poll is not asked again.
         assert client.asked == {"teamarr-event-1": 1, "teamarr-event-2": 3}
+
+    def test_independent_channels_are_probed_concurrently(self, monkeypatch):
+        manager = EPGManager(_EpgClient())
+        barrier = Barrier(2)
+
+        def has_programmes(_tvg_id):
+            barrier.wait(timeout=3)
+            return True
+
+        monkeypatch.setattr(manager, "has_programmes", has_programmes)
+        result = manager.wait_for_programmes(["teamarr-event-1", "teamarr-event-2"])
+
+        assert result["ready"] == 2
 
     def test_asks_for_one_row_not_the_whole_guide(self, clock):
         client = _EpgClient()
