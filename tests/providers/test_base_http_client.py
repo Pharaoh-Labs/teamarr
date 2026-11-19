@@ -183,3 +183,18 @@ def test_exhausted_transport_errors_are_one_connection_failure(_metrics, monkeyp
     client = _make_client(handler, retry_count=3)
     assert client._request_json("https://api.test/x") is None
     assert _metrics.failures_snapshot() == {"stub:x:connection": 1}
+
+
+def test_concurrent_response_wave_shares_one_cooldown(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(base_client.time, "sleep", sleeps.append)
+    cooldown = base_client._ProviderCooldown()
+    first_request = cooldown.wait()
+    second_request = cooldown.wait()
+
+    cooldown.backoff(2.0, first_request)
+    cooldown.backoff(2.0, second_request)
+
+    assert sleeps == [2.0]
+    cooldown.backoff(3.0, cooldown.wait())
+    assert sleeps == [2.0, 3.0]

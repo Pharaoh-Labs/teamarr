@@ -21,7 +21,7 @@ import json
 import logging
 import threading
 from collections import OrderedDict
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -270,7 +270,12 @@ class PersistentTTLCache:
         default_ttl_seconds: int = 3600,
         flush_interval_seconds: int = DEFAULT_FLUSH_INTERVAL,
         max_size: int = DEFAULT_MAX_SIZE,
+        *,
+        encode: Callable[[Any], Any] | None = None,
+        decode: Callable[[str, Any], Any] | None = None,
     ):
+        self._encode = encode
+        self._decode = decode
         self._memory_cache = TTLCache(
             default_ttl_seconds=default_ttl_seconds,
             max_size=max_size,
@@ -320,7 +325,10 @@ class PersistentTTLCache:
                     expires_at = datetime.fromisoformat(row["expires_at"])
                     if expires_at > now:
                         value = json.loads(row["data_json"])
-                        self._memory_cache.set_with_expiry(row["cache_key"], value, expires_at)
+                        key = row["cache_key"]
+                        if self._decode is not None:
+                            value = self._decode(key, value)
+                        self._memory_cache.set_with_expiry(key, value, expires_at)
                         loaded += 1
                     else:
                         expired += 1
@@ -516,6 +524,8 @@ class PersistentTTLCache:
                 now = datetime.now().isoformat()
                 for key, (value, expires_at) in to_write.items():
                     try:
+                        if self._encode is not None:
+                            value = self._encode(value)
                         data_json = json.dumps(value, default=str)
                         conn.execute(
                             """

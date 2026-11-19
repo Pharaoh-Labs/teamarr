@@ -157,3 +157,24 @@ def test_parse_broadcast_markets_from_scoreboard_payload():
         "Marquee Sports Network": "home",
         "MARQ+": "home",
     }
+
+
+def test_provider_cache_keeps_events_decoded_and_isolates_mutable_fields():
+    from teamarr.services.sports_data import (
+        _decode_cache_value,
+        _encode_cache_value,
+        _read_cached_event,
+    )
+
+    event = _event(broadcasts=["ESPN"], odds_data={"lines": {"spread": -2.5}})
+    payload = [event_to_dict(event)]
+    decoded = _decode_cache_value("events_v2:nba:2026-07-10:UTC", payload)
+    assert isinstance(decoded[0], Event)
+    assert _encode_cache_value(decoded) == payload
+
+    returned = _read_cached_event(decoded[0])
+    returned.broadcasts.append("ABC")
+    returned.odds_data["lines"]["spread"] = 0
+
+    assert decoded[0].broadcasts == ["ESPN"]
+    assert decoded[0].odds_data == {"lines": {"spread": -2.5}}

@@ -13,6 +13,7 @@ Uses PersistentTTLCache for all caching:
 import logging
 import threading
 import time
+from copy import copy, deepcopy
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, cast, overload
@@ -195,6 +196,54 @@ def _event_dict_is_stale(event_dict: dict) -> bool:
     )
 
 
+def _copy_cached_event(event: Event) -> Event:
+    """Copy mutable fields so callers cannot change a cached snapshot."""
+    snapshot = copy(event)
+    snapshot.broadcasts = event.broadcasts.copy()
+    snapshot.broadcast_markets = event.broadcast_markets.copy()
+    snapshot.odds_data = deepcopy(event.odds_data)
+    snapshot.segment_times = event.segment_times.copy()
+    snapshot.bouts = event.bouts.copy()
+    snapshot.sessions = event.sessions.copy()
+    snapshot.stage_laps = event.stage_laps.copy()
+    snapshot.fighter1_scores = (
+        event.fighter1_scores.copy() if event.fighter1_scores is not None else None
+    )
+    snapshot.fighter2_scores = (
+        event.fighter2_scores.copy() if event.fighter2_scores is not None else None
+    )
+    return snapshot
+
+
+def _read_cached_event(value: Event | dict) -> Event:
+    return _copy_cached_event(value) if isinstance(value, Event) else dict_to_event(value)
+
+
+def _encode_cache_value(value: Any) -> Any:
+    if isinstance(value, Event):
+        return event_to_dict(value)
+    if isinstance(value, list) and value and isinstance(value[0], Event):
+        return [event_to_dict(event) for event in value]
+    return value
+
+
+def _decode_cache_value(key: str, value: Any) -> Any:
+    def decode_event(item: Any) -> Any:
+        if isinstance(item, dict) and "home_team" in item and not _event_dict_is_stale(item):
+            try:
+                return dict_to_event(item)
+            except (KeyError, TypeError, ValueError):
+                pass
+        return item
+
+    kind = key.split(":", 1)[0]
+    if kind == "event":
+        return decode_event(value)
+    if kind in {"events_v2", "events_raw", "schedule"} and isinstance(value, list):
+        return [decode_event(item) for item in value]
+    return value
+
+
 # Singleton cache instance - shared across all SportsDataService instances
 # This ensures one in-memory cache with background persistence
 _shared_cache: PersistentTTLCache | None = None
@@ -207,7 +256,9 @@ def _get_shared_cache() -> PersistentTTLCache:
     if _shared_cache is None:
         with _cache_lock:
             if _shared_cache is None:
-                _shared_cache = PersistentTTLCache()
+                _shared_cache = PersistentTTLCache(
+                    encode=_encode_cache_value, decode=_decode_cache_value
+                )
                 logger.info("[CACHE] Initialized shared service cache")
     return _shared_cache
 
@@ -322,7 +373,7 @@ class SportsDataService:
                 return _CACHE_MISS
             logger.debug("[CACHE_HIT] %s", cache_key)
             try:
-                return [_enrich_event_teams(dict_to_event(e)) for e in cached]
+                return [_enrich_event_teams(_read_cached_event(e)) for e in cached]
             except (KeyError, TypeError) as e:
                 logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
                 return _CACHE_MISS
@@ -364,7 +415,7 @@ class SportsDataService:
                     ttl = get_events_cache_ttl(target_date, all_events_final=all_final)
                     # Cache ALL results including empty lists to avoid repeated API
                     # calls for leagues with no events on a given day
-                    self._cache.set(cache_key, [event_to_dict(e) for e in events], ttl)
+                    self._cache.set(cache_key, [_copy_cached_event(e) for e in events], ttl)
                     return [_enrich_event_teams(e) for e in events]
         return []
 
@@ -468,7 +519,7 @@ class SportsDataService:
         if any(_event_dict_is_stale(e) for e in cached if isinstance(e, dict)):
             return _CACHE_MISS
         try:
-            return [dict_to_event(e) for e in cached]
+            return [_read_cached_event(e) for e in cached]
         except (KeyError, TypeError) as e:
             logger.warning("[CACHE_ERROR] Raw bucket deserialization failed: %s", e)
             return _CACHE_MISS
@@ -477,7 +528,7 @@ class SportsDataService:
         all_final = len(events) == 0 or all(is_event_final(e) for e in events)
         self._cache.set(
             raw_key,
-            [event_to_dict(e) for e in events],
+            [_copy_cached_event(e) for e in events],
             get_events_cache_ttl(day, all_events_final=all_final),
         )
 
@@ -595,7 +646,7 @@ class SportsDataService:
             else:
                 logger.debug("[CACHE_HIT] %s", cache_key)
                 try:
-                    return [_enrich_event_teams(dict_to_event(e)) for e in cached]
+                    return [_enrich_event_teams(_read_cached_event(e)) for e in cached]
                 except (KeyError, TypeError) as e:
                     logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
 
@@ -604,9 +655,10 @@ class SportsDataService:
             if provider.supports_league(league):
                 events = provider.get_team_schedule(team_id, league, days_ahead)
                 if events:
-                    # Serialize to dict before caching
-                    serialized = [event_to_dict(e) for e in events]
-                    self._cache.set(cache_key, serialized, CACHE_TTL_SCHEDULE)
+                    # Keep a snapshot separate from the provider result.
+                    self._cache.set(
+                        cache_key, [_copy_cached_event(e) for e in events], CACHE_TTL_SCHEDULE
+                    )
                     return [_enrich_event_teams(e) for e in events]
         return []
 
@@ -638,7 +690,7 @@ class SportsDataService:
             if provider.supports_league(league):
                 team = provider.get_team(team_id, league)
                 if team:
-                    # Serialize to dict before caching
+                    # Keep a snapshot separate from the provider result.
                     self._cache.set(cache_key, team_to_dict(team), CACHE_TTL_TEAM_INFO)
                     return team
         self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)
@@ -675,7 +727,7 @@ class SportsDataService:
                 return _CACHE_MISS
             logger.debug("[CACHE_HIT] %s", cache_key)
             try:
-                return _enrich_event_teams(dict_to_event(cached))
+                return _enrich_event_teams(_read_cached_event(cached))
             except (KeyError, TypeError) as e:
                 logger.warning("[CACHE_ERROR] Deserialization failed: %s", e)
                 return _CACHE_MISS
@@ -696,8 +748,10 @@ class SportsDataService:
                 if provider.supports_league(league):
                     event = provider.get_event(event_id, league)
                     if event:
-                        # Serialize to dict before caching
-                        self._cache.set(cache_key, event_to_dict(event), CACHE_TTL_SINGLE_EVENT)
+                        # Keep a snapshot separate from the provider result.
+                        self._cache.set(
+                            cache_key, _copy_cached_event(event), CACHE_TTL_SINGLE_EVENT
+                        )
                         return _enrich_event_teams(event)
 
             # Short TTL: don't mask an event that becomes available, just absorb
@@ -940,7 +994,7 @@ class SportsDataService:
                         if rank:
                             stats = replace(stats, rank=rank)
                     stats = self._with_group_names(stats, league)
-                    # Serialize to dict before caching
+                    # Keep a snapshot separate from the provider result.
                     self._cache.set(cache_key, stats_to_dict(stats), CACHE_TTL_TEAM_STATS)
                     return stats
         self._cache.set(cache_key, _NOT_FOUND, CACHE_TTL_NEGATIVE)

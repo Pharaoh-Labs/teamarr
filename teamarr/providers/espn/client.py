@@ -12,7 +12,6 @@ Configuration via environment variables:
 import logging
 import os
 import threading
-import time
 from dataclasses import dataclass
 
 from teamarr.providers.base_client import BaseHTTPClient
@@ -188,7 +187,9 @@ class ESPNClient(BaseHTTPClient):
         self._base_url = ESPN_BASE_URL
         self._core_url = ESPN_CORE_URL
         # date_str -> (monotonic stamp, panel). A failed fetch is never memoised.
-        self._cricket_panel_cache: dict[str, tuple[float, dict]] = {}
+        self._cricket_panel_cache = TTLCache(
+            default_ttl_seconds=_CRICKET_PANEL_TTL_SECONDS, max_size=512
+        )
         self._cricket_season_cache = TTLCache(default_ttl_seconds=300, max_size=64)
         self._cricket_season_lock = threading.Lock()
 
@@ -437,13 +438,12 @@ class ESPNClient(BaseHTTPClient):
         answer; a failed request is not, so one blip cannot blank a day for
         five minutes.
         """
-        now = time.monotonic()
         hit = self._cricket_panel_cache.get(date_str)
-        if hit is not None and now - hit[0] < _CRICKET_PANEL_TTL_SECONDS:
-            return hit[1]
+        if hit is not None:
+            return hit
         data = self._request(ESPN_CRICKET_PANEL_URL, {"dates": date_str})
         if data is not None:
-            self._cricket_panel_cache[date_str] = (now, data)
+            self._cricket_panel_cache.set(date_str, data)
         return data
 
     def get_cricket_season(self, series_id: str, season: int | None = None) -> dict | None:
