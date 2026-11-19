@@ -14,15 +14,16 @@ logger = logging.getLogger(__name__)
 class TeamFiltering:
     """Applies team include/exclude filters and cleans up filtered channels.
 
-    Mixin for EventGroupProcessor — relies on the coordinator's
-    ``_db_factory``, ``_dispatcharr_client`` and ``_service`` attributes.
+    Mixin for EventGroupProcessor — uses the coordinator's lifecycle service.
     """
 
     if TYPE_CHECKING:
         # Provided by the EventGroupProcessor coordinator / sibling mixins.
         # Declared for type-checkers only — no runtime effect.
         _db_factory: Any
-        _dispatcharr_client: Any
+
+        def _get_lifecycle_service(self) -> Any: ...
+
         _service: Any
 
     def _filter_by_teams(

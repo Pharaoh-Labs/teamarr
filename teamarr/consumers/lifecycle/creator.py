@@ -49,6 +49,9 @@ class ChannelCreator(_LifecycleHost):
     lock, timing manager, dynamic resolver and helper methods.
     """
 
+    _settings_synced_ids: set[int]
+    _pending_stream_pushes: dict[int, PendingStreamPush]
+
     def process_matched_streams(
         self,
         matched_streams: list[dict],
@@ -780,7 +783,7 @@ class ChannelCreator(_LifecycleHost):
                         channel.dispatcharr_channel_id, {"streams": ordered}, "consolidate streams"
                     )
                 if not success:
-                    for stream_id in added_streams.keys() & set(ordered):
+                    for stream_id in added_streams:
                         remove_stream_from_channel(conn, channel.id, stream_id)
                     conn.commit()
                     result.errors.append(

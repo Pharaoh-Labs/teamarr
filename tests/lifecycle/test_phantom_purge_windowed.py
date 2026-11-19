@@ -81,7 +81,7 @@ def _service(known: set[int] | None | object = None, *, m3u: bool = True):
     return service, cm, m3u_manager
 
 
-def _consolidate(service, conn, channel, *, stream_id=NEW, flush=True):
+def _consolidate(service, conn, channel, *, stream_id=NEW, flush=True, **window):
     result = service._handle_existing_channel(
         conn=conn,
         existing=channel,
@@ -91,6 +91,7 @@ def _consolidate(service, conn, channel, *, stream_id=NEW, flush=True):
         matched_keyword=None,
         group_config={},
         template=None,
+        **window,
     )
     if flush:
         service._flush_pending_stream_pushes(conn, result)
@@ -234,3 +235,24 @@ def test_consolidate_batches_streams_and_compensates_on_failure(
     assert _active_ids(db_conn, channel.id) == (
         {ON_CHANNEL, NEW, other_new} if success else {ON_CHANNEL}
     )
+
+
+def test_rejected_batch_retries_new_windowed_membership(db_conn, channel):
+    service, cm, _ = _service()
+    cm.update_channel.return_value = OperationResult(success=False, error="Timeout")
+    _consolidate(service, db_conn, channel, flush=False)
+    result = _consolidate(
+        service,
+        db_conn,
+        channel,
+        stream_id=WINDOWED,
+        flush=False,
+        attach_at=_utc(60),
+        detach_at=_utc(120),
+    )
+
+    service._flush_pending_stream_pushes(db_conn, result)
+
+    assert set(_pushed_streams(cm)) == {ON_CHANNEL, NEW}
+    assert _active_ids(db_conn, channel.id) == {ON_CHANNEL}
+    assert result.streams_added == []
