@@ -6,6 +6,7 @@ Handles EPG source operations including refresh and status polling.
 import logging
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlencode
 
 from teamarr.dispatcharr.client import DispatcharrClient
@@ -377,13 +378,25 @@ class EPGManager:
 
         started = time.monotonic()
         cancelled = False
-        while True:
-            pending = [tvg_id for tvg_id in pending if not self.has_programmes(tvg_id)]
-            elapsed = time.monotonic() - started
-            cancelled = bool(cancellation_check and cancellation_check())
-            if not pending or cancelled or elapsed >= timeout:
-                break
-            time.sleep(min(poll_interval, max(timeout - elapsed, 0.0)))
+        workers = 8
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="epg-ready") as executor:
+            while pending:
+                missing = []
+                for offset in range(0, len(pending), workers):
+                    batch = pending[offset : offset + workers]
+                    ready = executor.map(self.has_programmes, batch)
+                    missing.extend(
+                        tvg_id for tvg_id, found in zip(batch, ready, strict=True) if not found
+                    )
+                    cancelled = bool(cancellation_check and cancellation_check())
+                    if cancelled or time.monotonic() - started >= timeout:
+                        missing.extend(pending[offset + workers :])
+                        break
+                pending = missing
+                elapsed = time.monotonic() - started
+                if not pending or cancelled or elapsed >= timeout:
+                    break
+                time.sleep(min(poll_interval, max(timeout - elapsed, 0.0)))
 
         elapsed = time.monotonic() - started
         if pending:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from typing import Any
 
@@ -1121,20 +1122,26 @@ class TeamChannelManager:
                     continue
                 pushes.append((team, ordered))
 
-        # Network only, after the connection is closed.
-        for team, ordered in pushes:
+        def push(item) -> bool:
+            team, ordered = item
             try:
                 sync_result = self._channels.update_channel(
                     team["dispatcharr_channel_id"], {"streams": ordered}
                 )
                 if not sync_result.success:
                     raise RuntimeError(sync_result.error or "Dispatcharr update failed")
-                result["channels"] += 1
+                return True
             except Exception:
                 logger.exception(
                     "[TEAM_CHANNEL] Stream order sync failed for %s", team["team_name"]
                 )
-                result["errors"] += 1
+                return False
+
+        # Network only, after the connection is closed.
+        if pushes:
+            with ThreadPoolExecutor(max_workers=8, thread_name_prefix="team-order") as executor:
+                result["channels"] += sum(executor.map(push, pushes))
+            result["errors"] += len(pushes) - result["channels"]
         return result
 
     # ------------------------------------------------------------------
