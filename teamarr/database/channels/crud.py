@@ -524,6 +524,8 @@ def mark_channel_deleted(
     conn: Connection,
     channel_id: int,
     reason: str | None = None,
+    *,
+    expected_channel: ManagedChannel | None = None,
 ) -> bool:
     """Mark a channel as deleted (soft delete).
 
@@ -531,17 +533,21 @@ def mark_channel_deleted(
         conn: Database connection
         channel_id: Channel ID
         reason: Delete reason
+        expected_channel: If set, require an active row with this Dispatcharr mapping
 
     Returns:
         True if updated, False if not found
     """
-    cursor = conn.execute(
-        """UPDATE managed_channels
-           SET deleted_at = datetime('now'),
-               delete_reason = ?
-           WHERE id = ?""",
-        (reason, channel_id),
-    )
+    query = """UPDATE managed_channels
+               SET deleted_at = datetime('now'), delete_reason = ?
+               WHERE id = ?"""
+    params = (reason, channel_id)
+    if expected_channel is not None:
+        # The remote operation happened outside the transaction. Only retire
+        # the active row if it still refers to the mapping we deleted.
+        query += " AND deleted_at IS NULL AND dispatcharr_channel_id IS ?"
+        params += (expected_channel.dispatcharr_channel_id,)
+    cursor = conn.execute(query, params)
     if cursor.rowcount > 0:
         logger.info("[DELETED] Managed channel id=%d reason=%s", channel_id, reason)
         return True
