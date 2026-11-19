@@ -27,7 +27,7 @@ from teamarr.templates import ContextBuilder, TemplateResolver
 from teamarr.utilities.art_url import read_art_base_url
 
 from .cleanup import ChannelCleanup
-from .creator import ChannelCreator
+from .creator import ChannelCreator, PendingStreamPush
 from .dynamic_resolver import DynamicResolver
 from .naming import ChannelNaming
 from .syncer import ChannelSyncer
@@ -223,6 +223,8 @@ class ChannelLifecycleService(
         # Per-run counters for observability (reset in clear_caches)
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
+        self._settings_synced_ids: set[int] = set()
+        self._pending_stream_pushes: dict[int, PendingStreamPush] = {}
 
     def _safe_update_channel(
         self,
@@ -323,6 +325,8 @@ class ChannelLifecycleService(
         self._stale_profile_ids_warned = set()
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
+        self._settings_synced_ids.clear()
+        self._pending_stream_pushes.clear()
 
     def _collect_profile_change(
         self,

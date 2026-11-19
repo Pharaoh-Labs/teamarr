@@ -39,6 +39,7 @@ class ChannelSyncer(_LifecycleHost):
         template: dict | None,
         segment: str | None = None,
         stream_windowed: bool = False,
+        sync_stream: bool = True,
     ) -> StreamProcessResult:
         """Sync channel settings from group/template to Dispatcharr.
 
@@ -173,7 +174,8 @@ class ChannelSyncer(_LifecycleHost):
             )
 
             old_group_id = current_channel.channel_group_id
-            if new_group_id != old_group_id:
+            # An unresolved group must not block the other settings updates.
+            if new_group_id is not None and new_group_id != old_group_id:
                 update_data["channel_group_id"] = new_group_id
                 changes_made.append(f"channel_group_id: {old_group_id} → {new_group_id}")
             # Keep the stored group in step (#950). The move used to reach
@@ -193,7 +195,7 @@ class ChannelSyncer(_LifecycleHost):
             # "missing from Dispatcharr" is the CORRECT closed-window state — the
             # old unconditional re-add fought the window sync every run.
             stream_id = stream.get("id") if stream else None
-            if stream_id and not stream_windowed:
+            if sync_stream and stream_id and not stream_windowed:
                 # streams is already tuple[int, ...] of stream IDs
                 ch_streams = current_channel.streams
                 current_stream_ids = list(ch_streams) if ch_streams else []
@@ -314,6 +316,8 @@ class ChannelSyncer(_LifecycleHost):
             if db_updates:
                 update_managed_channel(conn, existing.id, db_updates)
 
+            conn.commit()
+
             # 7. Sync channel_profile_ids (compares against Dispatcharr actual state)
             self._sync_channel_profiles(
                 conn,
@@ -323,6 +327,8 @@ class ChannelSyncer(_LifecycleHost):
                 changes_made,
                 current_channel=current_channel,
             )
+
+            conn.commit()
 
             # 8. Sync logo
             self._sync_channel_logo(
@@ -336,6 +342,8 @@ class ChannelSyncer(_LifecycleHost):
                 feed_team=sync_feed_team,
                 untagged_label=_ds.untagged_keyword_label,
             )
+
+            conn.commit()
 
             # 9. Sync stream_profile_id
             self._sync_stream_profile(conn, existing, current_channel, changes_made)
@@ -359,7 +367,10 @@ class ChannelSyncer(_LifecycleHost):
                     notes=f"Settings synced: {', '.join(changes_made)}",
                 )
 
+            conn.commit()
+
         except Exception as e:
+            conn.rollback()
             logger.warning(
                 "[LIFECYCLE] Error syncing settings for channel %s: %s",
                 existing.channel_name,

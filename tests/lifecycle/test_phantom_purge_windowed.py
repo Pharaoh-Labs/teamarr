@@ -10,7 +10,7 @@ stream catalog about the rest, and removes only ids Dispatcharr does not know.
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -77,21 +77,24 @@ def _service(known: set[int] | None | object = None, *, m3u: bool = True):
         epg_manager=MagicMock(),
         m3u_manager=m3u_manager,
     )
+    service._sync_channel_settings = MagicMock(return_value=StreamProcessResult())
     return service, cm, m3u_manager
 
 
-def _consolidate(service, conn, channel):
-    with patch.object(service, "_sync_channel_settings", return_value=StreamProcessResult()):
-        return service._handle_existing_channel(
-            conn=conn,
-            existing=channel,
-            stream={"id": NEW, "name": "Sky Sports NFL"},
-            event=FakeEvent(),
-            effective_mode="consolidate",
-            matched_keyword=None,
-            group_config={},
-            template=None,
-        )
+def _consolidate(service, conn, channel, *, stream_id=NEW, flush=True):
+    result = service._handle_existing_channel(
+        conn=conn,
+        existing=channel,
+        stream={"id": stream_id, "name": f"Feed {stream_id}"},
+        event=FakeEvent(),
+        effective_mode="consolidate",
+        matched_keyword=None,
+        group_config={},
+        template=None,
+    )
+    if flush:
+        service._flush_pending_stream_pushes(conn, result)
+    return result
 
 
 def _pushed_streams(cm) -> list[int]:
@@ -199,3 +202,35 @@ def test_streams_already_on_the_channel_are_never_asked_about(db_conn, channel):
 
     m3u.known_stream_ids.assert_not_called()
     assert _active_ids(db_conn, channel.id) == {ON_CHANNEL, NEW}
+
+
+@pytest.mark.parametrize("success", [True, False])
+def test_consolidate_batches_streams_and_compensates_on_failure(
+    db_conn, db_factory, channel, success
+):
+    service, cm, _ = _service()
+
+    def update_channel(_channel_id, _data):
+        with db_factory() as nested:
+            nested.execute("PRAGMA busy_timeout = 0")
+            nested.execute("UPDATE settings SET channel_post_buffer_minutes = 73 WHERE id = 1")
+        return OperationResult(success=success, error=None if success else "Timeout")
+
+    cm.update_channel.side_effect = update_channel
+    other_new = NEW + 1
+
+    first = _consolidate(service, db_conn, channel, flush=False)
+    result = _consolidate(service, db_conn, channel, stream_id=other_new, flush=False)
+
+    cm.update_channel.assert_not_called()
+    service._sync_channel_settings.assert_called_once()
+    service._flush_pending_stream_pushes(db_conn, result)
+
+    cm.update_channel.assert_called_once()
+    assert set(_pushed_streams(cm)) == {ON_CHANNEL, NEW, other_new}
+    assert first.streams_added == []
+    assert db_conn.execute("SELECT channel_post_buffer_minutes FROM settings").fetchone()[0] == 73
+    assert len(result.streams_added) == (2 if success else 0)
+    assert _active_ids(db_conn, channel.id) == (
+        {ON_CHANNEL, NEW, other_new} if success else {ON_CHANNEL}
+    )
