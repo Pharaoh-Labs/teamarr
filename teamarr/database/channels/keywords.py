@@ -4,7 +4,6 @@ Read-only access to consolidation_exception_keywords for lifecycle service.
 Full CRUD is in database/exception_keywords.py.
 """
 
-import re
 from sqlite3 import Connection
 from typing import Any
 
@@ -49,39 +48,6 @@ def keyword_display_value(keyword: str | None, untagged_label: str | None) -> st
     the keyword itself.
     """
     return keyword or untagged_label or ""
-
-
-def _make_keyword_pattern(term: str) -> str:
-    """Create regex pattern with smart boundaries for term matching.
-
-    Uses \\b for word characters, (?<!\\w)/(?!\\w) for non-word characters.
-    This allows terms like "(ESP)" to match correctly while still preventing
-    false positives like "Eli" matching "Pelicans".
-
-    Supports phrase matching - multi-word terms like "Peyton and Eli" will
-    match as a complete phrase.
-
-    Args:
-        term: The term/phrase to create a pattern for
-
-    Returns:
-        Regex pattern string
-    """
-    escaped = re.escape(term.lower())
-
-    # Start boundary: \b if term starts with word char, else (?<!\w)
-    if term and re.match(r"\w", term[0]):
-        start = r"\b"
-    else:
-        start = r"(?<!\w)"
-
-    # End boundary: \b if term ends with word char, else (?!\w)
-    if term and re.match(r"\w", term[-1]):
-        end = r"\b"
-    else:
-        end = r"(?!\w)"
-
-    return start + escaped + end
 
 
 def event_identity_text(event: Any) -> str:
@@ -212,11 +178,10 @@ def _first_keyword_match(
             continue
         text_lower = text.lower()
         for kw in keywords:
-            for term in kw.match_term_list:
-                pattern = _make_keyword_pattern(term)
-                if event_lower and re.search(pattern, event_lower):
+            for pattern in kw.match_term_patterns:
+                if event_lower and pattern.search(event_lower):
                     continue
-                if re.search(pattern, text_lower):
+                if pattern.search(text_lower):
                     return kw
         if use_regex:
             for kw in keywords:

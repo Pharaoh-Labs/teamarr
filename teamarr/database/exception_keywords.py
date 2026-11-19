@@ -50,6 +50,10 @@ class ExceptionKeyword:
         return [k.strip() for k in self.match_terms.split(",") if k.strip()]
 
     @cached_property
+    def match_term_patterns(self) -> tuple[re.Pattern[str], ...]:
+        return tuple(re.compile(_make_keyword_pattern(term)) for term in self.match_term_list)
+
+    @cached_property
     def m3u_group_regex(self) -> re.Pattern | None:
         return compile_source_pattern(self.m3u_group_pattern)
 
@@ -73,6 +77,39 @@ class ExceptionKeyword:
     def uses_m3u_group(self) -> bool:
         """Whether this keyword can match on a stream's M3U group."""
         return bool(self.m3u_group_id_set or self.m3u_group_regex)
+
+
+def _make_keyword_pattern(term: str) -> str:
+    """Create regex pattern with smart boundaries for term matching.
+
+    Uses \\b for word characters, (?<!\\w)/(?!\\w) for non-word characters.
+    This allows terms like "(ESP)" to match correctly while still preventing
+    false positives like "Eli" matching "Pelicans".
+
+    Supports phrase matching - multi-word terms like "Peyton and Eli" will
+    match as a complete phrase.
+
+    Args:
+        term: The term/phrase to create a pattern for
+
+    Returns:
+        Regex pattern string
+    """
+    escaped = re.escape(term.lower())
+
+    # Start boundary: \b if term starts with word char, else (?<!\w)
+    if term and re.match(r"\w", term[0]):
+        start = r"\b"
+    else:
+        start = r"(?<!\w)"
+
+    # End boundary: \b if term ends with word char, else (?!\w)
+    if term and re.match(r"\w", term[-1]):
+        end = r"\b"
+    else:
+        end = r"(?!\w)"
+
+    return start + escaped + end
 
 
 def compile_source_pattern(pattern: str | None) -> re.Pattern | None:
