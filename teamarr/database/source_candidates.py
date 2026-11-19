@@ -126,7 +126,10 @@ def _scan_batches(
         "SELECT c.*, g.m3u_group_id AS bound_id FROM source_candidates c "
         "LEFT JOIN event_epg_groups g ON g.id = c.source_group_id ORDER BY c.id"
     ):
-        key = (rotating_group_key(row["m3u_group_name"]), tuple(json.loads(row["m3u_account_ids"])))
+        key = (
+            rotating_group_key(row["m3u_group_name"]),
+            tuple(sorted(json.loads(row["m3u_account_ids"] or "[]"))),
+        )
         if key in rotating:
             prior[key].append(row)
 
@@ -138,7 +141,7 @@ def _scan_batches(
             for ev in batch:
                 yield ev, [ev]
             continue
-        if key[0] in dismissed:
+        if _is_dismissed_rotation(key[0], key[1], dismissed):
             continue
         if linked:
             representative = next(
@@ -255,13 +258,18 @@ def get_candidates(
         params.append(status)
     candidates: dict[int, CandidateEvidence] = {}
     for row in conn.execute(query, params).fetchall():
-        if row["status"] == "new" and rotating_group_key(row["m3u_group_name"]) in rejected_keys:
+        account_ids = json.loads(row["m3u_account_ids"] or "[]")
+        if row["status"] == "new" and _is_dismissed_rotation(
+            rotating_group_key(row["m3u_group_name"]),
+            tuple(sorted(account_ids)),
+            rejected_keys,
+        ):
             continue
         candidates[row["id"]] = CandidateEvidence(
             id=row["id"],
             m3u_group_id=row["m3u_group_id"],
             m3u_group_name=row["m3u_group_name"],
-            m3u_account_ids=json.loads(row["m3u_account_ids"] or "[]"),
+            m3u_account_ids=account_ids,
             stream_count=row["stream_count"] or 0,
             name_leagues=json.loads(row["name_leagues"] or "[]"),
             status=row["status"],
@@ -363,10 +371,26 @@ def dismissed_groups(conn: Connection) -> tuple[set[int], set[str]]:
     return {row[0] for row in rows}, {(row[1] or "").strip().lower() for row in rows}
 
 
-def dismissed_rotation_keys(conn: Connection) -> set[str]:
-    """A dismissal also hides legacy candidates for other days of the same group."""
-    _, names = dismissed_groups(conn)
-    return {key for name in names if (key := rotating_group_key(name)) is not None}
+def _is_dismissed_rotation(
+    key: str | None,
+    accounts: tuple[int, ...],
+    dismissed: set[tuple[str, tuple[int, ...]]],
+) -> bool:
+    return key is not None and ((key, accounts) in dismissed or (key, ()) in dismissed)
+
+
+def dismissed_rotation_keys(conn: Connection) -> set[tuple[str, tuple[int, ...]]]:
+    """Dismissed rotating identities, scoped to the accounts that carry them."""
+    rows = conn.execute(
+        "SELECT m3u_group_name, m3u_account_ids FROM source_candidates WHERE status = 'dismissed'"
+    ).fetchall()
+    keys: set[tuple[str, tuple[int, ...]]] = set()
+    for row in rows:
+        key = rotating_group_key(row["m3u_group_name"] or "")
+        if key is not None:
+            accounts = tuple(sorted(json.loads(row["m3u_account_ids"] or "[]")))
+            keys.add((key, accounts))
+    return keys
 
 
 def dismiss_group(conn: Connection, m3u_group_id: int, m3u_group_name: str) -> None:

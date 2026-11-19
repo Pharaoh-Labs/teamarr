@@ -8,10 +8,12 @@ import pytest
 
 from teamarr.consumers.matching import StreamCategory
 from teamarr.consumers.source_lifecycle.discovery import (
+    EVIDENCE_WINDOW_DAYS,
     TIER_GAMES,
     TIER_NAME_ONLY,
     TIER_TEAMS,
     SourceDiscovery,
+    accept_candidate,
     fold_same_content,
     is_replay_group,
     league_name_surfaces,
@@ -1292,6 +1294,54 @@ def test_rotation_leaves_manual_sources_and_live_bindings_alone(db, managed, old
             ).fetchone()[0]
             == wed.id
         )
+
+
+def test_dismissing_rotating_group_on_one_account_does_not_block_another_accounts_rebind(db):
+    def _acct_stream(stream_id: int, name: str, account_id: int):
+        s = _stream(stream_id, name)
+        s.m3u_account_id = account_id
+        return s
+
+    wed_a1, wed_a2 = _group(71, "LIVE | NHL (Wed)"), _group(72, "LIVE | NHL (Wed)")
+    _scan(
+        [wed_a1, wed_a2],
+        {
+            71: [_acct_stream(1, "nhl: A vs B", account_id=1)],
+            72: [_acct_stream(2, "nhl: A vs B", account_id=2)],
+        },
+    )
+    with get_db() as conn:
+        cands = {c.m3u_group_id: c for c in get_candidates(conn, NOW, EVIDENCE_WINDOW_DAYS)}
+        # Dismiss Account 2's copy; accept Account 1's copy as a managed source.
+        set_candidate_status(conn, cands[72].id, "dismissed")
+        visible = get_candidates(conn, NOW, EVIDENCE_WINDOW_DAYS, status="new")
+        assert [c.m3u_group_id for c in visible] == [71]
+        source_id = accept_candidate(conn, cands[71])
+
+    # Account 1's candidate must not be hidden by Account 2's dismissal, and
+    # when both rotate to Thursday, Account 1's managed source still rebinds
+    # while Account 2's rotation stays dismissed.
+    thu_a1, thu_a2 = _group(81, "LIVE | NHL (Thur)"), _group(82, "LIVE | NHL (Thur)")
+    later = NOW + timedelta(days=1)
+    result, _, _ = _scan(
+        [thu_a1, thu_a2],
+        {
+            81: [_acct_stream(3, "nhl: C vs D", account_id=1)],
+            82: [_acct_stream(4, "nhl: C vs D", account_id=2)],
+        },
+        now=later,
+    )
+    assert result.sources_rebound == 1
+    with get_db() as conn:
+        bound_id = conn.execute(
+            "SELECT m3u_group_id FROM event_epg_groups WHERE id = ?", (source_id,)
+        ).fetchone()[0]
+        all_cands = get_candidates(conn, later, EVIDENCE_WINDOW_DAYS)
+    assert bound_id == thu_a1.id
+    assert {(c.m3u_group_id, c.status) for c in all_cands} == {
+        (thu_a1.id, "accepted"),
+        (wed_a2.id, "dismissed"),
+    }
 
 
 def test_a_sport_toggle_covers_every_league_of_the_sport(db):

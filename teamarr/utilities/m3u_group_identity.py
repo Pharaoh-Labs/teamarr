@@ -11,14 +11,25 @@ _MONTH = (
     r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
     r"jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
 )
-_NUMBER = r"(?:0?[1-9]|[12][0-9]|3[01])"
-_NUMERIC_DATE = (
-    rf"(?:[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}|"
-    rf"(?!24/7\b){_NUMBER}[./-]{_NUMBER}(?:[./-][0-9]{{4}})?)"
+_MONTH_NUM = r"(?:0?[1-9]|1[0-2])"
+_DAY_NUM = r"(?:0?[1-9]|[12][0-9]|3[01])"
+_ISO_DATE = r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])"
+_MD_SLASH_DOT = (
+    rf"(?!24[./]7\b)(?:{_MONTH_NUM}[./]{_DAY_NUM}|{_DAY_NUM}[./]{_MONTH_NUM})"
+    rf"(?:[./][0-9]{{4}})?"
 )
-_DATE = rf"(?:{_NUMERIC_DATE}|{_MONTH}\s+{_NUMBER}|{_NUMBER}\s+{_MONTH})"
-_LABEL = rf"(?:{_DAY}(?:\s+(?:{_DATE}|{_NUMBER}))?|{_DATE})"
-_SUFFIX = re.compile(rf"(?:\s*\(\s*{_LABEL}\s*\)|\s*\[\s*{_LABEL}\s*\]|\s+{_LABEL})$")
+_MD_DASH_FULL = rf"(?:{_MONTH_NUM}-{_DAY_NUM}|{_DAY_NUM}-{_MONTH_NUM})-[0-9]{{4}}"
+_MD_DASH_SHORT = rf"(?!24-7\b)(?:{_MONTH_NUM}-{_DAY_NUM}|{_DAY_NUM}-{_MONTH_NUM})"
+_BARE_DATE = (
+    rf"(?:{_ISO_DATE}|{_MD_SLASH_DOT}|{_MD_DASH_FULL}|"
+    rf"{_MONTH}\s+{_DAY_NUM}|{_DAY_NUM}\s+{_MONTH})"
+)
+_BRACKET_DATE = rf"(?:{_BARE_DATE}|{_MD_DASH_SHORT})"
+_BARE_LABEL = rf"(?:{_DAY}(?:\s+(?:{_BRACKET_DATE}|{_DAY_NUM}))?|{_BARE_DATE})"
+_BRACKET_LABEL = rf"(?:{_DAY}(?:\s+(?:{_BRACKET_DATE}|{_DAY_NUM}))?|{_BRACKET_DATE})"
+_SUFFIX = re.compile(
+    rf"(?:\s*\(\s*{_BRACKET_LABEL}\s*\)|\s*\[\s*{_BRACKET_LABEL}\s*\]|\s+{_BARE_LABEL})$"
+)
 
 
 def name_key(text: str) -> str:

@@ -54,6 +54,7 @@ from teamarr.database.source_candidates import (
     ScanEvidence,
     dismiss_group,
     dismissed_groups,
+    dismissed_rotation_keys,
     forget_removed_source,
     get_candidates,
     move_accepted_candidate,
@@ -383,27 +384,37 @@ class SourceDiscovery:
         started = now_utc()
         summary = ScanSummary()
         live_groups = self._m3u.list_groups()
+        live_ids = {g.id for g in live_groups}
         summary.groups_total = len(live_groups)
 
         with self._db_factory() as conn:
             taken = self._source_group_ids(conn)
             dismissed, dismissed_names = dismissed_groups(conn)
-            dismissed_keys = {
-                key for name in dismissed_names if (key := rotating_group_key(name)) is not None
-            }
+            dismissed_rotations = dismissed_rotation_keys(conn)
+            dismissed_rot_names = {k for k, _ in dismissed_rotations}
+            missing_managed_keys = _missing_managed_rotation_keys(conn, live_ids)
             leagues = self._processor._get_subscription_leagues(conn, None)
             surfaces = league_name_surfaces(conn, leagues)
 
         todo = []
         renamed: list[Any] = []
         for group in live_groups:
+            rot_key = rotating_group_key(group.name or "")
+            group_accounts = _group_account_ids(group)
             if group.id in taken:
                 summary.skipped_sources += 1
             elif group.id in dismissed:
                 summary.skipped_dismissed += 1
-            elif rotating_group_key(group.name or "") in dismissed_keys:
+            elif rot_key is not None and (
+                (
+                    (rot_key, group_accounts) in dismissed_rotations
+                    or (rot_key, ()) in dismissed_rotations
+                )
+                if group_accounts
+                else (rot_key not in missing_managed_keys and rot_key in dismissed_rot_names)
+            ):
                 summary.skipped_dismissed += 1
-            elif (group.name or "").strip().lower() in dismissed_names:
+            elif rot_key is None and (group.name or "").strip().lower() in dismissed_names:
                 # A dismissed group back under a new id (a provider rename
                 # makes Dispatcharr create a new group): still dismissed.
                 renamed.append(group)
@@ -442,7 +453,6 @@ class SourceDiscovery:
                         summary.groups_with_games += 1
                     found.append(evidence)
 
-        live_ids = {g.id for g in live_groups}
         with self._db_factory() as conn:
             for group in renamed:
                 dismiss_group(conn, group.id, group.name)
@@ -789,6 +799,44 @@ def maintain_managed_sources(
                     int(gone),
                 )
     conn.commit()
+
+
+def _missing_managed_rotation_keys(conn: Connection, live_ids: set[int]) -> set[str]:
+    """Rotating keys of managed sources whose bound group ID is currently absent."""
+    accepted_names = {
+        row["source_group_id"]: row["m3u_group_name"]
+        for row in conn.execute(
+            "SELECT source_group_id, m3u_group_name FROM source_candidates "
+            "WHERE status = 'accepted' AND source_group_id IS NOT NULL"
+        )
+    }
+    keys: set[str] = set()
+    for source in get_all_groups(conn, include_disabled=True):
+        if (
+            source.is_channel_source
+            or not source.managed
+            or source.m3u_group_id is None
+            or source.m3u_group_id in live_ids
+        ):
+            continue
+        name = source.m3u_group_name or accepted_names.get(source.id, "")
+        if key := rotating_group_key(name):
+            keys.add(key)
+    return keys
+
+
+def _group_account_ids(group: Any) -> tuple[int, ...]:
+    """M3U account ids reported on a group listing, or empty when unavailable."""
+    accounts = getattr(group, "m3u_accounts", None) or []
+    ids: set[int] = set()
+    for acc in accounts:
+        if isinstance(acc, int) and not isinstance(acc, bool):
+            ids.add(acc)
+        elif isinstance(acc, dict):
+            acc_id = acc.get("m3u_account") or acc.get("account_id") or acc.get("id")
+            if isinstance(acc_id, int) and not isinstance(acc_id, bool):
+                ids.add(acc_id)
+    return tuple(sorted(ids))
 
 
 def _stream_count(group: Any) -> int | None:
