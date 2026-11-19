@@ -1023,7 +1023,8 @@ class TeamChannelManager:
         not hold a database connection across this call (#735, #826).
         """
         result = {"channels": 0, "streams": 0, "errors": 0}
-        if not self._channels:
+        channels = self._channels
+        if channels is None:
             return result
 
         from teamarr.database.channels.streams import fetch_stream_stats_by_ids
@@ -1125,7 +1126,7 @@ class TeamChannelManager:
         def push(item) -> bool:
             team, ordered = item
             try:
-                sync_result = self._channels.update_channel(
+                sync_result = channels.update_channel(
                     team["dispatcharr_channel_id"], {"streams": ordered}
                 )
                 if not sync_result.success:
