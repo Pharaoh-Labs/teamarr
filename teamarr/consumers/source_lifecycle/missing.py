@@ -83,6 +83,12 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
             """
         ).fetchall()
         for row in rows:
+            account_name = account_names_by_id.get(row["m3u_account_id"])
+            if account_name and account_name != row["m3u_account_name"]:
+                conn.execute(
+                    "UPDATE event_epg_groups SET m3u_account_name = ? WHERE id = ?",
+                    (account_name, row["id"]),
+                )
             # Auto-heal stale m3u_account_id if account ID no longer exists but name matches
             if (
                 row["m3u_account_id"]

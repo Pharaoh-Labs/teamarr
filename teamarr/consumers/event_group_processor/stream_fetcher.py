@@ -290,7 +290,7 @@ class StreamFetcher:
         # uses the same channel EPG), so including them here would double-process
         # the identical match. Consolidation would dedupe the result anyway, but
         # skipping avoids wasted work and inflated source-group stats.
-        epg_group_m3u_ids: set[int] = set()
+        epg_group_bindings: set[tuple[int, int | None]] = set()
         # User-selected DP channel groups to scope the scan (ybt.2). Empty = all.
         # Scoping skips the expensive EPG-resolution/matching for channels in
         # groups the user didn't pick — a generation-time saving.
@@ -300,8 +300,8 @@ class StreamFetcher:
             from teamarr.database.settings import get_epg_settings
 
             with self._db_factory() as conn:
-                epg_group_m3u_ids = {
-                    g.m3u_group_id
+                epg_group_bindings = {
+                    (g.m3u_group_id, g.m3u_account_id)
                     for g in get_all_groups(conn, include_disabled=False)
                     if g.epg_match_enabled and not g.is_channel_source and g.m3u_group_id
                 }
@@ -366,17 +366,15 @@ class StreamFetcher:
             if stream_id in seen:
                 continue
             detail = detail_by_id.get(stream_id)
-            # Dedupe: an EPG-match-enabled M3U group already handles this stream.
-            if (
-                epg_group_m3u_ids
-                and detail is not None
-                and getattr(detail, "channel_group_id", None) in epg_group_m3u_ids
+            account_id = getattr(detail, "m3u_account_id", None)
+            m3u_group_id, m3u_group_name = stream_m3u_group(detail, m3u_group_names)
+            if m3u_group_id is not None and (
+                (m3u_group_id, None) in epg_group_bindings
+                or (m3u_group_id, account_id) in epg_group_bindings
             ):
                 skipped_overlap += 1
                 continue
             seen.add(stream_id)
-            account_id = getattr(detail, "m3u_account_id", None) if detail else None
-            m3u_group_id, m3u_group_name = stream_m3u_group(detail, m3u_group_names)
             candidates.append(
                 {
                     "id": stream_id,

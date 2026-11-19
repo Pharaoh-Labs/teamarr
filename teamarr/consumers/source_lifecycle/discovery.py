@@ -522,12 +522,18 @@ class SourceDiscovery:
                             summary.groups_with_games += 1
                         found.append(evidence)
 
+        try:
+            account_names = {account.id: account.name for account in self._m3u.list_accounts()}
+        except Exception:
+            logger.warning("[DISCOVERY] Could not list M3U accounts", exc_info=True)
+            account_names = {}
+
         with self._db_factory() as conn:
             for group, account in renamed:
                 dismiss_group(conn, group.id, group.name, account or None)
             record_scan(conn, found, now)
-            readd_approved_sources(conn, now, summary)
-            auto_add_sources(conn, now, summary)
+            readd_approved_sources(conn, now, summary, account_names=account_names)
+            auto_add_sources(conn, now, summary, account_names=account_names)
             maintain_managed_sources(
                 conn,
                 now,
@@ -554,7 +560,11 @@ class SourceDiscovery:
 
 
 def accept_candidate(
-    conn: Connection, candidate: CandidateEvidence, auto_added_at: str | None = None
+    conn: Connection,
+    candidate: CandidateEvidence,
+    auto_added_at: str | None = None,
+    *,
+    account_names: dict[int, str] | None = None,
 ) -> int:
     """Turn a candidate into a managed source and return the new source's id.
 
@@ -579,6 +589,7 @@ def accept_candidate(
         m3u_group_id=candidate.m3u_group_id,
         m3u_group_name=candidate.m3u_group_name,
         m3u_account_id=candidate.m3u_account_id,
+        m3u_account_name=(account_names or {}).get(candidate.m3u_account_id or 0),
         name_match_enabled=name_match,
         team_streams_enabled=team_streams,
     )
@@ -675,7 +686,13 @@ def auto_add_decision(
     return None
 
 
-def auto_add_sources(conn: Connection, now: datetime, summary: ScanSummary) -> None:
+def auto_add_sources(
+    conn: Connection,
+    now: datetime,
+    summary: ScanSummary,
+    *,
+    account_names: dict[int, str] | None = None,
+) -> None:
     """Add qualifying candidates as managed sources for the toggled leagues (#997).
 
     Same machinery as pressing Add, pressed by the scan. Dismissed groups,
@@ -690,11 +707,17 @@ def auto_add_sources(conn: Connection, now: datetime, summary: ScanSummary) -> N
     stamp = to_db_utc(now)
     for candidate in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="new"):
         if auto_add_decision(candidate, toggled, max_streams) is None:
-            accept_candidate(conn, candidate, auto_added_at=stamp)
+            accept_candidate(conn, candidate, auto_added_at=stamp, account_names=account_names)
             summary.sources_auto_added += 1
 
 
-def readd_approved_sources(conn: Connection, now: datetime, summary: ScanSummary) -> None:
+def readd_approved_sources(
+    conn: Connection,
+    now: datetime,
+    summary: ScanSummary,
+    *,
+    account_names: dict[int, str] | None = None,
+) -> None:
     """Add back a source the user already approved once its group is back.
 
     A managed source is removed when its group has been gone long enough. If
@@ -705,7 +728,7 @@ def readd_approved_sources(conn: Connection, now: datetime, summary: ScanSummary
         if candidate.source_group_id is not None:
             continue
         if suggestion_tier(candidate) in (TIER_GAMES, TIER_TEAMS):
-            accept_candidate(conn, candidate)
+            accept_candidate(conn, candidate, account_names=account_names)
             summary.sources_readded += 1
 
 

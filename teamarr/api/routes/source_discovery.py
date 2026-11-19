@@ -150,10 +150,13 @@ def list_candidates(include_dismissed: bool = False) -> CandidateListResponse:
         auto = None
     rows = []
     for primary, *others in fold_same_content([c for c in shown if c.status != "dismissed"]):
-        rows.append(_to_response(primary, accounts, auto))
+        primary_row = _to_response(primary, accounts, auto)
+        rows.append(primary_row)
         for other in others:
             row = _to_response(other, accounts, auto)
             row.same_events_as = primary.m3u_group_name
+            if primary.m3u_group_name == other.m3u_group_name and primary_row.m3u_account_name:
+                row.same_events_as += f" ({primary_row.m3u_account_name})"
             rows.append(row)
     rows.extend(_to_response(c, accounts) for c in shown if c.status == "dismissed")
 
@@ -217,6 +220,7 @@ def accept(candidate_id: int) -> dict:
     re-enabled when its group carries games again; editing it by hand makes
     it an ordinary source that is never touched.
     """
+    accounts = _account_names()
     with get_db() as conn:
         candidates = {c.id: c for c in get_candidates(conn, now_utc(), EVIDENCE_WINDOW_DAYS)}
         candidate = candidates.get(candidate_id)
@@ -224,5 +228,5 @@ def accept(candidate_id: int) -> dict:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Candidate not found")
         if candidate.status == "accepted":
             raise HTTPException(status.HTTP_409_CONFLICT, "Candidate is already a source")
-        source_id = accept_candidate(conn, candidate)
+        source_id = accept_candidate(conn, candidate, account_names=accounts)
     return {"id": candidate_id, "status": "accepted", "source_group_id": source_id}
