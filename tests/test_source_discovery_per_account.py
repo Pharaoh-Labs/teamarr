@@ -111,11 +111,16 @@ def test_a_dismissed_account_stays_dismissed_under_a_new_group_id(db):  # noqa: 
 def test_accepting_each_account_makes_two_sources_with_the_group_name(db):  # noqa: F811
     _scan([_shared(7, "USA | NHL")], _two_accounts())
     with get_db() as conn:
-        ids = [accept_candidate(conn, _candidates()[("USA | NHL", account)]) for account in (3, 9)]
+        ids = [
+            accept_candidate(
+                conn, _candidates()[("USA | NHL", account)], account_names={3: "East", 9: "West"}
+            )
+            for account in (3, 9)
+        ]
         sources = [get_group(conn, i) for i in ids]
-    assert [(s.name, s.m3u_group_id, s.m3u_account_id) for s in sources] == [
-        ("USA | NHL", 7, 3),
-        ("USA | NHL", 7, 9),
+    assert [(s.name, s.m3u_group_id, s.m3u_account_id, s.m3u_account_name) for s in sources] == [
+        ("USA | NHL", 7, 3, "East"),
+        ("USA | NHL", 7, 9, "West"),
     ]
 
 
