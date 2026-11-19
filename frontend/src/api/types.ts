@@ -192,6 +192,7 @@ export interface EventGroupUpdate extends Partial<EventGroupCreate> {
   clear_custom_regex_league?: boolean
   clear_custom_regex_fighters?: boolean
   clear_custom_regex_event_name?: boolean
+  clear_bypass_filter_for_playoffs?: boolean
   clear_include_teams?: boolean
   clear_exclude_teams?: boolean
   clear_soccer_mode?: boolean

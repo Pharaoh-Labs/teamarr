@@ -208,12 +208,15 @@ def update_team(team_id: int, team: TeamUpdate):
     """Update a team (full or partial)."""
 
     updates = {k: v for k, v in team.model_dump().items() if v is not None}
-    # Unlike other optional fields, null deliberately clears the manual override.
-    if "managed_channel_number" in team.model_fields_set:
-        updates["managed_channel_number"] = team.managed_channel_number
-    # Same for the lifecycle override: null means "inherit the global setting".
-    if "managed_channel_lifecycle" in team.model_fields_set:
-        updates["managed_channel_lifecycle"] = team.managed_channel_lifecycle
+    # These fields explicitly support clearing an assignment or override with null.
+    for field in (
+        "template_id",
+        "team_abbrev",
+        "managed_channel_number",
+        "managed_channel_lifecycle",
+    ):
+        if field in team.model_fields_set:
+            updates[field] = getattr(team, field)
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
 

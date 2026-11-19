@@ -132,6 +132,7 @@ class GroupCreate(BaseModel):
     include_teams: list[TeamFilterEntry] | None = None
     exclude_teams: list[TeamFilterEntry] | None = None
     team_filter_mode: str = "include"  # "include" (whitelist) or "exclude" (blacklist)
+    bypass_filter_for_playoffs: bool | None = None
     channel_sort_order: str = "time"
     overlap_handling: str = "add_stream"
     enabled: bool = True
@@ -189,6 +190,7 @@ class GroupUpdate(BaseModel):
     include_teams: list[TeamFilterEntry] | None = None
     exclude_teams: list[TeamFilterEntry] | None = None
     team_filter_mode: str | None = None  # "include" (whitelist) or "exclude" (blacklist)
+    bypass_filter_for_playoffs: bool | None = None
     channel_sort_order: str | None = None
     overlap_handling: str | None = None
     enabled: bool | None = None
@@ -218,6 +220,7 @@ class GroupUpdate(BaseModel):
     clear_custom_regex_league: bool = False
     clear_custom_regex_fighters: bool = False
     clear_custom_regex_event_name: bool = False
+    clear_bypass_filter_for_playoffs: bool = False
     clear_include_teams: bool = False
     clear_exclude_teams: bool = False
     clear_soccer_mode: bool = False
@@ -288,6 +291,7 @@ class GroupResponse(BaseModel):
     include_teams: list[TeamFilterEntry] | None = None
     exclude_teams: list[TeamFilterEntry] | None = None
     team_filter_mode: str = "include"  # "include" (whitelist) or "exclude" (blacklist)
+    bypass_filter_for_playoffs: bool | None = None
     # Processing stats
     last_refresh: str | None = None
     stream_count: int = 0
@@ -732,6 +736,7 @@ def list_groups(
                 if g.soccer_followed_teams
                 else None,
                 channel_start_number=g.channel_start_number,
+                stream_timezone=g.stream_timezone,
                 duplicate_event_handling=g.duplicate_event_handling,
                 channel_assignment_mode=g.channel_assignment_mode,
                 sort_order=g.sort_order,
@@ -776,6 +781,7 @@ def list_groups(
                 if g.exclude_teams
                 else None,
                 team_filter_mode=g.team_filter_mode,
+                bypass_filter_for_playoffs=g.bypass_filter_for_playoffs,
                 last_refresh=g.last_refresh.isoformat() if g.last_refresh else None,
                 stream_count=g.stream_count,
                 matched_count=g.matched_count,
@@ -893,6 +899,7 @@ def create_group(request: GroupCreate):
             if request.exclude_teams is not None
             else None,
             team_filter_mode=request.team_filter_mode,
+            bypass_filter_for_playoffs=request.bypass_filter_for_playoffs,
             channel_sort_order="time",  # Deprecated — global ordering in v59
             overlap_handling="add_stream",  # Deprecated — global consolidation in v59
             enabled=request.enabled,
@@ -964,6 +971,7 @@ def create_group(request: GroupCreate):
         if group.exclude_teams
         else None,
         team_filter_mode=group.team_filter_mode,
+        bypass_filter_for_playoffs=group.bypass_filter_for_playoffs,
         last_refresh=group.last_refresh.isoformat() if group.last_refresh else None,
         stream_count=group.stream_count,
         matched_count=group.matched_count,
@@ -1415,6 +1423,7 @@ def get_group_by_id(group_id: int):
         if group.exclude_teams
         else None,
         team_filter_mode=group.team_filter_mode,
+        bypass_filter_for_playoffs=group.bypass_filter_for_playoffs,
         last_refresh=group.last_refresh.isoformat() if group.last_refresh else None,
         stream_count=group.stream_count,
         matched_count=group.matched_count,
@@ -1559,6 +1568,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 if request.exclude_teams is not None
                 else None,
                 team_filter_mode=request.team_filter_mode,
+                bypass_filter_for_playoffs=request.bypass_filter_for_playoffs,
                 channel_sort_order=None,  # Deprecated — global ordering in v59
                 overlap_handling=None,  # Deprecated — global consolidation in v59
                 enabled=request.enabled,
@@ -1581,6 +1591,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
                 clear_custom_regex_event_name=request.clear_custom_regex_event_name,
                 clear_include_teams=request.clear_include_teams,
                 clear_exclude_teams=request.clear_exclude_teams,
+                clear_bypass_filter_for_playoffs=request.clear_bypass_filter_for_playoffs,
                 clear_soccer_mode=request.clear_soccer_mode,
                 clear_soccer_followed_teams=request.clear_soccer_followed_teams,
                 subscription_leagues=request.subscription_leagues,
@@ -1666,6 +1677,7 @@ def update_group_by_id(group_id: int, request: GroupUpdate):
         if group.exclude_teams
         else None,
         team_filter_mode=group.team_filter_mode,
+        bypass_filter_for_playoffs=group.bypass_filter_for_playoffs,
         last_refresh=group.last_refresh.isoformat() if group.last_refresh else None,
         stream_count=group.stream_count,
         matched_count=group.matched_count,
