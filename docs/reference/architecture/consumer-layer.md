@@ -187,7 +187,9 @@ local database so the next run can retry.
 Group writes are committed before lifecycle helpers open another SQLite connection.
 For managed event channel deletion, Teamarr retires the local row after Dispatcharr
 confirms the deletion or reports the channel is already gone. A transient failure
-leaves the row active for retry.
+leaves the row active for retry. The scheduled deletion pass commits its due
+dates, sends independent Dispatcharr deletes with up to eight workers, then
+records confirmed deletions on one database connection.
 
 ### Reconciliation (`consumers/reconciliation.py`)
 

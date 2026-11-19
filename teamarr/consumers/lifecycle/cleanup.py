@@ -5,10 +5,12 @@ stream cleanup, orphan Dispatcharr channels and disabled-group cleanup.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from sqlite3 import Connection
 from typing import Any
 
+from teamarr.database.channels.types import ManagedChannel
 from teamarr.utilities.sports import get_sport_duration
 from teamarr.utilities.time_blocks import crosses_midnight
 from teamarr.utilities.tz import to_user_tz
@@ -81,11 +83,7 @@ class ChannelCleanup(_LifecycleHost):
         Returns:
             True if deleted successfully
         """
-        from teamarr.database.channels import (
-            get_managed_channel,
-            log_channel_history,
-            mark_channel_deleted,
-        )
+        from teamarr.database.channels import get_managed_channel
 
         channel = get_managed_channel(conn, managed_channel_id)
         if not channel:
@@ -93,27 +91,40 @@ class ChannelCleanup(_LifecycleHost):
 
         # Callers may have changed scheduling before deciding to delete.
         conn.commit()
-        if self._channel_manager and channel.dispatcharr_channel_id:
-            try:
-                with self._dispatcharr_lock:
-                    result = self._channel_manager.delete_channel(channel.dispatcharr_channel_id)
-            except Exception:
-                logger.exception(
-                    "Failed to delete Dispatcharr channel %s", channel.dispatcharr_channel_id
-                )
+        with self._dispatcharr_lock:
+            if not self._confirm_dispatcharr_deletion(channel.dispatcharr_channel_id):
                 return False
 
-            # The channel manager reports HTTP 404 with this exact error.
-            if not result.success and result.error != "Channel not found":
-                logger.warning(
-                    "Failed to delete Dispatcharr channel %s: %s",
-                    channel.dispatcharr_channel_id,
-                    result.error,
-                )
-                return False
+        return self._record_channel_deletion(conn, channel, reason, change_source)
 
-        # Mark as deleted in DB
-        mark_channel_deleted(conn, managed_channel_id, reason)
+    def _confirm_dispatcharr_deletion(self, dispatcharr_channel_id: int | None) -> bool:
+        """Return whether the channel is absent or has no remote mapping to delete."""
+        if not self._channel_manager or not dispatcharr_channel_id:
+            return True
+
+        try:
+            result = self._channel_manager.delete_channel(dispatcharr_channel_id)
+        except Exception:
+            logger.exception("Failed to delete Dispatcharr channel %s", dispatcharr_channel_id)
+            return False
+
+        # The channel manager reports HTTP 404 with this exact error.
+        if result.success or result.error == "Channel not found":
+            return True
+        logger.warning(
+            "Failed to delete Dispatcharr channel %s: %s", dispatcharr_channel_id, result.error
+        )
+        return False
+
+    def _record_channel_deletion(
+        self, conn: Connection, channel: ManagedChannel, reason: str, change_source: str
+    ) -> bool:
+        from teamarr.database.channels import log_channel_history, mark_channel_deleted
+
+        managed_channel_id = channel.id
+        if not mark_channel_deleted(conn, managed_channel_id, reason, expected_channel=channel):
+            conn.commit()
+            return False
 
         try:
             log_channel_history(
@@ -141,42 +152,59 @@ class ChannelCleanup(_LifecycleHost):
         Returns:
             StreamProcessResult with deleted channels
         """
-        from teamarr.database.channels import (
-            get_channels_pending_deletion,
-        )
+        from teamarr.database.channels import get_channels_pending_deletion
 
         result = StreamProcessResult()
 
         try:
             with self._db_factory() as conn:
-                # Step 1: Recalculate scheduled_delete_at for all active channels
-                # This handles settings changes (e.g., day_after -> 6_hours_after)
                 self._recalculate_deletion_times(conn)
-
-                # Step 2: Get channels that are now past their delete time
                 channels = get_channels_pending_deletion(conn)
 
-                for channel in channels:
-                    success = self.delete_managed_channel(
-                        conn,
-                        channel.id,
-                        reason="scheduled_delete",
-                    )
+            # Commit the schedule and release SQLite before issuing DELETEs.
+            remote_ids = list(
+                dict.fromkeys(
+                    channel.dispatcharr_channel_id
+                    for channel in channels
+                    if self._channel_manager and channel.dispatcharr_channel_id
+                )
+            )
+            confirmed: dict[int, bool] = {}
+            if remote_ids:
+                # The manager locks its cache updates internally. Holding the
+                # lifecycle lock here excludes other operations on this service
+                # while independent DELETEs run in the pool.
+                with (
+                    self._dispatcharr_lock,
+                    ThreadPoolExecutor(
+                        max_workers=8, thread_name_prefix="scheduled-delete"
+                    ) as pool,
+                ):
+                    outcomes = pool.map(self._confirm_dispatcharr_deletion, remote_ids)
+                    confirmed = dict(zip(remote_ids, outcomes, strict=True))
 
-                    if success:
-                        result.deleted.append(
-                            {
-                                "channel_id": channel.id,
-                                "channel_name": channel.channel_name,
-                                "tvg_id": channel.tvg_id,
-                            }
-                        )
-                    else:
+            if not channels:
+                return result
+
+            with self._db_factory() as conn:
+                for channel in channels:
+                    dispatcharr_id = channel.dispatcharr_channel_id
+                    if dispatcharr_id is not None and not confirmed.get(dispatcharr_id, True):
                         result.errors.append(
                             {
                                 "channel_id": channel.id,
                                 "channel_name": channel.channel_name,
                                 "error": "Failed to delete",
+                            }
+                        )
+                    elif self._record_channel_deletion(
+                        conn, channel, "scheduled_delete", "lifecycle"
+                    ):
+                        result.deleted.append(
+                            {
+                                "channel_id": channel.id,
+                                "channel_name": channel.channel_name,
+                                "tvg_id": channel.tvg_id,
                             }
                         )
 
