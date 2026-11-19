@@ -139,19 +139,24 @@ def test_excludes_channels_without_active_epg(monkeypatch):
     assert proc._fetch_channel_source_streams() == []
 
 
-def test_dedupes_streams_already_in_epg_match_group(monkeypatch):
+@pytest.mark.parametrize(("account_id", "expected"), [(None, []), (7, []), (8, [500])])
+def test_dedupes_streams_already_in_epg_match_group(monkeypatch, account_id, expected):
     # Stream 500 lives in M3U group 42, which is an EPG-match-enabled event group,
     # so the per-group path already handles it → channel source must skip it.
-    epg_group = SimpleNamespace(m3u_group_id=42, epg_match_enabled=True, is_channel_source=False)
+    epg_group = SimpleNamespace(
+        m3u_group_id=42, m3u_account_id=account_id, epg_match_enabled=True, is_channel_source=False
+    )
+    stream = _stream(500, "ESPN HD")
+    stream.channel_group = 42
     proc = _make_processor(
         stream_channel_map={500: {"id": 100, "epg_data_id": 1, "name": "ESPN"}},
         epg_data_list=[{"id": 1, "tvg_id": "ESPN.us", "epg_source": 10}],
-        streams=[_stream(500, "ESPN HD", group_id=42)],
+        streams=[stream],
         managed=[],
         epg_groups=[epg_group],
         monkeypatch=monkeypatch,
     )
-    assert proc._fetch_channel_source_streams() == []
+    assert [row["id"] for row in proc._fetch_channel_source_streams()] == expected
 
 
 def test_keeps_streams_in_non_epg_group(monkeypatch):
