@@ -65,6 +65,8 @@ class ChannelCleanup(_LifecycleHost):
         conn: Connection,
         managed_channel_id: int,
         reason: str = "scheduled",
+        *,
+        change_source: str = "lifecycle",
     ) -> bool:
         """Delete a managed channel from Dispatcharr and mark as deleted in DB.
 
@@ -89,27 +91,42 @@ class ChannelCleanup(_LifecycleHost):
         if not channel:
             return False
 
-        # Delete channel from Dispatcharr
+        # Callers may have changed scheduling before deciding to delete.
+        conn.commit()
         if self._channel_manager and channel.dispatcharr_channel_id:
-            with self._dispatcharr_lock:
-                result = self._channel_manager.delete_channel(channel.dispatcharr_channel_id)
-                if not result.success:
-                    logger.warning(
-                        f"Failed to delete channel {channel.dispatcharr_channel_id} "
-                        f"from Dispatcharr: {result.error}"
-                    )
+            try:
+                with self._dispatcharr_lock:
+                    result = self._channel_manager.delete_channel(channel.dispatcharr_channel_id)
+            except Exception:
+                logger.exception(
+                    "Failed to delete Dispatcharr channel %s", channel.dispatcharr_channel_id
+                )
+                return False
+
+            # The channel manager reports HTTP 404 with this exact error.
+            if not result.success and result.error != "Channel not found":
+                logger.warning(
+                    "Failed to delete Dispatcharr channel %s: %s",
+                    channel.dispatcharr_channel_id,
+                    result.error,
+                )
+                return False
 
         # Mark as deleted in DB
         mark_channel_deleted(conn, managed_channel_id, reason)
 
-        # Log history
-        log_channel_history(
-            conn=conn,
-            managed_channel_id=managed_channel_id,
-            change_type="deleted",
-            change_source="lifecycle",
-            notes=f"Deleted: {reason}",
-        )
+        try:
+            log_channel_history(
+                conn=conn,
+                managed_channel_id=managed_channel_id,
+                change_type="deleted",
+                change_source=change_source,
+                notes=f"Deleted: {reason}",
+            )
+        except Exception:
+            # Dispatcharr already confirmed deletion. Keep local ownership in sync
+            # even if the history write fails (#1065).
+            logger.exception("Channel %s deleted but history not recorded", managed_channel_id)
 
         conn.commit()
         logger.info("[LIFECYCLE] Deleted channel '%s' (%s)", channel.channel_name, reason)

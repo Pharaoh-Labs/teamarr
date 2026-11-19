@@ -1075,6 +1075,9 @@ class EventGroupProcessor(
         """
         from teamarr.consumers.lifecycle import StreamProcessResult
 
+        # Group writes must be visible before lifecycle helpers open their own
+        # connections on this thread (#1239).
+        conn.commit()
         lifecycle_service = self._get_lifecycle_service()
 
         # Build group config dict

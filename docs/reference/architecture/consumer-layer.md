@@ -178,6 +178,17 @@ Resolves `{sport}` and `{league}` wildcards in channel group and profile names:
 - Auto-creates groups/profiles in Dispatcharr if they don't exist
 - Caches resolved IDs for fast repeated lookups
 
+During generation, settings sync runs once per existing event channel. If the configured
+channel group cannot be resolved, the channel keeps its current group and other
+settings can still sync. Consolidation batches stream updates per channel within
+each source pass. A rejected update removes the new active memberships from the
+local database so the next run can retry.
+
+Group writes are committed before lifecycle helpers open another SQLite connection.
+For managed event channel deletion, Teamarr retires the local row after Dispatcharr
+confirms the deletion or reports the channel is already gone. A transient failure
+leaves the row active for retry.
+
 ### Reconciliation (`consumers/reconciliation.py`)
 
 `ChannelReconciler` detects and fixes inconsistencies between the local DB and Dispatcharr:
