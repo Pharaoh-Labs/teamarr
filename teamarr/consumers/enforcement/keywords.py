@@ -128,6 +128,7 @@ class KeywordEnforcer:
             add_stream_to_channel,
             check_exception_keyword,
             event_identity_text,
+            get_all_channel_streams,
             get_all_managed_channels,
             get_channel_streams,
             get_exception_keywords,
@@ -169,9 +170,15 @@ class KeywordEnforcer:
                 for ch in channels:
                     channel_lookup.setdefault((ch.event_id, ch.event_provider), []).append(ch)
 
-                # Check each channel's streams
+                # A prior move can change a target that has yet to be visited.
+                members = get_all_channel_streams(conn, [channel.id for channel in channels])
+                changed_targets: set[int] = set()
                 for channel in channels:
-                    streams = get_channel_streams(conn, channel.id, include_removed=False)
+                    streams = (
+                        get_channel_streams(conn, channel.id)
+                        if channel.id in changed_targets
+                        else members.get(channel.id, [])
+                    )
 
                     for stream in streams:
                         stream_name = stream.stream_name or ""
@@ -287,6 +294,7 @@ class KeywordEnforcer:
                         if not stream_exists_on_channel(
                             conn, target_channel.id, stream.dispatcharr_stream_id
                         ):
+                            changed_targets.add(target_channel.id)
                             # Use sequential priority - final ordering after all matching
                             priority = get_next_stream_priority(conn, target_channel.id)
                             add_stream_to_channel(

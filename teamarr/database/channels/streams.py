@@ -204,6 +204,8 @@ def compute_stream_priority_from_rules(
     dispatcharr_source_channel_id: int | None = None,
     season_type: str | None = None,
     has_local_broadcast: bool | None = None,
+    *,
+    ordering_cache: dict | None = None,
 ) -> int:
     """Compute priority for a stream based on ordering rules.
 
@@ -246,6 +248,7 @@ def compute_stream_priority_from_rules(
         sport,
         league,
         context=GameContext(season_type=season_type, has_local_broadcast=has_local_broadcast),
+        cache=ordering_cache,
     )
     if not ordering_service.rules:
         # No rules - use sequential ordering (will be assigned by get_next_stream_priority)
@@ -995,6 +998,7 @@ def clear_stream_stats(conn: Connection, group_id: int | None = None) -> int:
 
 def get_all_channel_streams(
     conn: Connection,
+    channel_ids: list[int] | None = None,
 ) -> dict[int, list[ManagedChannelStream]]:
     """Every active stream on every managed channel, grouped by channel id.
 
@@ -1009,10 +1013,17 @@ def get_all_channel_streams(
     Returns:
         ``{managed_channel_id: [ManagedChannelStream, ...]}`` in priority order.
     """
+    if channel_ids == []:
+        return {}
+    channel_filter = ""
+    if channel_ids is not None:
+        placeholders = ", ".join("?" for _ in channel_ids)
+        channel_filter = f"AND managed_channel_id IN ({placeholders})"
     cursor = conn.execute(
         f"""SELECT * FROM managed_channel_streams
-           WHERE removed_at IS NULL
-           ORDER BY managed_channel_id, {_STREAM_ORDER}"""
+           WHERE removed_at IS NULL {channel_filter}
+           ORDER BY managed_channel_id, {_STREAM_ORDER}""",
+        channel_ids or [],
     )
     grouped: dict[int, list[ManagedChannelStream]] = {}
     for row in cursor.fetchall():

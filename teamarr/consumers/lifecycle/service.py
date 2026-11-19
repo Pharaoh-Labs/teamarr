@@ -221,6 +221,7 @@ class ChannelLifecycleService(
         self._dynamic_resolver = DynamicResolver()
 
         # Per-run counters for observability (reset in clear_caches)
+        self._event_templates: dict[tuple[str, str], Any] = {}
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
         self._settings_synced_ids = set()
@@ -323,6 +324,7 @@ class ChannelLifecycleService(
         self._pending_profile_db_writes = {}
         self._all_profile_ids_cache = None
         self._stale_profile_ids_warned = set()
+        self._event_templates.clear()
         self._dispatcharr_failure_count = 0
         self._stream_drift_fix_count = 0
         self._settings_synced_ids.clear()
@@ -542,6 +544,10 @@ class ChannelLifecycleService(
         event_sport = getattr(event, "sport", None) or ""
         event_league = getattr(event, "league", None) or ""
 
+        key = (event_sport, event_league)
+        if key in self._event_templates:
+            return self._event_templates[key] or fallback_template
+
         # Resolve template from global subscription
         template_id = get_subscription_template_for_event(conn, event_sport, event_league)
 
@@ -561,6 +567,7 @@ class ChannelLifecycleService(
                         event_league,
                         template.event_channel_name,
                     )
+                self._event_templates[key] = config
                 return config
             logger.warning(
                 "[LIFECYCLE] Template %s not found for event %s",
@@ -576,7 +583,7 @@ class ChannelLifecycleService(
                 type(fallback_template).__name__ if fallback_template else None,
             )
 
-        # Fall back to the provided template
+        self._event_templates[key] = None
         return fallback_template
 
     def _parse_profile_ids(self, raw: Any) -> list[int]:

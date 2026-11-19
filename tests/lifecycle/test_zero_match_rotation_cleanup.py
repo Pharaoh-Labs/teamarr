@@ -46,8 +46,8 @@ def _run_cleanup(service, channels, streams_by_channel, current_streams, **kwarg
             return_value=channels,
         ),
         patch(
-            "teamarr.database.channels.get_channel_streams",
-            side_effect=lambda conn, cid, include_removed=False: streams_by_channel.get(cid, []),
+            "teamarr.database.channels.get_all_channel_streams",
+            return_value=streams_by_channel,
         ),
         patch("teamarr.database.channels.remove_stream_from_channel", remove),
         patch("teamarr.database.channels.update_stream_name"),
