@@ -130,6 +130,7 @@ class XmltvRenderer:
                 [(t.template_id, t.sports, t.leagues) for t in sub_templates],
             )
 
+        keywords_by_league = {}
         for match in matched_streams:
             event = match.get("event")
             if not event:
@@ -201,9 +202,11 @@ class XmltvRenderer:
             stream_name = stream.get("name", "")
             if stream_name:
                 event = match.get("event")
-                keywords = get_keywords_for_league(
-                    conn, getattr(event, "league", None), exception_keywords
-                )
+                if event_league not in keywords_by_league:
+                    keywords_by_league[event_league] = get_keywords_for_league(
+                        conn, event_league, exception_keywords
+                    )
+                keywords = keywords_by_league[event_league]
                 keyword_label, _ = check_exception_keyword(
                     stream_name,
                     keywords,

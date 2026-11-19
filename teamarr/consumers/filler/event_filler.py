@@ -340,9 +340,10 @@ class EventFillerGenerator:
         should_prepend = prepend_postponed_label and event and is_event_postponed(event)
 
         programmes: list[Programme] = []
+        variables = self._resolver.build_variables(context)
         for chunk_start, chunk_end in chunks:
             # Resolve templates
-            title = self._resolver.resolve(template.title, context)
+            title = self._resolver.resolve(template.title, context, variables=variables)
             # Provider-copy primaries (e.g. {game_recap}) may resolve empty
             # before the copy exists — walk the cascade until one renders
             # non-empty (winning row → other matching rows → base).
@@ -350,12 +351,12 @@ class EventFillerGenerator:
             for candidate in (template.description, *template.description_fallbacks):
                 if not candidate:
                     continue
-                description = self._resolver.resolve(candidate, context)
+                description = self._resolver.resolve(candidate, context, variables=variables)
                 if description.strip():
                     break
             subtitle = None
             if template.subtitle:
-                subtitle = self._resolver.resolve(template.subtitle, context)
+                subtitle = self._resolver.resolve(template.subtitle, context, variables=variables)
 
             # Prepend "Postponed: " label if applicable
             if should_prepend:
@@ -368,7 +369,9 @@ class EventFillerGenerator:
             # Resolve art URL if present
             # Unknown variables stay literal (e.g., {bad_var}) so user can identify issues
             icon = (
-                self._resolver.resolve_art(template.art_url, context) if template.art_url else None
+                self._resolver.resolve_art(template.art_url, context, variables=variables)
+                if template.art_url
+                else None
             )
 
             # Filler categories come from the template's xmltv_filler_categories
@@ -378,7 +381,9 @@ class EventFillerGenerator:
             filler_categories = []
             for cat in config.xmltv_categories:
                 if "{" in cat:
-                    filler_categories.append(self._resolver.resolve(cat, context).title())
+                    filler_categories.append(
+                        self._resolver.resolve(cat, context, variables=variables).title()
+                    )
                 else:
                     filler_categories.append(cat.title())
 
