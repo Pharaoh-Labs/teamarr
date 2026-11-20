@@ -8,10 +8,12 @@ import pytest
 
 from teamarr.consumers.matching import StreamCategory
 from teamarr.consumers.source_lifecycle.discovery import (
+    EVIDENCE_WINDOW_DAYS,
     TIER_GAMES,
     TIER_NAME_ONLY,
     TIER_TEAMS,
     SourceDiscovery,
+    accept_candidate,
     fold_same_content,
     is_replay_group,
     league_name_surfaces,
@@ -1190,6 +1192,158 @@ def test_a_toggled_league_adds_a_group_whose_evidence_points_at_it(db):
     src = _sources()
     assert list(src) == ["LIVE | ESPN+"]
     assert src["LIVE | ESPN+"][1] == 1 and src["LIVE | ESPN+"][2] is not None
+
+
+def test_rotating_groups_share_evidence_but_same_day_variants_only_count_once(db):
+    _toggle(leagues=["nhl"])
+    wed, thu = _group(71, "LIVE | NHL (Wed)"), _group(72, "LIVE | NHL (Thur)")
+    games = {g.id: [_stream(g.id, "nhl: A vs B")] for g in [wed, thu]}
+
+    first, _, _ = _scan([wed, thu], games)
+    (candidate,) = _by_name().values()
+    assert candidate.evidence_days == 1
+    assert first.sources_auto_added == 0
+
+    later = NOW + timedelta(days=1)
+    second, _, _ = _scan([wed], games, now=later)
+    (current,) = _by_name(later).values()
+    assert (current.id, current.m3u_group_id, current.evidence_days) == (candidate.id, wed.id, 2)
+    assert second.sources_auto_added == 1
+    assert current.status == "accepted"
+
+
+def test_rotating_group_dismissal_survives_disappearance_and_restore(db):
+    wed, thu = _group(71, "LIVE | NHL (Wed)"), _group(72, "LIVE | NHL (Thur)")
+    games = {g.id: [_stream(g.id, "nhl: A vs B")] for g in [wed, thu]}
+    _scan([wed], games)
+    candidate = _by_name()[wed.name]
+    with get_db() as conn:
+        set_candidate_status(conn, candidate.id, "dismissed")
+    later = NOW + timedelta(days=1)
+    summary, m3u, _ = _scan([thu], games, now=later)
+    assert m3u.read == [] and summary.skipped_dismissed == 1
+    assert list(_by_name(later)) == [wed.name]
+    with get_db() as conn:
+        set_candidate_status(conn, candidate.id, "new")
+    _scan([thu], games, now=later)
+    assert _by_name(later)[thu.name].id == candidate.id
+
+
+def test_managed_source_follows_rotation_after_a_gap_and_keeps_its_settings(db):
+    _toggle(leagues=["nhl"])
+    first = _group(71, "LIVE | NHL (Wed)")
+    _scan([first], {71: [_stream(1, "nhl: A vs B")]}, now=NOW - timedelta(days=1))
+    _scan([first], {71: [_stream(1, "nhl: A vs B")]})
+    candidate = _by_name()[first.name]
+    source_id = candidate.source_group_id
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE event_epg_groups SET source_missing = 1, name = 'My NHL', "
+            "leagues = '[\"nhl\"]' WHERE id = ?",
+            (source_id,),
+        )
+    other = _group(80, "LIVE | NBA (Thur)")
+    gap, _, _ = _scan([other], {80: [_stream(2, "nba: C vs D")]}, now=NOW + timedelta(days=1))
+    assert gap.sources_rebound == 0
+
+    taken = _group(81, "LIVE | NHL (Tue)", streams=30)
+    no_games = _group(82, "LIVE | NHL (Wed)", streams=25)
+    wrong_account = _group(83, "LIVE | NHL (Sat)", streams=24)
+    older = _group(84, "LIVE | NHL (Thur)", streams=15)
+    preferred = _group(85, "LIVE | NHL (Fri)", streams=15)
+    with get_db() as conn:
+        create_group(conn, name="Already taken", leagues=[], m3u_group_id=taken.id)
+    foreign_stream = _stream(3, "nhl: E vs F")
+    foreign_stream.m3u_account_id = 99
+    now = NOW + timedelta(days=2)
+    result, _, _ = _scan(
+        [taken, no_games, wrong_account, older, preferred],
+        {
+            82: [_stream(2, "NHL News")],
+            83: [foreign_stream],
+            84: [_stream(4, "nhl: A vs C")],
+            85: [_stream(5, "nhl: B vs D")],
+        },
+        now=now,
+    )
+    assert result.sources_rebound == 1 and result.sources_auto_added == 0
+    current = _by_name(now)[preferred.name]
+    assert (current.id, current.source_group_id) == (candidate.id, source_id)
+    with get_db() as conn:
+        source = conn.execute(
+            "SELECT name, leagues, m3u_group_id, m3u_group_name, source_missing "
+            "FROM event_epg_groups WHERE id = ?",
+            (source_id,),
+        ).fetchone()
+    assert tuple(source) == ("My NHL", '["nhl"]', preferred.id, preferred.name, 0)
+
+
+@pytest.mark.parametrize("managed, old_id_live", [(False, False), (True, True)])
+def test_rotation_leaves_manual_sources_and_live_bindings_alone(db, managed, old_id_live):
+    wed, thu = _group(71, "LIVE | NHL (Wed)"), _group(72, "LIVE | NHL (Thur)")
+    with get_db() as conn:
+        source_id = create_group(
+            conn, name="My NHL", leagues=[], m3u_group_id=wed.id, m3u_group_name=wed.name
+        )
+        conn.execute("UPDATE event_epg_groups SET managed = ? WHERE id = ?", (managed, source_id))
+    groups = [wed, thu] if old_id_live else [thu]
+    result, _, _ = _scan(groups, {thu.id: [_stream(1, "nhl: A vs B")]})
+    assert result.sources_rebound == 0
+    with get_db() as conn:
+        assert (
+            conn.execute(
+                "SELECT m3u_group_id FROM event_epg_groups WHERE id = ?", (source_id,)
+            ).fetchone()[0]
+            == wed.id
+        )
+
+
+def test_dismissing_rotating_group_on_one_account_does_not_block_another_accounts_rebind(db):
+    def _acct_stream(stream_id: int, name: str, account_id: int):
+        s = _stream(stream_id, name)
+        s.m3u_account_id = account_id
+        return s
+
+    wed_a1, wed_a2 = _group(71, "LIVE | NHL (Wed)"), _group(72, "LIVE | NHL (Wed)")
+    _scan(
+        [wed_a1, wed_a2],
+        {
+            71: [_acct_stream(1, "nhl: A vs B", account_id=1)],
+            72: [_acct_stream(2, "nhl: A vs B", account_id=2)],
+        },
+    )
+    with get_db() as conn:
+        cands = {c.m3u_group_id: c for c in get_candidates(conn, NOW, EVIDENCE_WINDOW_DAYS)}
+        # Dismiss Account 2's copy; accept Account 1's copy as a managed source.
+        set_candidate_status(conn, cands[72].id, "dismissed")
+        visible = get_candidates(conn, NOW, EVIDENCE_WINDOW_DAYS, status="new")
+        assert [c.m3u_group_id for c in visible] == [71]
+        source_id = accept_candidate(conn, cands[71])
+
+    # Account 1's candidate must not be hidden by Account 2's dismissal, and
+    # when both rotate to Thursday, Account 1's managed source still rebinds
+    # while Account 2's rotation stays dismissed.
+    thu_a1, thu_a2 = _group(81, "LIVE | NHL (Thur)"), _group(82, "LIVE | NHL (Thur)")
+    later = NOW + timedelta(days=1)
+    result, _, _ = _scan(
+        [thu_a1, thu_a2],
+        {
+            81: [_acct_stream(3, "nhl: C vs D", account_id=1)],
+            82: [_acct_stream(4, "nhl: C vs D", account_id=2)],
+        },
+        now=later,
+    )
+    assert result.sources_rebound == 1
+    with get_db() as conn:
+        bound_id = conn.execute(
+            "SELECT m3u_group_id FROM event_epg_groups WHERE id = ?", (source_id,)
+        ).fetchone()[0]
+        all_cands = get_candidates(conn, later, EVIDENCE_WINDOW_DAYS)
+    assert bound_id == thu_a1.id
+    assert {(c.m3u_group_id, c.status) for c in all_cands} == {
+        (thu_a1.id, "accepted"),
+        (wed_a2.id, "dismissed"),
+    }
 
 
 def test_a_sport_toggle_covers_every_league_of_the_sport(db):

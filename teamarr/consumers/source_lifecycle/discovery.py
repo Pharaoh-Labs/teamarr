@@ -31,8 +31,7 @@ import logging
 import re
 import threading
 import time
-import unicodedata
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
@@ -56,13 +55,17 @@ from teamarr.database.source_candidates import (
     account_key,
     dismiss_group,
     dismissed_groups,
+    dismissed_rotation_keys,
     forget_removed_source,
     get_candidates,
+    move_accepted_candidate,
     record_scan,
+    rotation_rank,
     set_candidate_status,
     upsert_accepted_candidate,
 )
 from teamarr.utilities.logging import quiet_debug
+from teamarr.utilities.m3u_group_identity import name_key, rotating_group_key
 from teamarr.utilities.tz import now_utc, parse_db_timestamp, to_db_utc
 
 from .policy import SourceLifecyclePolicy, load_policy
@@ -108,12 +111,6 @@ TIER_NAME_ONLY = "name_only"
 _REPLAY_WORD = re.compile(r"\breplays?\b", re.IGNORECASE)
 
 
-def _name_key(text: str) -> str:
-    """Lower-case ASCII words, for whole-word comparison of names."""
-    folded = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
-    return re.sub(r"[^a-z0-9+]+", " ", folded).strip()
-
-
 def league_name_surfaces(conn: Connection, leagues: list[str]) -> dict[str, set[str]]:
     """The names a group could call each league by, as ``{name: {league codes}}``.
 
@@ -131,13 +128,13 @@ def league_name_surfaces(conn: Connection, leagues: list[str]) -> dict[str, set[
             continue
         seen.add(code)
         for name in (row["display_name"], row["league_alias"]):
-            key = _name_key(name or "")
+            key = name_key(name or "")
             if len(key) >= 2:
                 surfaces.setdefault(key, set()).add(code)
     for row in conn.execute("SELECT league_slug, league_name FROM league_cache").fetchall():
         code = (row["league_slug"] or "").lower()
         if code in wanted and code not in seen:
-            key = _name_key(row["league_name"] or "")
+            key = name_key(row["league_name"] or "")
             if len(key) >= 2:
                 surfaces.setdefault(key, set()).add(code)
     return surfaces
@@ -145,7 +142,7 @@ def league_name_surfaces(conn: Connection, leagues: list[str]) -> dict[str, set[
 
 def leagues_named_by(group_name: str, surfaces: dict[str, set[str]]) -> list[str]:
     """Subscribed leagues a group name mentions, as whole words."""
-    padded = f" {_name_key(group_name)} "
+    padded = f" {rotating_group_key(group_name) or name_key(group_name)} "
     found: set[str] = set()
     for surface, codes in surfaces.items():
         if f" {surface} " in padded:
@@ -246,6 +243,7 @@ class ScanSummary:
     sources_removed: int = 0
     sources_readded: int = 0
     sources_auto_added: int = 0
+    sources_rebound: int = 0
     skipped_replay: int = 0
     streams_matched_against: int = 0
     errors: int = 0
@@ -434,11 +432,15 @@ class SourceDiscovery:
         started = now_utc()
         summary = ScanSummary()
         live_groups = self._m3u.list_groups()
+        live_ids = {g.id for g in live_groups}
         summary.groups_total = len(live_groups)
 
         with self._db_factory() as conn:
             taken = self._taken_accounts(conn)
             dismissed, dismissed_names = dismissed_groups(conn)
+            dismissed_rotations = dismissed_rotation_keys(conn)
+            dismissed_rot_names = {k for k, _ in dismissed_rotations}
+            missing_managed_keys = _missing_managed_rotation_keys(conn, live_ids)
             leagues = self._processor._get_subscription_leagues(conn, None)
             surfaces = league_name_surfaces(conn, leagues)
 
@@ -456,12 +458,34 @@ class SourceDiscovery:
         todo = []
         for group in live_groups:
             name = (group.name or "").strip().lower()
+            rot_key = rotating_group_key(group.name or "")
+            group_accounts = _group_account_ids(group)
             sourced = taken.get(group.id, set())
             said_no = dismissed_by_group.get(group.id, set())
-            said_no_by_name = dismissed_by_name.get(name, set()) - said_no
+            said_no_by_name = (
+                (dismissed_by_name.get(name, set()) - said_no) if rot_key is None else set()
+            )
             decided = {account_key(a) for a in sourced} | said_no | said_no_by_name
             if None in sourced:
                 summary.skipped_sources += 1
+            elif rot_key is not None and (
+                (
+                    all(
+                        (rot_key, acc) in dismissed_rotations
+                        or (rot_key, 0) in dismissed_rotations
+                        for acc in group_accounts
+                    )
+                    and not (set(group_accounts) & {account_key(a) for a in sourced})
+                )
+                if group_accounts
+                else (
+                    not sourced
+                    and not said_no
+                    and rot_key not in missing_managed_keys
+                    and rot_key in dismissed_rot_names
+                )
+            ):
+                summary.skipped_dismissed += 1
             elif decided and self._nothing_new(group, decided):
                 if sourced:
                     summary.skipped_sources += 1
@@ -475,6 +499,7 @@ class SourceDiscovery:
 
         def unwanted(group: Any) -> Callable[[int], bool]:
             name = (group.name or "").strip().lower()
+            rot_key = rotating_group_key(group.name or "")
             sourced = taken.get(group.id, set())
 
             def skip(account: int) -> bool:
@@ -483,7 +508,14 @@ class SourceDiscovery:
                 if (group.id, account) in dismissed:
                     summary.skipped_dismissed += 1
                     return True
-                if (name, account) in dismissed_names:
+                if rot_key is not None:
+                    if (rot_key, account) in dismissed_rotations or (
+                        rot_key,
+                        0,
+                    ) in dismissed_rotations:
+                        summary.skipped_dismissed += 1
+                        return True
+                elif (name, account) in dismissed_names:
                     renamed.append((group, account))
                     summary.skipped_dismissed += 1
                     return True
@@ -531,16 +563,22 @@ class SourceDiscovery:
         with self._db_factory() as conn:
             for group, account in renamed:
                 dismiss_group(conn, group.id, group.name, account or None)
-            record_scan(conn, found, now)
-            readd_approved_sources(conn, now, summary, account_names=account_names)
-            auto_add_sources(conn, now, summary, account_names=account_names)
-            maintain_managed_sources(
-                conn,
-                now,
-                {g.id for g in live_groups},
-                {(e.m3u_group_id, account_key(e.m3u_account_id)): e for e in found},
-                summary,
+            rebind_rotating_sources(conn, now, live_ids, found, summary)
+            scanned_ids = record_scan(conn, found, now)
+            readd_approved_sources(
+                conn, now, summary, scanned_ids, account_names=account_names
             )
+            auto_add_sources(
+                conn, now, summary, scanned_ids, account_names=account_names
+            )
+            if live_ids:
+                maintain_managed_sources(
+                    conn,
+                    now,
+                    live_ids,
+                    {(e.m3u_group_id, account_key(e.m3u_account_id)): e for e in found},
+                    summary,
+                )
 
         summary.duration_seconds = round((now_utc() - started).total_seconds(), 1)
         logger.info(
@@ -690,6 +728,7 @@ def auto_add_sources(
     conn: Connection,
     now: datetime,
     summary: ScanSummary,
+    scanned_ids: set[int] | None = None,
     *,
     account_names: dict[int, str] | None = None,
 ) -> None:
@@ -706,6 +745,8 @@ def auto_add_sources(
     max_streams = load_policy(conn).auto_max_streams
     stamp = to_db_utc(now)
     for candidate in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="new"):
+        if scanned_ids is not None and candidate.m3u_group_id not in scanned_ids:
+            continue
         if auto_add_decision(candidate, toggled, max_streams) is None:
             accept_candidate(conn, candidate, auto_added_at=stamp, account_names=account_names)
             summary.sources_auto_added += 1
@@ -715,6 +756,7 @@ def readd_approved_sources(
     conn: Connection,
     now: datetime,
     summary: ScanSummary,
+    scanned_ids: set[int] | None = None,
     *,
     account_names: dict[int, str] | None = None,
 ) -> None:
@@ -725,11 +767,87 @@ def readd_approved_sources(
     ``accepted``, just without a source, and qualifying evidence re-creates it.
     """
     for candidate in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="accepted"):
-        if candidate.source_group_id is not None:
+        if candidate.source_group_id is not None or (
+            scanned_ids is not None and candidate.m3u_group_id not in scanned_ids
+        ):
             continue
         if suggestion_tier(candidate) in (TIER_GAMES, TIER_TEAMS):
             accept_candidate(conn, candidate, account_names=account_names)
             summary.sources_readded += 1
+
+
+def rebind_rotating_sources(
+    conn: Connection,
+    now: datetime,
+    live_ids: set[int],
+    evidence: list[ScanEvidence],
+    summary: ScanSummary,
+) -> None:
+    """Follow a rotating group only after the bound ID disappears."""
+    by_key: dict[str, list[ScanEvidence]] = defaultdict(list)
+    for ev in evidence:
+        key = rotating_group_key(ev.m3u_group_name)
+        if key and not ev.replay:
+            by_key[key].append(ev)
+    if not by_key:
+        return
+
+    sources = [s for s in get_all_groups(conn, include_disabled=True) if not s.is_channel_source]
+    taken = {(s.m3u_group_id, s.m3u_account_id) for s in sources}
+    accepted = {
+        row["source_group_id"]: row
+        for row in conn.execute(
+            "SELECT id, source_group_id, m3u_group_name FROM source_candidates "
+            "WHERE status = 'accepted' AND source_group_id IS NOT NULL"
+        )
+    }
+    for source in sorted(sources, key=lambda s: (not s.enabled, s.id)):
+        if not source.managed or source.m3u_group_id is None or source.m3u_group_id in live_ids:
+            continue
+        candidate = accepted.get(source.id)
+        name = source.m3u_group_name or (candidate["m3u_group_name"] if candidate else "")
+        key = rotating_group_key(name)
+        if not key:
+            continue
+        replacement = max(
+            (
+                ev
+                for ev in by_key.get(key, [])
+                if (ev.m3u_group_id, ev.m3u_account_id) not in taken
+                and (ev.m3u_group_id, None) not in taken
+                and (not source.m3u_account_id or source.m3u_account_id == ev.m3u_account_id)
+            ),
+            key=rotation_rank,
+            default=None,
+        )
+        if replacement is None:
+            continue
+        if candidate and not move_accepted_candidate(conn, candidate["id"], replacement):
+            continue
+        conn.execute(
+            "UPDATE event_epg_groups SET m3u_group_id = ?, m3u_group_name = ?, "
+            "source_missing = 0, source_last_seen = ? WHERE id = ?",
+            (replacement.m3u_group_id, replacement.m3u_group_name, to_db_utc(now), source.id),
+        )
+        if not candidate:
+            # Older sources may lack a linked candidate. Give them one so the
+            # same scan cannot offer their new binding as another source.
+            upsert_accepted_candidate(
+                conn,
+                m3u_group_id=replacement.m3u_group_id,
+                m3u_group_name=replacement.m3u_group_name,
+                m3u_account_id=replacement.m3u_account_id,
+                name_leagues=replacement.name_leagues,
+                source_group_id=source.id,
+            )
+        taken.add((replacement.m3u_group_id, replacement.m3u_account_id))
+        summary.sources_rebound += 1
+        logger.info(
+            "[DISCOVERY] Rebound source %r from group %d to %d",
+            source.name,
+            source.m3u_group_id,
+            replacement.m3u_group_id,
+        )
 
 
 def _age_days(stamp: str | None, now: datetime) -> float | None:
@@ -830,6 +948,44 @@ def _evidence_for(
         return evidence.get((source.m3u_group_id, source.m3u_account_id))
     halves = [e for (group_id, _), e in evidence.items() if group_id == source.m3u_group_id]
     return max(halves, key=lambda e: (e.game_matches, e.team_only_matches), default=None)
+
+
+def _missing_managed_rotation_keys(conn: Connection, live_ids: set[int]) -> set[str]:
+    """Rotating keys of managed sources whose bound group ID is currently absent."""
+    accepted_names = {
+        row["source_group_id"]: row["m3u_group_name"]
+        for row in conn.execute(
+            "SELECT source_group_id, m3u_group_name FROM source_candidates "
+            "WHERE status = 'accepted' AND source_group_id IS NOT NULL"
+        )
+    }
+    keys: set[str] = set()
+    for source in get_all_groups(conn, include_disabled=True):
+        if (
+            source.is_channel_source
+            or not source.managed
+            or source.m3u_group_id is None
+            or source.m3u_group_id in live_ids
+        ):
+            continue
+        name = source.m3u_group_name or accepted_names.get(source.id, "")
+        if key := rotating_group_key(name):
+            keys.add(key)
+    return keys
+
+
+def _group_account_ids(group: Any) -> tuple[int, ...]:
+    """M3U account ids reported on a group listing, or empty when unavailable."""
+    accounts = getattr(group, "m3u_accounts", None) or []
+    ids: set[int] = set()
+    for acc in accounts:
+        if isinstance(acc, int) and not isinstance(acc, bool):
+            ids.add(acc)
+        elif isinstance(acc, dict):
+            acc_id = acc.get("m3u_account") or acc.get("account_id") or acc.get("id")
+            if isinstance(acc_id, int) and not isinstance(acc_id, bool):
+                ids.add(acc_id)
+    return tuple(sorted(ids))
 
 
 def _stream_count(group: Any) -> int | None:
