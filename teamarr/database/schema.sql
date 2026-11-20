@@ -1505,6 +1505,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('bbl', 'espn', 'cricket/8044', NULL, 'Big Bash League', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/8044.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('sa20', 'espn', 'cricket/21275', NULL, 'South Africa Twenty20', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/21275.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('mlc', 'espn', 'cricket/21266', NULL, 'Major League Cricket', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/21266.png', NULL, 1, 'MLC', 'mlc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('cpl', 'espn', 'cricket/8623', NULL, 'Caribbean Premier League', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/8623.png', NULL, 1, 'CPL', 'cpl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Rugby (ESPN)
     ('rwc',   'espn', 'rugby/164205',    NULL, 'Rugby World Cup',                 'rugby', 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Rugby_World_Cup_Logo%2C_used_post_RWC_2023.svg', NULL, 1, 'RWC',   'rwc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
