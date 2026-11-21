@@ -1,5 +1,5 @@
 {
-  "_source": "ESPN scoreboard?season=2026 (SA20 season=2027), captured 2026-10-14. Fields trimmed; one event per series, full team IDs/names.",
+  "_source": "ESPN scoreboard?season=2026 (SA20 season=2027), captured 2026-10-14; cpl captured 2026-11-20. Fields trimmed; one event per series, full team IDs/names.",
   "mlc": {
     "leagues": [{"id": "21266", "links": [{"href": "https://www.espn.com/cricket/series/_/id/21266/season/2026/major-league-cricket"}]}],
     "teams": [
@@ -94,6 +94,30 @@
         "competitors": [
           {"homeAway": "home", "score": "", "team": {"id": "1335273", "displayName": "Sunrisers Eastern Cape", "abbreviation": "SEC"}},
           {"homeAway": "away", "score": "", "team": {"id": "1335271", "displayName": "Pretoria Capitals", "abbreviation": "PC"}}
+        ]
+      }]
+    }]
+  },
+  "cpl": {
+    "leagues": [{"id": "8623", "links": [{"href": "https://www.espn.com/cricket/series/_/id/8623/season/2026/caribbean-premier-league"}]}],
+    "teams": [
+      {"id": "1428675", "name": "Antigua and Barbuda Falcons", "abbreviation": "ABF"},
+      {"id": "642411", "name": "Barbados Tridents", "abbreviation": "BT"},
+      {"id": "642413", "name": "Guyana Amazon Warriors", "abbreviation": "GAW"},
+      {"id": "1534178", "name": "Jamaica Kingsmen", "abbreviation": "JAK"},
+      {"id": "857687", "name": "St Kitts and Nevis Patriots", "abbreviation": "STKNP"},
+      {"id": "642417", "name": "St Lucia Kings", "abbreviation": "SLK"},
+      {"id": "642421", "name": "Trinbago Knight Riders", "abbreviation": "TKR"}
+    ],
+    "events": [{
+      "id": "1534179", "name": "Antigua and Barbuda Falcons v Jamaica Kingsmen", "shortName": "ABF v JAK", "date": "2026-08-07T23:00Z",
+      "competitions": [{
+        "id": "1534179", "date": "2026-08-07T23:00Z", "description": "1st Match",
+        "class": {"generalClassCard": "Twenty20"},
+        "status": {"summary": "Starts at 19:00 local time", "type": {"description": "Scheduled", "state": "pre"}},
+        "competitors": [
+          {"homeAway": "home", "score": "", "team": {"id": "1428675", "displayName": "Antigua and Barbuda Falcons", "abbreviation": "ABF"}},
+          {"homeAway": "away", "score": "", "team": {"id": "1534178", "displayName": "Jamaica Kingsmen", "abbreviation": "JAK"}}
         ]
       }]
     }]
