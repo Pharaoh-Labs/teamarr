@@ -151,6 +151,12 @@ class TestBatchBDateAndColonExtraction:
         assert classified.normalized.extracted_date == date(2026, 11, 21)
         assert classified.team2 == "TORONTO MARLIES"
 
+    def test_day_first_date_before_two_digit_year_keeps_the_day(self):
+        classified = classify_stream("CHICAGO WOLVES VS TORONTO MARLIES 21 Nov 26 7:30PM ET")
+        extracted = classified.normalized.extracted_date
+        assert extracted is not None
+        assert (extracted.month, extracted.day) == (11, 21)
+
     @pytest.mark.parametrize(
         ("stream_name", "expected_t1", "expected_t2"),
         [
