@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS teams (
     active BOOLEAN DEFAULT 1,
     managed_channel_enabled BOOLEAN NOT NULL DEFAULT 0,
     managed_channel_number INTEGER,
-    managed_channel_lifecycle TEXT,          -- NULL = inherit the global setting (#904)
+    managed_channel_lifecycle TEXT,          -- NULL = inherit the global setting; 'persistent' | 'in_season' | 'game_days' (#904, #1206)
     managed_channel_record BOOLEAN NOT NULL DEFAULT 0,  -- (#729) Schedule a Dispatcharr recording for each of this team's games on its managed team channel
 
     -- One entry per team per league (ESPN reuses IDs across leagues for different teams)
@@ -383,7 +383,10 @@ CREATE TABLE IF NOT EXISTS settings (
     managed_team_channel_priority_ids JSON DEFAULT '[]',
     -- Team channel lifecycle (#904): 'persistent' keeps every managed team
     -- channel; 'game_days' creates it inside the event-channel lifecycle
-    -- window of a game and removes it after, keeping tvg-id and number.
+    -- window of a game and removes it after, keeping tvg-id and number;
+    -- 'in_season' (#1206) keeps it while the team has a game inside the
+    -- Team EPG look-ahead (team_schedule_days_ahead) and removes it when
+    -- it has none, keeping tvg-id and number the same way.
     managed_team_channel_lifecycle TEXT DEFAULT 'persistent',
 
     -- Default Team Filtering (for Event Groups)

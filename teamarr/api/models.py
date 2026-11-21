@@ -28,7 +28,7 @@ class TeamCreate(BaseModel):
     active: bool = True
     managed_channel_enabled: bool = False
     managed_channel_number: int | None = None
-    managed_channel_lifecycle: Literal["persistent", "game_days"] | None = None
+    managed_channel_lifecycle: Literal["persistent", "in_season", "game_days"] | None = None
 
 
 class TeamUpdate(BaseModel):
@@ -44,7 +44,7 @@ class TeamUpdate(BaseModel):
     active: bool | None = None
     managed_channel_enabled: bool | None = None
     managed_channel_number: int | None = None
-    managed_channel_lifecycle: Literal["persistent", "game_days"] | None = None
+    managed_channel_lifecycle: Literal["persistent", "in_season", "game_days"] | None = None
     # (#729) Record this team's games on its managed team channel
     managed_channel_record: bool | None = None
     primary_league: str | None = None
