@@ -68,9 +68,9 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
     # Map name -> live ids so a source recreated under a NEW id (same name) is
     # recognised as still present, not stale. Dispatcharr group names (e.g.
     # "USA | NCAA BASEBALL ⚾") are specific enough to identify the source.
-    ids_by_name: dict[str, list[int]] = {}
+    groups_by_name: dict[str, list[Any]] = {}
     for g in live_groups:
-        ids_by_name.setdefault(g.name, []).append(g.id)
+        groups_by_name.setdefault(g.name, []).append(g)
 
     try:
         live_accounts = conn_dc.m3u.list_accounts()
@@ -90,15 +90,14 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
               AND COALESCE(is_channel_source, 0) = 0
             """
         ).fetchall()
-        bound_group_ids = {
-            r[0]
-            for r in conn.execute(
-                """
-                SELECT m3u_group_id FROM event_epg_groups
-                WHERE m3u_group_id IS NOT NULL AND COALESCE(is_channel_source, 0) = 0
-                """
-            ).fetchall()
-        }
+        bound_accounts: dict[int, dict[int, int]] = {}
+        for group_id, source_id, account_id in conn.execute(
+            """
+            SELECT m3u_group_id, id, m3u_account_id FROM event_epg_groups
+            WHERE m3u_group_id IS NOT NULL AND COALESCE(is_channel_source, 0) = 0
+            """
+        ):
+            bound_accounts.setdefault(group_id, {})[source_id] = account_key(account_id)
         dismissed_ids, _ = dismissed_groups(conn)
         accepted_candidates = {
             r["source_group_id"]: r["id"]
@@ -109,6 +108,45 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                 """
             ).fetchall()
         }
+
+        def can_rebind(group: Any, acc_key: int) -> bool:
+            # An unscoped source reads all accounts; scoped sources can share a group.
+            taken = bound_accounts.get(group.id, {}).values()
+            if 0 in taken or acc_key in taken or (acc_key == 0 and taken):
+                return False
+            if (group.id, acc_key) in dismissed_ids or (group.id, 0) in dismissed_ids:
+                return False
+            accounts = _group_account_ids(group)
+            return not acc_key or not accounts or acc_key in accounts
+
+        def rebind(row: Any, group: Any, acc_id: int | None) -> bool:
+            candidate_id = accepted_candidates.get(row["id"])
+            if candidate_id is not None and not move_accepted_candidate(
+                conn,
+                candidate_id,
+                ScanEvidence(
+                    m3u_group_id=group.id,
+                    m3u_group_name=group.name,
+                    m3u_account_id=acc_id,
+                ),
+            ):
+                return False
+            conn.execute(
+                "UPDATE event_epg_groups SET m3u_group_id = ?, m3u_group_name = ? WHERE id = ?",
+                (group.id, group.name, row["id"]),
+            )
+            mark_group_source_seen(conn, row["id"])
+            bound_accounts[row["m3u_group_id"]].pop(row["id"])
+            bound_accounts.setdefault(group.id, {})[row["id"]] = account_key(acc_id)
+            logger.info(
+                "[STALE_GROUPS] Healed '%s' source %s (%r) -> %s (%r)",
+                row["name"],
+                row["m3u_group_id"],
+                row["m3u_group_name"],
+                group.id,
+                group.name,
+            )
+            return True
 
         for row in rows:
             source_acc_id = row["m3u_account_id"]
@@ -137,86 +175,37 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                         target_acc_id,
                     )
                     source_acc_id = target_acc_id
+                    bound_accounts[row["m3u_group_id"]][row["id"]] = account_key(target_acc_id)
 
             if row["m3u_group_id"] in existing_ids:
                 mark_group_source_seen(conn, row["id"])
                 continue
             # Source id is gone, but a same-named group may exist under a new id
             # (deleted + recreated) — that's not stale. Self-heal the stored id
-            # when the name maps to exactly one live group.
-            name_ids = ids_by_name.get(row["m3u_group_name"] or "")
-            if name_ids:
-                if len(name_ids) == 1:
-                    new_id = name_ids[0]
-                    candidate_id = accepted_candidates.get(row["id"])
-                    if candidate_id is not None:
-                        move_accepted_candidate(
-                            conn,
-                            candidate_id,
-                            ScanEvidence(
-                                m3u_group_id=new_id,
-                                m3u_group_name=row["m3u_group_name"] or row["name"],
-                                m3u_account_id=source_acc_id,
-                            ),
-                        )
-                    conn.execute(
-                        "UPDATE event_epg_groups SET m3u_group_id = ? WHERE id = ?",
-                        (new_id, row["id"]),
-                    )
-                    bound_group_ids.add(new_id)
-                    logger.info(
-                        "[STALE_GROUPS] Healed '%s' source id %s -> %s (recreated under new id)",
-                        row["name"],
-                        row["m3u_group_id"],
-                        new_id,
-                    )
-                mark_group_source_seen(conn, row["id"])
+            # when the name maps to exactly one eligible live group.
+            acc_key = account_key(source_acc_id)
+            same_name = groups_by_name.get(row["m3u_group_name"] or "")
+            if same_name:
+                if len(same_name) == 1:
+                    new_group = same_name[0]
+                    if not can_rebind(new_group, acc_key) or not rebind(
+                        row, new_group, source_acc_id
+                    ):
+                        mark_group_source_missing(conn, row["id"])
+                else:
+                    mark_group_source_seen(conn, row["id"])
                 continue
 
             rot_key = rotating_group_key(row["m3u_group_name"] or "")
             if rot_key is not None:
-                acc_key = account_key(source_acc_id)
                 rot_candidates = [
                     g
                     for g in live_groups
                     if rotating_group_key(g.name or "") == rot_key
-                    and g.id not in bound_group_ids
-                    and (g.id, acc_key) not in dismissed_ids
-                    and (g.id, 0) not in dismissed_ids
-                    and (
-                        not source_acc_id
-                        or not (g_accs := _group_account_ids(g))
-                        or source_acc_id in g_accs
-                    )
+                    and can_rebind(g, acc_key)
                 ]
-                if len(rot_candidates) == 1:
-                    new_group = rot_candidates[0]
-                    candidate_id = accepted_candidates.get(row["id"])
-                    if candidate_id is None or move_accepted_candidate(
-                        conn,
-                        candidate_id,
-                        ScanEvidence(
-                            m3u_group_id=new_group.id,
-                            m3u_group_name=new_group.name,
-                            m3u_account_id=source_acc_id,
-                        ),
-                    ):
-                        conn.execute(
-                            "UPDATE event_epg_groups SET m3u_group_id = ?, m3u_group_name = ? "
-                            "WHERE id = ?",
-                            (new_group.id, new_group.name, row["id"]),
-                        )
-                        mark_group_source_seen(conn, row["id"])
-                        bound_group_ids.add(new_group.id)
-                        logger.info(
-                            "[STALE_GROUPS] Healed '%s' rotating source %s (%r) -> %s (%r)",
-                            row["name"],
-                            row["m3u_group_id"],
-                            row["m3u_group_name"],
-                            new_group.id,
-                            new_group.name,
-                        )
-                        continue
+                if len(rot_candidates) == 1 and rebind(row, rot_candidates[0], source_acc_id):
+                    continue
 
             mark_group_source_missing(conn, row["id"])
 

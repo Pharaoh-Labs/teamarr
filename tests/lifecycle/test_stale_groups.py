@@ -31,12 +31,21 @@ def _factory(conn: sqlite3.Connection):
     return factory
 
 
-def _add_group(conn, name, m3u_group_id, *, enabled=1, is_channel_source=0, m3u_group_name=None):
+def _add_group(
+    conn,
+    name,
+    m3u_group_id,
+    *,
+    enabled=1,
+    is_channel_source=0,
+    m3u_group_name=None,
+    m3u_account_id=None,
+):
     conn.execute(
         "INSERT INTO event_epg_groups "
-        "(name, leagues, m3u_group_id, m3u_group_name, enabled, is_channel_source) "
-        "VALUES (?, '[]', ?, ?, ?, ?)",
-        (name, m3u_group_id, m3u_group_name, enabled, is_channel_source),
+        "(name, leagues, m3u_group_id, m3u_group_name, enabled, is_channel_source, m3u_account_id) "
+        "VALUES (?, '[]', ?, ?, ?, ?, ?)",
+        (name, m3u_group_id, m3u_group_name, enabled, is_channel_source, m3u_account_id),
     )
     conn.commit()
 
@@ -50,7 +59,9 @@ def _patch_dispatcharr(monkeypatch, groups):
 
     def mk(item):
         if isinstance(item, tuple):
-            return SimpleNamespace(id=item[0], name=item[1])
+            return SimpleNamespace(
+                id=item[0], name=item[1], m3u_accounts=item[2] if len(item) > 2 else []
+            )
         return SimpleNamespace(id=item, name=f"live-{item}")
 
     fake = SimpleNamespace(m3u=SimpleNamespace(list_groups=lambda: [mk(i) for i in groups]))
@@ -219,6 +230,50 @@ def test_rotating_group_healing_respects_bound_dismissed_and_account(monkeypatch
         74,
         "LIVE | NHL (Sat)",
     )
+
+
+def test_two_accounts_can_heal_to_the_same_live_rotation(monkeypatch):
+    conn = _db()
+    _add_group(conn, "NHL A", 71, m3u_group_name="LIVE | NHL (Wed)", m3u_account_id=1)
+    _add_group(conn, "NHL B", 71, m3u_group_name="LIVE | NHL (Wed)", m3u_account_id=2)
+    conn.execute(
+        "INSERT INTO source_candidates "
+        "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
+        "SELECT m3u_group_id, m3u_group_name, m3u_account_id, 'accepted', id "
+        "FROM event_epg_groups"
+    )
+    conn.commit()
+    _patch_dispatcharr(monkeypatch, [(72, "LIVE | NHL (Thu)", [1, 2])])
+
+    assert detect_stale_groups(_factory(conn)) == []
+    rows = conn.execute(
+        "SELECT g.m3u_account_id, g.m3u_group_id, c.m3u_group_id, g.source_missing "
+        "FROM event_epg_groups g JOIN source_candidates c ON c.source_group_id = g.id "
+        "ORDER BY g.m3u_account_id"
+    ).fetchall()
+    assert [tuple(row) for row in rows] == [(1, 72, 72, 0), (2, 72, 72, 0)]
+
+
+def test_exact_name_heal_keeps_source_and_candidate_in_sync_on_conflict(monkeypatch):
+    conn = _db()
+    _add_group(conn, "Missing", 71, m3u_group_name="NHL", m3u_account_id=1)
+    _add_group(conn, "Other", 73, m3u_group_name="Other", m3u_account_id=1)
+    conn.execute(
+        "INSERT INTO source_candidates "
+        "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
+        "SELECT CASE WHEN name = 'Missing' THEN 71 ELSE 72 END, 'NHL', 1, 'accepted', id "
+        "FROM event_epg_groups"
+    )
+    conn.commit()
+    _patch_dispatcharr(monkeypatch, [(72, "NHL", [1]), (73, "Other", [1])])
+
+    assert [row["name"] for row in detect_stale_groups(_factory(conn))] == ["Missing"]
+    rows = conn.execute(
+        "SELECT g.name, g.m3u_group_id, c.m3u_group_id "
+        "FROM event_epg_groups g JOIN source_candidates c ON c.source_group_id = g.id "
+        "ORDER BY g.name"
+    ).fetchall()
+    assert [tuple(row) for row in rows] == [("Missing", 71, 71), ("Other", 73, 72)]
 
 
 def test_ambiguous_name_not_healed_but_not_stale(monkeypatch):
