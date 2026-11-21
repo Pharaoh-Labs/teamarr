@@ -1346,6 +1346,81 @@ def test_dismissing_rotating_group_on_one_account_does_not_block_another_account
     }
 
 
+def test_rebind_rotating_sources_iterates_past_blocked_replacement_and_requires_account_match(db):
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, rebind_rotating_sources
+
+    with get_db() as conn:
+        # Source 1 bound to account 4 on group 71; Source 2 unbound (account_id=None) on group 72
+        s1 = create_group(
+            conn,
+            name="Acc4 NHL",
+            leagues=[],
+            m3u_group_id=71,
+            m3u_group_name="LIVE | NHL (Wed)",
+            m3u_account_id=4,
+        )
+        s2 = create_group(
+            conn,
+            name="Unbound NHL",
+            leagues=[],
+            m3u_group_id=72,
+            m3u_group_name="LIVE | NHL (Wed)",
+            m3u_account_id=None,
+        )
+        conn.execute("UPDATE event_epg_groups SET managed = 1 WHERE id IN (?, ?)", (s1, s2))
+        conn.execute(
+            "INSERT INTO source_candidates "
+            "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
+            "VALUES (71, 'LIVE | NHL (Wed)', 4, 'accepted', ?), "
+            "       (72, 'LIVE | NHL (Wed)', 0, 'accepted', ?), "
+            "       (90, 'LIVE | NHL (Fri)', 4, 'dismissed', NULL)",
+            (s1, s2),
+        )
+
+        # Group 90 has higher rank than Group 85, but is dismissed for account 4.
+        # Group 85 is valid for account 4.
+        # Unbound source s2 (account_id=None) should NOT rebind to account-4 evidence (group 86).
+        evidence = [
+            ScanEvidence(
+                m3u_group_id=90,
+                m3u_group_name="LIVE | NHL (Fri)",
+                m3u_account_id=4,
+                stream_count=50,
+                game_matches=5,
+            ),
+            ScanEvidence(
+                m3u_group_id=85,
+                m3u_group_name="LIVE | NHL (Thu)",
+                m3u_account_id=4,
+                stream_count=20,
+                game_matches=3,
+            ),
+            ScanEvidence(
+                m3u_group_id=86,
+                m3u_group_name="LIVE | NHL (Sat)",
+                m3u_account_id=4,
+                stream_count=10,
+                game_matches=2,
+            ),
+        ]
+        summary = ScanSummary()
+        rebind_rotating_sources(conn, NOW, live_ids=set(), evidence=evidence, summary=summary)
+        conn.commit()
+
+        s1_row = conn.execute(
+            "SELECT m3u_group_id, m3u_group_name, m3u_account_id "
+            "FROM event_epg_groups WHERE id = ?",
+            (s1,),
+        ).fetchone()
+        s2_row = conn.execute(
+            "SELECT m3u_group_id, m3u_account_id FROM event_epg_groups WHERE id = ?",
+            (s2,),
+        ).fetchone()
+    assert summary.sources_rebound == 1
+    assert tuple(s1_row) == (85, "LIVE | NHL (Thu)", 4)
+    assert tuple(s2_row) == (72, None)
+
+
 def test_a_sport_toggle_covers_every_league_of_the_sport(db):
     _toggle(sports=["football"])
     _two_days(

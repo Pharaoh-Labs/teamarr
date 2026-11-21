@@ -34,11 +34,19 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
     Returns:
         The current list of stale groups (``get_stale_groups``).
     """
+    from teamarr.consumers.source_lifecycle.discovery import _group_account_ids
     from teamarr.database.groups import (
         get_stale_groups,
         mark_group_source_missing,
         mark_group_source_seen,
     )
+    from teamarr.database.source_candidates import (
+        ScanEvidence,
+        account_key,
+        dismissed_groups,
+        move_accepted_candidate,
+    )
+    from teamarr.utilities.m3u_group_identity import rotating_group_key
 
     conn_dc = get_dispatcharr_connection(db_factory=db_factory)
     if conn_dc is None:
@@ -82,8 +90,29 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
               AND COALESCE(is_channel_source, 0) = 0
             """
         ).fetchall()
+        bound_group_ids = {
+            r[0]
+            for r in conn.execute(
+                """
+                SELECT m3u_group_id FROM event_epg_groups
+                WHERE m3u_group_id IS NOT NULL AND COALESCE(is_channel_source, 0) = 0
+                """
+            ).fetchall()
+        }
+        dismissed_ids, _ = dismissed_groups(conn)
+        accepted_candidates = {
+            r["source_group_id"]: r["id"]
+            for r in conn.execute(
+                """
+                SELECT id, source_group_id FROM source_candidates
+                WHERE status = 'accepted' AND source_group_id IS NOT NULL
+                """
+            ).fetchall()
+        }
+
         for row in rows:
-            account_name = account_names_by_id.get(row["m3u_account_id"])
+            source_acc_id = row["m3u_account_id"]
+            account_name = account_names_by_id.get(source_acc_id)
             if account_name and account_name != row["m3u_account_name"]:
                 conn.execute(
                     "UPDATE event_epg_groups SET m3u_account_name = ? WHERE id = ?",
@@ -91,9 +120,9 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                 )
             # Auto-heal stale m3u_account_id if account ID no longer exists but name matches
             if (
-                row["m3u_account_id"]
+                source_acc_id
                 and account_names_by_id
-                and row["m3u_account_id"] not in account_names_by_id
+                and source_acc_id not in account_names_by_id
             ):
                 target_acc_id = account_ids_by_name.get(row["m3u_account_name"] or "")
                 if target_acc_id:
@@ -104,9 +133,10 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                     logger.info(
                         "[STALE_GROUPS] Healed '%s' account id %s -> %s",
                         row["name"],
-                        row["m3u_account_id"],
+                        source_acc_id,
                         target_acc_id,
                     )
+                    source_acc_id = target_acc_id
 
             if row["m3u_group_id"] in existing_ids:
                 mark_group_source_seen(conn, row["id"])
@@ -117,19 +147,78 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
             name_ids = ids_by_name.get(row["m3u_group_name"] or "")
             if name_ids:
                 if len(name_ids) == 1:
+                    new_id = name_ids[0]
+                    candidate_id = accepted_candidates.get(row["id"])
+                    if candidate_id is not None:
+                        move_accepted_candidate(
+                            conn,
+                            candidate_id,
+                            ScanEvidence(
+                                m3u_group_id=new_id,
+                                m3u_group_name=row["m3u_group_name"] or row["name"],
+                                m3u_account_id=source_acc_id,
+                            ),
+                        )
                     conn.execute(
                         "UPDATE event_epg_groups SET m3u_group_id = ? WHERE id = ?",
-                        (name_ids[0], row["id"]),
+                        (new_id, row["id"]),
                     )
+                    bound_group_ids.add(new_id)
                     logger.info(
                         "[STALE_GROUPS] Healed '%s' source id %s -> %s (recreated under new id)",
                         row["name"],
                         row["m3u_group_id"],
-                        name_ids[0],
+                        new_id,
                     )
                 mark_group_source_seen(conn, row["id"])
-            else:
-                mark_group_source_missing(conn, row["id"])
+                continue
+
+            rot_key = rotating_group_key(row["m3u_group_name"] or "")
+            if rot_key is not None:
+                acc_key = account_key(source_acc_id)
+                rot_candidates = [
+                    g
+                    for g in live_groups
+                    if rotating_group_key(g.name or "") == rot_key
+                    and g.id not in bound_group_ids
+                    and (g.id, acc_key) not in dismissed_ids
+                    and (g.id, 0) not in dismissed_ids
+                    and (
+                        not source_acc_id
+                        or not (g_accs := _group_account_ids(g))
+                        or source_acc_id in g_accs
+                    )
+                ]
+                if len(rot_candidates) == 1:
+                    new_group = rot_candidates[0]
+                    candidate_id = accepted_candidates.get(row["id"])
+                    if candidate_id is None or move_accepted_candidate(
+                        conn,
+                        candidate_id,
+                        ScanEvidence(
+                            m3u_group_id=new_group.id,
+                            m3u_group_name=new_group.name,
+                            m3u_account_id=source_acc_id,
+                        ),
+                    ):
+                        conn.execute(
+                            "UPDATE event_epg_groups SET m3u_group_id = ?, m3u_group_name = ? "
+                            "WHERE id = ?",
+                            (new_group.id, new_group.name, row["id"]),
+                        )
+                        mark_group_source_seen(conn, row["id"])
+                        bound_group_ids.add(new_group.id)
+                        logger.info(
+                            "[STALE_GROUPS] Healed '%s' rotating source %s (%r) -> %s (%r)",
+                            row["name"],
+                            row["m3u_group_id"],
+                            row["m3u_group_name"],
+                            new_group.id,
+                            new_group.name,
+                        )
+                        continue
+
+            mark_group_source_missing(conn, row["id"])
 
         # Channel-source rows (#542) read a Dispatcharr channel group by id.
         # One whose group was deleted stays selected and keeps running under

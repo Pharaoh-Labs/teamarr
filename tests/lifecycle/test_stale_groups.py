@@ -123,6 +123,16 @@ def test_recreated_under_new_id_is_not_stale_and_heals(monkeypatch):
     """Source deleted + recreated (same name, new id) is NOT stale; id self-heals."""
     conn = _db()
     _add_group(conn, "Recreated", 99, m3u_group_name="USA | NCAA BASEBALL")
+    source_id = conn.execute(
+        "SELECT id FROM event_epg_groups WHERE name='Recreated'"
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT INTO source_candidates "
+        "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
+        "VALUES (99, 'USA | NCAA BASEBALL', 0, 'accepted', ?)",
+        (source_id,),
+    )
+    conn.commit()
     _patch_dispatcharr(monkeypatch, [(500, "USA | NCAA BASEBALL")])  # same name, new id
 
     assert detect_stale_groups(_factory(conn)) == []
@@ -131,6 +141,84 @@ def test_recreated_under_new_id_is_not_stale_and_heals(monkeypatch):
     ).fetchone()
     assert row["source_missing"] == 0
     assert row["m3u_group_id"] == 500  # healed to the live id
+    cand = conn.execute(
+        "SELECT m3u_group_id FROM source_candidates WHERE source_group_id = ?",
+        (source_id,),
+    ).fetchone()
+    assert cand["m3u_group_id"] == 500
+
+
+def test_rotating_group_healed_at_generation_time(monkeypatch):
+    """Rotating group name (e.g. Wed -> Thu) heals immediately without marking source_missing."""
+    conn = _db()
+    _add_group(conn, "NHL Source", 71, m3u_group_name="LIVE | NHL (Wed)")
+    source_id = conn.execute(
+        "SELECT id FROM event_epg_groups WHERE name='NHL Source'"
+    ).fetchone()[0]
+    conn.execute(
+        "INSERT INTO source_candidates "
+        "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
+        "VALUES (71, 'LIVE | NHL (Wed)', 0, 'accepted', ?)",
+        (source_id,),
+    )
+    conn.commit()
+    _patch_dispatcharr(monkeypatch, [(72, "LIVE | NHL (Thu)")])
+
+    assert detect_stale_groups(_factory(conn)) == []
+    row = conn.execute(
+        "SELECT source_missing, m3u_group_id, m3u_group_name, source_last_seen "
+        "FROM event_epg_groups WHERE id = ?",
+        (source_id,),
+    ).fetchone()
+    assert (row["source_missing"], row["m3u_group_id"], row["m3u_group_name"]) == (
+        0,
+        72,
+        "LIVE | NHL (Thu)",
+    )
+    assert row["source_last_seen"] is not None
+    cand = conn.execute(
+        "SELECT m3u_group_id, m3u_group_name FROM source_candidates WHERE source_group_id = ?",
+        (source_id,),
+    ).fetchone()
+    assert (cand["m3u_group_id"], cand["m3u_group_name"]) == (72, "LIVE | NHL (Thu)")
+
+
+def test_rotating_group_healing_respects_bound_dismissed_and_account(monkeypatch):
+    """Rotating heal skips bound groups, dismissed groups, and wrong-account groups."""
+    conn = _db()
+    _add_group(conn, "Taken NHL", 70, m3u_group_name="LIVE | NHL (Tue)")
+    conn.execute(
+        "INSERT INTO event_epg_groups "
+        "(name, leagues, m3u_group_id, m3u_group_name, m3u_account_id, enabled, is_channel_source) "
+        "VALUES ('Acc1 NHL', '[]', 71, 'LIVE | NHL (Wed)', 1, 1, 0)"
+    )
+    conn.execute(
+        "INSERT INTO source_candidates (m3u_group_id, m3u_group_name, m3u_account_id, status) "
+        "VALUES (72, 'LIVE | NHL (Thu)', 1, 'dismissed')"
+    )
+    conn.commit()
+
+    import teamarr.consumers.source_lifecycle.missing as reconciliation
+
+    groups = [
+        SimpleNamespace(id=70, name="LIVE | NHL (Tue)", m3u_accounts=[1]),  # already bound
+        SimpleNamespace(id=72, name="LIVE | NHL (Thu)", m3u_accounts=[1]),  # dismissed
+        SimpleNamespace(id=73, name="LIVE | NHL (Fri)", m3u_accounts=[2]),  # wrong account
+        SimpleNamespace(id=74, name="LIVE | NHL (Sat)", m3u_accounts=[1]),  # single valid match
+    ]
+    fake = SimpleNamespace(m3u=SimpleNamespace(list_groups=lambda: groups))
+    monkeypatch.setattr(reconciliation, "get_dispatcharr_connection", lambda db_factory=None: fake)
+
+    assert detect_stale_groups(_factory(conn)) == []
+    row = conn.execute(
+        "SELECT source_missing, m3u_group_id, m3u_group_name "
+        "FROM event_epg_groups WHERE name='Acc1 NHL'"
+    ).fetchone()
+    assert (row["source_missing"], row["m3u_group_id"], row["m3u_group_name"]) == (
+        0,
+        74,
+        "LIVE | NHL (Sat)",
+    )
 
 
 def test_ambiguous_name_not_healed_but_not_stale(monkeypatch):
