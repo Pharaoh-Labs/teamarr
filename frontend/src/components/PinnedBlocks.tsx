@@ -32,7 +32,11 @@ import {
   useSegmentCodes,
   useUpdateNumberingException,
 } from "@/hooks/useNumberingExceptions"
-import type { NumberingException, NumberingScope } from "@/api/numberingExceptions"
+import type {
+  NumberingChannelKind,
+  NumberingException,
+  NumberingScope,
+} from "@/api/numberingExceptions"
 import type { TeamFilterEntry } from "@/api/types"
 
 /**
@@ -48,8 +52,22 @@ import type { TeamFilterEntry } from "@/api/types"
  * channels go to (#950) — "NBA postseason at 900, in 09 TEAMARR {league}". It may
  * also be limited to session / card-segment codes and to one kind of channel
  * (main, driver feeds, other race feeds, one feed) — "F1 race and qualifying at
- * 1200" (#1018). Those controls sit under Advanced.
+ * 1200" (#1018) — and to event channels or managed team channels (#1224), so a
+ * league's games and its team channels can sit in two blocks. Those controls
+ * sit under Advanced.
  */
+
+// Channel kind condition (#1224): "" = both.
+const CHANNEL_KIND_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "All channels" },
+  { value: "event", label: "Event channels only" },
+  { value: "team", label: "Team channels only" },
+]
+
+const CHANNEL_KIND_TAG: Record<string, string> = {
+  event: "event channels",
+  team: "team channels",
+}
 
 const SEASON_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Any season" },
@@ -214,12 +232,13 @@ function raceOptionsFor(
   return null
 }
 
-/** Segments and keyword of a block as summary-row text. */
+/** Segments, keyword and channel kind of a block as summary-row text. */
 function BlockConditions({ b, feeds }: { b: NumberingException; feeds: RaceFeed[] }) {
   return (
     <>
       {b.segments && ` · segments: ${b.segments.join(", ")}`}
       {b.keyword && ` · keyword: ${keywordLabel(b.keyword, feeds)}`}
+      {b.channel_kind && ` · ${CHANNEL_KIND_TAG[b.channel_kind] ?? b.channel_kind}`}
     </>
   )
 }
@@ -340,6 +359,20 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
     }
   }
 
+  const onChannelKindChange = async (b: NumberingException, value: string) => {
+    try {
+      await update.mutateAsync({
+        id: b.id,
+        data: {
+          channel_kind: (value || null) as NumberingChannelKind | null,
+          set_channel_kind: true,
+        },
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update channel kind")
+    }
+  }
+
   const onKeywordChange = async (b: NumberingException, value: string) => {
     try {
       await update.mutateAsync({ id: b.id, data: { keyword: value || null, set_keyword: true } })
@@ -381,7 +414,8 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
               Priority Teams above. Blocks spill forward if they fill up. A block can be
               limited to one season (playoffs only, say) and can send its channels to its
               own channel group. Under Advanced, racing and MMA blocks can also be limited
-              to sessions (race, qualifying…) and to the main channel or a kind of keyword.
+              to sessions (race, qualifying…) and to the main channel or a kind of keyword,
+              and any block can be limited to event channels or to managed team channels.
             </CardDescription>
           </div>
           <Button size="sm" onClick={() => setAddOpen(true)}>
@@ -428,7 +462,9 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                     {getSportDisplayName(b.sport, sportsMap)}
                     {b.end != null && ` · ends at ${b.end}`}
                     <BlockConditions b={b} feeds={raceFeeds} />
-                    {` · ${b.channel_count} channel${b.channel_count === 1 ? "" : "s"} today`}
+                    {/* The count is of event channels; a team-channels block has none. */}
+                    {b.channel_kind !== "team" &&
+                      ` · ${b.channel_count} channel${b.channel_count === 1 ? "" : "s"} today`}
                   </div>
                 </div>
                 <Select
@@ -452,7 +488,7 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                     raceLeagues,
                     raceFeeds
                   )
-                  const open = expanded.has(b.id) || !!b.segments || !!b.keyword
+                  const open = expanded.has(b.id) || !!b.segments || !!b.keyword || !!b.channel_kind
                   if (!open) return null
                   return (
                     <>
@@ -469,6 +505,19 @@ export function PinnedBlocks({ rangeStart }: { rangeStart: number }) {
                         />
                       )}
                       <BlockKeyword b={b} race={race} onSave={onKeywordChange} />
+                      <Select
+                        value={b.channel_kind ?? ""}
+                        onChange={(e) => onChannelKindChange(b, e.target.value)}
+                        className="w-44 h-8"
+                        aria-label="Applies to"
+                        title="Limit this block to a league's game channels or to its managed team channels."
+                      >
+                        {CHANNEL_KIND_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </Select>
                     </>
                   )
                 })()}
@@ -603,6 +652,7 @@ function AddBlockDialog({
   const [season, setSeason] = useState("")
   const [segments, setSegments] = useState("")
   const [keyword, setKeyword] = useState("")
+  const [channelKind, setChannelKind] = useState("")
   const [groupPattern, setGroupPattern] = useState("")
 
   const reset = () => {
@@ -617,6 +667,7 @@ function AddBlockDialog({
     setSeason("")
     setSegments("")
     setKeyword("")
+    setChannelKind("")
     setGroupPattern("")
   }
 
@@ -669,6 +720,7 @@ function AddBlockDialog({
         season_type: season || null,
         segments: codes.length > 0 ? parseSegments(segments) : null,
         keyword: submitKeyword,
+        channel_kind: (channelKind || null) as NumberingChannelKind | null,
         channel_group_mode: groupPattern.trim() || null,
       })
       toast.success("Block added — re-grid queued for the next generation")
@@ -844,8 +896,27 @@ function AddBlockDialog({
                   `Segments are comma-separated codes (${codes.join(", ")}); the block then holds only those. `}
                 Keyword limits the block to the main channel, any keyword channel, or one
                 keyword. Among blocks of the same scope, the most specific keyword wins, then
-                segments, then season.
+                segments, then season, then a block limited to one kind of channel.
               </p>
+
+              <div className="space-y-2 max-w-[50%]">
+                <Label htmlFor="pin-channel-kind">Applies to</Label>
+                <Select
+                  id="pin-channel-kind"
+                  value={channelKind}
+                  onChange={(e) => setChannelKind(e.target.value)}
+                >
+                  {CHANNEL_KIND_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Limit this block to a league&apos;s game channels or to its managed team
+                  channels.
+                </p>
+              </div>
 
               <div className="space-y-2 max-w-[50%]">
                 <Label htmlFor="pin-end">End channel</Label>
@@ -869,7 +940,7 @@ function AddBlockDialog({
               className="text-xs text-muted-foreground underline-offset-2 hover:underline"
               onClick={() => setShowAdvanced(true)}
             >
-              Advanced: segments, keyword, end channel
+              Advanced: segments, keyword, applies to, end channel
             </button>
           )}
         </div>

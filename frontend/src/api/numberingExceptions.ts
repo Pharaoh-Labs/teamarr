@@ -15,6 +15,10 @@ export type NumberingSeason = "preseason" | "regular" | "postseason"
 // "feed:<feed_key>" = one race feed, "label:<label>" = one exception keyword.
 export type NumberingKeyword = string
 
+// Channel kind condition on a block (#1224): null = all channels, "event" =
+// event (game) channels only, "team" = managed team channels only.
+export type NumberingChannelKind = "team" | "event"
+
 export interface NumberingException {
   id: number
   scope: NumberingScope
@@ -31,6 +35,7 @@ export interface NumberingException {
   season_type: string | null
   segments: string[] | null
   keyword: NumberingKeyword | null
+  channel_kind: NumberingChannelKind | null
   channel_group_id: number | null
   channel_group_mode: string | null
   display_name: string | null
@@ -50,6 +55,7 @@ export interface NumberingExceptionCreate {
   season_type?: string | null
   segments?: string[] | null
   keyword?: NumberingKeyword | null
+  channel_kind?: NumberingChannelKind | null
   channel_group_mode?: string | null
 }
 
@@ -67,6 +73,8 @@ export interface NumberingExceptionUpdate {
   set_segments?: boolean
   keyword?: NumberingKeyword | null
   set_keyword?: boolean
+  channel_kind?: NumberingChannelKind | null
+  set_channel_kind?: boolean
   channel_group_id?: number | null
   channel_group_mode?: string | null
   set_channel_group?: boolean
