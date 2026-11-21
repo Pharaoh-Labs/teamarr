@@ -93,8 +93,10 @@ class StreamMatching:
         _get_all_known_leagues: Any
         _load_sport_durations: Any
         _get_lifecycle_service: Any
-        # Run-scoped memo for _epg_resolution_inputs (#734).
+        # Run-scoped memo for _epg_resolution_inputs (#734) and per-tvg_id
+        # programme fetches (#1263).
         _epg_inputs_cache: Any
+        _epg_program_cache: Any
 
     def _match_streams(
         self,
@@ -294,10 +296,19 @@ class StreamMatching:
         window_start = to_utc(day_start - timedelta(days=MATCH_WINDOW_DAYS))
         window_end = to_utc(day_start + timedelta(days=match_days_ahead + 1))
 
+        program_cache = getattr(self, "_epg_program_cache", None)
+        if program_cache is None:
+            program_cache = {}
+            self._epg_program_cache = program_cache
+
         try:
             index = (
                 EPGProgramIndex.build(
-                    self._dispatcharr_client.epg, resolution, window_start, window_end
+                    self._dispatcharr_client.epg,
+                    resolution,
+                    window_start,
+                    window_end,
+                    program_cache=program_cache,
                 )
                 if resolution
                 else EPGProgramIndex({})
@@ -382,8 +393,12 @@ class StreamMatching:
 
     def clear_epg_resolution_cache(self) -> None:
         """Drop the shared catalogs and derived resolution inputs for the next run."""
+        from teamarr.consumers.matching.epg_xtream import clear_xtream_parse_cache
+
         self._epg_inputs_cache = None
         self._dispatcharr_catalog_cache = None
+        self._epg_program_cache = None
+        clear_xtream_parse_cache()
 
     def _own_epg_source_id(self) -> "int | None":
         """The app's OWN configured EPG-source id (``dispatcharr_epg_id`` setting).

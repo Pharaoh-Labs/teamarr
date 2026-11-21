@@ -1015,16 +1015,22 @@ def get_all_channel_streams(
     """
     if channel_ids == []:
         return {}
-    channel_filter = ""
     if channel_ids is not None:
         placeholders = ", ".join("?" for _ in channel_ids)
-        channel_filter = f"AND managed_channel_id IN ({placeholders})"
-    cursor = conn.execute(
-        f"""SELECT * FROM managed_channel_streams
-           WHERE removed_at IS NULL {channel_filter}
-           ORDER BY managed_channel_id, {_STREAM_ORDER}""",
-        channel_ids or [],
-    )
+        cursor = conn.execute(
+            f"""SELECT * FROM managed_channel_streams
+               WHERE removed_at IS NULL AND managed_channel_id IN ({placeholders})
+               ORDER BY managed_channel_id, {_STREAM_ORDER}""",
+            channel_ids,
+        )
+    else:
+        cursor = conn.execute(
+            f"""SELECT managed_channel_streams.* FROM managed_channel_streams
+               JOIN managed_channels mc ON mc.id = managed_channel_streams.managed_channel_id
+               WHERE managed_channel_streams.removed_at IS NULL
+                 AND mc.deleted_at IS NULL
+               ORDER BY managed_channel_streams.managed_channel_id, {_STREAM_ORDER}""",
+        )
     grouped: dict[int, list[ManagedChannelStream]] = {}
     for row in cursor.fetchall():
         stream = ManagedChannelStream.from_row(dict(row))
@@ -1052,12 +1058,16 @@ def get_all_ordered_stream_ids(
     now_expr = "datetime('now')" if now is None else "?"
     params: tuple = () if now is None else (now, now)
     cursor = conn.execute(
-        f"""SELECT managed_channel_id, dispatcharr_stream_id
+        f"""SELECT managed_channel_streams.managed_channel_id,
+                  managed_channel_streams.dispatcharr_stream_id
            FROM managed_channel_streams
-           WHERE removed_at IS NULL
-             AND (attach_at IS NULL
-                  OR (attach_at <= {now_expr} AND {now_expr} < detach_at))
-           ORDER BY managed_channel_id, {_STREAM_ORDER}""",
+           JOIN managed_channels mc ON mc.id = managed_channel_streams.managed_channel_id
+           WHERE managed_channel_streams.removed_at IS NULL
+             AND mc.deleted_at IS NULL
+             AND (managed_channel_streams.attach_at IS NULL
+                  OR (managed_channel_streams.attach_at <= {now_expr}
+                      AND {now_expr} < managed_channel_streams.detach_at))
+           ORDER BY managed_channel_streams.managed_channel_id, {_STREAM_ORDER}""",
         params,
     )
     grouped: dict[int, list[int]] = {}

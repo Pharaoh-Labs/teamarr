@@ -1941,6 +1941,7 @@ CREATE TABLE IF NOT EXISTS managed_channel_history (
 
 CREATE INDEX IF NOT EXISTS idx_mch_channel ON managed_channel_history(managed_channel_id, changed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mch_type ON managed_channel_history(change_type);
+CREATE INDEX IF NOT EXISTS idx_mch_changed_at ON managed_channel_history(changed_at);
 
 
 -- =============================================================================

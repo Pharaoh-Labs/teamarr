@@ -549,6 +549,13 @@ def mark_channel_deleted(
         params += (expected_channel.dispatcharr_channel_id,)
     cursor = conn.execute(query, params)
     if cursor.rowcount > 0:
+        conn.execute(
+            """UPDATE managed_channel_streams
+               SET removed_at = datetime('now'),
+                   remove_reason = COALESCE(?, 'channel_deleted')
+               WHERE managed_channel_id = ? AND removed_at IS NULL""",
+            (reason, channel_id),
+        )
         logger.info("[DELETED] Managed channel id=%d reason=%s", channel_id, reason)
         return True
     return False
@@ -574,6 +581,15 @@ def mark_all_channels_deleted(conn: Connection) -> tuple[int, int]:
            WHERE deleted_at IS NULL"""
     )
     rows_updated = cursor.rowcount
+    conn.execute(
+        """UPDATE managed_channel_streams
+           SET removed_at = CURRENT_TIMESTAMP,
+               remove_reason = COALESCE(remove_reason, 'channel_deleted')
+           WHERE removed_at IS NULL
+             AND managed_channel_id IN (
+                 SELECT id FROM managed_channels WHERE deleted_at IS NOT NULL
+             )"""
+    )
     conn.commit()
 
     logger.info(

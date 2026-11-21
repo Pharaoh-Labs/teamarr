@@ -3,8 +3,11 @@
 import io
 from datetime import UTC, datetime
 
+from teamarr.consumers.matching import epg_xtream
 from teamarr.consumers.matching.epg_xtream import (
     _parse_xmltv_time,
+    clear_xtream_parse_cache,
+    fetch_xtream_programs,
     is_xtream_account,
     parse_xmltv_programs,
     xmltv_url,
@@ -135,3 +138,53 @@ def test_parse_empty_wanted_returns_empty():
     ws = datetime(2026, 6, 3, 0, tzinfo=UTC)
     we = datetime(2026, 6, 5, 0, tzinfo=UTC)
     assert _parse(set(), ws, we) == {}
+
+
+def test_fetch_xtream_programs_reuses_in_memory_parse_across_groups(tmp_path, monkeypatch):
+    """Groups sharing an Xtream account in one run parse the cached XML once (#1263)."""
+    monkeypatch.setenv("TEAMARR_CACHE_DIR", str(tmp_path))
+    clear_xtream_parse_cache()
+    cache_file = tmp_path / "xtream_acct4.xml"
+    cache_file.write_text(_XML)
+
+    ws = datetime(2026, 6, 3, 22, tzinfo=UTC)
+    we = datetime(2026, 6, 4, 6, tzinfo=UTC)
+
+    real_parse = parse_xmltv_programs
+    parse_calls = 0
+
+    def counting_parse(fh, wanted, window_start, window_end):
+        nonlocal parse_calls
+        parse_calls += 1
+        return real_parse(fh, wanted, window_start, window_end)
+
+    monkeypatch.setattr(epg_xtream, "parse_xmltv_programs", counting_parse)
+
+    first = fetch_xtream_programs(
+        "https://db4.org/xmltv.php?username=u&password=p",
+        cache_key="acct4",
+        wanted_tvg_ids={"USANetwork.us"},
+        window_start=ws,
+        window_end=we,
+    )
+    second = fetch_xtream_programs(
+        "https://db4.org/xmltv.php?username=u&password=p",
+        cache_key="acct4",
+        wanted_tvg_ids={"ESPN.us"},
+        window_start=ws,
+        window_end=we,
+    )
+
+    assert parse_calls == 1
+    assert set(first) == {"USANetwork.us"}
+    assert set(second) == {"ESPN.us"}
+
+    clear_xtream_parse_cache()
+    fetch_xtream_programs(
+        "https://db4.org/xmltv.php?username=u&password=p",
+        cache_key="acct4",
+        wanted_tvg_ids={"ESPN.us"},
+        window_start=ws,
+        window_end=we,
+    )
+    assert parse_calls == 2

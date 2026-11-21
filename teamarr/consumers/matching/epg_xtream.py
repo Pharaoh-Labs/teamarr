@@ -44,6 +44,18 @@ XTREAM_EPG_SOURCE = "_xtream"
 # XMLTV timestamp: "YYYYMMDDHHMMSS[ +ZZZZ]" (offset optional; assume UTC if absent).
 _XMLTV_TIME = re.compile(r"^\s*(\d{14})(?:\s+([+-]\d{4}))?")
 
+# Bounded in-memory cache of parsed provider XMLTV programmes keyed by
+# (cache_file_path, mtime_ns, window_start, window_end) so multiple groups
+# sharing an Xtream account in one generation run do not re-parse an 80MB+
+# XML file from disk per group (#1263).
+_PARSE_CACHE_MAX = 8
+_PARSE_CACHE: dict[tuple[str, int, datetime, datetime], dict[str, list[DispatcharrProgram]]] = {}
+
+
+def clear_xtream_parse_cache() -> None:
+    """Drop cached in-memory XMLTV parses between generation runs."""
+    _PARSE_CACHE.clear()
+
 
 def is_xtream_account(account: dict) -> bool:
     """True if the M3U account is an Xtream-Codes panel with usable credentials.
@@ -102,16 +114,17 @@ def _parse_xmltv_time(value: str | None) -> datetime | None:
 
 def parse_xmltv_programs(
     fileobj,
-    wanted_tvg_ids: set[str],
+    wanted_tvg_ids: set[str] | None,
     window_start: datetime,
     window_end: datetime,
 ) -> dict[str, list[DispatcharrProgram]]:
     """Stream-parse an XMLTV document into DispatcharrProgram lists per tvg_id.
 
-    Only ``<programme>`` elements whose ``channel`` is in ``wanted_tvg_ids`` AND
-    that overlap [window_start, window_end] are kept, so a 100 MB / 300k-entry
-    guide is reduced to just the streams and window we care about. Uses
-    ``iterparse`` and clears parsed elements so peak memory stays flat.
+    Only ``<programme>`` elements whose ``channel`` is in ``wanted_tvg_ids`` (or
+    any non-empty channel when ``wanted_tvg_ids`` is ``None``) AND that overlap
+    [window_start, window_end] are kept, so a 100 MB / 300k-entry guide is
+    reduced to just the streams and window we care about. Uses ``iterparse``
+    and clears parsed elements so peak memory stays flat.
 
     The result is keyed by the XMLTV ``channel`` id — which for an Xtream
     provider equals the M3U ``tvg_id`` — and holds the SAME DispatcharrProgram
@@ -119,7 +132,7 @@ def parse_xmltv_programs(
     to the source. Program ids are synthetic (negative, sequential): these
     programs never came from DP's API.
     """
-    if not wanted_tvg_ids:
+    if wanted_tvg_ids is not None and not wanted_tvg_ids:
         return {}
 
     by_tvg: dict[str, list[DispatcharrProgram]] = {}
@@ -132,7 +145,7 @@ def parse_xmltv_programs(
         if event != "end" or elem.tag != "programme":
             continue
         channel = elem.get("channel")
-        if channel in wanted_tvg_ids:
+        if channel and (wanted_tvg_ids is None or channel in wanted_tvg_ids):
             start = _parse_xmltv_time(elem.get("start"))
             stop = _parse_xmltv_time(elem.get("stop"))
             # Overlap test (half-open); skip entries we can't window.
@@ -222,8 +235,21 @@ def fetch_xtream_programs(
             # fall through and use the stale cache if we have one
 
     try:
-        with open(cache_file, "rb") as fh:
-            result = parse_xmltv_programs(fh, wanted_tvg_ids, window_start, window_end)
+        cache_path_str = str(cache_file)
+        mtime_ns = cache_file.stat().st_mtime_ns
+        parse_key = (cache_path_str, mtime_ns, window_start, window_end)
+        all_by_tvg = _PARSE_CACHE.get(parse_key)
+        if all_by_tvg is None:
+            with open(cache_file, "rb") as fh:
+                all_by_tvg = parse_xmltv_programs(fh, None, window_start, window_end)
+            # Evict stale mtimes for the same cache file first, then oldest if full.
+            for k in [k for k in _PARSE_CACHE if k[0] == cache_path_str and k[1] != mtime_ns]:
+                del _PARSE_CACHE[k]
+            while len(_PARSE_CACHE) >= _PARSE_CACHE_MAX:
+                del _PARSE_CACHE[next(iter(_PARSE_CACHE))]
+            _PARSE_CACHE[parse_key] = all_by_tvg
+
+        result = {tvg: list(progs) for tvg, progs in all_by_tvg.items() if tvg in wanted_tvg_ids}
         logger.info(
             "[XTREAM-EPG] parsed %d/%d wanted tvg_ids, %d programs in window",
             len(result),
