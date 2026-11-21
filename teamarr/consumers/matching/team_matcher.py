@@ -1395,12 +1395,10 @@ class TeamMatcher:
         if not entry:
             return None
 
-        # Touch the cache entry to keep it fresh
-        self._cache.touch(ctx.group_id, ctx.stream_id, ctx.stream_name, ctx.generation)
-
         # A manually skipped stream is a pinned no-match decision.  Older
         # versions stored it as NULL, so retain support for those rows as well.
         if entry.user_corrected and entry.event_id in (None, USER_SKIPPED_EVENT_ID):
+            self._cache.touch(ctx.group_id, ctx.stream_id, ctx.stream_name, ctx.generation)
             logger.debug("[CACHE_SKIP] stream_id=%d (user skipped)", ctx.stream_id)
             return MatchOutcome.filtered(
                 FilteredReason.USER_SKIPPED,
@@ -1421,6 +1419,7 @@ class TeamMatcher:
 
         # User-corrected entries are pinned - always trust them regardless of date
         if entry.user_corrected:
+            self._cache.touch(ctx.group_id, ctx.stream_id, ctx.stream_name, ctx.generation)
             logger.debug(
                 "[CACHE_HIT] stream_id=%d event=%s (user corrected)",
                 ctx.stream_id,
@@ -1441,19 +1440,49 @@ class TeamMatcher:
         # The cached event has OLD status from when it was cached, which may have
         # changed to "final". Re-matching ensures we get current status from ESPN.
         event_date = event.start_time.astimezone(ctx.user_tz).date()
-        if event_date < ctx.target_date:
+        session_dates = {
+            s.start_time.astimezone(ctx.user_tz).date()
+            for s in (event.sessions or [])
+            if s.start_time is not None
+        }
+        active_today = event_date == ctx.target_date or ctx.target_date in session_dates
+        latest_event_date = max({event_date} | session_dates)
+        if latest_event_date < ctx.target_date:
             # Event is from a previous day - invalidate cache to get fresh status
             logger.debug(
-                "[MATCH_CACHE] Stale: event from %s < target %s", event_date, ctx.target_date
+                "[MATCH_CACHE] Stale: event from %s < target %s",
+                latest_event_date,
+                ctx.target_date,
             )
             return None
 
-        # Today's events: use cache (final status handled in _outcome_to_result)
-        if event_date != ctx.target_date:
-            logger.debug(
-                "[MATCH_CACHE] Mismatch: event from %s != target %s", event_date, ctx.target_date
+        # Today's events (or active multi-day events): use cache. Upcoming events
+        # (event_date > target_date) also hit cache when the stream carries a
+        # trusted date naming that event (#1264).
+        if not active_today:
+            extracted_date = ctx.classified.normalized.extracted_date
+            extracted_trusted = ctx.classified.normalized.extracted_date_trusted
+            compare_tz = ctx.stream_tz or ctx.user_tz
+            compare_dates = {event.start_time.astimezone(compare_tz).date()} | {
+                s.start_time.astimezone(compare_tz).date()
+                for s in (event.sessions or [])
+                if s.start_time is not None
+            }
+            date_pinned = (
+                extracted_date is not None
+                and extracted_trusted
+                and min(abs((extracted_date - d).days) for d in compare_dates) <= 1
             )
-            return None
+            if not date_pinned:
+                logger.debug(
+                    "[MATCH_CACHE] Mismatch: event from %s != target %s",
+                    event_date,
+                    ctx.target_date,
+                )
+                return None
+
+        # Touch the cache entry only after validation succeeds (#1264)
+        self._cache.touch(ctx.group_id, ctx.stream_id, ctx.stream_name, ctx.generation)
 
         logger.debug(
             "[CACHE_HIT] stream_id=%d event=%s",
@@ -1597,9 +1626,9 @@ class TeamMatcher:
             return events
 
         tokens = tokenize(f"{ctx.team1 or ''} {ctx.team2 or ''}")
+        tokens |= self._alias_tokens(ctx.team1) | self._alias_tokens(ctx.team2)
         if not tokens:
             return events
-        tokens |= self._alias_tokens(ctx.team1) | self._alias_tokens(ctx.team2)
 
         index = self._token_index_memo.get(id(events))
         if index is None:
@@ -1610,7 +1639,7 @@ class TeamMatcher:
         return events if narrowed is None else narrowed
 
     def _alias_tokens(self, side: str | None) -> set[str]:
-        """Words of every canonical name an alias gives this side, built-in or user."""
+        """Words of every canonical name or code an alias gives this side, built-in or user."""
         if not side:
             return set()
         key = normalize_text(side)
@@ -1618,9 +1647,28 @@ class TeamMatcher:
         builtin = _NORMALIZED_TEAM_ALIASES.get(key)
         if builtin:
             names.append(builtin)
+        country = self._country_resolver.resolve(side)
+        if country:
+            names.append(country)
+        else:
+            for tok in tokenize(side):
+                resolved_tok = self._country_resolver.resolve(tok)
+                if resolved_tok:
+                    names.append(resolved_tok)
         found: set[str] = set()
         for name in names:
             found |= tokenize(name)
+        for tok in tokenize(side):
+            alt = ALTERNATE_TEAM_CODES.get(tok)
+            if alt and alt not in ABBREVIATION_STOPWORDS:
+                found.add(alt)
+        for code in _code_cased_tokens(side):
+            if (
+                2 <= len(code) <= 5
+                and code.isalpha()
+                and code not in ABBREVIATION_STOPWORDS
+            ):
+                found.add(code)
         return found
 
     def _match_against_candidates(
@@ -1914,6 +1962,24 @@ class TeamMatcher:
                             is_better = anchor_dist < best_anchor_dist
                         else:
                             is_better = away_home_orientation and not best_away_home_orientation
+                    elif not has_date_validation:
+                        # Without an extracted stream date, ref_date in time_distance
+                        # uses each candidate's own date, so date proximity (future
+                        # over past, then nearest to target_date) must come before
+                        # time-of-day disambiguation (#1264).
+                        cand_key = (
+                            is_future,
+                            -abs_distance,
+                            -time_distance,
+                            away_home_orientation,
+                        )
+                        best_key = (
+                            best_is_future,
+                            -best_date_distance,
+                            -best_time_distance,
+                            best_away_home_orientation,
+                        )
+                        is_better = cand_key > best_key
                     elif time_distance < best_time_distance:
                         # Closer to stream time wins (doubleheader case)
                         is_better = True
@@ -2996,10 +3062,10 @@ class TeamMatcher:
             return []
 
         results: list[tuple[str, str | None]] = []
-        normalized = team_name.lower()
+        normalized = normalize_text(team_name)
 
         # Check built-in aliases first (already league-agnostic)
-        canonical = TEAM_ALIASES.get(normalized)
+        canonical = _NORMALIZED_TEAM_ALIASES.get(normalized)
         if canonical:
             results.append((canonical, None))
 

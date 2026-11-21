@@ -67,7 +67,7 @@ def translate_cities(text: str) -> str:
     lowered = text.lower()
     for variant, english in CITY_TRANSLATIONS.items():
         if variant in lowered:
-            text = re.sub(re.escape(variant), english, text, flags=re.IGNORECASE)
+            text = re.sub(rf"\b{re.escape(variant)}\b", english, text, flags=re.IGNORECASE)
     return text
 
 

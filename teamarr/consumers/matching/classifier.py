@@ -947,7 +947,7 @@ def extract_teams_from_separator(
 
     # Clean up teams (remove DATE_MASK, TIME_MASK, trailing punctuation)
     team1 = _clean_team_name(team1)
-    team2 = _clean_team_name(team2)
+    team2 = _clean_team_name(team2, is_team2=True)
 
     # A show label before the matchup ("Live UEFA Nations League|England v
     # Spain") is not the first team. Unlike a pipe on team2, where the tail
@@ -989,7 +989,7 @@ def _is_substantial_side(side: str | None) -> bool:
 _QUALITY_TAG = rf"[\(\[]?\s*{QUALITY_TOKEN}\s*[\)\]]?"
 
 
-def _clean_team_name(name: str) -> str:
+def _clean_team_name(name: str, *, is_team2: bool = False) -> str:
     """Clean extracted team name."""
     if not name:
         return ""
@@ -1002,6 +1002,15 @@ def _clean_team_name(name: str) -> str:
     # "Indiana Pacers // UK Wed 14 Jan" → "Indiana Pacers"
     if " // " in name:
         name = name.split(" // ")[0]
+
+    # On the right-hand side of a matchup separator (team2), a colon separates
+    # the team name from trailing broadcast/date/group metadata ("AMHERST (FIRST
+    # ROUND): Sat DATE_MASK ...", "Napoli Knights: all: DATE_MASK: ..."), never
+    # a leading show prefix before team2 (#1264).
+    if is_team2 and ":" in name:
+        head = name.split(":", 1)[0].strip()
+        if _is_substantial_side(head):
+            name = head
 
     # Remove datetime masks
     name = re.sub(r"\bDATE_MASK\b", "", name)
@@ -1046,6 +1055,9 @@ def _clean_team_name(name: str) -> str:
     # A dangling pipe before a trailing tag ("Wagner | 1080p") goes with it.
     name = re.sub(rf"^\s*(?:{_QUALITY_TAG}\s*)+(?=\S)", "", name, flags=re.IGNORECASE)
     name = re.sub(rf"(?:\s*\|)?(?:\s*{_QUALITY_TAG})+\s*$", "", name, flags=re.IGNORECASE)
+
+    # Remove trailing camera/feed designators ("TORONTO MARLIES CAM 01" -> "TORONTO MARLIES", #1264)
+    name = re.sub(r"\s+\bCAM\s*\d+\b\s*$", "", name, flags=re.IGNORECASE)
 
     # Remove broadcast network indicators like (CBS), (FOX), (ABC), (NBC), (ESPN)
     name = re.sub(
@@ -1130,14 +1142,15 @@ def _clean_team_name(name: str) -> str:
     # Safe because after separator split, a leading 1-2 digit number + space is a channel number
     name = re.sub(r"^\d{1,2}\s+(?!-\s*)", "", name)
 
-    # Strip numbered channel prefixes like "NFL Game Pass 03:", "ESPN+ 45:"
-    name = re.sub(r"^[A-Za-z][A-Za-z\s+]*\d*:\s*", "", name)
+    if not is_team2:
+        # Strip numbered channel prefixes like "NFL Game Pass 03:", "ESPN+ 45:"
+        name = re.sub(r"^[A-Za-z][A-Za-z\s+]*\d*:\s*", "", name)
 
-    # Strip show name prefixes like "MNF Playbook:", "NFL RedZone:"
-    prev = None
-    while prev != name:
-        prev = name
-        name = re.sub(r"^[A-Z][A-Za-z\s]+:\s*", "", name)
+        # Strip show name prefixes like "MNF Playbook:", "NFL RedZone:"
+        prev = None
+        while prev != name:
+            prev = name
+            name = re.sub(r"^[A-Z][A-Za-z\s]+:\s*", "", name)
 
     # Strip common league abbreviations at start (even without colon)
     # "NFL Bills" → "Bills", "NBA 03 Lakers" → "03 Lakers"

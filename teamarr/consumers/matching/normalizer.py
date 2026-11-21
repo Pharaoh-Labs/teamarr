@@ -315,8 +315,13 @@ DATE_PATTERNS = [
     # 1/17, 12/31 (MM/DD without year) - infer year based on proximity to today
     # Must come after MM/DD/YYYY to avoid partial matches
     (r"\b(\d{1,2})[/\-](\d{1,2})\b", "DATE_MASK_NO_YEAR"),
-    # 31 Dec, 31 December - check this BEFORE "Dec 31" to prefer "14 Jan" over "Jan 11"
-    (rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:{_MONTH_NAMES})\b", "DATE_MASK"),
+    # 31 Dec, 31 December - check this BEFORE "Dec 31" to prefer "14 Jan" over "Jan 11",
+    # unless the month is followed by its own day number ("CAM 01 NOV 21 01:30PM", #1264).
+    (
+        rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:{_MONTH_NAMES})\b"
+        rf"(?!\s+\d{{1,2}}(?:st|nd|rd|th)?\b(?!:|\s*[AaPp][Mm]\b))",
+        "DATE_MASK",
+    ),
     # Dec 31, December 31 - use negative lookahead (?!:) to avoid matching "Jan 11:45pm"
     (rf"\b(?:{_MONTH_NAMES})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?!:)\b", "DATE_MASK"),
 ]

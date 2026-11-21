@@ -40,6 +40,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from teamarr.consumers.matching.constants import ABBREVIATION_STOPWORDS
 from teamarr.utilities.fuzzy_match import normalize_text
 
 if TYPE_CHECKING:
@@ -70,7 +71,9 @@ def event_tokens(event: Event) -> set[str]:
     """Every word an event could be recognised by.
 
     Full names, short names AND abbreviations — see the module docstring for why
-    the last two are not optional.
+    the last two are not optional. Two-letter team codes (KC, TB, SF, SD, ...)
+    are indexed explicitly because ``tokenize`` drops <3-character fragments in
+    general prose (#1264).
     """
     tokens: set[str] = set()
     for side in (event.home_team, event.away_team):
@@ -78,7 +81,16 @@ def event_tokens(event: Event) -> set[str]:
             continue
         tokens |= tokenize(side.name)
         tokens |= tokenize(getattr(side, "short_name", "") or "")
-        tokens |= tokenize(getattr(side, "abbreviation", "") or "")
+        raw_abbr = getattr(side, "abbreviation", "") or ""
+        tokens |= tokenize(raw_abbr)
+        abbr = normalize_text(raw_abbr)
+        if (
+            len(abbr) == 2
+            and abbr.isalpha()
+            and abbr not in _STOPWORDS
+            and abbr not in ABBREVIATION_STOPWORDS
+        ):
+            tokens.add(abbr)
     return tokens
 
 

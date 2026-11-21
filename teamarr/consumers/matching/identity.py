@@ -641,12 +641,18 @@ class TeamIdentityIndex:
             return None
         lo, hi = owner[start], owner[start + n - 1]
         if not self._bounded(raw_tokens[:lo][::-1], junk) or not self._bounded(
-            raw_tokens[hi + 1 :], junk
+            raw_tokens[hi + 1 :], junk, allow_hyphen=n > 1
         ):
             return None
         return " ".join(raw_tokens[lo : hi + 1])
 
-    def _bounded(self, outward: list[str], junk: AbstractSet[str] = frozenset()) -> bool:
+    def _bounded(
+        self,
+        outward: list[str],
+        junk: AbstractSet[str] = frozenset(),
+        *,
+        allow_hyphen: bool = True,
+    ) -> bool:
         """Is the stripped text separated from the span by a real boundary?
 
         ``outward`` is the remainder on one side, nearest token first. A plain
@@ -660,8 +666,13 @@ class TeamIdentityIndex:
         with punctuation or a digit ("Football:", "(Big", "|", "13", "6pm")
         is the boundary providers actually write.
         """
+        tokens = (
+            outward[1:]
+            if not allow_hyphen and len(outward) >= 2 and outward[0] == "-" and outward[1].isalpha()
+            else outward
+        )
         run: list[str] = []
-        for token in outward:
+        for token in tokens:
             if token.isalpha():
                 run.append(token)
             else:

@@ -96,6 +96,9 @@ class TestEventTokens:
     def test_indexes_short_names(self):
         assert "arizona" in event_tokens(_event(ASU, MORGAN))
 
+    def test_indexes_two_letter_team_abbreviations(self):
+        assert "tb" in event_tokens(_event(RAYS, TIGERS))
+
 
 class TestIndex:
     def _candidates(self):
@@ -207,10 +210,20 @@ class TestVerdictsUnchanged:
         return make_team_matcher()
 
     def _run(self, matcher, name):
+        white_sox = _team("Chicago White Sox", "White Sox", "CHW")
+        royals = _team("Kansas City Royals", "Royals", "KC")
+        padres = _team("San Diego Padres", "Padres", "SD")
+        giants = _team("San Francisco Giants", "Giants", "SF")
+        morocco = _team("Morocco", "Morocco", "MAR", "fifa.world", "soccer")
+        scotland = _team("Scotland", "Scotland", "SCO", "fifa.world", "soccer")
         cands = (
             ("mlb", _event(RAYS, TIGERS, "e1")),
             ("mlb", _event(METS, YANKEES, "e2")),
             ("college-football", _event(ASU, MORGAN, "e3")),
+            ("mlb", _event(royals, white_sox, "e4")),
+            ("mlb", _event(royals, RAYS, "e5")),
+            ("mlb", _event(giants, padres, "e6")),
+            ("fifa.world", _event(scotland, morocco, "e7")),
         )
         return matcher._match_against_candidates(_ctx(name), cands)
 
@@ -219,6 +232,10 @@ class TestVerdictsUnchanged:
         [
             "Tampa Bay Rays vs Detroit Tigers",
             "New York Mets vs New York Yankees",
+            "CWS vs KC",
+            "TBR vs KCR",
+            "SDP vs SFG",
+            "Marruecos vs Escocia",
             "Liverpool vs Everton",  # matches nothing either way
         ],
     )
@@ -231,6 +248,23 @@ class TestVerdictsUnchanged:
         assert off.category is on.category
         assert (off.event and off.event.id) == (on.event and on.event.id)
         assert off.failed_reason is on.failed_reason
+
+    @pytest.mark.parametrize(
+        ("name", "expected_id"),
+        [
+            ("CWS vs KC", "e4"),
+            ("TBR vs KCR", "e5"),
+            ("SDP vs SFG", "e6"),
+            ("Marruecos vs Escocia", "e7"),
+        ],
+    )
+    def test_alternate_codes_and_country_exonyms_match_with_index_on(
+        self, matcher, monkeypatch, name, expected_id
+    ):
+        monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
+        out = self._run(matcher, name)
+        assert out.category is ResultCategory.MATCHED
+        assert out.event.id == expected_id
 
     def test_a_match_is_still_found_through_the_index(self, matcher, monkeypatch):
         monkeypatch.setenv("TEAMARR_TOKEN_INDEX", "1")
@@ -347,6 +381,27 @@ class TestMissingSplitSquadCandidates:
 
         assert out.category is ResultCategory.MATCHED
         assert out.event.id == "401923610"
+
+    def test_dateless_stream_with_time_prefers_today_over_past_closer_time(self, monkeypatch):
+        """A stream with extracted_time but no extracted_date must rank today's
+        game ahead of a game 20 days ago whose time-of-day was slightly closer (#1264)."""
+        from datetime import timedelta
+
+        blue_jays = _team("Toronto Blue Jays", "Blue Jays", "TOR")
+        orioles = _team("Baltimore Orioles", "Orioles", "BAL")
+        past = _event(orioles, blue_jays, "past-exact-time")
+        today_game = _event(orioles, blue_jays, "today-5min-later")
+        past.start_time = datetime.combine(TODAY - timedelta(days=20), time(19, 5), tzinfo=UTC)
+        today_game.start_time = datetime.combine(TODAY, time(19, 10), tzinfo=UTC)
+        monkeypatch.delenv("TEAMARR_TOKEN_INDEX", raising=False)
+
+        out = make_team_matcher()._match_against_candidates(
+            _ctx("Toronto @ Baltimore @ 07:05 PM"),
+            (("mlb", past), ("mlb", today_game)),
+        )
+
+        assert out.category is ResultCategory.MATCHED
+        assert out.event.id == "today-5min-later"
 
     @pytest.mark.parametrize("token_index", [False, True])
     def test_vs_uses_auto_matchup_order_for_missing_split_squad(self, monkeypatch, token_index):

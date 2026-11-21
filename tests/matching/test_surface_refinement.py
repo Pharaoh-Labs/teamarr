@@ -241,6 +241,8 @@ class TestRefineSide:
             # Bobcats). Only a boundary or a known label licenses the strip.
             ("FOX College Football - Big Ten: Oklahoma State", "end"),
             ("Ohio Wesleyan", "end"),
+            ("Ohio - Wesleyan", "end"),
+            ("Ohio - Wesleyan", "start"),
             ("Georgia Tech Yellow", "end"),
             ("Wisconsin Fri", "start"),
             # The remainder is claimable by a team the span names — the
