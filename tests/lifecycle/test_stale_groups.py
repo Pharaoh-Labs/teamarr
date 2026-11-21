@@ -232,6 +232,21 @@ def test_rotating_group_healing_respects_bound_dismissed_and_account(monkeypatch
     )
 
 
+def test_exact_name_on_wrong_account_does_not_block_rotation(monkeypatch):
+    conn = _db()
+    _add_group(conn, "NHL", 71, m3u_group_name="LIVE | NHL (Wed)", m3u_account_id=1)
+    _patch_dispatcharr(
+        monkeypatch,
+        [(72, "LIVE | NHL (Wed)", [2]), (73, "LIVE | NHL (Thu)", [1])],
+    )
+
+    assert detect_stale_groups(_factory(conn)) == []
+    row = conn.execute(
+        "SELECT m3u_group_id, m3u_group_name, source_missing FROM event_epg_groups"
+    ).fetchone()
+    assert tuple(row) == (73, "LIVE | NHL (Thu)", 0)
+
+
 def test_two_accounts_can_heal_to_the_same_live_rotation(monkeypatch):
     conn = _db()
     _add_group(conn, "NHL A", 71, m3u_group_name="LIVE | NHL (Wed)", m3u_account_id=1)

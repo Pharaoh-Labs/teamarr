@@ -180,28 +180,25 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
             if row["m3u_group_id"] in existing_ids:
                 mark_group_source_seen(conn, row["id"])
                 continue
-            # Source id is gone, but a same-named group may exist under a new id
-            # (deleted + recreated) — that's not stale. Self-heal the stored id
-            # when the name maps to exactly one eligible live group.
+            # Prefer a same-named replacement, but only among eligible groups.
+            # A same-named group on another account must not hide a rotation.
             acc_key = account_key(source_acc_id)
-            same_name = groups_by_name.get(row["m3u_group_name"] or "")
-            if same_name:
-                if len(same_name) == 1:
-                    new_group = same_name[0]
-                    if not can_rebind(new_group, acc_key) or not rebind(
-                        row, new_group, source_acc_id
-                    ):
-                        mark_group_source_missing(conn, row["id"])
-                else:
-                    mark_group_source_seen(conn, row["id"])
+            old_name = row["m3u_group_name"] or ""
+            same_name = [g for g in groups_by_name.get(old_name, []) if can_rebind(g, acc_key)]
+            if len(same_name) > 1:
+                # Preserve the existing ambiguous-exact-name behavior.
+                mark_group_source_seen(conn, row["id"])
+                continue
+            if same_name and rebind(row, same_name[0], source_acc_id):
                 continue
 
-            rot_key = rotating_group_key(row["m3u_group_name"] or "")
+            rot_key = rotating_group_key(old_name)
             if rot_key is not None:
                 rot_candidates = [
                     g
                     for g in live_groups
-                    if rotating_group_key(g.name or "") == rot_key
+                    if g.name != old_name
+                    and rotating_group_key(g.name or "") == rot_key
                     and can_rebind(g, acc_key)
                 ]
                 if len(rot_candidates) == 1 and rebind(row, rot_candidates[0], source_acc_id):
