@@ -57,6 +57,17 @@ class _Counter:
         return [{"id": 7, "is_active": True, "name": "Guide"}]
 
 
+@pytest.fixture(autouse=True)
+def _no_managed_channels(monkeypatch):
+    """The harness has no database, and the snapshot reads managed ids
+    strictly (#1201) — a failed read is a failed snapshot. These tests are
+    about the Dispatcharr fetches, so the id read answers with none."""
+    monkeypatch.setattr(
+        "teamarr.consumers.event_group_processor.stream_fetcher.managed_channel_ids",
+        lambda db_factory, *, strict=False: set(),
+    )
+
+
 class _Harness(StreamMatching):
     """StreamMatching with just the collaborators _epg_resolution_inputs touches."""
 

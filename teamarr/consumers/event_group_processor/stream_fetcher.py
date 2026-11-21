@@ -24,7 +24,7 @@ def stream_m3u_group(stream: Any, group_names: dict[int, str]) -> tuple[int | No
     return group_id, group_names.get(group_id)
 
 
-def managed_channel_ids(db_factory: Any) -> set[int]:
+def managed_channel_ids(db_factory: Any, *, strict: bool = False) -> set[int]:
     """Dispatcharr ids of Teamarr's own output channels.
 
     These are OUTPUT, never EPG-match input — callers pass them as
@@ -32,6 +32,10 @@ def managed_channel_ids(db_factory: Any) -> set[int]:
     can't claim slots for streams shared with curated channels (#512).
     Module-level (not a mixin method) so both StreamFetcher and
     StreamMatching can use it without cross-mixin attribute access.
+
+    A failed read answers with an empty set, which is right for a single
+    request and wrong for anything that keeps the answer: ``strict`` raises
+    instead, so the run-wide snapshot is never built from it (#1201).
     """
     try:
         from teamarr.database.channels import get_all_managed_channels
@@ -60,6 +64,8 @@ def managed_channel_ids(db_factory: Any) -> set[int]:
             return ids
     except Exception as e:
         logger.warning("[CHANNEL_SOURCE] Failed to load managed channel ids: %s", e)
+        if strict:
+            raise
         return set()
 
 
@@ -84,7 +90,9 @@ def dispatcharr_catalog_inputs(processor: Any) -> DispatcharrCatalogInputs:
     if cached is not None:
         return cached
 
-    managed_ids = managed_channel_ids(processor._db_factory)
+    # strict: an empty set from a failed read would switch the #512 exclusion
+    # off for every channel-source row and for EPG resolution, all run.
+    managed_ids = managed_channel_ids(processor._db_factory, strict=True)
     channels = processor._dispatcharr_client.channels
     epg_data_list = channels.get_epg_data_list()
     stream_channels, channel_by_uuid = channels.get_channel_maps(exclude_channel_ids=managed_ids)
@@ -139,6 +147,10 @@ class StreamFetcher:
         ``_fetch_streams`` calls this once per event group, but the map
         itself is shared across the whole generation — caching it here means
         one ``list_groups()`` request per run instead of one per group.
+
+        A failed or empty listing falls back to the names stored on attached
+        streams, and that fallback is kept for the run too: retrying per group
+        would repeat a failing request once for every source.
         """
         cache = getattr(self, "_group_name_cache", None)
         if cache is None:
@@ -269,11 +281,12 @@ class StreamFetcher:
         client = self._dispatcharr_client
 
         # Teamarr's own managed channels are OUTPUT — never treat them as a source.
-        # Loaded BEFORE the channel-map fetch so they can be excluded from slot
-        # claiming (#512): the map is last-write-wins, so once the attach window
-        # opens a Teamarr event channel would steal a shared stream's slot from
-        # the curated channel, dropping it from this pool and cascading into
-        # delete/recreate churn on alternating runs.
+        # The shared snapshot leaves them out of the stream->channel map (#512):
+        # that map is last-write-wins, so once the attach window opens a Teamarr
+        # event channel would steal a shared stream's slot from the curated
+        # channel, dropping it from this pool and cascading into delete/recreate
+        # churn on alternating runs. A snapshot that failed to build is not
+        # cached, so the next channel-source row tries again.
         try:
             inputs = dispatcharr_catalog_inputs(self)
         except Exception as e:
@@ -393,9 +406,7 @@ class StreamFetcher:
                     # The DP CHANNEL's own group (channel organization), distinct from
                     # the M3U stream group above — drives scoping + the sorting rule.
                     "dp_channel_group_id": dp_group_id,
-                    "dp_channel_group": dp_group_names.get(dp_group_id)
-                    if dp_group_id is not None
-                    else None,
+                    "dp_channel_group": dp_group_names.get(dp_group_id),
                     # The DP channel itself (#971) — drives the dispatcharr_channel rule
                     "dp_channel_id": ch.get("id"),
                     "m3u_account_id": account_id,
