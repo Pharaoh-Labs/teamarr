@@ -1448,6 +1448,35 @@ _FEEDER_PARENTS: dict[str, tuple[str, ...]] = {
 }
 
 
+# Words that name ONE of NASCAR's three national series (#1158). The umbrella
+# signature above scopes "NASCAR" to all three leagues, and on a weekend where
+# two of them share a track nothing in that scope says which one a stream is
+# for. League code -> pattern; the apostrophe in O'Reilly arrives as ', ` or
+# a typographic quote, or not at all. "Xfinity" is the series' former name and
+# still what many providers write. A sponsor word followed by a race distance
+# is a race, not a series: the 2026 Cup schedule has an "Xfinity 500", and
+# "NASCAR: Xfinity 500" must stay a name match on the Cup event.
+NASCAR_SERIES_WORDS: "dict[str, Pattern[str]]" = {
+    "nascar-cup": re.compile(r"\b(?:cup\s+series|nascar\s+cup)\b", re.IGNORECASE),
+    "nascar-xfinity": re.compile(
+        r"\b(?:o\W?reilly(?!\s+auto\s+parts\s+\d)|xfinity(?!\s+\d)|orap)\b", re.IGNORECASE
+    ),
+    "nascar-truck": re.compile(r"\b(?:trucks?|craftsman(?!\s+\d))\b", re.IGNORECASE),
+}
+
+
+def detect_nascar_series(text: str) -> "tuple[str, ...]":
+    """NASCAR league codes whose series the text names by its own words.
+
+    Empty when the text names none — a bare "NASCAR" included. More than one
+    is possible (a Cup race sponsored by another series' sponsor); callers
+    narrow only on exactly one.
+    """
+    if not text:
+        return ()
+    return tuple(lg for lg, pattern in NASCAR_SERIES_WORDS.items() if pattern.search(text))
+
+
 def detect_racing_series_leagues(text: str) -> "tuple[str, ...] | None":
     """League codes for the racing series the text explicitly names.
 

@@ -24,8 +24,10 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from rapidfuzz import fuzz
 
 from teamarr.consumers.matching.classifier import (
+    NASCAR_SERIES_WORDS,
     ClassifiedStream,
     StreamCategory,
+    detect_nascar_series,
     detect_racing_series_leagues,
 )
 from teamarr.consumers.matching.result import (
@@ -109,6 +111,31 @@ def _single_event_evidence(stream_name: str) -> bool:
     return _session_category_from_stream_name(stream_name) is not None
 
 
+def _event_name_score(stream_norm: str, stream_aug: str, event: Event) -> float:
+    """Best fuzzy score of a normalized stream against an event's own names."""
+    best = 0.0
+    for candidate in (event.name, event.short_name, event.circuit_name):
+        if not candidate:
+            continue
+        cand_norm = normalize_text(candidate)
+        best = max(
+            best,
+            fuzz.token_set_ratio(stream_norm, cand_norm),
+            fuzz.token_set_ratio(stream_aug, _augment_compounds(cand_norm)),
+        )
+    return best
+
+
+def _nascar_series_unnamed(league: str, stream_name: str) -> bool:
+    """Is ``league`` a NASCAR series the stream does not name (#1158)?
+
+    "NASCAR" is an umbrella over three national series and over every local
+    and touring race that carries the word, so for these leagues it is not
+    series evidence: only the series' own words are.
+    """
+    return league in NASCAR_SERIES_WORDS and league not in detect_nascar_series(stream_name)
+
+
 @dataclass
 class RacingMatchContext:
     """Context for racing event matching."""
@@ -185,6 +212,7 @@ class RacingMatcher:
         user_tz: ZoneInfo,
         anchor_dt: "datetime | None" = None,
         sport_durations: "dict[str, float] | None" = None,
+        cache_time_only: bool = True,
     ) -> MatchOutcome:
         """Match a racing stream to a provider event.
 
@@ -196,6 +224,8 @@ class RacingMatcher:
             stream_id: Stream ID (for caching)
             generation: Cache generation counter
             user_tz: User timezone for date validation
+            cache_time_only: False when the caller already holds a time-only
+                match from another league and will return that one (#1158)
 
         Returns:
             MatchOutcome with result
@@ -302,7 +332,7 @@ class RacingMatcher:
         result = self._match_to_event(ctx, window_events, league)
 
         # Cache successful matches
-        if result.is_matched and result.event:
+        if result.is_matched and result.event and (cache_time_only or not result.time_only):
             self._cache_result(ctx, result)
 
         return result
@@ -389,6 +419,14 @@ class RacingMatcher:
         if not self._covers_date(event, ctx.target_date, ctx.user_tz):
             return None
 
+        # A match cached before series words chose the league (#1158) must not
+        # replay: a stream naming one NASCAR series, cached on another, or a
+        # stream naming none that was bound on time alone (no name score).
+        # A user's own pick stands.
+        if not entry.user_corrected and self._stale_nascar_bind(ctx, entry.league, event):
+            self._cache.delete(ctx.group_id, ctx.stream_id, ctx.stream_name)
+            return None
+
         # Season-year gate, same as match(): a cached archival bind ("2008
         # Belgian Grand Prix" cached before the gate existed) must not keep
         # resurrecting through the cache.
@@ -413,6 +451,20 @@ class RacingMatcher:
             stream_id=ctx.stream_id,
             origin_match_method=entry.match_method,  # Original method
         )
+
+    @staticmethod
+    def _stale_nascar_bind(ctx: RacingMatchContext, league: str | None, event: Event) -> bool:
+        """Would today's rules refuse this cached NASCAR match outright?"""
+        if league not in NASCAR_SERIES_WORDS:
+            return False
+        named = detect_nascar_series(ctx.stream_name)
+        if len(named) == 1:
+            return league not in named
+        if league in named:
+            return False
+        stream_norm = normalize_text(ctx.stream_name)
+        score = _event_name_score(stream_norm, _augment_compounds(stream_norm), event)
+        return score < SINGLE_EVENT_SANITY_THRESHOLD
 
     def _match_to_event(
         self,
@@ -441,17 +493,10 @@ class RacingMatcher:
         country_scores: dict[str, float] = {}
 
         for event in events:
-            for candidate in (event.name, event.short_name, event.circuit_name):
-                if not candidate:
-                    continue
-                cand_norm = normalize_text(candidate)
-                score = max(
-                    fuzz.token_set_ratio(stream_norm, cand_norm),
-                    fuzz.token_set_ratio(stream_aug, _augment_compounds(cand_norm)),
-                )
-                if score > best_score:
-                    best_score = score
-                    best_event = event
+            score = _event_name_score(stream_norm, stream_aug, event)
+            if score > best_score:
+                best_score = score
+                best_event = event
             country = event.venue.country if event.venue else None
             if country:
                 country_scores[event.id] = fuzz.token_set_ratio(
@@ -483,10 +528,14 @@ class RacingMatcher:
         # Likewise a bare world feed ("F1 LIVE @ 13 Sep 09:00 AM") names the
         # series and a time that lands inside one of the covering event's
         # sessions — the same instant gate the EPG path uses (#245).
+        # Not for a NASCAR league the stream does not name (#1158): a bare
+        # "NASCAR" fits three national series and any local race, and on time
+        # alone "NASCAR Halloween Speedfest Langley" sat on the O'Reilly race.
         timed_evidence = (
             len(events) == 1
             and not feed_evidence
             and best_score < SINGLE_EVENT_SANITY_THRESHOLD
+            and not _nascar_series_unnamed(league, ctx.stream_name)
             and _single_event_evidence(ctx.stream_name)
             and self._stream_instant_covered(ctx, events[0])
         )
@@ -505,7 +554,7 @@ class RacingMatcher:
                 event.name,
                 best_score,
             )
-            return MatchOutcome.matched(
+            outcome = MatchOutcome.matched(
                 MatchMethod.DIRECT,
                 event,
                 detected_league=league,
@@ -513,6 +562,8 @@ class RacingMatcher:
                 stream_name=ctx.stream_name,
                 stream_id=ctx.stream_id,
             )
+            outcome.time_only = timed_evidence
+            return outcome
 
         # Strategy 2: Fuzzy match against multiple candidate events
         if best_event and best_score >= RACING_MATCH_THRESHOLD:
