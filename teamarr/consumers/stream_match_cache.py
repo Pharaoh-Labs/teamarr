@@ -608,6 +608,8 @@ class StreamMatchCache:
         group_id: int,
         stream_id: int,
         stream_name: str,
+        *,
+        failed_only: bool = False,
     ) -> bool:
         """Delete a single cache entry.
 
@@ -617,18 +619,21 @@ class StreamMatchCache:
             group_id: Event group ID
             stream_id: Stream ID
             stream_name: Exact stream name
+            failed_only: Preserve successful matches and user corrections.
 
         Returns:
             True if entry was deleted
         """
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
 
+        query = "DELETE FROM stream_match_cache WHERE fingerprint = ?"
+        params = (fingerprint,)
+        if failed_only:
+            query += " AND event_id = ? AND user_corrected = 0"
+            params += (FAILED_MATCH_EVENT_ID,)
         try:
             with self._conn() as conn:
-                cursor = conn.execute(
-                    "DELETE FROM stream_match_cache WHERE fingerprint = ?",
-                    (fingerprint,),
-                )
+                cursor = conn.execute(query, params)
                 self._commit(conn)
                 deleted = cursor.rowcount > 0
                 if deleted:

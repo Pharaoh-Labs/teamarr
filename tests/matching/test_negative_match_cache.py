@@ -237,7 +237,10 @@ class TestReadBack:
         assert m._cached_failure(self._classified(), 1, "S", target_date=day1) is not None
         assert m._cached_failure(self._classified(), 1, "S", target_date=day2) is None
 
-    def test_epg_match_does_not_pollute_negative_cache(self, on, db_factory, monkeypatch):
+    @pytest.mark.parametrize("cached_date", [None, "2026-11-20", "2026-11-21", "no_entry"])
+    def test_epg_match_does_not_pollute_negative_cache(
+        self, on, db_factory, monkeypatch, cached_date
+    ):
         """A stream that fails by name but matches via EPG in match_all must not
         leave a __FAILED__ entry in stream_match_cache (#1264)."""
         from datetime import date
@@ -246,6 +249,11 @@ class TestReadBack:
         from teamarr.consumers.matching.classifier import StreamCategory
         from teamarr.consumers.matching.matcher import MatchedStreamResult
 
+        cache = StreamMatchCache(db_factory)
+        if cached_date != "no_entry":
+            cache.set_failed(
+                1, 1, "Rays vs Tigers", 6, FailedReason.NO_EVENT_FOUND.value, cached_date
+            )
         m = _matcher(db_factory, epg_index=MagicMock(unavailable=None))
         m._epg_index.is_linear.return_value = True
         m._prefetch_events = lambda *a, **kw: None
@@ -274,7 +282,17 @@ class TestReadBack:
         )
 
         assert res.matched_count == 1
-        assert StreamMatchCache(db_factory).get(1, 1, "Rays vs Tigers", include_failed=True) is None
+        assert cache.get(1, 1, "Rays vs Tigers", include_failed=True) is None
+
+    def test_legacy_no_event_found_is_rechecked(self, on, db_factory):
+        from datetime import date
+
+        cache = StreamMatchCache(db_factory)
+        cache.set_failed(1, 1, "S", 6, FailedReason.NO_EVENT_FOUND.value)
+        m = _matcher(db_factory)
+
+        assert m._cached_failure(self._classified(), 1, "S", target_date=date(2026, 11, 21)) is None
+        assert cache.get(1, 1, "S", include_failed=True) is None
 
 
 class TestNoDatabase:

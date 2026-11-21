@@ -689,7 +689,7 @@ class StreamMatcher:
                         self._db_factory is not None
                         and any(r.from_cache and not r.matched for r in name_results)
                     ):
-                        self._cache.delete(self._group_id, stream_id, stream_name)
+                        self._cache.delete(self._group_id, stream_id, stream_name, failed_only=True)
                 elif not any(r.from_cache for r in match_results):
                     self._remember_failure(
                         match_results,
@@ -1131,14 +1131,14 @@ class StreamMatcher:
         # A dateless stream that failed with NO_EVENT_FOUND because its fixture
         # sat beyond +days_ahead can enter the window when target_date advances
         # (#1264). Re-match once per calendar day while keeping same-day runs
-        # cached.
+        # cached. Legacy rows have no date, so re-match those on first read.
         cached_target_date = cached_data.get("target_date")
         if (
             reason is FailedReason.NO_EVENT_FOUND
             and target_date is not None
-            and cached_target_date is not None
             and cached_target_date != target_date.isoformat()
         ):
+            self._cache.delete(self._group_id, stream_id, stream_name, failed_only=True)
             return None
 
         # A replayed failure is a sighting like any other (#1101). Every
@@ -1181,7 +1181,7 @@ class StreamMatcher:
         """
         if not _negative_cache_enabled() or self._db_factory is None or not outcomes:
             return
-        if any(o.is_matched if hasattr(o, "is_matched") else bool(o.matched) for o in outcomes):
+        if any(o.is_matched if isinstance(o, MatchOutcome) else o.matched for o in outcomes):
             return
 
         reasons = {o.failed_reason for o in outcomes}
