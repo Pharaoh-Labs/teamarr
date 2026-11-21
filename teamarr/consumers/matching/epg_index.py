@@ -130,7 +130,7 @@ class EPGProgramIndex:
         def _cache_key(program_tvg: str) -> tuple[str, str, str, bool, int]:
             return (program_tvg, start_iso, end_iso, exclude_teamarr, page_size)
 
-        def fetch(program_tvg: str) -> tuple[str, list[DispatcharrProgram]]:
+        def fetch(program_tvg: str) -> tuple[str, list[DispatcharrProgram] | None]:
             # One call per resolved EPG-source tvg_id (the endpoint does not
             # support multi-value tvg_id).
             programs = epg_manager.search_programs(
@@ -139,6 +139,8 @@ class EPGProgramIndex:
                 end_after=start_iso,
                 page_size=page_size,
             )
+            if programs is None:
+                return program_tvg, None
             if exclude_teamarr:
                 programs = [p for p in programs if not p.is_teamarr]
             programs.sort(key=lambda p: p.start_time or "")
@@ -156,6 +158,9 @@ class EPGProgramIndex:
             workers = min(FETCH_WORKERS, len(uncached_tvgs))
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 for program_tvg, programs in executor.map(fetch, uncached_tvgs):
+                    if programs is None:
+                        # A later group can retry an incomplete read.
+                        continue
                     programs_by_program_tvg[program_tvg] = programs
                     if program_cache is not None:
                         program_cache[_cache_key(program_tvg)] = programs

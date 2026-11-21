@@ -265,3 +265,19 @@ def test_build_reuses_run_scoped_program_cache():
     )
     assert mgr.search_programs.call_count == 3
     assert set(idx2.tvg_ids()) == {"FS1-Mirror.us", "ESPN.us"}
+
+
+def test_build_retries_failed_program_fetch_in_next_group():
+    mgr = _epg_mgr()
+    base = datetime(2026, 6, 1, 18, tzinfo=UTC)
+    end = base + timedelta(days=1)
+    mgr.search_programs.side_effect = [None, [_prog(1, "82547", base, end)]]
+    cache = {}
+
+    first = EPGProgramIndex.build(mgr, {"FS1.us": "82547"}, base, end, program_cache=cache)
+    assert first.tvg_ids() == []
+    assert not cache
+
+    second = EPGProgramIndex.build(mgr, {"Mirror.us": "82547"}, base, end, program_cache=cache)
+    assert second.tvg_ids() == ["Mirror.us"]
+    assert mgr.search_programs.call_count == 2
