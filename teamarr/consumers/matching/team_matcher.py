@@ -42,7 +42,11 @@ from teamarr.consumers.matching.country_resolver import (
 from teamarr.consumers.matching.country_resolver import (
     get_country_resolver,
 )
-from teamarr.consumers.matching.identity import TeamIdentityIndex, residual_contradicts
+from teamarr.consumers.matching.identity import (
+    TeamIdentityIndex,
+    residual_contradicts,
+    span_key,
+)
 from teamarr.consumers.matching.normalizer import normalize_for_matching
 from teamarr.consumers.matching.result import (
     FailedReason,
@@ -2987,14 +2991,39 @@ class TeamMatcher:
         # A weekday written beside the stream's own date belongs to the date,
         # not the team (#925): "UCLA at Maryland Sun @ Sep 27".
         junk = _weekday_words(ctx.classified.normalized.extracted_date)
-        refined1 = index.refine_side(ctx.team1, anchor="end", junk=junk)
-        refined2 = index.refine_side(ctx.team2, anchor="start", junk=junk)
+        # A user alias is a surface too (#1225): "NCAA Hockey - W. Michigan"
+        # must lose its label so the exact-key alias lookup can fire.
+        aliases = self._alias_surfaces()
+        refined1 = index.refine_side(
+            ctx.team1, anchor="end", junk=junk, extra_surfaces=aliases
+        )
+        refined2 = index.refine_side(
+            ctx.team2, anchor="start", junk=junk, extra_surfaces=aliases
+        )
         if refined1:
             ctx.team1 = refined1
             ctx.classified.team1 = refined1
         if refined2:
             ctx.team2 = refined2
             ctx.classified.team2 = refined2
+
+    def _alias_surfaces(self) -> dict[tuple[str, ...], tuple[str, ...]]:
+        """User alias texts as refinement surfaces: span key -> canonical names.
+
+        Derived from ``_reverse_aliases`` and rebuilt whenever that object is
+        replaced, so an alias edit counts on the next match (`reload_aliases`).
+        """
+        cached = getattr(self, "_alias_surface_cache", None)
+        if cached is not None and cached[0] is self._reverse_aliases:
+            return cached[1]
+        surfaces: dict[tuple[str, ...], tuple[str, ...]] = {}
+        for alias, targets in self._reverse_aliases.items():
+            key = span_key(alias)
+            if key:
+                names = dict.fromkeys(canonical for canonical, _league in targets)
+                surfaces[key] = tuple(dict.fromkeys((*surfaces.get(key, ()), *names)))
+        self._alias_surface_cache = (self._reverse_aliases, surfaces)
+        return surfaces
 
     def _fixture_leagues(self, ctx: MatchContext) -> set[str] | None:
         """Leagues where this stream's two sides could actually meet.
