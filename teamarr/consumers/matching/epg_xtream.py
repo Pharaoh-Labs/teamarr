@@ -24,8 +24,11 @@ import os
 import re
 import time
 import xml.etree.ElementTree as ET
+from collections import OrderedDict
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
+from sys import getsizeof
+from threading import Lock
 from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
@@ -44,17 +47,42 @@ XTREAM_EPG_SOURCE = "_xtream"
 # XMLTV timestamp: "YYYYMMDDHHMMSS[ +ZZZZ]" (offset optional; assume UTC if absent).
 _XMLTV_TIME = re.compile(r"^\s*(\d{14})(?:\s+([+-]\d{4}))?")
 
-# Bounded in-memory cache of parsed provider XMLTV programmes keyed by
-# (cache_file_path, mtime_ns, window_start, window_end) so multiple groups
-# sharing an Xtream account in one generation run do not re-parse an 80MB+
-# XML file from disk per group (#1263).
-_PARSE_CACHE_MAX = 8
-_PARSE_CACHE: dict[tuple[str, int, datetime, datetime], dict[str, list[DispatcharrProgram]]] = {}
+# Cache only requested channels. A large guide can contain hundreds of
+# thousands of programmes for channels the run never uses (#1263).
+_PARSE_CACHE_MAX_BYTES = 32 * 1024 * 1024
+_ChannelKey = tuple[str, int, datetime, datetime, str]
+_PARSE_CACHE: OrderedDict[_ChannelKey, tuple[int, list[DispatcharrProgram]]] = OrderedDict()
+_PARSE_CACHE_LOCK = Lock()
 
 
 def clear_xtream_parse_cache() -> None:
     """Drop cached in-memory XMLTV parses between generation runs."""
-    _PARSE_CACHE.clear()
+    with _PARSE_CACHE_LOCK:
+        _PARSE_CACHE.clear()
+
+
+def _cache_channels(channels: dict[_ChannelKey, list[DispatcharrProgram]]) -> None:
+    """Admit whole channel results under a shared, estimated byte budget."""
+    with _PARSE_CACHE_LOCK:
+        used = sum(size for size, _ in _PARSE_CACHE.values())
+        for key, programs in channels.items():
+            # Include text (especially descriptions), model and container overhead.
+            # Shared values are counted more than once, on purpose.
+            size = 256 + getsizeof(key) + sum(map(getsizeof, key)) + getsizeof(programs)
+            for program in programs:
+                fields = vars(program)
+                size += getsizeof(program) + getsizeof(fields)
+                size += sum(map(getsizeof, fields.values()))
+                size += sum(map(getsizeof, program.categories))
+            if size > _PARSE_CACHE_MAX_BYTES:
+                continue
+            if previous := _PARSE_CACHE.pop(key, None):
+                used -= previous[0]
+            while used + size > _PARSE_CACHE_MAX_BYTES:
+                _, (evicted_size, _) = _PARSE_CACHE.popitem(last=False)
+                used -= evicted_size
+            _PARSE_CACHE[key] = (size, programs)
+            used += size
 
 
 def is_xtream_account(account: dict) -> bool:
@@ -114,17 +142,15 @@ def _parse_xmltv_time(value: str | None) -> datetime | None:
 
 def parse_xmltv_programs(
     fileobj,
-    wanted_tvg_ids: set[str] | None,
+    wanted_tvg_ids: set[str],
     window_start: datetime,
     window_end: datetime,
 ) -> dict[str, list[DispatcharrProgram]]:
     """Stream-parse an XMLTV document into DispatcharrProgram lists per tvg_id.
 
-    Only ``<programme>`` elements whose ``channel`` is in ``wanted_tvg_ids`` (or
-    any non-empty channel when ``wanted_tvg_ids`` is ``None``) AND that overlap
-    [window_start, window_end] are kept, so a 100 MB / 300k-entry guide is
-    reduced to just the streams and window we care about. Uses ``iterparse``
-    and clears parsed elements so peak memory stays flat.
+    Only ``<programme>`` elements whose ``channel`` is in ``wanted_tvg_ids``
+    and that overlap [window_start, window_end] are kept. Uses ``iterparse``
+    and clears parsed XML elements as it goes.
 
     The result is keyed by the XMLTV ``channel`` id — which for an Xtream
     provider equals the M3U ``tvg_id`` — and holds the SAME DispatcharrProgram
@@ -132,7 +158,7 @@ def parse_xmltv_programs(
     to the source. Program ids are synthetic (negative, sequential): these
     programs never came from DP's API.
     """
-    if wanted_tvg_ids is not None and not wanted_tvg_ids:
+    if not wanted_tvg_ids:
         return {}
 
     by_tvg: dict[str, list[DispatcharrProgram]] = {}
@@ -145,7 +171,7 @@ def parse_xmltv_programs(
         if event != "end" or elem.tag != "programme":
             continue
         channel = elem.get("channel")
-        if channel and (wanted_tvg_ids is None or channel in wanted_tvg_ids):
+        if channel and channel in wanted_tvg_ids:
             start = _parse_xmltv_time(elem.get("start"))
             stop = _parse_xmltv_time(elem.get("stop"))
             # Overlap test (half-open); skip entries we can't window.
@@ -201,8 +227,8 @@ def fetch_xtream_programs(
 
     The raw XMLTV is streamed to a per-account cache file and re-downloaded only
     once the file is older than ``ttl_seconds`` (provider guides change slowly;
-    the file is large). Parsing is done fresh each call from the cached file,
-    filtered to ``wanted_tvg_ids`` + window. Any network/parse failure logs and
+    the file is large). Only channels not already cached for this file version
+    and window are parsed. Any network/parse failure logs and
     returns ``{}`` so EPG matching degrades to "no Xtream programs" rather than
     breaking generation.
     """
@@ -235,21 +261,24 @@ def fetch_xtream_programs(
             # fall through and use the stale cache if we have one
 
     try:
-        cache_path_str = str(cache_file)
-        mtime_ns = cache_file.stat().st_mtime_ns
-        parse_key = (cache_path_str, mtime_ns, window_start, window_end)
-        all_by_tvg = _PARSE_CACHE.get(parse_key)
-        if all_by_tvg is None:
+        guide_key = (str(cache_file), cache_file.stat().st_mtime_ns, window_start, window_end)
+        result: dict[str, list[DispatcharrProgram]] = {}
+        missing: set[str] = set()
+        with _PARSE_CACHE_LOCK:
+            for tvg in wanted_tvg_ids:
+                key = (*guide_key, tvg)
+                if cached := _PARSE_CACHE.get(key):
+                    _PARSE_CACHE.move_to_end(key)
+                    if cached[1]:
+                        result[tvg] = list(cached[1])
+                else:
+                    missing.add(tvg)
+        if missing:
             with open(cache_file, "rb") as fh:
-                all_by_tvg = parse_xmltv_programs(fh, None, window_start, window_end)
-            # Evict stale mtimes for the same cache file first, then oldest if full.
-            for k in [k for k in _PARSE_CACHE if k[0] == cache_path_str and k[1] != mtime_ns]:
-                del _PARSE_CACHE[k]
-            while len(_PARSE_CACHE) >= _PARSE_CACHE_MAX:
-                del _PARSE_CACHE[next(iter(_PARSE_CACHE))]
-            _PARSE_CACHE[parse_key] = all_by_tvg
+                parsed = parse_xmltv_programs(fh, missing, window_start, window_end)
+            _cache_channels({(*guide_key, tvg): parsed.get(tvg, []) for tvg in missing})
+            result.update({tvg: list(programs) for tvg, programs in parsed.items()})
 
-        result = {tvg: list(progs) for tvg, progs in all_by_tvg.items() if tvg in wanted_tvg_ids}
         logger.info(
             "[XTREAM-EPG] parsed %d/%d wanted tvg_ids, %d programs in window",
             len(result),
