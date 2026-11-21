@@ -507,7 +507,9 @@ class DynamicResolver:
             return None
 
         try:
-            result = dispatcharr.channels.create_profile(name)
+            # Empty on purpose: Dispatcharr's default fills a new profile with
+            # every channel it has, and the sync adds the ones that belong (#1260).
+            result = dispatcharr.channels.create_profile(name, start_empty=True)
             if result.success and result.data:
                 pid = result.data.get("id")
                 if pid:

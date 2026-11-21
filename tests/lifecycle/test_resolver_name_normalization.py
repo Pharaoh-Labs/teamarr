@@ -127,3 +127,36 @@ class TestProfileLookup:
 
         assert r._get_or_create_profile("   ") is None
         dispatcharr.channels.create_profile.assert_not_called()
+
+
+class TestNewProfileStartsEmpty:
+    """#1260: Dispatcharr fills a new profile with every channel unless asked not to."""
+
+    def test_resolver_asks_for_an_empty_profile(self):
+        dispatcharr = MagicMock()
+        dispatcharr.channels.create_profile.return_value = MagicMock(
+            success=True, data={"id": 9}
+        )
+        r = _resolver({"Sports": 42}, dispatcharr)
+
+        assert r._get_or_create_profile("NHL") == 9
+        dispatcharr.channels.create_profile.assert_called_once_with("NHL", start_empty=True)
+
+    def test_manager_sends_start_empty_only_when_asked(self):
+        from teamarr.dispatcharr.managers.channels import ChannelManager
+
+        client = MagicMock()
+        client.post.return_value = MagicMock(status_code=201, json=lambda: {"id": 9})
+        manager = ChannelManager(client)
+
+        manager.create_profile(" NHL ", start_empty=True)
+        manager.create_profile("Manual")
+
+        assert client.post.call_args_list[0].args == (
+            "/api/channels/profiles/",
+            {"name": "NHL", "start_empty": True},
+        )
+        assert client.post.call_args_list[1].args == (
+            "/api/channels/profiles/",
+            {"name": "Manual"},
+        )
