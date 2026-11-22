@@ -71,6 +71,9 @@ class EPGProgramIndex:
         window_end: datetime,
         exclude_teamarr: bool = True,
         page_size: int = 500,
+        program_cache: (
+            dict[tuple[str, str, str, bool, int], list[DispatcharrProgram]] | None
+        ) = None,
     ) -> "EPGProgramIndex":
         """Fetch and index programs per candidate stream over a time window.
 
@@ -89,6 +92,10 @@ class EPGProgramIndex:
             window_end: End of the window to index.
             exclude_teamarr: Drop programs from our own "_Teamarr" EPG source.
             page_size: Page size passed to the search endpoint.
+            program_cache: Optional run-scoped cache keyed by
+                ``(program_tvg, start_iso, end_iso, exclude_teamarr, page_size)``
+                so multiple groups in the same generation run reuse already-fetched
+                program lists instead of re-querying Dispatcharr (#1263).
 
         Returns:
             An EPGProgramIndex. Empty if the endpoint is unsupported, no
@@ -120,7 +127,10 @@ class EPGProgramIndex:
                 continue
             streams_by_program.setdefault(program_tvg, []).append(stream_tvg)
 
-        def fetch(program_tvg: str) -> tuple[str, list[DispatcharrProgram]]:
+        def _cache_key(program_tvg: str) -> tuple[str, str, str, bool, int]:
+            return (program_tvg, start_iso, end_iso, exclude_teamarr, page_size)
+
+        def fetch(program_tvg: str) -> tuple[str, list[DispatcharrProgram] | None]:
             # One call per resolved EPG-source tvg_id (the endpoint does not
             # support multi-value tvg_id).
             programs = epg_manager.search_programs(
@@ -129,23 +139,42 @@ class EPGProgramIndex:
                 end_after=start_iso,
                 page_size=page_size,
             )
+            if programs is None:
+                return program_tvg, None
             if exclude_teamarr:
                 programs = [p for p in programs if not p.is_teamarr]
             programs.sort(key=lambda p: p.start_time or "")
             return program_tvg, programs
 
+        programs_by_program_tvg: dict[str, list[DispatcharrProgram]] = {}
+        uncached_tvgs: list[str] = []
+        for program_tvg in streams_by_program:
+            if program_cache is not None and _cache_key(program_tvg) in program_cache:
+                programs_by_program_tvg[program_tvg] = program_cache[_cache_key(program_tvg)]
+            else:
+                uncached_tvgs.append(program_tvg)
+
+        if uncached_tvgs:
+            workers = min(FETCH_WORKERS, len(uncached_tvgs))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                for program_tvg, programs in executor.map(fetch, uncached_tvgs):
+                    if programs is None:
+                        # A later group can retry an incomplete read.
+                        continue
+                    programs_by_program_tvg[program_tvg] = programs
+                    if program_cache is not None:
+                        program_cache[_cache_key(program_tvg)] = programs
+
         by_tvg: dict[str, list[DispatcharrProgram]] = {}
         total = 0
-        if streams_by_program:
-            workers = min(FETCH_WORKERS, len(streams_by_program))
-            with ThreadPoolExecutor(max_workers=workers) as executor:
-                for program_tvg, programs in executor.map(fetch, streams_by_program.keys()):
-                    if not programs:
-                        continue
-                    # Key the result by the stream tvg_id(s) for matcher lookup.
-                    for stream_tvg in streams_by_program[program_tvg]:
-                        by_tvg[stream_tvg] = programs
-                        total += len(programs)
+        for program_tvg, stream_tvgs in streams_by_program.items():
+            programs = programs_by_program_tvg.get(program_tvg)
+            if not programs:
+                continue
+            # Key the result by the stream tvg_id(s) for matcher lookup.
+            for stream_tvg in stream_tvgs:
+                by_tvg[stream_tvg] = programs
+                total += len(programs)
 
         logger.info(
             "[EPG-INDEX] Indexed %d programs across %d/%d tvg_ids "
@@ -153,7 +182,7 @@ class EPGProgramIndex:
             total,
             len(by_tvg),
             len(tvg_id_resolution),
-            len(streams_by_program),
+            len(uncached_tvgs),
             (datetime.now(UTC) - fetch_started).total_seconds(),
             start_iso,
             end_iso,

@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, time
 from enum import Enum
+from functools import lru_cache
 from re import Pattern
 from typing import cast
 
@@ -1468,6 +1469,35 @@ _FEEDER_PARENTS: dict[str, tuple[str, ...]] = {
 }
 
 
+# Words that name ONE of NASCAR's three national series (#1158). The umbrella
+# signature above scopes "NASCAR" to all three leagues, and on a weekend where
+# two of them share a track nothing in that scope says which one a stream is
+# for. League code -> pattern; the apostrophe in O'Reilly arrives as ', ` or
+# a typographic quote, or not at all. "Xfinity" is the series' former name and
+# still what many providers write. A sponsor word followed by a race distance
+# is a race, not a series: the 2026 Cup schedule has an "Xfinity 500", and
+# "NASCAR: Xfinity 500" must stay a name match on the Cup event.
+NASCAR_SERIES_WORDS: "dict[str, Pattern[str]]" = {
+    "nascar-cup": re.compile(r"\b(?:cup\s+series|nascar\s+cup)\b", re.IGNORECASE),
+    "nascar-xfinity": re.compile(
+        r"\b(?:o\W?reilly(?!\s+auto\s+parts\s+\d)|xfinity(?!\s+\d)|orap)\b", re.IGNORECASE
+    ),
+    "nascar-truck": re.compile(r"\b(?:trucks?|craftsman(?!\s+\d))\b", re.IGNORECASE),
+}
+
+
+def detect_nascar_series(text: str) -> "tuple[str, ...]":
+    """NASCAR league codes whose series the text names by its own words.
+
+    Empty when the text names none — a bare "NASCAR" included. More than one
+    is possible (a Cup race sponsored by another series' sponsor); callers
+    narrow only on exactly one.
+    """
+    if not text:
+        return ()
+    return tuple(lg for lg, pattern in NASCAR_SERIES_WORDS.items() if pattern.search(text))
+
+
 def detect_racing_series_leagues(text: str) -> "tuple[str, ...] | None":
     """League codes for the racing series the text explicitly names.
 
@@ -1696,6 +1726,12 @@ def _clean_fighter_name(name: str) -> str | None:
 # =============================================================================
 
 
+@lru_cache(maxsize=256)
+def _feed_term_pattern(term: str) -> Pattern[str]:
+    """Compile and cache a word-bounded feed-hint regex for a single term (#1263)."""
+    return re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+
+
 def detect_and_strip_feed_hint(
     text: str,
     home_terms: list[str],
@@ -1715,14 +1751,14 @@ def detect_and_strip_feed_hint(
         Tuple of (cleaned_text, feed_hint) where feed_hint is "home", "away", or None
     """
     for term in home_terms:
-        pattern = re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+        pattern = _feed_term_pattern(term)
         if pattern.search(text):
             cleaned = pattern.sub("", text)
             cleaned = " ".join(cleaned.split())  # Normalize whitespace
             return cleaned, "home"
 
     for term in away_terms:
-        pattern = re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+        pattern = _feed_term_pattern(term)
         if pattern.search(text):
             cleaned = pattern.sub("", text)
             cleaned = " ".join(cleaned.split())  # Normalize whitespace

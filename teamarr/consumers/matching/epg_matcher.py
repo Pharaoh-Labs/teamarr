@@ -116,15 +116,27 @@ def build_match_input(program: DispatcharrProgram) -> str:
     a matchup carried inline in the title with a colon/dash separator ("MLB
     Baseball : Mets at Mariners") is split at that separator so the leading
     league/category still becomes a strippable hint — matching the canonical
-    title|sub_title shape. Feeds that already split cleanly (no decorations, no
-    inline separator) are unaffected.
+    title|sub_title shape. A title that spans lines is split at the line break
+    the same way (#1262). Feeds that already split cleanly (no decorations, no
+    inline separator, one line) are unaffected.
     """
-    title = _clean_epg_segment(program.title or "")
+    title_lines = _clean_epg_lines(program.title or "")
     sub_title = _clean_epg_segment(program.sub_title or "")
-    if title and not sub_title:
-        title = _INLINE_SEP.sub(" | ", title, count=1)
-    parts = [p for p in (title, sub_title) if p]
+    if len(title_lines) == 1 and not sub_title:
+        title_lines = [_INLINE_SEP.sub(" | ", title_lines[0], count=1)]
+    parts = [p for p in (*title_lines, sub_title) if p]
     return " | ".join(parts)
+
+
+def _clean_epg_lines(text: str) -> list[str]:
+    """One cleaned segment per line of an EPG field.
+
+    Some feeds put the show on the first line of the title and the matchup on
+    the second ("College Football ᴺᵉʷ" / "Wake Forest at Georgia Tech", #1262).
+    A line break is the feed's own boundary, so each line is its own segment;
+    folding it into a space made the first side "College Football Wake Forest".
+    """
+    return [line for line in map(_clean_epg_segment, text.splitlines()) if line]
 
 
 def _clean_epg_segment(text: str) -> str:

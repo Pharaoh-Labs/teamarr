@@ -325,6 +325,7 @@ def get_next_channel_number(
         season_type,
         segment=segment,
         exception_keyword=exception_keyword,
+        channel_kind="event",
     )
 
     used_set = _get_all_used_channels(conn)
@@ -640,6 +641,7 @@ def reassign_all_channels(
             ch.get("season_type"),
             segment=ch.get("segment"),
             exception_keyword=ch.get("exception_keyword"),
+            channel_kind="event",
         )
         by_lane[lane.id].append(ch)
 

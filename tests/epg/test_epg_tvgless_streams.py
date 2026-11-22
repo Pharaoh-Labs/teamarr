@@ -45,7 +45,7 @@ class _Harness(StreamMatching):
 def _capture_build(monkeypatch) -> dict:
     seen: dict = {}
 
-    def fake_build(_epg, resolution, _start, _end):
+    def fake_build(_epg, resolution, _start, _end, **_kwargs):
         seen["resolution"] = dict(resolution)
         return EPGProgramIndex({})
 
@@ -87,7 +87,7 @@ def test_provider_guide_fallback_is_not_offered_a_borrowed_id(monkeypatch):
     _capture_build(monkeypatch)
     wanted_seen: list[set] = []
 
-    def fake_fetch(_url, *, cache_key, wanted_tvg_ids, window_start, window_end, ttl_seconds):
+    def fake_fetch(_url, *, cache_key, wanted_tvg_ids, window_start, window_end, **_):
         wanted_seen.append(set(wanted_tvg_ids))
         return {}
 

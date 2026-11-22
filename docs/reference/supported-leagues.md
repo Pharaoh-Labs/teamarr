@@ -6,7 +6,7 @@ nav_order: 1
 
 # Supported Sports & Leagues
 
-Teamarr supports **180 pre-configured leagues** across 16 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
+Teamarr supports **181 pre-configured leagues** across 16 sports, plus **~228 dynamically discovered soccer leagues** from ESPN. Most pre-configured leagues have full support (team import + event matching) — see the Support Levels table below for the event-only exceptions. Discovered leagues support event matching only.
 
 ## Support Levels
 
@@ -25,7 +25,7 @@ Leagues have different levels of support:
 
 | Provider | Description |
 |----------|-------------|
-| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. Covers international cricket (ODIs, T20Is, Tests) and franchise cricket (IPL, BBL, SA20, MLC), without an API key. |
+| **ESPN** | Primary provider for most US leagues and international soccer. Discovers ~228 soccer leagues dynamically. Covers international cricket (ODIs, T20Is, Tests) and franchise cricket (IPL, BBL, SA20, MLC, CPL), without an API key. |
 | **Bell Media** | CFL plus CHL, OHL, WHL, QMJHL, AHL, and PWHL via TSN's public sports widget API. |
 | **NASCAR** | NASCAR Cup, O'Reilly (Xfinity), and Truck series via the official cf.nascar.com schedule API. Full race-weekend sessions, no API key required. See [provider docs](providers/nascar). |
 | **MLB Stats API** | Minor League Baseball (MiLB) — Triple-A, Double-A, High-A, Single-A, Rookie |
@@ -360,6 +360,7 @@ splitting and matching details.
 | Big Bash League | `bbl` | ESPN |
 | SA20 | `sa20` | ESPN |
 | Major League Cricket | `mlc` | ESPN |
+| Caribbean Premier League | `cpl` | ESPN |
 
 {: .note }
 The three international leagues filter ESPN's daily cricket score panel by format, over changing tour IDs. They have no team list, so team channels and the team importer are not offered for them. A Test match is one channel per day: each day is a session with its own create and retire time, named by `{session_name}` ("Day 3"), and a stream whose name says "Day 3" feeds that day only while a plain "1st Test" feed feeds every day (#944). The four franchise leagues use ESPN's complete season scoreboards, support team import and team channels, and require **no premium key**. See [franchise cricket migration notes](providers/espn.md#franchise-cricket).

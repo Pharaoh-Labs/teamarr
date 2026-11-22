@@ -71,6 +71,28 @@ def test_build_input_combines_title_and_subtitle():
     assert build_match_input(p) == "MLB Baseball | Chicago Cubs at St. Louis Cardinals"
 
 
+def test_build_input_splits_a_title_at_its_line_break():
+    # #1262: show on line one, matchup on line two, no sub_title. The line
+    # break is the feed's boundary; a space made team1 "College Football Wake
+    # Forest".
+    p = _prog("College Football \u1d3a\u1d49\u02b7\nWake Forest at Georgia Tech", None)
+    assert build_match_input(p) == "College Football | Wake Forest at Georgia Tech"
+    classified = classify_stream(build_match_input(p))
+    assert (classified.team1, classified.team2) == ("Wake Forest", "Georgia Tech")
+
+
+def test_build_input_line_break_variants():
+    crlf = _prog("College Football\r\nWake Forest at Georgia Tech", "")
+    assert build_match_input(crlf) == "College Football | Wake Forest at Georgia Tech"
+    # Blank lines add no empty segment.
+    assert build_match_input(_prog("NHL Hockey\n", None)) == "NHL Hockey"
+    assert build_match_input(_prog("\n\nCubs at Cardinals", None)) == "Cubs at Cardinals"
+    # A multi-line title keeps its own lines; the inline-separator rule is for
+    # a one-line title only.
+    two = _prog("MLB Baseball\nMets - Mariners", None)
+    assert build_match_input(two) == "MLB Baseball | Mets - Mariners"
+
+
 def test_build_input_generic_title_no_subtitle():
     p = _prog("NHL Hockey", None)
     assert build_match_input(p) == "NHL Hockey"

@@ -17,7 +17,7 @@ from teamarr.providers.espn.provider import ESPNProvider
 FIXTURE = json.loads(
     (Path(__file__).parent / "fixtures" / "espn_cricket_franchises.json").read_text()
 )
-SERIES = {"mlc": "21266", "ipl": "8048", "bbl": "8044", "sa20": "21275"}
+SERIES = {"mlc": "21266", "ipl": "8048", "bbl": "8044", "sa20": "21275", "cpl": "8623"}
 
 
 def provider_for(league):
@@ -34,7 +34,10 @@ def provider_for(league):
     return ESPNProvider(client=client, league_mapping_source=source), payload
 
 
-@pytest.mark.parametrize("league,count", [("mlc", 6), ("ipl", 10), ("bbl", 8), ("sa20", 6)])
+@pytest.mark.parametrize(
+    "league,count",
+    [("mlc", 6), ("ipl", 10), ("bbl", 8), ("sa20", 6), ("cpl", 7)],
+)
 def test_import_and_lookup_use_full_scoreboard_team_list(league, count):
     provider, payload = provider_for(league)
     teams = provider.get_league_teams(league)

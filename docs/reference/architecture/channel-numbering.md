@@ -38,7 +38,7 @@ holds golden-equivalence tests that assert this for compact, gap and strict.
 ## Resolution: most specific wins
 
 `LaneResolver.resolve(sport, league, home_team, away_team, season_type, *,
-segment, exception_keyword)` returns the lane for a channel. Precedence:
+segment, exception_keyword, channel_kind)` returns the lane for a channel. Precedence:
 
 1. **Team** pin matching the home team
 2. **Team** pin matching the away team
@@ -51,7 +51,8 @@ one team per side), so there is no user-facing tie-break; `(sort_order, id)`
 remains as a deterministic fallback for legacy rows. Team matching is `(sport, team_name)` case-insensitive on either side
 of the event — the same key `channel_priority_teams` uses — so a team pin
 follows the club into cup competitions. A team pin covers both the team's
-dedicated team channel and every event channel it plays in.
+dedicated team channel and every event channel it plays in, unless a
+channel kind condition (#1224) limits it to one of the two.
 
 ### Season condition (#950)
 
@@ -72,6 +73,27 @@ The season is stored on the channel (`managed_channels.season_type`, written
 at creation and kept current by the settings sync), because re-layout
 resolves lanes from the stored row and has no event to ask.
 
+### Channel kind condition (#1224)
+
+A pin may carry `channel_kind`: `team` (managed team channels only) or `event`
+(event channels only); `NULL` takes both, as before. It lets one league number
+its games and its team channels in two blocks ("NFL games at 1710" as
+`event`, "NFL team channels at 1750" as `team`).
+
+The kind is not stored on a channel; the caller states it. Every event-channel
+path passes `channel_kind="event"`: `get_next_channel_number` and
+`reassign_all_channels` in `channel_numbers.py`, the pinned-block channel group
+lookup (`ChannelLifecycleService._pinned_block_group`), and the count and
+preview routes. `TeamChannelManager._allocate_number` passes `"team"`. A caller
+that passes none satisfies no kind condition, the same rule as an unknown
+season or segment. A new caller of `LaneResolver.resolve` / `match` must state
+its kind, or kind-limited blocks are invisible to it.
+
+At its scope rank a kind-limited row outranks an unconditioned one, as the last
+term of the fixed key below. A pin's channel group (#950) is read for event
+channels only, so a `team` block's group is never applied; team channels take
+their group from the team channel settings.
+
 ### Segment and keyword conditions (#1018)
 
 A pin may also carry `segments` (a list of session / card-segment codes) and a
@@ -85,7 +107,8 @@ order or on how many conditions a row has:
    no keyword
 2. rows with segments before rows without
 3. rows with a season before rows without
-4. `(sort_order, id)`
+4. rows with a channel kind before rows without (#1224, below)
+5. `(sort_order, id)`
 
 A season-only row therefore resolves exactly as before. For example, a
 `keyword=main` block beats a `segments=[race]` block for the main race

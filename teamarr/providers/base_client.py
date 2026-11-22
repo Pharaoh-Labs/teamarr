@@ -78,24 +78,55 @@ def configure_provider_request_policy(
     )
 
 
+def _sleep(seconds: float) -> None:
+    """Every sleep in this module goes through here (tests patch it)."""
+    time.sleep(seconds)
+
+
+def _monotonic() -> float:
+    """The clock the shared rate-limit deadline is measured on (tests patch it)."""
+    return time.monotonic()
+
+
 class _ProviderCooldown:
-    """One shared wait for responses from the same wave of requests."""
+    """A provider's shared rate-limit wait: a deadline that only moves later.
+
+    Only a 429 sets it (#1277). A 5xx or connection retry is one request's
+    problem and sleeps in its own thread; a rate limit is the provider
+    telling every caller to stop, so requests about to be sent wait for it.
+    The lock guards the deadline and is never held during a sleep.
+    """
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._epoch = 0
+        self._until = 0.0  # _monotonic() deadline; 0.0 = no wait
 
-    def wait(self) -> int:
-        with self._lock:
-            return self._epoch
+    def wait(self) -> None:
+        """Sleep until the shared deadline has passed. Call before sending."""
+        slept_to = 0.0
+        while True:
+            with self._lock:
+                until = self._until
+            # A sleep is trusted to last as long as asked, so the loop goes
+            # round again only for a deadline extended meanwhile. Re-reading
+            # the clock instead would spin under a patched sleep.
+            if until <= slept_to:
+                return
+            remaining = until - _monotonic()
+            if remaining <= 0:
+                return
+            _sleep(remaining)
+            slept_to = until
 
-    def backoff(self, delay: float, observed_epoch: int) -> None:
-        # New requests wait on this lock. Responses sent before the wait
-        # reuse it instead of each starting a new delay.
+    def rate_limited(self, delay: float) -> None:
+        """Record a 429 asking for ``delay`` seconds, then wait it out.
+
+        The deadline is only ever extended, so the longest wait any thread
+        was given wins, and the caller waits for that one too.
+        """
         with self._lock:
-            if self._epoch == observed_epoch:
-                time.sleep(max(0.0, delay))
-                self._epoch += 1
+            self._until = max(self._until, _monotonic() + max(0.0, delay))
+        self.wait()
 
 
 _cooldowns: dict[str, _ProviderCooldown] = {}
@@ -189,7 +220,7 @@ class BaseHTTPClient:
         rate_limit_retries = 0
 
         for attempt in range(self._retry_count + RATE_LIMIT_MAX_RETRIES):
-            epoch = self._cooldown.wait()
+            self._cooldown.wait()
             try:
                 client = self._get_client()
                 response = client.get(url, params=params)
@@ -229,7 +260,7 @@ class BaseHTTPClient:
                         delay,
                         url,
                     )
-                    self._cooldown.backoff(delay, epoch)
+                    self._cooldown.rate_limited(delay)
                     continue
 
                 response.raise_for_status()
@@ -246,7 +277,7 @@ class BaseHTTPClient:
                     call_metrics.record_failure(self.PROVIDER, label, str(e.response.status_code))
                     return None
                 if attempt < self._retry_count - 1:
-                    self._cooldown.backoff(self._calculate_delay(attempt), epoch)
+                    _sleep(self._calculate_delay(attempt))
                     continue
                 call_metrics.record_failure(self.PROVIDER, label, str(e.response.status_code))
                 return None
@@ -258,7 +289,7 @@ class BaseHTTPClient:
                 # Don't reset client here - causes race conditions in parallel
                 # processing; the httpx pool handles stale connections itself
                 if attempt < self._retry_count - 1:
-                    self._cooldown.backoff(self._calculate_delay(attempt), epoch)
+                    _sleep(self._calculate_delay(attempt))
                     continue
                 call_metrics.record_failure(self.PROVIDER, label, "connection")
                 return None

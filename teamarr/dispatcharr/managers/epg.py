@@ -430,7 +430,7 @@ class EPGManager:
         epg_source: int | str | None = None,
         page_size: int = 500,
         fields: str | None = None,
-    ) -> list[DispatcharrProgram]:
+    ) -> list[DispatcharrProgram] | None:
         """Search EPG programs via /api/epg/programs/search/.
 
         Fetches all matching programs across pages (DRF-paginated). Use the
@@ -452,10 +452,11 @@ class EPGManager:
             fields: Optional comma-separated field projection (server-supported).
 
         Returns:
-            List of DispatcharrProgram. Empty if unsupported or no matches.
+            List of DispatcharrProgram. Empty if unsupported or no matches;
+            None if the support probe fails transiently or the search cannot read all pages.
         """
         if not self.supports_program_search():
-            return []
+            return [] if self._programs_search_supported is False else None
 
         params: dict[str, str | int] = {"page_size": page_size}
         if tvg_id is not None:
@@ -474,7 +475,11 @@ class EPGManager:
             params["fields"] = fields
 
         endpoint = f"{self._PROGRAMS_SEARCH_PATH}?{urlencode(params)}"
-        raw = self._client.paginated_get(endpoint, error_context="epg programs")
+        raw = self._client.paginated_get_or_none(
+            endpoint, error_context="epg programs", require_complete=True
+        )
+        if raw is None:
+            return None
 
         programs: list[DispatcharrProgram] = []
         for item in raw:

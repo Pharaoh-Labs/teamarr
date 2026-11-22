@@ -343,39 +343,18 @@ class DispatcharrClient:
             List of all items from all pages
         """
 
-        def fetch(url: str) -> dict | list | None:
-            """One page. ``None`` means the request failed — never an empty page."""
-            response = self.get(url)
-            if response is None or response.status_code != 200:
-                status = response.status_code if response else "No response"
-                logger.error("[DISPATCHARR] Failed to get %s: %s", error_context, status)
-                return None
-            return response.json()
-
-        def follow(data: dict, into: list[dict]) -> None:
-            """Walk `next` links from an already-fetched page, appending."""
-            next_page = _next_path(data)
-            while next_page:
-                page = fetch(next_page)
-                if page is None:
-                    return
-                if not isinstance(page, dict):
-                    into.extend(page)
-                    return
-                into.extend(page.get("results", []))
-                next_page = _next_path(page)
-
         items = self.paginated_get_or_none(initial_endpoint, error_context=error_context)
         return [] if items is None else items
 
     def paginated_get_or_none(
-        self, initial_endpoint: str, error_context: str = "items"
+        self, initial_endpoint: str, error_context: str = "items", *, require_complete: bool = False
     ) -> list[dict] | None:
         """``paginated_get`` that answers ``None`` when page 1 cannot be read.
 
         Callers that take a destructive decision on "nothing there" (the team
         channel sync recreates channels it cannot see) need failure and empty
         told apart; ``[]`` from ``paginated_get`` conflates them (#826).
+        With ``require_complete``, also return ``None`` when a later page fails.
         """
 
         def fetch(url: str) -> dict | list | None:
@@ -385,20 +364,34 @@ class DispatcharrClient:
                 status = response.status_code if response else "No response"
                 logger.error("[DISPATCHARR] Failed to get %s: %s", error_context, status)
                 return None
-            return response.json()
+            try:
+                data = response.json()
+            except ValueError:
+                if not require_complete:
+                    raise
+                logger.error("[DISPATCHARR] Invalid JSON in %s response", error_context)
+                return None
+            if require_complete and not (
+                isinstance(data, list)
+                or (isinstance(data, dict) and isinstance(data.get("results"), list))
+            ):
+                logger.error("[DISPATCHARR] Invalid %s response", error_context)
+                return None
+            return data
 
-        def follow(data: dict, into: list[dict]) -> None:
-            """Walk `next` links from an already-fetched page, appending."""
+        def follow(data: dict, into: list[dict]) -> bool:
+            """Append remaining pages and report whether all were read."""
             next_page = _next_path(data)
             while next_page:
                 page = fetch(next_page)
                 if page is None:
-                    return
+                    return False
                 if not isinstance(page, dict):
                     into.extend(page)
-                    return
+                    return True
                 into.extend(page.get("results", []))
                 next_page = _next_path(page)
+            return True
 
         first = fetch(initial_endpoint)
         if first is None:
@@ -416,8 +409,8 @@ class DispatcharrClient:
 
         if pages is None or pages <= 1:
             # No usable count, or nothing beyond page 1: walk `next` as before.
-            follow(first, all_items)
-            return all_items
+            complete = follow(first, all_items)
+            return all_items if complete or not require_complete else None
 
         # Pages 2..N are independently addressable, so fetch them at once rather
         # than paying a round trip each (#735; same shape as m3u.list_streams,
@@ -464,13 +457,13 @@ class DispatcharrClient:
                     page_no,
                     pages,
                 )
-                return all_items
+                return None if require_complete else all_items
             all_items.extend(page_items)
 
         # The collection can grow between page 1 and the last page; whatever
         # `next` still points at is picked up here.
-        follow(last, all_items)
-        return all_items
+        complete = follow(last, all_items)
+        return all_items if complete or not require_complete else None
 
     def parse_api_error(self, response: httpx.Response | None) -> str:
         """Parse error message from API response.

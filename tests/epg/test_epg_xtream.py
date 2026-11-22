@@ -3,8 +3,11 @@
 import io
 from datetime import UTC, datetime
 
+from teamarr.consumers.matching import epg_xtream
 from teamarr.consumers.matching.epg_xtream import (
+    XtreamParseCache,
     _parse_xmltv_time,
+    fetch_xtream_programs,
     is_xtream_account,
     parse_xmltv_programs,
     xmltv_url,
@@ -135,3 +138,59 @@ def test_parse_empty_wanted_returns_empty():
     ws = datetime(2026, 6, 3, 0, tzinfo=UTC)
     we = datetime(2026, 6, 5, 0, tzinfo=UTC)
     assert _parse(set(), ws, we) == {}
+
+
+def test_fetch_xtream_programs_reuses_only_requested_channels(tmp_path, monkeypatch):
+    """An overlapping lookup scans the guide only for previously unseen channels."""
+    monkeypatch.setenv("TEAMARR_CACHE_DIR", str(tmp_path))
+    cache = XtreamParseCache()
+    cache_file = tmp_path / "xtream_acct4.xml"
+    cache_file.write_text(_XML)
+
+    ws = datetime(2026, 6, 3, 22, tzinfo=UTC)
+    we = datetime(2026, 6, 4, 6, tzinfo=UTC)
+
+    real_parse = parse_xmltv_programs
+    parsed_channels = []
+
+    def counting_parse(fh, wanted, window_start, window_end):
+        parsed_channels.append(set(wanted))
+        return real_parse(fh, wanted, window_start, window_end)
+
+    monkeypatch.setattr(epg_xtream, "parse_xmltv_programs", counting_parse)
+
+    def fetch(*tvgs):
+        return fetch_xtream_programs(
+            "https://db4.org/xmltv.php", "acct4", set(tvgs), ws, we, parse_cache=cache
+        )
+
+    assert set(fetch("USANetwork.us", "missing")) == {"USANetwork.us"}
+    assert set(fetch("USANetwork.us", "ESPN.us", "missing")) == {"USANetwork.us", "ESPN.us"}
+    assert set(fetch("ESPN.us", "missing")) == {"ESPN.us"}
+    assert parsed_channels == [{"USANetwork.us", "missing"}, {"ESPN.us"}]
+
+    cache = XtreamParseCache()
+    assert set(fetch("ESPN.us")) == {"ESPN.us"}
+    assert parsed_channels[-1] == {"ESPN.us"}
+    assert len(parsed_channels) == 3
+
+
+def test_fetch_xtream_programs_skips_caching_oversized_channel(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEAMARR_CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(epg_xtream, "_PARSE_CACHE_MAX_BYTES", 1024)
+    cache = XtreamParseCache()
+    cache_file = tmp_path / "xtream_acct4.xml"
+    cache_file.write_text(
+        '<tv><programme channel="ESPN.us" start="20260603230000 +0000" '
+        'stop="20260604010000 +0000"><title>Game</title><desc>'
+        + ("x" * 4096)
+        + "</desc></programme></tv>"
+    )
+    ws = datetime(2026, 6, 3, 22, tzinfo=UTC)
+    we = datetime(2026, 6, 4, 6, tzinfo=UTC)
+    args = ("https://db4.org/xmltv.php", "acct4", {"ESPN.us"}, ws, we)
+
+    assert fetch_xtream_programs(*args, parse_cache=cache)["ESPN.us"][0].title == "Game"
+    # Replace the parser now to prove the over-budget result was not reused.
+    monkeypatch.setattr(epg_xtream, "parse_xmltv_programs", lambda *_: {})
+    assert fetch_xtream_programs(*args, parse_cache=cache) == {}

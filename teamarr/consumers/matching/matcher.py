@@ -32,10 +32,12 @@ from zoneinfo import ZoneInfo
 
 from teamarr.config import get_user_timezone
 from teamarr.consumers.matching.classifier import (
+    NASCAR_SERIES_WORDS,
     ClassifiedStream,
     CustomRegexConfig,
     StreamCategory,
     classify_stream,
+    detect_nascar_series,
     detect_racing_series_leagues,
     has_racing_text_evidence,
 )
@@ -1836,14 +1838,7 @@ class StreamMatcher:
         anchor_dt: "datetime | None" = None,
     ) -> MatchOutcome:
         """Match a team-vs-team stream."""
-        # Determine effective stream timezone for date/time comparison
-        # Priority: extracted TZ from stream > group setting > None (use user_tz as fallback)
-        stream_tz = self._stream_tz
-        if classified.normalized.extracted_tz:
-            try:
-                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
-            except (KeyError, ValueError):
-                pass  # Keep group setting or None
+        stream_tz = self._known_stream_tz(classified)
 
         search_leagues = self._non_tennis_leagues(self._search_leagues)
         if not search_leagues:
@@ -1892,12 +1887,7 @@ class StreamMatcher:
         anchor_dt: "datetime | None" = None,
     ) -> list[MatchOutcome]:
         """Match a single-team branded stream, returning one outcome per matched event."""
-        stream_tz = self._stream_tz
-        if classified.normalized.extracted_tz:
-            try:
-                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
-            except (KeyError, ValueError):
-                pass
+        stream_tz = self._known_stream_tz(classified)
 
         return self._team_matcher.match_team_only(
             classified=classified,
@@ -1921,12 +1911,7 @@ class StreamMatcher:
         anchor_dt: "datetime | None" = None,
     ) -> list[MatchOutcome]:
         """Match a league All-Star stream to that league's All-Star event."""
-        stream_tz = self._stream_tz
-        if classified.normalized.extracted_tz:
-            try:
-                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
-            except (KeyError, ValueError):
-                pass
+        stream_tz = self._known_stream_tz(classified)
 
         return self._team_matcher.match_all_star(
             classified=classified,
@@ -1984,6 +1969,21 @@ class StreamMatcher:
             detail="No matching event card found",
         )
 
+    def _known_stream_tz(self, classified: ClassifiedStream) -> ZoneInfo | None:
+        """The zone a stream's written date and time are in, or None when unknown.
+
+        The zone code the name states, else the source's Stream Timezone
+        setting. None is not the user timezone: callers that only act on a
+        KNOWN zone (the #956 stated-time gate, the #1276 racing weekend gate)
+        rely on the difference.
+        """
+        if classified.normalized.extracted_tz:
+            try:
+                return ZoneInfo(classified.normalized.extracted_tz)
+            except (KeyError, ValueError):
+                pass  # Keep group setting or None
+        return self._stream_tz
+
     def _match_racing_event(
         self,
         classified: ClassifiedStream,
@@ -2037,9 +2037,23 @@ class StreamMatcher:
                 )
             racing_leagues = scoped
 
-        # Try each racing league
+        # A stream that names exactly one NASCAR series belongs to that league
+        # (#1158): the umbrella word scopes it to all three, and on a weekend
+        # where two share a track the other series' session times fit just as
+        # well. Other racing leagues are not touched.
+        nascar_named = detect_nascar_series(classified.normalized.original)
+        if len(nascar_named) == 1:
+            racing_leagues = [
+                lg for lg in racing_leagues if lg not in NASCAR_SERIES_WORDS or lg in nascar_named
+            ]
+
+        # Try each racing league, in a fixed order — the list is built from a
+        # set upstream, and set order must never pick the event. A match that
+        # rests on session times alone is held back in case a later league
+        # matches the stream by name.
         outcome = None
-        for league in racing_leagues:
+        time_only_match: MatchOutcome | None = None
+        for league in sorted(racing_leagues):
             outcome = self._racing_matcher.match(
                 classified=classified,
                 league=league,
@@ -2050,9 +2064,18 @@ class StreamMatcher:
                 user_tz=self._user_tz,
                 anchor_dt=anchor_dt,
                 sport_durations=self._sport_durations,
+                stream_tz=self._known_stream_tz(classified),
+                # The held match is the one returned; a second time-only
+                # match must not replace it in the cache.
+                cache_time_only=time_only_match is None,
             )
             if outcome.is_matched:
-                return outcome
+                if not outcome.time_only:
+                    return outcome
+                time_only_match = time_only_match or outcome
+
+        if time_only_match is not None:
+            return time_only_match
 
         # No match in any racing league
         return MatchOutcome.failed(
