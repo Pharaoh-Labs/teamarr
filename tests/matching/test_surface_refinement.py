@@ -241,8 +241,6 @@ class TestRefineSide:
             # Bobcats). Only a boundary or a known label licenses the strip.
             ("FOX College Football - Big Ten: Oklahoma State", "end"),
             ("Ohio Wesleyan", "end"),
-            ("Ohio - Wesleyan", "end"),
-            ("Ohio - Wesleyan", "start"),
             ("Georgia Tech Yellow", "end"),
             ("Wisconsin Fri", "start"),
             # The remainder is claimable by a team the span names — the
@@ -259,6 +257,55 @@ class TestRefineSide:
     )
     def test_side_is_left_alone(self, index, side, anchor):
         assert index.refine_side(side, anchor=anchor) is None
+
+    @pytest.mark.parametrize(
+        ("side", "expected"),
+        [
+            # The #799 boundary, after a one-word team as after any other.
+            ("Ohio - Big Ten Network", "Ohio"),
+            ("Howard - Big Ten Network", "Howard"),
+            ("Toledo - Day #1", "Toledo"),
+            ("Michigan - Post Match Press Conference", "Michigan"),
+            ("Michigan State - Big Ten Network", "Michigan State"),
+        ],
+    )
+    @pytest.mark.parametrize("anchor", ["start", "end"])
+    def test_hyphen_after_a_team_is_a_boundary(self, index, side, anchor, expected):
+        assert index.refine_side(side, anchor=anchor) == expected
+
+    @pytest.mark.parametrize("anchor", ["start", "end"])
+    def test_hyphen_inside_a_known_name_is_not_a_boundary(self, anchor):
+        # "Ohio Wesleyan" is a team: the run across the hyphen is the longest
+        # surface, so the side is already whole and "Ohio" alone never wins.
+        known = TeamIdentityIndex(
+            [
+                *CACHED_TEAMS,
+                (
+                    "Ohio Wesleyan Battling Bishops",
+                    "Ohio Wesleyan",
+                    "OWU",
+                    "college-football",
+                    "football",
+                ),
+            ],
+            LABELS,
+        )
+        assert known.refine_side("Ohio - Wesleyan", anchor=anchor) is None
+        assert known.refine_side("Ohio - Wesleyan Battling Bishops", anchor=anchor) is None
+        # Junk after the full name still strips, to the name with its hyphen.
+        assert (
+            known.refine_side("Ohio - Wesleyan (Big Ten Network)", anchor="start")
+            == "Ohio - Wesleyan"
+        )
+        # The same team is still found past a real label.
+        assert known.refine_side("Ohio - Big Ten Network", anchor=anchor) == "Ohio"
+
+    @pytest.mark.parametrize("anchor", ["start", "end"])
+    def test_hyphen_before_an_unknown_word_is_still_a_boundary(self, index, anchor):
+        # Ohio Wesleyan is NOT in this cache. Nothing tells "- Wesleyan" from
+        # "- Big Ten Network" then, and the hyphen is the boundary providers
+        # write; the flush form above ("Ohio Wesleyan") stays whole.
+        assert index.refine_side("Ohio - Wesleyan", anchor=anchor) == "Ohio"
 
     def test_longest_surface_wins_over_a_shorter_one_inside_it(self, index):
         # "ohio" (Bobcats) sits inside "ohio state" (Buckeyes): longest wins,
@@ -302,6 +349,38 @@ class TestCodeCasedTokens:
 
 class TestReporterShapesMatch:
     """The support-bundle rows, end to end through the real matcher."""
+
+    @pytest.mark.parametrize(
+        ("stream", "home", "away", "team2"),
+        [
+            # The three shapes whose match rate halved when a hyphen after a
+            # one-word team stopped being a boundary (#1264).
+            (
+                "B1G+: Iowa at Wisconsin - Big Ten Network",
+                "Wisconsin Badgers",
+                "Iowa Hawkeyes",
+                "Wisconsin",
+            ),
+            (
+                "TSN+ 04: Rays vs. Tigers - Day #1 @ 12 Sep 12:00 PM ET",
+                "Detroit Tigers",
+                "Tampa Bay Rays",
+                "Tigers",
+            ),
+            (
+                "Howard vs Toledo - Post Match Press Conference",
+                "Toledo Rockets",
+                "Howard Bison",
+                "Toledo",
+            ),
+        ],
+    )
+    def test_hyphen_tail_after_a_one_word_team_is_stripped(
+        self, db_factory, stream, home, away, team2
+    ):
+        result, classified = _match(stream, _event(home, away), db_factory)
+        assert result.category is ResultCategory.MATCHED
+        assert classified.team2 == team2
 
     @pytest.mark.parametrize(
         ("stream", "home", "away", "t1", "t2"),

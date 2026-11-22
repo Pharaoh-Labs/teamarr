@@ -641,18 +641,12 @@ class TeamIdentityIndex:
             return None
         lo, hi = owner[start], owner[start + n - 1]
         if not self._bounded(raw_tokens[:lo][::-1], junk) or not self._bounded(
-            raw_tokens[hi + 1 :], junk, allow_hyphen=n > 1
+            raw_tokens[hi + 1 :], junk
         ):
             return None
         return " ".join(raw_tokens[lo : hi + 1])
 
-    def _bounded(
-        self,
-        outward: list[str],
-        junk: AbstractSet[str] = frozenset(),
-        *,
-        allow_hyphen: bool = True,
-    ) -> bool:
+    def _bounded(self, outward: list[str], junk: AbstractSet[str] = frozenset()) -> bool:
         """Is the stripped text separated from the span by a real boundary?
 
         ``outward`` is the remainder on one side, nearest token first. A plain
@@ -665,14 +659,18 @@ class TeamIdentityIndex:
         which already rejects "Ohio Wesleyan" against the Bobcats. A token
         with punctuation or a digit ("Football:", "(Big", "|", "13", "6pm")
         is the boundary providers actually write.
+
+        A lone hyphen is such a boundary after a one-word team too (#1264):
+        "Sharks - Big Ten Network", "Kraken - Day #1". The words after it are
+        the rest of the name only when the joined words are a surface, and
+        then this is never reached — the hyphen normalizes to nothing, so
+        ``refine_side`` finds "Ohio - Wesleyan" as the two-token run "ohio
+        wesleyan" before it ever considers "Ohio" alone. Reading the hyphen
+        as glue for a team the cache does not know halved the strip for every
+        one-word team (292 → 153 of 300 `{away} at {home} - Big Ten Network`).
         """
-        tokens = (
-            outward[1:]
-            if not allow_hyphen and len(outward) >= 2 and outward[0] == "-" and outward[1].isalpha()
-            else outward
-        )
         run: list[str] = []
-        for token in tokens:
+        for token in outward:
             if token.isalpha():
                 run.append(token)
             else:
