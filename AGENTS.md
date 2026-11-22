@@ -21,7 +21,7 @@ Support-bundle v2 adds `owner_type` and the nullable plugin identity/adoption fi
 
 ## Generation Catalog Reuse
 
-Channel-source candidate fetching and EPG resolution share one successful Dispatcharr channel-map/EPGData snapshot per generation (#1161, `dispatcharr_catalog_inputs`). Exclude managed event and team output channels before assigning stream slots; preserve per-source group/active-guide/overlap filtering, and fetch stream details only for eligible IDs. `clear_epg_resolution_cache` drops both the shared snapshot and derived resolver inputs; `process_all_groups` also clears account/group name caches. Failed catalog reads are not cached. Do not widen stream-detail reads to the whole catalog to implement reuse.
+Channel-source candidate fetching and EPG resolution share one successful Dispatcharr channel-map/EPGData snapshot per generation (#1161, `dispatcharr_catalog_inputs`). Exclude managed event and team output channels before assigning stream slots; preserve per-source group/active-guide/overlap filtering, and fetch stream details only for eligible IDs. `clear_epg_resolution_cache` drops both the shared snapshot and derived resolver inputs; `process_all_groups` also clears account/group name caches. Failed catalog reads are not cached — the managed-id read inside the snapshot is `strict` and raises, because an empty set from a failed read would switch the #512 exclusion off for the run (#1201). The M3U group-name map is the one deliberate exception: a failed `list_groups()` falls back to stored names and that fallback is kept for the run, since retrying per source repeats a failing request once per source. Do not widen stream-detail reads to the whole catalog to implement reuse.
 
 ## Quick Reference
 
