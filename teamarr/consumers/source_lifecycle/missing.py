@@ -108,6 +108,7 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                 """
             ).fetchall()
         }
+        account_group_counts: dict[int, dict[int, int]] = {}
 
         def can_rebind(group: Any, acc_key: int) -> bool:
             # An unscoped source reads all accounts; scoped sources can share a group.
@@ -116,8 +117,21 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                 return False
             if (group.id, acc_key) in dismissed_ids or (group.id, 0) in dismissed_ids:
                 return False
+            if not acc_key:
+                return True
             accounts = _group_account_ids(group)
-            return not acc_key or not accounts or acc_key in accounts
+            if accounts:
+                return acc_key in accounts
+            # Some Dispatcharr versions report counts with no account IDs in
+            # list_groups. Look up membership by ID rather than infer it from
+            # the name, and share the lookup across replacements on this account.
+            if acc_key not in account_group_counts:
+                try:
+                    account_group_counts[acc_key] = conn_dc.m3u.get_account_group_counts(acc_key)
+                except Exception as e:
+                    logger.warning("[STALE_GROUPS] Could not verify replacement group: %s", e)
+                    account_group_counts[acc_key] = {}
+            return account_group_counts[acc_key].get(group.id, 0) > 0
 
         def rebind(row: Any, group: Any, acc_id: int | None) -> bool:
             candidate_id = accepted_candidates.get(row["id"])

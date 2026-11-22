@@ -9,6 +9,8 @@ import contextlib
 import sqlite3
 from types import SimpleNamespace
 
+import pytest
+
 from teamarr.consumers.source_lifecycle import detect_stale_groups
 from tests.helpers import SCHEMA_PATH
 
@@ -50,7 +52,7 @@ def _add_group(
     conn.commit()
 
 
-def _patch_dispatcharr(monkeypatch, groups):
+def _patch_dispatcharr(monkeypatch, groups, *, get_account_group_counts=None):
     """Fake get_dispatcharr_connection -> .m3u.list_groups().
 
     `groups` items may be ints (auto-named) or (id, name) tuples.
@@ -65,6 +67,8 @@ def _patch_dispatcharr(monkeypatch, groups):
         return SimpleNamespace(id=item, name=f"live-{item}")
 
     fake = SimpleNamespace(m3u=SimpleNamespace(list_groups=lambda: [mk(i) for i in groups]))
+    if get_account_group_counts is not None:
+        fake.m3u.get_account_group_counts = get_account_group_counts
     monkeypatch.setattr(reconciliation, "get_dispatcharr_connection", lambda db_factory=None: fake)
 
 
@@ -245,6 +249,33 @@ def test_exact_name_on_wrong_account_does_not_block_rotation(monkeypatch):
         "SELECT m3u_group_id, m3u_group_name, source_missing FROM event_epg_groups"
     ).fetchone()
     assert tuple(row) == (73, "LIVE | NHL (Thu)", 0)
+
+
+@pytest.mark.parametrize("replacement_name", ["LIVE | NHL (Wed)", "LIVE | NHL (Thu)"])
+@pytest.mark.parametrize("in_account", [False, True])
+def test_scoped_healing_checks_account_detail_when_group_omits_account_ids(
+    monkeypatch, replacement_name, in_account
+):
+    conn = _db()
+    _add_group(conn, "NHL", 71, m3u_group_name="LIVE | NHL (Wed)", m3u_account_id=1)
+    lookups = []
+
+    def get_counts(account_id):
+        lookups.append(account_id)
+        return {72: 8} if in_account else {99: 8}
+
+    _patch_dispatcharr(
+        monkeypatch,
+        [(72, replacement_name, [{"stream_count": 8}])],
+        get_account_group_counts=get_counts,
+    )
+
+    stale = detect_stale_groups(_factory(conn))
+
+    assert lookups == [1]
+    assert [group["name"] for group in stale] == ([] if in_account else ["NHL"])
+    row = conn.execute("SELECT m3u_group_id, source_missing FROM event_epg_groups").fetchone()
+    assert tuple(row) == ((72, 0) if in_account else (71, 1))
 
 
 def test_two_accounts_can_heal_to_the_same_live_rotation(monkeypatch):
