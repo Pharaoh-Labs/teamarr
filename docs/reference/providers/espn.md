@@ -7,7 +7,7 @@ nav_order: 1
 
 # ESPN Provider
 
-ESPN is the primary data provider (priority 0), serving 106 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
+ESPN is the primary data provider (priority 0), serving 109 pre-configured leagues plus ~228 dynamically discovered soccer leagues. The API is free, public, and requires no authentication.
 
 ## API Details
 
@@ -68,7 +68,7 @@ baseball/mlb
 | Combat Sports | UFC, PFL | Event Card matching. ESPN files every other promotion (Cage Warriors, OKTAGON, RIZIN, ONE, and LFA since June 2026) under a catch-all `mma/other` bucket, and only after the event, so none of them can be a league (#760, #1083) |
 | Motorsports | F1, IndyCar | Race weekend sessions |
 | Tennis | ATP, WTA | One event per match; grand slams split by draw type |
-| Cricket | ODIs, T20 Internationals, Test Matches; IPL, BBL, SA20, MLC | Internationals filter the daily score panel by format (#944). Franchise leagues use recurring numeric series IDs and complete season scoreboards, including team import and team channels (#1069) |
+| Cricket | ODIs, T20 Internationals, Test Matches; IPL, BBL, SA20, MLC, CPL | Internationals filter the daily score panel by format (#944). Franchise leagues use recurring numeric series IDs and complete season scoreboards, including team import and team channels (#1069) |
 | Lacrosse | NLL, PLL, NCAA M/W | |
 | Volleyball | NCAA M/W | |
 | Softball | NCAA Softball | |
@@ -85,8 +85,8 @@ Rugby uses numeric slug IDs instead of string slugs — `rugby/180659` (Six Nati
 
 ### Franchise cricket
 
-IPL (`cricket/8048`), BBL (`cricket/8044`), SA20 (`cricket/21275`) and MLC
-(`cricket/21266`) require **no API key**. Their team list, team lookup, schedules,
+IPL (`cricket/8048`), BBL (`cricket/8044`), SA20 (`cricket/21275`), MLC
+(`cricket/21266`) and CPL (`cricket/8623`) require **no API key**. Their team list, team lookup, schedules,
 history and previews come from scoreboards, not ESPN's unsupported cricket team
 endpoints. A season response is shared for five minutes across day/team readers;
 failed season requests have a 30-second retry cooldown. International format

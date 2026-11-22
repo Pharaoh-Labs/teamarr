@@ -25,7 +25,7 @@ Channel-source candidate fetching and EPG resolution share one successful Dispat
 
 ## Quick Reference
 
-Franchise cricket (#1069): IPL, BBL, SA20 and MLC use ESPN numeric series IDs.
+Franchise cricket (#1069): IPL, BBL, SA20, MLC and CPL use ESPN numeric series IDs.
 Their team lists and schedules come from cached explicit-season scoreboards, not
 the unsupported cricket team endpoints. Preserve local team/channel IDs when
 migrating provider identities; old event channels retain ownership until normal
