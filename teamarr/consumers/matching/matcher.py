@@ -1784,14 +1784,7 @@ class StreamMatcher:
         anchor_dt: "datetime | None" = None,
     ) -> MatchOutcome:
         """Match a team-vs-team stream."""
-        # Determine effective stream timezone for date/time comparison
-        # Priority: extracted TZ from stream > group setting > None (use user_tz as fallback)
-        stream_tz = self._stream_tz
-        if classified.normalized.extracted_tz:
-            try:
-                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
-            except (KeyError, ValueError):
-                pass  # Keep group setting or None
+        stream_tz = self._known_stream_tz(classified)
 
         search_leagues = self._non_tennis_leagues(self._search_leagues)
         if not search_leagues:
@@ -1840,12 +1833,7 @@ class StreamMatcher:
         anchor_dt: "datetime | None" = None,
     ) -> list[MatchOutcome]:
         """Match a single-team branded stream, returning one outcome per matched event."""
-        stream_tz = self._stream_tz
-        if classified.normalized.extracted_tz:
-            try:
-                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
-            except (KeyError, ValueError):
-                pass
+        stream_tz = self._known_stream_tz(classified)
 
         return self._team_matcher.match_team_only(
             classified=classified,
@@ -1869,12 +1857,7 @@ class StreamMatcher:
         anchor_dt: "datetime | None" = None,
     ) -> list[MatchOutcome]:
         """Match a league All-Star stream to that league's All-Star event."""
-        stream_tz = self._stream_tz
-        if classified.normalized.extracted_tz:
-            try:
-                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
-            except (KeyError, ValueError):
-                pass
+        stream_tz = self._known_stream_tz(classified)
 
         return self._team_matcher.match_all_star(
             classified=classified,
@@ -1931,6 +1914,21 @@ class StreamMatcher:
             stream_id=stream_id,
             detail="No matching event card found",
         )
+
+    def _known_stream_tz(self, classified: ClassifiedStream) -> ZoneInfo | None:
+        """The zone a stream's written date and time are in, or None when unknown.
+
+        The zone code the name states, else the source's Stream Timezone
+        setting. None is not the user timezone: callers that only act on a
+        KNOWN zone (the #956 stated-time gate, the #1276 racing weekend gate)
+        rely on the difference.
+        """
+        if classified.normalized.extracted_tz:
+            try:
+                return ZoneInfo(classified.normalized.extracted_tz)
+            except (KeyError, ValueError):
+                pass  # Keep group setting or None
+        return self._stream_tz
 
     def _match_racing_event(
         self,
@@ -2012,6 +2010,7 @@ class StreamMatcher:
                 user_tz=self._user_tz,
                 anchor_dt=anchor_dt,
                 sport_durations=self._sport_durations,
+                stream_tz=self._known_stream_tz(classified),
                 # The held match is the one returned; a second time-only
                 # match must not replace it in the cache.
                 cache_time_only=time_only_match is None,

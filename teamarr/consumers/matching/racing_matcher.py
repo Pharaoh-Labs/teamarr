@@ -136,6 +136,24 @@ def _nascar_series_unnamed(league: str, stream_name: str) -> bool:
     return league in NASCAR_SERIES_WORDS and league not in detect_nascar_series(stream_name)
 
 
+def _gate_date(normalized: Any, stream_tz: ZoneInfo | None, user_tz: ZoneInfo) -> date | None:
+    """The date a stream writes, as the user's calendar reads it (#1276).
+
+    Session dates are compared in the user timezone, so the written date has
+    to be placed there too: "22 Nov 02:50 UTC" is 21 Nov in New York. Needs
+    all three of a written date, a written time and a KNOWN zone (the code in
+    the name, else the source's stream timezone). A bare date cannot be
+    shifted — it is a whole day in the stream's zone, which straddles two of
+    the user's — and with no known zone there is nothing to convert from; both
+    return the written date unchanged.
+    """
+    written = normalized.extracted_date
+    if written is None or normalized.extracted_time is None or stream_tz is None:
+        return written
+    stated = datetime.combine(written, normalized.extracted_time, tzinfo=stream_tz)
+    return stated.astimezone(user_tz).date()
+
+
 @dataclass
 class RacingMatchContext:
     """Context for racing event matching."""
@@ -149,6 +167,9 @@ class RacingMatchContext:
     classified: ClassifiedStream
     anchor_dt: "datetime | None" = None
     sport_durations: "dict[str, float] | None" = None
+    # Known zone of the stream's written date/time (name code, else the
+    # source's stream timezone); None = unknown, never the user timezone.
+    stream_tz: "ZoneInfo | None" = None
 
 
 class RacingMatcher:
@@ -213,6 +234,7 @@ class RacingMatcher:
         anchor_dt: "datetime | None" = None,
         sport_durations: "dict[str, float] | None" = None,
         cache_time_only: bool = True,
+        stream_tz: "ZoneInfo | None" = None,
     ) -> MatchOutcome:
         """Match a racing stream to a provider event.
 
@@ -226,6 +248,9 @@ class RacingMatcher:
             user_tz: User timezone for date validation
             cache_time_only: False when the caller already holds a time-only
                 match from another league and will return that one (#1158)
+            stream_tz: The zone the stream's written date and time are in, when
+                known — the code in the name, else the source's stream timezone
+                (#1276). None = unknown; never pass the user timezone here.
 
         Returns:
             MatchOutcome with result
@@ -246,7 +271,19 @@ class RacingMatcher:
         # a Friday session can bind as soon as the guide publishes it, rather
         # than waiting for the run date to reach the race weekend. The
         # anchor_dt gate below still enforces real session proximity.
-        match_date = classified.normalized.extracted_date
+        #
+        # The written date is read in the stream's own zone when that zone is
+        # known and the name carries a time (#1276): sessions are compared by
+        # their date in the USER timezone, so a UK/UTC-dated stream of a
+        # late-evening US session ("Sun 22 Nov 02:50 UTC" for a race at 23:00
+        # on the 21st in New York) otherwise names a day no session falls on.
+        if stream_tz is None and classified.normalized.extracted_tz:
+            # A caller that threads no zone still gets the one the name states.
+            try:
+                stream_tz = ZoneInfo(classified.normalized.extracted_tz)
+            except (ValueError, KeyError, ZoneInfoNotFoundError):
+                stream_tz = None
+        match_date = _gate_date(classified.normalized, stream_tz, user_tz)
         if match_date is None:
             match_date = anchor_dt.astimezone(user_tz).date() if anchor_dt else target_date
 
@@ -260,6 +297,7 @@ class RacingMatcher:
             classified=classified,
             anchor_dt=anchor_dt,
             sport_durations=sport_durations,
+            stream_tz=stream_tz,
         )
 
         # Check cache first
@@ -343,15 +381,18 @@ class RacingMatcher:
 
     def _stream_instant_covered(self, ctx: RacingMatchContext, event: Event) -> bool:
         """Does the stream's own timestamp fall inside (or near) a session of ``event``?"""
-        extracted_time = ctx.classified.normalized.extracted_time
+        normalized = ctx.classified.normalized
+        extracted_time = normalized.extracted_time
         if extracted_time is None or not event.sessions:
             return False
-        tz_name = ctx.classified.normalized.extracted_tz
-        try:
-            tz = ZoneInfo(tz_name) if tz_name else ctx.user_tz
-        except (ValueError, KeyError, ZoneInfoNotFoundError):
-            tz = ctx.user_tz
-        instant = datetime.combine(ctx.target_date, extracted_time, tzinfo=tz)
+        # The WRITTEN date and time in the stream's zone — the name's code,
+        # else the source's stream timezone, else the user's. ctx.target_date
+        # is already in user terms when the zone is known (#1276), so reading
+        # it here would shift the day twice; it stands in only for a name
+        # with no date, where it is the run's (or the programme's) own day.
+        tz = ctx.stream_tz or ctx.user_tz
+        day = normalized.extracted_date or ctx.target_date
+        instant = datetime.combine(day, extracted_time, tzinfo=tz)
         return self._covers_instant(event, instant, ctx.sport_durations)
 
     def _covers_date(self, event: Event, target_date: date, user_tz: ZoneInfo) -> bool:
