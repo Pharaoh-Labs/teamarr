@@ -989,10 +989,10 @@ def _is_substantial_side(side: str | None) -> bool:
 _QUALITY_TAG = rf"[\(\[]?\s*{QUALITY_TOKEN}\s*[\)\]]?"
 
 # A leading colon segment ending in a number is not necessarily a channel
-# label ("Schalke 04:"). Only strip bare numbers and recognized providers.
+# label ("Schalke 04:"). Only strip bare numbers and recognized providers/shows.
 _TEAM2_CHANNEL_PREFIX = re.compile(
-    r"^(?:(?:(?:NFL Game Pass|ESPN\+?|Peacock|Paramount\+?|Sky Sports|TSN)\s*)?"
-    r"\d+\s*:\s*)+",
+    r"^(?:(?:\d+|(?:NFL\s+(?:Game\s+Pass|Red\s*Zone)|MNF\s+Playbook|"
+    r"ESPN\+?|DAZN|Peacock|Paramount\+?|Sky\s+Sports|TSN)(?:\s*\d+)?)\s*:\s*)+",
     re.IGNORECASE,
 )
 

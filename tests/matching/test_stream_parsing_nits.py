@@ -163,6 +163,11 @@ class TestBatchBDateAndColonExtraction:
             ("Bills vs 142: Broncos", "Bills", "Broncos"),
             ("Bills vs ESPN+ 45: Broncos", "Bills", "Broncos"),
             ("Bills vs ESPN+ 45: Broncos: 12:00 PM ET", "Bills", "Broncos"),
+            ("Bills vs ESPN: Broncos", "Bills", "Broncos"),
+            ("Bills vs NFL RedZone: Broncos", "Bills", "Broncos"),
+            ("Bills vs DAZN 03: Broncos", "Bills", "Broncos"),
+            ("Bills vs DAZN 03: ESPN: Broncos: NFL RedZone", "Bills", "Broncos"),
+            ("Bills vs Broncos: ESPN", "Bills", "Broncos"),
             ("Bills vs Broncos (:05)", "Bills", "Broncos"),
             ("Dortmund vs Schalke 04: 12:00 PM ET", "Dortmund", "Schalke 04"),
             (
