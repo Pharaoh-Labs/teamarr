@@ -226,3 +226,58 @@ def test_merge_skips_empty_and_blank():
     idx = EPGProgramIndex({})
     assert idx.merge({"A": [], "": [object()], None: [object()]}) == 0
     assert idx.tvg_ids() == []
+
+
+def test_build_reuses_run_scoped_program_cache():
+    """Shared program_cache avoids re-fetching resolved tvg_ids across groups (#1263)."""
+    mgr = _epg_mgr()
+    base = datetime(2026, 6, 1, 18, tzinfo=UTC)
+
+    def fake_search(tvg_id, **kw):
+        if tvg_id == "empty-chan":
+            return []
+        return [_prog(1, tvg_id, base, base + timedelta(hours=3))]
+
+    mgr.search_programs.side_effect = fake_search
+    cache: dict = {}
+
+    idx1 = EPGProgramIndex.build(
+        mgr,
+        tvg_id_resolution={"FS1.us": "82547", "Empty.us": "empty-chan"},
+        window_start=base,
+        window_end=base + timedelta(days=1),
+        program_cache=cache,
+    )
+    assert mgr.search_programs.call_count == 2
+    assert set(idx1.tvg_ids()) == {"FS1.us"}
+
+    # Group 2 shares 82547 and empty-chan, plus a new 12345. Only 12345 is fetched.
+    idx2 = EPGProgramIndex.build(
+        mgr,
+        tvg_id_resolution={
+            "FS1-Mirror.us": "82547",
+            "Empty2.us": "empty-chan",
+            "ESPN.us": "12345",
+        },
+        window_start=base,
+        window_end=base + timedelta(days=1),
+        program_cache=cache,
+    )
+    assert mgr.search_programs.call_count == 3
+    assert set(idx2.tvg_ids()) == {"FS1-Mirror.us", "ESPN.us"}
+
+
+def test_build_retries_failed_program_fetch_in_next_group():
+    mgr = _epg_mgr()
+    base = datetime(2026, 6, 1, 18, tzinfo=UTC)
+    end = base + timedelta(days=1)
+    mgr.search_programs.side_effect = [None, [_prog(1, "82547", base, end)]]
+    cache = {}
+
+    first = EPGProgramIndex.build(mgr, {"FS1.us": "82547"}, base, end, program_cache=cache)
+    assert first.tvg_ids() == []
+    assert not cache
+
+    second = EPGProgramIndex.build(mgr, {"Mirror.us": "82547"}, base, end, program_cache=cache)
+    assert second.tvg_ids() == ["Mirror.us"]
+    assert mgr.search_programs.call_count == 2

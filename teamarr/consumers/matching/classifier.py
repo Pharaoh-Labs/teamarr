@@ -12,6 +12,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, time
 from enum import Enum
+from functools import lru_cache
 from re import Pattern
 from typing import cast
 
@@ -1676,6 +1677,12 @@ def _clean_fighter_name(name: str) -> str | None:
 # =============================================================================
 
 
+@lru_cache(maxsize=256)
+def _feed_term_pattern(term: str) -> Pattern[str]:
+    """Compile and cache a word-bounded feed-hint regex for a single term (#1263)."""
+    return re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+
+
 def detect_and_strip_feed_hint(
     text: str,
     home_terms: list[str],
@@ -1695,14 +1702,14 @@ def detect_and_strip_feed_hint(
         Tuple of (cleaned_text, feed_hint) where feed_hint is "home", "away", or None
     """
     for term in home_terms:
-        pattern = re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+        pattern = _feed_term_pattern(term)
         if pattern.search(text):
             cleaned = pattern.sub("", text)
             cleaned = " ".join(cleaned.split())  # Normalize whitespace
             return cleaned, "home"
 
     for term in away_terms:
-        pattern = re.compile(rf"\b{re.escape(term)}\b", re.IGNORECASE)
+        pattern = _feed_term_pattern(term)
         if pattern.search(text):
             cleaned = pattern.sub("", text)
             cleaned = " ".join(cleaned.split())  # Normalize whitespace

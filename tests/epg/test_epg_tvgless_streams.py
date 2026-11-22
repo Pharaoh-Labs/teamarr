@@ -45,7 +45,7 @@ class _Harness(StreamMatching):
 def _capture_build(monkeypatch) -> dict:
     seen: dict = {}
 
-    def fake_build(_epg, resolution, _start, _end):
+    def fake_build(_epg, resolution, _start, _end, **_kwargs):
         seen["resolution"] = dict(resolution)
         return EPGProgramIndex({})
 

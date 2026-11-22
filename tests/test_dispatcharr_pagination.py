@@ -166,6 +166,20 @@ def test_failed_first_page_returns_empty():
     assert _client(paged).paginated_get(ENDPOINT, "x") == []
 
 
+def test_complete_read_rejects_failed_pages():
+    for count_field in (True, False):
+        for failed_page in (1, 2):
+            paged = _Paged(
+                total=300, page_size=100, fail_pages={failed_page}, count_field=count_field
+            )
+            assert _client(paged).paginated_get_or_none(ENDPOINT, require_complete=True) is None
+
+
+def test_complete_read_accepts_confirmed_empty_result():
+    paged = _Paged(total=0, page_size=100)
+    assert _client(paged).paginated_get_or_none(ENDPOINT, require_complete=True) == []
+
+
 def test_client_is_built_once_under_concurrent_first_use():
     """Lazy init is double-checked — a race must not leak a second pooled client."""
     client = DispatcharrClient.__new__(DispatcharrClient)

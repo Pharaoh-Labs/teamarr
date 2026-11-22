@@ -129,13 +129,13 @@ def test_search_programs_unsupported_short_circuits():
 
     assert mgr.search_programs(tvg_id="60048") == []
     # never reaches pagination
-    client.paginated_get.assert_not_called()
+    client.paginated_get_or_none.assert_not_called()
 
 
 def test_search_programs_builds_params_and_maps_results():
     client = MagicMock()
     client.get.return_value = _mgr(200)
-    client.paginated_get.return_value = [SAMPLE_PROGRAM]
+    client.paginated_get_or_none.return_value = [SAMPLE_PROGRAM]
     mgr = EPGManager(client)
 
     progs = mgr.search_programs(
@@ -149,7 +149,8 @@ def test_search_programs_builds_params_and_maps_results():
     assert len(progs) == 1
     assert progs[0].title == "Alabama at Auburn"
 
-    endpoint = client.paginated_get.call_args[0][0]
+    endpoint = client.paginated_get_or_none.call_args.args[0]
+    assert client.paginated_get_or_none.call_args.kwargs["require_complete"] is True
     assert endpoint.startswith("/api/epg/programs/search/?")
     assert "tvg_id=60048" in endpoint
     assert "page_size=500" in endpoint
@@ -161,8 +162,15 @@ def test_search_programs_builds_params_and_maps_results():
 def test_search_programs_skips_malformed_records():
     client = MagicMock()
     client.get.return_value = _mgr(200)
-    client.paginated_get.return_value = [SAMPLE_PROGRAM, {"no_id": True}]
+    client.paginated_get_or_none.return_value = [SAMPLE_PROGRAM, {"no_id": True}]
     mgr = EPGManager(client)
 
     progs = mgr.search_programs(tvg_id="60048")
     assert len(progs) == 1
+
+
+def test_search_programs_reports_failed_read_as_none():
+    client = MagicMock()
+    client.get.return_value = _mgr(200)
+    client.paginated_get_or_none.return_value = None
+    assert EPGManager(client).search_programs(tvg_id="60048") is None
