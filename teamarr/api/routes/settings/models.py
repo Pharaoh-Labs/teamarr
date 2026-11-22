@@ -419,7 +419,7 @@ class ManagedTeamChannelSettingsModel(BaseModel):
     range_start: int = 9000
     range_end: int | None = None
     priority_ids: list[int] = []
-    lifecycle: Literal["persistent", "game_days"] = "persistent"
+    lifecycle: Literal["persistent", "in_season", "game_days"] = "persistent"
 
 
 class ManagedTeamChannelSettingsUpdate(BaseModel):
@@ -428,7 +428,7 @@ class ManagedTeamChannelSettingsUpdate(BaseModel):
     range_start: int | None = None
     range_end: int | None = None
     priority_ids: list[int] | None = None
-    lifecycle: Literal["persistent", "game_days"] | None = None
+    lifecycle: Literal["persistent", "in_season", "game_days"] | None = None
 
 
 # =============================================================================

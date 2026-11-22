@@ -42,7 +42,7 @@ export interface LifecycleSettings {
   channel_range_end: number | null
 }
 
-export type ManagedTeamChannelLifecycle = "persistent" | "game_days"
+export type ManagedTeamChannelLifecycle = "persistent" | "in_season" | "game_days"
 
 export interface ManagedTeamChannelSettings {
   range_start: number

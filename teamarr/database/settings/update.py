@@ -219,7 +219,8 @@ def update_managed_team_channel_settings(
     """Update Team EPG channel numbering and lifecycle settings.
 
     ``range_end=None`` clears the upper bound; omitted fields remain unchanged.
-    ``lifecycle`` is ``persistent`` or ``game_days`` (#904).
+    ``lifecycle`` is ``persistent``, ``in_season`` (#1206) or ``game_days``
+    (#904).
     """
     provided = _skip_none(
         range_start=range_start, priority_ids=priority_ids, lifecycle=lifecycle
