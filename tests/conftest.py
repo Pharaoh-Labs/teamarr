@@ -28,6 +28,25 @@ def _reset_shared_identity_index():
     reset_identity_index_cache()
 
 
+@pytest.fixture(autouse=True)
+def _reset_provider_rate_limit_waits():
+    """A provider's rate-limit deadline is process-wide (#1277).
+
+    A test that answers 429 under a patched sleep leaves a deadline in the
+    real future; the next test's first request to that provider would then
+    really wait for it.
+    """
+    from teamarr.providers import base_client
+
+    def _reset():
+        for cooldown in list(base_client._cooldowns.values()):
+            cooldown._until = 0.0
+
+    _reset()
+    yield
+    _reset()
+
+
 @pytest.fixture
 def db_path(tmp_path):
     """Path to a fully-initialized temp database (fresh per test)."""
