@@ -52,8 +52,18 @@ def test_transport_error_retries_then_recovers(monkeypatch):
 
 
 def test_429_respects_retry_after_then_recovers(monkeypatch):
+    # #1277: the 429 wait is a deadline on base_client's clock, so the test
+    # drives that clock; a sleep that records without advancing it would be
+    # asked again for the time still left.
     sleeps = []
-    monkeypatch.setattr(base_client.time, "sleep", sleeps.append)
+    now = [100.0]
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    monkeypatch.setattr(base_client, "_monotonic", lambda: now[0])
+    monkeypatch.setattr(base_client, "_sleep", fake_sleep)
     attempts = []
 
     def handler(request):
@@ -183,18 +193,3 @@ def test_exhausted_transport_errors_are_one_connection_failure(_metrics, monkeyp
     client = _make_client(handler, retry_count=3)
     assert client._request_json("https://api.test/x") is None
     assert _metrics.failures_snapshot() == {"stub:x:connection": 1}
-
-
-def test_concurrent_response_wave_shares_one_cooldown(monkeypatch):
-    sleeps = []
-    monkeypatch.setattr(base_client.time, "sleep", sleeps.append)
-    cooldown = base_client._ProviderCooldown()
-    first_request = cooldown.wait()
-    second_request = cooldown.wait()
-
-    cooldown.backoff(2.0, first_request)
-    cooldown.backoff(2.0, second_request)
-
-    assert sleeps == [2.0]
-    cooldown.backoff(3.0, cooldown.wait())
-    assert sleeps == [2.0, 3.0]

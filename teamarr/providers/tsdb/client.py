@@ -286,7 +286,7 @@ class TSDBClient(BaseHTTPClient):
         backoff_attempt = 0
 
         for attempt in range(self._retry_count + self.BACKOFF_MAX_RETRIES):
-            epoch = self._cooldown.wait()
+            self._cooldown.wait()
             try:
                 client = self._get_client()
                 response = client.get(url, params=params)
@@ -315,7 +315,7 @@ class TSDBClient(BaseHTTPClient):
                         f"TSDB 429 rate limit hit. Retry {backoff_attempt}/"
                         f"{self.BACKOFF_MAX_RETRIES} in {wait_seconds:.0f}s..."
                     )
-                    self._cooldown.backoff(wait_seconds, epoch)
+                    self._cooldown.rate_limited(wait_seconds)
                     logger.info(
                         f"TSDB backoff complete, retrying request "
                         f"(attempt {backoff_attempt + 1}/{self.BACKOFF_MAX_RETRIES + 1})"
@@ -342,7 +342,7 @@ class TSDBClient(BaseHTTPClient):
                     call_metrics.record_failure("tsdb", endpoint, "404")
                     return None
                 if attempt < self._retry_count - 1:
-                    self._cooldown.backoff(self._retry_delay * (attempt + 1), epoch)
+                    time.sleep(self._retry_delay * (attempt + 1))
                     continue
                 call_metrics.record_failure("tsdb", endpoint, str(status))
                 return None
@@ -356,7 +356,7 @@ class TSDBClient(BaseHTTPClient):
                 # Don't reset client here - causes race conditions in parallel processing
                 # httpx connection pool handles stale connections automatically
                 if attempt < self._retry_count - 1:
-                    self._cooldown.backoff(self._retry_delay * (attempt + 1), epoch)
+                    time.sleep(self._retry_delay * (attempt + 1))
                     continue
                 call_metrics.record_failure("tsdb", endpoint, "connection")
                 return None
