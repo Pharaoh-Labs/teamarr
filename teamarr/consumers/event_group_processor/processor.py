@@ -344,7 +344,6 @@ class EventGroupProcessor(
         # Clear caches at start of new generation run
         self._run_now = datetime.now(get_user_timezone())
         self._shared_events.clear()
-        self.clear_epg_resolution_cache()
         self._group_name_cache = None
         self._account_name_cache = None
         if hasattr(self, "_subscription_leagues_cache"):
@@ -353,7 +352,7 @@ class EventGroupProcessor(
         self._deletions_processed = False
         self._initial_reassign_done = False
 
-        with self._db_factory() as conn:
+        with self._epg_cache_scope(), self._db_factory() as conn:
             # Sync the system-managed "Dispatcharr Channels" source rows (183.9) to
             # the global setting before loading groups — one row per selected
             # Dispatcharr channel group (#542). Enabled rows join the normal

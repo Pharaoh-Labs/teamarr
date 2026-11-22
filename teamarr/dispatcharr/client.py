@@ -364,7 +364,13 @@ class DispatcharrClient:
                 status = response.status_code if response else "No response"
                 logger.error("[DISPATCHARR] Failed to get %s: %s", error_context, status)
                 return None
-            data = response.json()
+            try:
+                data = response.json()
+            except ValueError:
+                if not require_complete:
+                    raise
+                logger.error("[DISPATCHARR] Invalid JSON in %s response", error_context)
+                return None
             if require_complete and not (
                 isinstance(data, list)
                 or (isinstance(data, dict) and isinstance(data.get("results"), list))

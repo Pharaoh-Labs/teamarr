@@ -9,7 +9,11 @@ time, in both the SQL readers and the in-memory sort.
 
 from datetime import datetime
 
-from teamarr.database.channels.crud import mark_all_channels_deleted, mark_channel_deleted
+from teamarr.database.channels.crud import (
+    get_managed_channels_for_group,
+    mark_all_channels_deleted,
+    mark_channel_deleted,
+)
 from teamarr.database.channels.streams import (
     get_all_channel_streams,
     get_all_ordered_stream_ids,
@@ -139,3 +143,26 @@ def test_soft_deleted_channels_excluded_from_bulk_stream_reads_and_cleaned_up(db
         for row in db_conn.execute("PRAGMA index_list('managed_channel_history')").fetchall()
     }
     assert "idx_mch_changed_at" in indexes
+
+
+def test_deleted_channels_keep_cross_group_history(db_conn):
+    _group(db_conn, "Channel owner", 1)
+    _group(db_conn, "Stream source", 2)
+    db_conn.execute(
+        "INSERT INTO managed_channels "
+        "(id, event_id, event_provider, tvg_id, channel_name, event_epg_group_id) "
+        "VALUES (1, 'e1', 'espn', 'tvg1', 'Deleted Channel', 1), "
+        "       (2, 'e2', 'espn', 'tvg2', 'Active Channel', 1)"
+    )
+    _attach(db_conn, 1, 101, 2, "2026-01-01 00:00:00")
+    _attach(db_conn, 1, 102, 2, "2026-01-01 00:00:00")
+    _attach(db_conn, 2, 202, 2, "2026-01-01 00:00:00")
+    db_conn.execute(
+        "UPDATE managed_channel_streams SET removed_at = datetime('now')"
+        " WHERE managed_channel_id = 2"
+    )
+    assert mark_channel_deleted(db_conn, 1, reason="expired")
+
+    assert get_managed_channels_for_group(db_conn, 2) == []
+    channels = get_managed_channels_for_group(db_conn, 2, include_deleted=True)
+    assert [channel.id for channel in channels] == [1]

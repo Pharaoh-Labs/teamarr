@@ -453,10 +453,10 @@ class EPGManager:
 
         Returns:
             List of DispatcharrProgram. Empty if unsupported or no matches;
-            None if the search could not read all pages.
+            None if the support probe fails transiently or the search cannot read all pages.
         """
         if not self.supports_program_search():
-            return []
+            return [] if self._programs_search_supported is False else None
 
         params: dict[str, str | int] = {"page_size": page_size}
         if tvg_id is not None:
