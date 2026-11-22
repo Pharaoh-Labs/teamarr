@@ -5,7 +5,8 @@ resolution and UFC/racing segment expansion of the matched-stream list.
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from sqlite3 import Connection
@@ -25,6 +26,7 @@ from teamarr.consumers.matching.epg_resolver import (
     EpgCatalogIndex,
     build_epg_catalog_index,
 )
+from teamarr.consumers.matching.epg_xtream import XtreamParseCache
 from teamarr.consumers.stream_match_cache import StreamMatchCache
 from teamarr.database.groups import EventEPGGroup
 from teamarr.database.settings import get_feed_separation_settings
@@ -296,11 +298,6 @@ class StreamMatching:
         window_start = to_utc(day_start - timedelta(days=MATCH_WINDOW_DAYS))
         window_end = to_utc(day_start + timedelta(days=match_days_ahead + 1))
 
-        program_cache = getattr(self, "_epg_program_cache", None)
-        if program_cache is None:
-            program_cache = {}
-            self._epg_program_cache = program_cache
-
         try:
             index = (
                 EPGProgramIndex.build(
@@ -308,7 +305,7 @@ class StreamMatching:
                     resolution,
                     window_start,
                     window_end,
-                    program_cache=program_cache,
+                    program_cache=getattr(self, "_epg_program_cache", None),
                 )
                 if resolution
                 else EPGProgramIndex({})
@@ -392,13 +389,22 @@ class StreamMatching:
         return inputs
 
     def clear_epg_resolution_cache(self) -> None:
-        """Drop the shared catalogs and derived resolution inputs for the next run."""
-        from teamarr.consumers.matching.epg_xtream import clear_xtream_parse_cache
-
+        """Release the shared catalogs, resolution inputs and programme caches."""
         self._epg_inputs_cache = None
         self._dispatcharr_catalog_cache = None
         self._epg_program_cache = None
-        clear_xtream_parse_cache()
+        self._xtream_parse_cache = None
+
+    @contextmanager
+    def _epg_cache_scope(self) -> Iterator[None]:
+        """Share EPG reads within one batch or preview, including on error paths."""
+        self.clear_epg_resolution_cache()
+        self._epg_program_cache = {}
+        self._xtream_parse_cache = XtreamParseCache()
+        try:
+            yield
+        finally:
+            self.clear_epg_resolution_cache()
 
     def _own_epg_source_id(self) -> "int | None":
         """The app's OWN configured EPG-source id (``dispatcharr_epg_id`` setting).
@@ -484,6 +490,7 @@ class StreamMatching:
             window_start=window_start,
             window_end=window_end,
             ttl_seconds=max(1, cache_hours) * 3600,
+            parse_cache=getattr(self, "_xtream_parse_cache", None),
         )
         if programs:
             added = index.merge(programs)

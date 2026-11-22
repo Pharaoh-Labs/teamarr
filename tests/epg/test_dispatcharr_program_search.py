@@ -8,8 +8,14 @@ Covers the client surface added in teamarr-183.2:
 The broader matching/lifecycle test matrix lives in teamarr-183.7.
 """
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
+import httpx
+import pytest
+
+from teamarr.consumers.matching.epg_index import EPGProgramIndex
+from teamarr.dispatcharr.client import DispatcharrClient
 from teamarr.dispatcharr.managers.epg import EPGManager
 from teamarr.dispatcharr.types import DispatcharrProgram
 
@@ -174,3 +180,47 @@ def test_search_programs_reports_failed_read_as_none():
     client.get.return_value = _mgr(200)
     client.paginated_get_or_none.return_value = None
     assert EPGManager(client).search_programs(tvg_id="60048") is None
+
+
+def test_search_programs_retries_after_a_transient_probe_failure():
+    client = MagicMock()
+    client.get.side_effect = [_mgr(503), _mgr(200)]
+    client.paginated_get_or_none.return_value = [SAMPLE_PROGRAM]
+    mgr = EPGManager(client)
+
+    assert mgr.search_programs(tvg_id="60048") is None
+    programs = mgr.search_programs(tvg_id="60048")
+    assert programs is not None and [p.id for p in programs] == [SAMPLE_PROGRAM["id"]]
+
+
+@pytest.mark.parametrize("failure", ["first-page", "later-page", "invalid-json"])
+def test_index_retries_incomplete_search_for_the_next_group(monkeypatch, failure):
+    client = DispatcharrClient.__new__(DispatcharrClient)
+    follow_url = "/api/epg/programs/search/?page=2&page_size=500&tvg_id=60048"
+    recovered = False
+
+    def get(path):
+        if path.endswith("?page_size=1"):
+            return httpx.Response(200)
+        if path == follow_url:
+            return httpx.Response(503)
+        if recovered:
+            return httpx.Response(200, json={"results": [SAMPLE_PROGRAM]})
+        if failure == "later-page":
+            return httpx.Response(200, json={"results": [SAMPLE_PROGRAM], "next": follow_url})
+        if failure == "invalid-json":
+            return httpx.Response(200, text="bad gateway")
+        return httpx.Response(503)
+
+    monkeypatch.setattr(client, "get", get)
+    manager = EPGManager(client)
+    cache = {}
+    start, end = datetime(2026, 6, 1, tzinfo=UTC), datetime(2026, 6, 2, tzinfo=UTC)
+
+    first = EPGProgramIndex.build(manager, {"stream-A": "60048"}, start, end, program_cache=cache)
+    assert not first
+    assert not cache
+    recovered = True
+    index = EPGProgramIndex.build(manager, {"stream-B": "60048"}, start, end, program_cache=cache)
+    assert index.tvg_ids() == ["stream-B"]
+    assert index.program_count() == 1

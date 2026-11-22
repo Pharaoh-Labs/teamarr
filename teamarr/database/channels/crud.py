@@ -367,6 +367,7 @@ def get_managed_channels_for_group(
     Returns channels where either:
     - The channel was created by this group (event_epg_group_id = group_id), OR
     - The channel has active streams sourced from this group (source_group_id = group_id)
+    - When including deleted channels, a deleted channel with historical streams from this group
 
     This allows each group to validate its own streams even on channels
     created by other groups (e.g., consolidated channels with cross-group streams).
@@ -380,10 +381,14 @@ def get_managed_channels_for_group(
         List of ManagedChannel objects (deduplicated)
     """
     deleted_clause = "" if include_deleted else "AND mc.deleted_at IS NULL"
+    membership_clause = (
+        "(mcs.removed_at IS NULL OR mc.deleted_at IS NOT NULL)"
+        if include_deleted else "mcs.removed_at IS NULL"
+    )
     cursor = conn.execute(
         f"""SELECT DISTINCT mc.* FROM managed_channels mc
             LEFT JOIN managed_channel_streams mcs
-                ON mc.id = mcs.managed_channel_id AND mcs.removed_at IS NULL
+                ON mc.id = mcs.managed_channel_id AND {membership_clause}
              WHERE (mc.event_epg_group_id = ? OR mcs.source_group_id = ?)
                {_core_owner_clause(conn, "mc.")}
             {deleted_clause}
