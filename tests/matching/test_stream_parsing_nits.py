@@ -160,6 +160,11 @@ class TestBatchBDateAndColonExtraction:
     @pytest.mark.parametrize(
         ("stream_name", "expected_t1", "expected_t2"),
         [
+            ("Bills vs 142: Broncos", "Bills", "Broncos"),
+            ("Bills vs ESPN+ 45: Broncos", "Bills", "Broncos"),
+            ("Bills vs ESPN+ 45: Broncos: 12:00 PM ET", "Bills", "Broncos"),
+            ("Bills vs Broncos (:05)", "Bills", "Broncos"),
+            ("Dortmund vs Schalke 04: 12:00 PM ET", "Dortmund", "Schalke 04"),
             (
                 "LIVE: BRIDGEWATER STATE VS. AMHERST (FIRST ROUND): Sat 21 Nov 12:00 EST (US):"
                 "  : USA: ESPN+ [PPV EVENTS] 36 [1080p]",

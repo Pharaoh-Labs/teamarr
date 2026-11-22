@@ -988,6 +988,14 @@ def _is_substantial_side(side: str | None) -> bool:
 # One quality token, optionally bracketed: "HD", "1080p", "[1080p]", "(4K)".
 _QUALITY_TAG = rf"[\(\[]?\s*{QUALITY_TOKEN}\s*[\)\]]?"
 
+# A leading colon segment ending in a number is not necessarily a channel
+# label ("Schalke 04:"). Only strip bare numbers and recognized providers.
+_TEAM2_CHANNEL_PREFIX = re.compile(
+    r"^(?:(?:(?:NFL Game Pass|ESPN\+?|Peacock|Paramount\+?|Sky Sports|TSN)\s*)?"
+    r"\d+\s*:\s*)+",
+    re.IGNORECASE,
+)
+
 
 def _clean_team_name(name: str, *, is_team2: bool = False) -> str:
     """Clean extracted team name."""
@@ -1003,15 +1011,6 @@ def _clean_team_name(name: str, *, is_team2: bool = False) -> str:
     if " // " in name:
         name = name.split(" // ")[0]
 
-    # On the right-hand side of a matchup separator (team2), a colon separates
-    # the team name from trailing broadcast/date/group metadata ("AMHERST (FIRST
-    # ROUND): Sat DATE_MASK ...", "Napoli Knights: all: DATE_MASK: ..."), never
-    # a leading show prefix before team2 (#1264).
-    if is_team2 and ":" in name:
-        head = name.split(":", 1)[0].strip()
-        if _is_substantial_side(head):
-            name = head
-
     # Remove datetime masks
     name = re.sub(r"\bDATE_MASK\b", "", name)
     name = re.sub(r"\bTIME_MASK\b", "", name)
@@ -1019,6 +1018,14 @@ def _clean_team_name(name: str, *, is_team2: bool = False) -> str:
     # Remove parentheses left empty/near-empty after datetime mask removal
     # Handles: () (   ) (:05) (  -- ) (  --  :40) etc.
     name = re.sub(r"\(\s*[\s:\-]*\d{0,2}\s*\)", "", name)
+
+    # On the right-hand side, strip recognized channel prefixes before
+    # interpreting the next colon as trailing broadcast/date metadata (#1264).
+    if is_team2 and ":" in name:
+        name = _TEAM2_CHANNEL_PREFIX.sub("", name.lstrip())
+        head = name.split(":", 1)[0].strip()
+        if _is_substantial_side(head):
+            name = head
 
     # Clean up "@ ET", "@ EST", "@ PT", etc. at end
     name = re.sub(r"\s*@\s*[A-Z]{2,4}T?\s*$", "", name, flags=re.IGNORECASE)
