@@ -275,6 +275,12 @@ class MatchOutcome:
     # match team-branded streams. None for TEAM_VS_TEAM/other categories.
     matched_side: str | None = None
 
+    # Racing only (#1158): the match rests on the stream's timestamp landing in
+    # a session of the one covering event, with no event-name score behind it.
+    # Internal to choosing between racing leagues that both accept a stream —
+    # never persisted.
+    time_only: bool = False
+
     # For EXCLUDED/LEAGUE_NOT_INCLUDED - the league that was found (for display)
     found_league: str | None = None
     found_league_name: str | None = None
