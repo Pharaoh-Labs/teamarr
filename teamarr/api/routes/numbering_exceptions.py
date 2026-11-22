@@ -47,6 +47,7 @@ class NumberingExceptionModel(BaseModel):
     season_type: str | None = None  # None = any season
     segments: list[str] | None = None  # None = any segment (#1018)
     keyword: str | None = None  # None = any channel (#1018)
+    channel_kind: str | None = None  # 'team' | 'event'; None = both (#1224)
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
     display_name: str | None = None
@@ -73,6 +74,7 @@ class NumberingExceptionCreate(BaseModel):
     season_type: str | None = None
     segments: list[str] | None = None
     keyword: str | None = None
+    channel_kind: str | None = None  # 'team' | 'event'; None = both (#1224)
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
 
@@ -95,6 +97,9 @@ class NumberingExceptionUpdate(BaseModel):
     set_segments: bool = False
     keyword: str | None = None
     set_keyword: bool = False
+    # Channel kind condition (#1224), same set_* convention.
+    channel_kind: str | None = None
+    set_channel_kind: bool = False
     channel_group_id: int | None = None
     channel_group_mode: str | None = None
     set_channel_group: bool = False
@@ -124,6 +129,7 @@ _KEYWORD_LABELS = {
     "driver": "driver feeds",
     "variant": "other race feeds",
 }
+_CHANNEL_KIND_LABELS = {"team": "team channels", "event": "event channels"}
 
 
 def _display_name(conn, exc) -> str:
@@ -153,6 +159,9 @@ def _display_name(conn, exc) -> str:
 def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
     """Attach display names and how many active channels each block row owns.
 
+    Only event channels are counted (managed team channels are not in this
+    list), so a block limited to team channels reads 0 here (#1224).
+
     Counted per ROW — the row a channel actually resolved to — not per lane.
     Group members share one lane, so a per-lane count put the whole block's
     total on every member: a playoffs-only NBA row with no channels read
@@ -172,6 +181,7 @@ def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
             ch.get("season_type"),
             segment=ch.get("segment"),
             exception_keyword=ch.get("exception_keyword"),
+            channel_kind="event",
         )
         if row is not None:
             counts[row.id] = counts.get(row.id, 0) + 1
@@ -187,9 +197,9 @@ def _with_counts(conn, exceptions) -> list[NumberingExceptionModel]:
 
 def _member_label(conn, exc) -> str:
     """A block member's name for the layout strip, with its conditions when it
-    has any — "NBA (postseason)", "F1 (race/qualifying, driver feeds)" — so a
-    conditioned member does not read as if all of the league numbers there
-    (#950, #1018)."""
+    has any — "NBA (postseason)", "F1 (race/qualifying, driver feeds)",
+    "NFL (team channels)" — so a conditioned member does not read as if all of
+    the league numbers there (#950, #1018, #1224)."""
     name = _display_name(conn, exc)
     parts = []
     if exc.season_type:
@@ -198,6 +208,8 @@ def _member_label(conn, exc) -> str:
         parts.append("/".join(exc.segments))
     if exc.keyword:
         parts.append(_KEYWORD_LABELS.get(exc.keyword) or exc.keyword.partition(":")[2])
+    if exc.channel_kind:
+        parts.append(_CHANNEL_KIND_LABELS.get(exc.channel_kind) or exc.channel_kind)
     return f"{name} ({', '.join(parts)})" if parts else name
 
 
@@ -215,7 +227,10 @@ def list_numbering_exceptions():
 
 @router.post("", response_model=NumberingExceptionModel)
 def create_numbering_exception(data: NumberingExceptionCreate):
-    """Add a pinned block. 400 if the start is already used by another block."""
+    """Add a pinned block. 400 if the start is already used by another block or
+    a condition (season, segments, keyword, channel kind) is invalid.
+    ``channel_kind`` limits the block to managed team channels ('team') or
+    event channels ('event'); omit it for both."""
     with get_db() as conn:
         try:
             created = add_numbering_exception(
@@ -232,6 +247,7 @@ def create_numbering_exception(data: NumberingExceptionCreate):
                 season_type=data.season_type,
                 segments=data.segments,
                 keyword=data.keyword,
+                channel_kind=data.channel_kind,
                 channel_group_id=data.channel_group_id,
                 channel_group_mode=data.channel_group_mode,
             )
@@ -241,8 +257,8 @@ def create_numbering_exception(data: NumberingExceptionCreate):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Could not add block — check scope, start/end, the season, segments "
-                    "and keyword conditions, and that the team/league exists"
+                    "Could not add block — check scope, start/end, the season, segments, "
+                    "keyword and channel kind conditions, and that the team/league exists"
                 ),
             )
         return _with_counts(conn, [created])[0]
@@ -250,8 +266,9 @@ def create_numbering_exception(data: NumberingExceptionCreate):
 
 @router.get("/preview", response_model=list[LanePreviewModel])
 def preview_layout():
-    """Effective layout: how many of today's channels each lane would hold and
-    the number span they'd occupy in compact placement (a spill indicator)."""
+    """Effective layout: how many of today's event channels each lane would
+    hold and the number span they'd occupy in compact placement (a spill
+    indicator). Managed team channels are not counted."""
     from teamarr.database.channel_numbers import _default_lane, get_all_channels_sorted
     from teamarr.database.numbering_exceptions import LaneResolver
 
@@ -268,6 +285,7 @@ def preview_layout():
                 ch.get("season_type"),
                 segment=ch.get("segment"),
                 exception_keyword=ch.get("exception_keyword"),
+                channel_kind="event",
             )
             buckets[lane.id].append(ch)
         exceptions = {e.id: e for e in get_numbering_exceptions(conn)}
@@ -316,8 +334,8 @@ def segment_codes():
 
 @router.put("/{exception_id}", response_model=NumberingExceptionModel)
 def update(exception_id: int, data: NumberingExceptionUpdate):
-    """Update a block's start / end / label / enabled / season, segments and
-    keyword conditions / channel group. 400 on a start conflict, 404 for an
+    """Update a block's start / end / label / enabled / season, segments,
+    keyword and channel kind conditions / channel group. 400 on a start conflict, 404 for an
     unknown block, 422 when the new range or a condition is invalid."""
     with get_db() as conn:
         if get_numbering_exception(conn, exception_id) is None:
@@ -333,6 +351,7 @@ def update(exception_id: int, data: NumberingExceptionUpdate):
                 season_type=data.season_type if data.set_season_type else ...,
                 segments=data.segments if data.set_segments else ...,
                 keyword=data.keyword if data.set_keyword else ...,
+                channel_kind=data.channel_kind if data.set_channel_kind else ...,
                 channel_group_id=data.channel_group_id if data.set_channel_group else ...,
                 channel_group_mode=data.channel_group_mode if data.set_channel_group else ...,
             )
@@ -341,7 +360,7 @@ def update(exception_id: int, data: NumberingExceptionUpdate):
         if updated is None:
             raise HTTPException(
                 status_code=422,
-                detail="Invalid range, segments or keyword condition",
+                detail="Invalid range, segments, keyword or channel kind condition",
             )
         return _with_counts(conn, [updated])[0]
 

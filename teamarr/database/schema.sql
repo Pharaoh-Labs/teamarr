@@ -1194,6 +1194,9 @@ CREATE TABLE IF NOT EXISTS numbering_exceptions (
     -- fixed precedence order in numbering_exceptions.py picks the winner.
     segments TEXT,                           -- comma-separated lowercase codes: 'race,qualifying'
     keyword TEXT,                            -- 'main' | 'any' | 'driver' | 'variant' | 'feed:<feed_key>' | 'label:<keyword label>'
+    -- Channel kind condition (#1224): NULL = any channel. Lets one league number
+    -- its event channels and its managed team channels in two separate blocks.
+    channel_kind TEXT,                       -- 'team' (managed team channels) | 'event' (event channels)
     -- Output channel group for channels in this block (#950). Same shape as the
     -- global/per-league pair: a static id, or a pattern ("09 TEAMARR {league}")
     -- in channel_group_mode. Both NULL = the subscription's group applies.

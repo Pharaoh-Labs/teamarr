@@ -1189,7 +1189,12 @@ class TeamChannelManager:
 
         lane = LaneResolver.load(
             conn, Lane(id=None, start=settings.range_start, end=settings.range_end)
-        ).resolve(team.get("sport"), team.get("primary_league"), team.get("team_name"))
+        ).resolve(
+            team.get("sport"),
+            team.get("primary_league"),
+            team.get("team_name"),
+            channel_kind="team",
+        )
         number = lane.start
         while lane.end is None or number <= lane.end:
             if number not in occupied:
