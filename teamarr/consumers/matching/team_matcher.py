@@ -594,6 +594,13 @@ class MatchContext:
     # Sport durations for ongoing event detection (hours)
     sport_durations: dict[str, float] = field(default_factory=dict)
 
+    # What this run searches for the stream (#1264): the leagues, and the
+    # prefetch when the batch has one. The cache check reads them to confirm
+    # that a cached upcoming event is still listed; left unset, every upcoming
+    # event is a cache miss.
+    search_leagues: Sequence[str] = ()
+    prefetched_events: "dict[str, list[Event]] | None" = field(default=None, repr=False)
+
     def is_event_in_search_window(self, event: "Event") -> bool:
         """Check if an event falls within the 30-day search window for matching.
 
@@ -668,6 +675,10 @@ class TeamMatcher:
         # _prefetched_candidates). Keyed by league set + date window, and reset
         # whenever a different prefetch dict arrives.
         self._candidates_source: dict[str, list[Event]] | None = None
+        # (league, event id) -> event for the prefetch last seen by the cache
+        # check (#1264); rebuilt when the prefetch is replaced.
+        self._listed_source: dict[str, list[Event]] | None = None
+        self._listed_index: dict[tuple[str, str], Event] = {}
         self._candidates_memo: dict[
             tuple[tuple[str, ...], _DateWindow | None], tuple[tuple[str, Event], ...]
         ] = {}
@@ -758,6 +769,7 @@ class TeamMatcher:
             team2=classified.team2,
             sport_durations=sport_durations or {},
             anchor_dt=anchor_dt,
+            search_leagues=(league,),
         )
 
         # Check cache first
@@ -857,6 +869,8 @@ class TeamMatcher:
             team2=classified.team2,
             sport_durations=sport_durations or {},
             anchor_dt=anchor_dt,
+            search_leagues=enabled_leagues,
+            prefetched_events=prefetched_events,
         )
 
         # Check cache first
@@ -1390,7 +1404,9 @@ class TeamMatcher:
         """Check cache for existing match.
 
         User-corrected entries are always trusted (pinned).
-        Algorithmic entries are validated against date.
+        Algorithmic entries are validated against date. An upcoming event is
+        served only while this run still lists it (``_listed_event``, which
+        reads ``ctx.search_leagues`` / ``ctx.prefetched_events``).
         """
         # Anchored (EPG) matches are keyed only by title in the cache, but two
         # programs with the same title (a series' Game 1/Game 2, or a live airing
@@ -1464,30 +1480,52 @@ class TeamMatcher:
             )
             return None
 
-        # Today's events (or active multi-day events): use cache. Upcoming events
-        # (event_date > target_date) also hit cache when the stream carries a
-        # trusted date naming that event (#1264).
+        # Today's events (or active multi-day events): use cache.
+        #
+        # An upcoming event (event_date > target_date) is served only when
+        # both hold (#1264):
+        #
+        # * This run still lists it. The cached copy is the event as it was
+        #   when the stream first matched; the listed object is the event as
+        #   it is now, and that is the one returned — a rescheduled game must
+        #   not keep its old start until its old day arrives. An event the run
+        #   no longer lists is a miss.
+        # * The stream's own trusted date is one of the event's days — the
+        #   same day, not the day beside it. The matcher's one-day slack lets
+        #   "(Nov 21)" match the Nov 20 game while that is the only game
+        #   listed; when the Nov 21 game is published it wins on the date, and
+        #   it can only win if this stream is matched again.
+        #
+        # Anything else is re-matched, as every upcoming event was before.
         if not active_today:
             extracted_date = ctx.classified.normalized.extracted_date
-            extracted_trusted = ctx.classified.normalized.extracted_date_trusted
-            compare_tz = ctx.stream_tz or ctx.user_tz
-            compare_dates = {event.start_time.astimezone(compare_tz).date()} | {
-                s.start_time.astimezone(compare_tz).date()
-                for s in (event.sessions or [])
-                if s.start_time is not None
-            }
-            date_pinned = (
-                extracted_date is not None
-                and extracted_trusted
-                and min(abs((extracted_date - d).days) for d in compare_dates) <= 1
-            )
-            if not date_pinned:
+            if extracted_date is None or not ctx.classified.normalized.extracted_date_trusted:
                 logger.debug(
                     "[MATCH_CACHE] Mismatch: event from %s != target %s",
                     event_date,
                     ctx.target_date,
                 )
                 return None
+            listed = self._listed_event(ctx, entry.league, event)
+            if listed is None:
+                logger.debug(
+                    "[MATCH_CACHE] Upcoming event %s is not in this run's candidates", event.id
+                )
+                return None
+            compare_tz = ctx.stream_tz or ctx.user_tz
+            listed_dates = {listed.start_time.astimezone(compare_tz).date()} | {
+                s.start_time.astimezone(compare_tz).date()
+                for s in (listed.sessions or [])
+                if s.start_time is not None
+            }
+            if extracted_date not in listed_dates:
+                logger.debug(
+                    "[MATCH_CACHE] Upcoming event %s is not on the stream's date %s",
+                    event.id,
+                    extracted_date,
+                )
+                return None
+            event = listed
 
         # Touch the cache entry only after validation succeeds (#1264)
         self._cache.touch(ctx.group_id, ctx.stream_id, ctx.stream_name, ctx.generation)
@@ -1508,6 +1546,39 @@ class TeamMatcher:
             parsed_team2=ctx.team2,
             origin_match_method=entry.match_method,  # Original method (fuzzy, alias, etc.)
         )
+
+    def _listed_event(
+        self,
+        ctx: MatchContext,
+        league: str | None,
+        cached: Event,
+    ) -> Event | None:
+        """This run's own copy of a cached event, or None when the run has none.
+
+        The candidates of a run are the prefetch when there is one, otherwise
+        what the service returns for the day. Only the league the cached match
+        was found in is read, and only while the stream still searches it.
+        """
+        if not league or league not in ctx.search_leagues:
+            return None
+        prefetched_events = ctx.prefetched_events
+        if prefetched_events:
+            if self._listed_source is not prefetched_events:
+                # Same freshness rule as ``_prefetched_candidates``: the
+                # prefetch is replaced, never mutated in place.
+                self._listed_source = prefetched_events
+                self._listed_index = {
+                    (lg, event.id): event
+                    for lg, events in prefetched_events.items()
+                    for event in events
+                }
+            return self._listed_index.get((league, cached.id))
+        cache_only = self._service.get_provider_name(league) == "tsdb"
+        day = cached.start_time.astimezone(ctx.user_tz).date()
+        for event in self._service.get_events(league, day, cache_only=cache_only):
+            if event.id == cached.id:
+                return event
+        return None
 
     def _match_against_events(
         self,

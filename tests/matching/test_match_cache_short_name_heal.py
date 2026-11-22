@@ -139,11 +139,74 @@ class TestCheckCacheDateValidation:
         )
         matcher = make_team_matcher(cache=cache)
         ctx = self._ctx("Athletics at Philadelphia Phillies - 2026-05-06", date(2026, 5, 5))
+        # An upcoming event is a hit only while the run lists it, and the
+        # listed object is the one served (here: same day, new start).
+        listed = matcher._reconstruct_event({**cached, "start_time": "2026-05-06T20:00:00+00:00"})
+
+        ctx.search_leagues, ctx.prefetched_events = ["mlb"], {"mlb": [listed]}
 
         outcome = matcher._check_cache(ctx)
 
         assert outcome is not None and outcome.is_matched
+        assert outcome.event is listed
         cache.touch.assert_called_once_with(1, 1, ctx.stream_name, 5)
+
+    def test_upcoming_event_misses_cache_without_touch_when_run_does_not_list_it(self):
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from teamarr.consumers.stream_match_cache import StreamCacheEntry
+        from tests.fakes import make_team_matcher
+
+        cached = _make_cached("Phillies", "Athletics")
+        cached["start_time"] = "2026-05-06T18:00:00+00:00"
+        cache = MagicMock()
+        cache.get.return_value = StreamCacheEntry(
+            event_id="401815214",
+            league="mlb",
+            cached_data=cached,
+            match_method="fuzzy",
+            user_corrected=False,
+        )
+        matcher = make_team_matcher(cache=cache)
+        ctx = self._ctx("Athletics at Philadelphia Phillies - 2026-05-06", date(2026, 5, 5))
+        other = matcher._reconstruct_event({**cached, "id": "401815999"})
+
+        ctx.search_leagues, ctx.prefetched_events = ["mlb"], {"mlb": [other]}
+        assert matcher._check_cache(ctx) is None
+        # The league the match was found in is no longer searched.
+        listed = matcher._reconstruct_event(cached)
+        ctx.search_leagues, ctx.prefetched_events = ["nhl"], {"mlb": [listed]}
+        assert matcher._check_cache(ctx) is None
+        cache.touch.assert_not_called()
+
+    def test_upcoming_event_a_day_off_the_stream_date_misses_cache(self):
+        from datetime import date
+        from unittest.mock import MagicMock
+
+        from teamarr.consumers.stream_match_cache import StreamCacheEntry
+        from tests.fakes import make_team_matcher
+
+        cached = _make_cached("Phillies", "Athletics")
+        cached["start_time"] = "2026-05-06T18:00:00+00:00"
+        cache = MagicMock()
+        cache.get.return_value = StreamCacheEntry(
+            event_id="401815214",
+            league="mlb",
+            cached_data=cached,
+            match_method="fuzzy",
+            user_corrected=False,
+        )
+        matcher = make_team_matcher(cache=cache)
+        ctx = self._ctx("Athletics at Philadelphia Phillies - 2026-05-07", date(2026, 5, 5))
+        listed = matcher._reconstruct_event(cached)
+
+        ctx.search_leagues, ctx.prefetched_events = ["mlb"], {"mlb": [listed]}
+
+        outcome = matcher._check_cache(ctx)
+
+        assert outcome is None
+        cache.touch.assert_not_called()
 
     def test_upcoming_event_misses_cache_without_touch_when_stream_has_no_date(self):
         from datetime import date
