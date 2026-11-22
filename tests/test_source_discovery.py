@@ -1346,7 +1346,11 @@ def test_dismissing_rotating_group_on_one_account_does_not_block_another_account
     }
 
 
-def test_rebind_rotating_sources_iterates_past_blocked_replacement_and_requires_account_match(db):
+@pytest.mark.parametrize("has_linked_candidate", [True, False])
+@pytest.mark.parametrize("dismissed_account", [4, 0])
+def test_rebind_rotating_sources_iterates_past_blocked_replacement_and_requires_account_match(
+    db, has_linked_candidate, dismissed_account
+):
     from teamarr.consumers.source_lifecycle.discovery import ScanSummary, rebind_rotating_sources
 
     with get_db() as conn:
@@ -1371,13 +1375,19 @@ def test_rebind_rotating_sources_iterates_past_blocked_replacement_and_requires_
         conn.execute(
             "INSERT INTO source_candidates "
             "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
-            "VALUES (71, 'LIVE | NHL (Wed)', 4, 'accepted', ?), "
-            "       (72, 'LIVE | NHL (Wed)', 0, 'accepted', ?), "
-            "       (90, 'LIVE | NHL (Fri)', 4, 'dismissed', NULL)",
-            (s1, s2),
+            "VALUES (72, 'LIVE | NHL (Wed)', 0, 'accepted', ?), "
+            "       (90, 'LIVE | NHL (Fri)', ?, 'dismissed', NULL)",
+            (s2, dismissed_account),
         )
+        if has_linked_candidate:
+            conn.execute(
+                "INSERT INTO source_candidates "
+                "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
+                "VALUES (71, 'LIVE | NHL (Wed)', 4, 'accepted', ?)",
+                (s1,),
+            )
 
-        # Group 90 has higher rank than Group 85, but is dismissed for account 4.
+        # Group 90 has higher rank than Group 85, but is dismissed on account 4 or unscoped.
         # Group 85 is valid for account 4.
         # Unbound source s2 (account_id=None) should NOT rebind to account-4 evidence (group 86).
         evidence = [
@@ -1404,7 +1414,9 @@ def test_rebind_rotating_sources_iterates_past_blocked_replacement_and_requires_
             ),
         ]
         summary = ScanSummary()
-        rebind_rotating_sources(conn, NOW, live_ids=set(), evidence=evidence, summary=summary)
+        rebind_rotating_sources(
+            conn, NOW, live_ids={85, 86, 90}, evidence=evidence, summary=summary
+        )
         conn.commit()
 
         s1_row = conn.execute(
@@ -1416,9 +1428,17 @@ def test_rebind_rotating_sources_iterates_past_blocked_replacement_and_requires_
             "SELECT m3u_group_id, m3u_account_id FROM event_epg_groups WHERE id = ?",
             (s2,),
         ).fetchone()
+        candidates = conn.execute(
+            "SELECT m3u_group_id, m3u_account_id, status, source_group_id "
+            "FROM source_candidates WHERE m3u_group_id IN (85, 90) ORDER BY m3u_group_id"
+        ).fetchall()
     assert summary.sources_rebound == 1
     assert tuple(s1_row) == (85, "LIVE | NHL (Thu)", 4)
     assert tuple(s2_row) == (72, None)
+    assert [tuple(row) for row in candidates] == [
+        (85, 4, "accepted", s1),
+        (90, dismissed_account, "dismissed", None),
+    ]
 
 
 def test_a_sport_toggle_covers_every_league_of_the_sport(db):

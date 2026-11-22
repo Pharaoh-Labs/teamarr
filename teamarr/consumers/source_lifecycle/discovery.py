@@ -818,6 +818,7 @@ def rebind_rotating_sources(
 
     sources = [s for s in get_all_groups(conn, include_disabled=True) if not s.is_channel_source]
     taken = {(s.m3u_group_id, s.m3u_account_id) for s in sources}
+    dismissed, _ = dismissed_groups(conn)
     accepted = {
         row["source_group_id"]: row
         for row in conn.execute(
@@ -845,6 +846,10 @@ def rebind_rotating_sources(
             reverse=True,
         )
         for replacement in replacements:
+            group_id = replacement.m3u_group_id
+            account = account_key(replacement.m3u_account_id)
+            if (group_id, account) in dismissed or (group_id, 0) in dismissed:
+                continue
             if candidate and not move_accepted_candidate(conn, candidate["id"], replacement):
                 continue
             conn.execute(
