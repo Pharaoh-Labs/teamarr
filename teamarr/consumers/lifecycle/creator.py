@@ -7,6 +7,7 @@ channels via `_create_channel`.
 """
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from sqlite3 import Connection
@@ -737,66 +738,129 @@ class ChannelCreator(_LifecycleHost):
         )
 
     def _flush_pending_stream_pushes(self, conn: Connection, result: StreamProcessResult) -> None:
+        """Push every queued channel's stream list, one channel at a time.
+
+        Each channel is isolated (#1278): the queue is emptied up front and
+        the added rows are already committed, so an exception escaping one
+        channel used to leave every later channel's streams in the DB, never
+        sent. A channel that raises is rolled back like a rejected PATCH and
+        the loop carries on.
+        """
+        pending, self._pending_stream_pushes = self._pending_stream_pushes, {}
+        for channel_id, record in pending.items():
+            added_before = len(result.streams_added)
+            try:
+                self._flush_channel_stream_push(conn, result, channel_id, record)
+            except Exception as exc:
+                logger.warning(
+                    "[LIFECYCLE] Stream push failed for channel db_id=%d: %s; "
+                    "rolling back its added streams and continuing",
+                    channel_id,
+                    exc,
+                )
+                # Nothing this channel reported as added survives the rollback.
+                del result.streams_added[added_before:]
+                error = f"Stream push failed: {exc}"
+                try:
+                    # Drop the partial transaction (uncommitted history rows)
+                    # so the compensation and the next channel start clean.
+                    conn.rollback()
+                    self._rollback_stream_push(
+                        conn, result, channel_id, record.added_streams, error
+                    )
+                except Exception as rollback_err:
+                    # The rows stay; the ordering pass / drift repair converges.
+                    logger.warning(
+                        "[LIFECYCLE] Could not roll back added streams for channel "
+                        "db_id=%d: %s; leaving them for the ordering pass",
+                        channel_id,
+                        rollback_err,
+                    )
+                    result.errors.append({"channel_id": channel_id, "error": error})
+                    try:
+                        conn.rollback()
+                    except Exception as final_err:
+                        logger.debug(
+                            "[LIFECYCLE] Rollback after failed stream push failed: %s", final_err
+                        )
+
+    def _rollback_stream_push(
+        self,
+        conn: Connection,
+        result: StreamProcessResult,
+        channel_id: int,
+        added_stream_ids: Iterable[int],
+        error: str,
+    ) -> None:
+        """Undo a channel's just-added streams after a push that did not land."""
+        from teamarr.database.channels import remove_stream_from_channel
+
+        for stream_id in added_stream_ids:
+            remove_stream_from_channel(conn, channel_id, stream_id)
+        conn.commit()
+        result.errors.append({"channel_id": channel_id, "error": error})
+
+    def _flush_channel_stream_push(
+        self,
+        conn: Connection,
+        result: StreamProcessResult,
+        channel_id: int,
+        record: PendingStreamPush,
+    ) -> None:
         from teamarr.database.channels import (
             get_channel_streams,
             get_managed_channel,
             get_ordered_stream_ids,
-            remove_stream_from_channel,
         )
 
-        pending, self._pending_stream_pushes = self._pending_stream_pushes, {}
-        for channel_id, record in pending.items():
-            channel = get_managed_channel(conn, channel_id)
-            if not channel or channel.deleted_at:
-                continue
+        channel = get_managed_channel(conn, channel_id)
+        if not channel or channel.deleted_at:
+            return
 
-            added_streams = {
-                row.dispatcharr_stream_id: record.added_streams[row.dispatcharr_stream_id]
-                for row in get_channel_streams(conn, channel.id)
-                if row.dispatcharr_stream_id in record.added_streams
-            }
-            ordered = get_ordered_stream_ids(conn, channel.id)
-            remote = record.remote_streams
-            if remote is not None and not added_streams:
-                # Drift repair adds missing known members to the live list.
-                ordered = list(remote) + [sid for sid in ordered if sid in record.drifted_streams]
-            elif remote is not None:
-                phantoms = self._purge_phantom_streams(
-                    conn, channel, ordered, set(remote) | added_streams.keys()
+        added_streams = {
+            row.dispatcharr_stream_id: record.added_streams[row.dispatcharr_stream_id]
+            for row in get_channel_streams(conn, channel.id)
+            if row.dispatcharr_stream_id in record.added_streams
+        }
+        ordered = get_ordered_stream_ids(conn, channel.id)
+        remote = record.remote_streams
+        if remote is not None and not added_streams:
+            # Drift repair adds missing known members to the live list.
+            ordered = list(remote) + [sid for sid in ordered if sid in record.drifted_streams]
+        elif remote is not None:
+            phantoms = self._purge_phantom_streams(
+                conn, channel, ordered, set(remote) | added_streams.keys()
+            )
+            if phantoms:
+                ordered = [stream_id for stream_id in ordered if stream_id not in phantoms]
+
+        # Keep the feed viewers are watching in slot 1 during a live event.
+        if (
+            remote
+            and remote[0] in ordered
+            and live_pin_enabled(conn)
+            and is_channel_event_live(channel.event_date, channel.scheduled_delete_at)
+        ):
+            ordered.remove(remote[0])
+            ordered.insert(0, remote[0])
+
+        # A confirmed phantom purge is durable independently of the PATCH.
+        conn.commit()
+        if ordered and tuple(ordered) != remote:
+            with self._dispatcharr_lock:
+                success = self._safe_update_channel(
+                    channel.dispatcharr_channel_id, {"streams": ordered}, "consolidate streams"
                 )
-                if phantoms:
-                    ordered = [stream_id for stream_id in ordered if stream_id not in phantoms]
+            if not success:
+                self._rollback_stream_push(
+                    conn, result, channel.id, added_streams, "Stream update failed"
+                )
+                return
+            self._stream_drift_fix_count += len(record.drifted_streams.intersection(ordered))
 
-            # Keep the feed viewers are watching in slot 1 during a live event.
-            if (
-                remote
-                and remote[0] in ordered
-                and live_pin_enabled(conn)
-                and is_channel_event_live(channel.event_date, channel.scheduled_delete_at)
-            ):
-                ordered.remove(remote[0])
-                ordered.insert(0, remote[0])
-
-            # A confirmed phantom purge is durable independently of the PATCH.
-            conn.commit()
-            if ordered and tuple(ordered) != remote:
-                with self._dispatcharr_lock:
-                    success = self._safe_update_channel(
-                        channel.dispatcharr_channel_id, {"streams": ordered}, "consolidate streams"
-                    )
-                if not success:
-                    for stream_id in added_streams:
-                        remove_stream_from_channel(conn, channel.id, stream_id)
-                    conn.commit()
-                    result.errors.append(
-                        {"channel_id": channel.id, "error": "Stream update failed"}
-                    )
-                    continue
-                self._stream_drift_fix_count += len(record.drifted_streams.intersection(ordered))
-
-            for name in added_streams.values():
-                self._record_stream_add(conn, result, channel, name)
-            conn.commit()
+        for name in added_streams.values():
+            self._record_stream_add(conn, result, channel, name)
+        conn.commit()
 
     def _handle_existing_channel(
         self,
