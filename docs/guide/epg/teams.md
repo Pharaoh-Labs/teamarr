@@ -10,7 +10,7 @@ redirect_from:
 
 # Teams
 
-**Cricket:** IPL, Big Bash, SA20 and Major League Cricket support team import and
+**Cricket:** IPL, Big Bash, SA20, Major League Cricket and the Caribbean Premier League support team import and
 team channels through ESPN, with no premium API key. Existing recognized team
 selections migrate automatically. The international ODI, T20I and Test format
 leagues remain event-only. See [migration details](../../reference/providers/espn.md#franchise-cricket).
