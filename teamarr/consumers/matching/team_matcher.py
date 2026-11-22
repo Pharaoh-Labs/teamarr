@@ -482,6 +482,14 @@ def _has_shared_name_token(stream_norm: str, event_team) -> bool:
 # does not apply there.
 STATED_TIME_GATE_HOURS = 14
 
+# For a stream that states a time and no date: how close to that time a
+# candidate must start, on its own day, for the time to count as naming it
+# (#1264). Half an hour covers what a correct time looks like in a name (a
+# pre-show start: "06:20 PM" for a 6:30 game) and still separates consecutive
+# nights of a series (6:30 / 5:00, 7:00 / 6:00, 8:00 / 7:00 in the replay). A
+# time written for another zone sits an hour or more from every candidate.
+DATELESS_TIME_TOLERANCE_SECONDS = 30 * 60
+
 
 def _stated_start_gap_hours(ctx: "MatchContext", event) -> float:
     """Hours between the start a stream states and the event's start.
@@ -1663,11 +1671,7 @@ class TeamMatcher:
             if alt and alt not in ABBREVIATION_STOPWORDS:
                 found.add(alt)
         for code in _code_cased_tokens(side):
-            if (
-                2 <= len(code) <= 5
-                and code.isalpha()
-                and code not in ABBREVIATION_STOPWORDS
-            ):
+            if 2 <= len(code) <= 5 and code.isalpha() and code not in ABBREVIATION_STOPWORDS:
                 found.add(code)
         return found
 
@@ -1730,6 +1734,8 @@ class TeamMatcher:
 
         # Check if we have date validation from the stream
         has_date_validation = ctx.classified.normalized.extracted_date is not None
+        # "@" / "at" states who is away and who is home; "vs" does not (#1264).
+        states_venue = (ctx.classified.separator_found or "").strip().lower() in {"@", "at"}
 
         best_match: Event | None = None
         best_league: str | None = None
@@ -1962,18 +1968,39 @@ class TeamMatcher:
                             is_better = anchor_dist < best_anchor_dist
                         else:
                             is_better = away_home_orientation and not best_away_home_orientation
-                    elif not has_date_validation:
-                        # Without an extracted stream date, ref_date in time_distance
-                        # uses each candidate's own date, so date proximity (future
-                        # over past, then nearest to target_date) must come before
-                        # time-of-day disambiguation (#1264).
+                    elif (
+                        not has_date_validation
+                        and ctx.classified.normalized.extracted_time is not None
+                        and (time_distance <= DATELESS_TIME_TOLERANCE_SECONDS)
+                        == (best_time_distance <= DATELESS_TIME_TOLERANCE_SECONDS)
+                    ):
+                        # The stream states a time and no date, and the time
+                        # does not tell these two fixtures apart (#1264): both
+                        # start near it on their own day (tonight's 7:10 game
+                        # and the 7:05 one three weeks ago), or neither does —
+                        # the time is written in a zone we are not reading it
+                        # in ("Orlando Magic @ Boston Celtics | 17/11 00:15" is
+                        # UK time, 15 h and 19 h from the two meetings). Only
+                        # then does the day decide: future over past, then the
+                        # nearer day, then the closer time (a same-day
+                        # doubleheader). A stream that states the venue ("A @
+                        # B", "A at B") is first held to the meeting played
+                        # that way round — the return leg is another game. A
+                        # "vs" order is a provider convention we only guess
+                        # at, so there it stays the last tie-break. When
+                        # exactly one start is near the stated time, the rules
+                        # below stand and the time ranks first: a stream still
+                        # listed after its game stays on that game, not the
+                        # team's next fixture.
                         cand_key = (
+                            states_venue and away_home_orientation,
                             is_future,
                             -abs_distance,
                             -time_distance,
                             away_home_orientation,
                         )
                         best_key = (
+                            states_venue and best_away_home_orientation,
                             best_is_future,
                             -best_date_distance,
                             -best_time_distance,
