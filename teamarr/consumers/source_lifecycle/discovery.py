@@ -56,9 +56,9 @@ from teamarr.database.source_candidates import (
     binding_conflicts,
     dismiss_group,
     dismissed_groups,
-    dismissed_rotation_keys,
     forget_removed_source,
     get_candidates,
+    group_name_key,
     is_dismissed_day,
     move_accepted_candidate,
     record_scan,
@@ -441,17 +441,6 @@ class SourceDiscovery:
         with self._db_factory() as conn:
             taken = self._taken_accounts(conn)
             dismissed, dismissed_names = dismissed_groups(conn)
-            dismissed_rotations = dismissed_rotation_keys(conn)
-            missing_managed_keys = _missing_managed_rotation_keys(conn, live_ids)
-            missing_managed_rot_names = {k for k, _ in missing_managed_keys}
-            known_accounts = {
-                row[0] or 0
-                for row in conn.execute(
-                    "SELECT m3u_account_id FROM source_candidates "
-                    "UNION SELECT m3u_account_id FROM event_epg_groups "
-                    "WHERE m3u_group_id IS NOT NULL"
-                )
-            }
             leagues = self._processor._get_subscription_leagues(conn, None)
             surfaces = league_name_surfaces(conn, leagues)
 
@@ -461,9 +450,6 @@ class SourceDiscovery:
         dismissed_by_name: dict[str, set[int]] = {}
         for name, account in dismissed_names:
             dismissed_by_name.setdefault(name, set()).add(account)
-        dismissed_by_rot: dict[str, set[int]] = {}
-        for key, account in dismissed_rotations:
-            dismissed_by_rot.setdefault(key, set()).add(account)
 
         # A dismissed candidate back under a new group id (a provider rename
         # makes Dispatcharr create a new group): still dismissed.
@@ -471,58 +457,35 @@ class SourceDiscovery:
 
         todo = []
         for group in live_groups:
-            name = (group.name or "").strip().lower()
-            rot_key = rotating_group_key(group.name or "")
-            group_accounts = _group_account_ids(group)
+            name = group_name_key(group.name)
+            # A rotating group is back under a new id every day or week. Its
+            # dismissal is by name like any other, and covers that day's name
+            # only (#1265); no row is written for each new id it arrives under.
+            rotating = rotating_group_key(group.name or "") is not None
             sourced = taken.get(group.id, set())
             said_no = dismissed_by_group.get(group.id, set())
-            said_no_by_name = (
-                (dismissed_by_name.get(name, set()) - said_no) if rot_key is None else set()
-            )
+            said_no_by_name = dismissed_by_name.get(name, set()) - said_no
             decided = {account_key(a) for a in sourced} | said_no | said_no_by_name
             if None in sourced:
                 summary.skipped_sources += 1
-            elif rot_key is not None and (
-                (
-                    all(
-                        (
-                            (rot_key, acc) in dismissed_rotations
-                            or (rot_key, 0) in dismissed_rotations
-                        )
-                        and (rot_key, acc) not in missing_managed_keys
-                        and (rot_key, 0) not in missing_managed_keys
-                        for acc in group_accounts
-                    )
-                    and not (set(group_accounts) & {account_key(a) for a in sourced})
-                )
-                if group_accounts
-                else (
-                    not sourced
-                    and not said_no
-                    and rot_key not in missing_managed_rot_names
-                    and rot_key in dismissed_by_rot
-                    and (
-                        0 in dismissed_by_rot[rot_key]
-                        or not (known_accounts - dismissed_by_rot[rot_key])
-                    )
-                    and self._nothing_new(group, decided | dismissed_by_rot[rot_key])
-                )
-            ):
+            elif rotating and 0 in dismissed_by_name.get(name, ()) and not sourced:
+                # Dismissed with no account: every account's copy of this day.
                 summary.skipped_dismissed += 1
             elif decided and self._nothing_new(group, decided):
                 if sourced:
                     summary.skipped_sources += 1
                 else:
                     summary.skipped_dismissed += 1
-                    renamed.extend((group, account) for account in said_no_by_name)
+                    if not rotating:
+                        renamed.extend((group, account) for account in said_no_by_name)
             elif _stream_count(group) == 0:
                 summary.skipped_empty += 1
             else:
                 todo.append(group)
 
         def unwanted(group: Any) -> Callable[[int], bool]:
-            name = (group.name or "").strip().lower()
-            rot_key = rotating_group_key(group.name or "")
+            name = group_name_key(group.name)
+            rotating = rotating_group_key(group.name or "") is not None
             sourced = taken.get(group.id, set())
 
             def skip(account: int) -> bool:
@@ -531,15 +494,8 @@ class SourceDiscovery:
                 if (group.id, account) in dismissed:
                     summary.skipped_dismissed += 1
                     return True
-                if rot_key is not None:
-                    if (
-                        (
-                            (rot_key, account) in dismissed_rotations
-                            or (rot_key, 0) in dismissed_rotations
-                        )
-                        and (rot_key, account) not in missing_managed_keys
-                        and (rot_key, 0) not in missing_managed_keys
-                    ):
+                if rotating:
+                    if is_dismissed_day(group.name, account, dismissed_names):
                         summary.skipped_dismissed += 1
                         return True
                 elif (name, account) in dismissed_names:
@@ -997,44 +953,6 @@ def _evidence_for(
         return evidence.get((source.m3u_group_id, source.m3u_account_id))
     halves = [e for (group_id, _), e in evidence.items() if group_id == source.m3u_group_id]
     return max(halves, key=lambda e: (e.game_matches, e.team_only_matches), default=None)
-
-
-def _missing_managed_rotation_keys(conn: Connection, live_ids: set[int]) -> set[tuple[str, int]]:
-    """Rotating keys of managed sources whose bound group ID is currently absent."""
-    accepted_names = {
-        row["source_group_id"]: row["m3u_group_name"]
-        for row in conn.execute(
-            "SELECT source_group_id, m3u_group_name FROM source_candidates "
-            "WHERE status = 'accepted' AND source_group_id IS NOT NULL"
-        )
-    }
-    keys: set[tuple[str, int]] = set()
-    for source in get_all_groups(conn, include_disabled=True):
-        if (
-            source.is_channel_source
-            or not source.managed
-            or source.m3u_group_id is None
-            or source.m3u_group_id in live_ids
-        ):
-            continue
-        name = source.m3u_group_name or accepted_names.get(source.id, "")
-        if key := rotating_group_key(name):
-            keys.add((key, account_key(source.m3u_account_id)))
-    return keys
-
-
-def _group_account_ids(group: Any) -> tuple[int, ...]:
-    """M3U account ids reported on a group listing, or empty when unavailable."""
-    accounts = getattr(group, "m3u_accounts", None) or []
-    ids: set[int] = set()
-    for acc in accounts:
-        if isinstance(acc, int) and not isinstance(acc, bool):
-            ids.add(acc)
-        elif isinstance(acc, dict):
-            acc_id = acc.get("m3u_account") or acc.get("account_id") or acc.get("id")
-            if isinstance(acc_id, int) and not isinstance(acc_id, bool):
-                ids.add(acc_id)
-    return tuple(sorted(ids))
 
 
 def _stream_count(group: Any) -> int | None:

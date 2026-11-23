@@ -1212,21 +1212,59 @@ def test_rotating_groups_share_evidence_but_same_day_variants_only_count_once(db
     assert current.status == "accepted"
 
 
-def test_rotating_group_dismissal_survives_disappearance_and_restore(db):
+def test_a_dismissed_day_blocks_its_own_name_not_the_family(db):
+    """Dismissing `(Wed)` says no to `(Wed)`, under any id, and to nothing else (#1265)."""
     wed, thu = _group(71, "LIVE | NHL (Wed)"), _group(72, "LIVE | NHL (Thur)")
-    games = {g.id: [_stream(g.id, "nhl: A vs B")] for g in [wed, thu]}
+    games = {gid: [_stream(gid, "nhl: A vs B")] for gid in (71, 72, 73)}
     _scan([wed], games)
     candidate = _by_name()[wed.name]
     with get_db() as conn:
         set_candidate_status(conn, candidate.id, "dismissed")
+
+    # Next week's (Wed) has a new id; (Thur) is another day of the family.
+    wed_again = _group(73, "LIVE | NHL (Wed)")
     later = NOW + timedelta(days=1)
-    summary, m3u, _ = _scan([thu], games, now=later)
-    assert m3u.read == [] and summary.skipped_dismissed == 1
-    assert list(_by_name(later)) == [wed.name]
+    for _ in range(2):  # a second scan must not fold the dismissal away
+        summary, m3u, _ = _scan([wed_again, thu], games, now=later)
+        assert m3u.read == [72] and summary.skipped_dismissed == 1
+        found = _by_name(later)
+        assert set(found) == {wed.name, thu.name}
+        assert (found[wed.name].id, found[wed.name].status) == (candidate.id, "dismissed")
+        assert found[wed.name].m3u_group_id == 71  # no row per new id
+        assert found[thu.name].status == "new" and found[thu.name].id != candidate.id
+
+    # Restored, the days are one family again and share one candidate.
     with get_db() as conn:
         set_candidate_status(conn, candidate.id, "new")
-    _scan([thu], games, now=later)
-    assert _by_name(later)[thu.name].id == candidate.id
+    _scan([wed_again, thu], games, now=later)
+    (merged,) = _by_name(later).values()
+    assert merged.id == candidate.id and merged.status == "new"
+
+
+def _acct_stream(stream_id, name, account_id):
+    stream = _stream(stream_id, name)
+    stream.m3u_account_id = account_id
+    return stream
+
+
+@pytest.mark.parametrize("dismissed_account, read", [(4, [5]), (0, []), (5, [4])])
+def test_a_dismissed_day_is_scoped_to_its_account(db, dismissed_account, read):
+    """Per account (#1226); one recorded with no account covers every account."""
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO source_candidates (m3u_group_id, m3u_group_name, m3u_account_id, status) "
+            "VALUES (60, ' live | nhl (sat)', ?, 'dismissed')",
+            (dismissed_account,),
+        )
+    sat = SimpleNamespace(id=71, name="LIVE | NHL (Sat)", m3u_accounts=[4, 5])
+    streams = {71: [_acct_stream(1, "nhl: A vs B", 4), _acct_stream(2, "nhl: A vs B", 5)]}
+    _scan([sat], streams)
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT m3u_account_id FROM source_candidates WHERE m3u_group_id = 71 "
+            "ORDER BY m3u_account_id"
+        ).fetchall()
+    assert [r[0] for r in rows] == read
 
 
 def _managed_source(conn, name, group_id, group_name, account=4, managed=1, enabled=True):
@@ -1492,8 +1530,7 @@ def test_dismissing_rotating_group_on_one_account_does_not_block_another_account
         source_id = accept_candidate(conn, cands[71])
 
     # Account 1's candidate must not be hidden by Account 2's dismissal, and
-    # when both rotate to Thursday, Account 1's managed source still rebinds
-    # while Account 2's rotation stays dismissed.
+    # when both rotate to Thursday, Account 1's managed source still rebinds.
     thu_a1, thu_a2 = _group(81, "LIVE | NHL (Thur)"), _group(82, "LIVE | NHL (Thur)")
     later = NOW + timedelta(days=1)
     result, _, _ = _scan(
@@ -1511,9 +1548,11 @@ def test_dismissing_rotating_group_on_one_account_does_not_block_another_account
         ).fetchone()[0]
         all_cands = get_candidates(conn, later, EVIDENCE_WINDOW_DAYS)
     assert bound_id == thu_a1.id
-    assert {(c.m3u_group_id, c.status) for c in all_cands} == {
-        (thu_a1.id, "accepted"),
-        (wed_a2.id, "dismissed"),
+    # Account 2 said no to (Wed), not to (Thur): that day is its own suggestion.
+    assert {(c.m3u_group_id, c.m3u_account_id, c.status) for c in all_cands} == {
+        (thu_a1.id, 1, "accepted"),
+        (wed_a2.id, 2, "dismissed"),
+        (thu_a2.id, 2, "new"),
     }
 
 

@@ -197,17 +197,20 @@ def _scan_batches(
     their next scan without rewriting unrelated groups or requiring a migration.
     """
     rotating: dict[tuple[str, int], list[ScanEvidence]] = defaultdict(list)
+    _, dismissed_names = dismissed_groups(conn)
     for ev in evidence:
         key = rotating_group_key(ev.m3u_group_name)
         if key and not ev.replay:
-            rotating[key, account_key(ev.m3u_account_id)].append(ev)
+            account = account_key(ev.m3u_account_id)
+            if is_dismissed_day(ev.m3u_group_name, account, dismissed_names):
+                continue  # The user said no to this day; it is nobody's evidence.
+            rotating[key, account].append(ev)
         else:
             yield ev, [ev]
     if not rotating:
         return
 
     prior = defaultdict(list)
-    dismissed = dismissed_rotation_keys(conn)
     family_sizes = rotating_family_sizes(conn)
     for row in conn.execute(
         "SELECT c.*, g.m3u_group_id AS bound_id FROM source_candidates c "
@@ -217,7 +220,9 @@ def _scan_batches(
             rotating_group_key(row["m3u_group_name"]),
             row["m3u_account_id"] or 0,
         )
-        if key in rotating:
+        # A dismissed day keeps its own row: it is never folded into the
+        # family's candidate, or the dismissal would be lost with it.
+        if key in rotating and row["status"] != "dismissed":
             prior[key].append(row)
 
     for key, batch in rotating.items():
@@ -227,8 +232,6 @@ def _scan_batches(
             # Legacy installs may have deliberately created separate sources.
             for ev in batch:
                 yield ev, [ev]
-            continue
-        if _is_dismissed_rotation(key[0], key[1], dismissed):
             continue
         if linked:
             representative = next(
@@ -337,7 +340,7 @@ def get_candidates(
 ) -> list[CandidateEvidence]:
     """Every candidate with its evidence over the last ``window_days``."""
     since = to_db_utc(now - timedelta(days=window_days))
-    rejected_keys = dismissed_rotation_keys(conn)
+    _, dismissed_names = dismissed_groups(conn)
     query = "SELECT * FROM source_candidates"
     params: list = []
     if status:
@@ -346,10 +349,10 @@ def get_candidates(
     candidates: dict[int, CandidateEvidence] = {}
     for row in conn.execute(query, params).fetchall():
         account_id = row["m3u_account_id"] or None
-        if row["status"] == "new" and _is_dismissed_rotation(
-            rotating_group_key(row["m3u_group_name"]),
-            account_key(account_id),
-            rejected_keys,
+        if (
+            row["status"] == "new"
+            and rotating_group_key(row["m3u_group_name"]) is not None
+            and is_dismissed_day(row["m3u_group_name"], account_key(account_id), dismissed_names)
         ):
             continue
         candidates[row["id"]] = CandidateEvidence(
@@ -463,27 +466,6 @@ def dismissed_groups(conn: Connection) -> tuple[set[tuple[int, int]], set[tuple[
         {(row[0], row[2] or 0) for row in rows},
         {(group_name_key(row[1]), row[2] or 0) for row in rows},
     )
-
-
-def _is_dismissed_rotation(
-    key: str | None,
-    account: int,
-    dismissed: set[tuple[str, int]],
-) -> bool:
-    return key is not None and ((key, account) in dismissed or (key, 0) in dismissed)
-
-
-def dismissed_rotation_keys(conn: Connection) -> set[tuple[str, int]]:
-    """Dismissed rotating identities, scoped to the account that carries them."""
-    rows = conn.execute(
-        "SELECT m3u_group_name, m3u_account_id FROM source_candidates WHERE status = 'dismissed'"
-    ).fetchall()
-    keys: set[tuple[str, int]] = set()
-    for row in rows:
-        key = rotating_group_key(row["m3u_group_name"] or "")
-        if key is not None:
-            keys.add((key, row["m3u_account_id"] or 0))
-    return keys
 
 
 def dismiss_group(
