@@ -25,9 +25,12 @@ from teamarr.database import get_db, init_db
 from teamarr.database.groups import create_group
 from teamarr.database.source_candidates import (
     CandidateEvidence,
+    RotationDismissals,
     ScanEvidence,
     get_candidates,
+    is_dismissed_rotation,
     record_scan,
+    rotation_dismissals,
     set_candidate_status,
 )
 
@@ -1216,6 +1219,10 @@ def test_a_dismissed_day_blocks_its_own_name_not_the_family(db):
     """Dismissing `(Wed)` says no to `(Wed)`, under any id, and to nothing else (#1265)."""
     wed, thu = _group(71, "LIVE | NHL (Wed)"), _group(72, "LIVE | NHL (Thur)")
     games = {gid: [_stream(gid, "nhl: A vs B")] for gid in (71, 72, 73)}
+    with get_db() as conn:
+        # The account keeps a source for another day: that is what makes a
+        # dismissal reach one day only (#1285).
+        _managed_source(conn, "NHL Fri", 70, "LIVE | NHL (Fri)", managed=0, enabled=False)
     _scan([wed], games)
     candidate = _by_name()[wed.name]
     with get_db() as conn:
@@ -1581,11 +1588,11 @@ def test_dismissing_rotating_group_on_one_account_does_not_block_another_account
         ).fetchone()[0]
         all_cands = get_candidates(conn, later, EVIDENCE_WINDOW_DAYS)
     assert bound_id == thu_a1.id
-    # Account 2 said no to (Wed), not to (Thur): that day is its own suggestion.
+    # Account 2 said no to (Wed) and keeps no source in the family: (Thur) is
+    # the same no under another name, and is not read for it (#1285).
     assert {(c.m3u_group_id, c.m3u_account_id, c.status) for c in all_cands} == {
         (thu_a1.id, 1, "accepted"),
         (wed_a2.id, 2, "dismissed"),
-        (thu_a2.id, 2, "new"),
     }
 
 
@@ -1810,3 +1817,303 @@ def test_an_auto_added_source_is_marked_in_the_sources_list(api):
     listed = api.get("/api/v1/groups").json()["groups"]
     src = next(g for g in listed if g["name"] == "LIVE | NHL (Direct)")
     assert src["managed"] is True and src["auto_added_at"]
+
+
+# --- a dismissed rotating day: one day, or the family (#1285) -------------------------
+
+SLF = "LIVE | Selected Live Football"
+
+
+def _dismiss(conn, group_id, name, account):
+    conn.execute(
+        "INSERT INTO source_candidates (m3u_group_id, m3u_group_name, m3u_account_id, status) "
+        "VALUES (?, ?, ?, 'dismissed')",
+        (group_id, name, account),
+    )
+
+
+def _rows_for(group_id):
+    with get_db() as conn:
+        return [
+            tuple(r)
+            for r in conn.execute(
+                "SELECT m3u_account_id, status FROM source_candidates WHERE m3u_group_id = ? "
+                "ORDER BY m3u_account_id",
+                (group_id,),
+            )
+        ]
+
+
+def _suggested(now=NOW):
+    with get_db() as conn:
+        return sorted(
+            (c.m3u_group_name, c.m3u_account_id)
+            for c in get_candidates(conn, now, EVIDENCE_WINDOW_DAYS, status="new")
+        )
+
+
+def test_the_rotation_test_follows_the_accounts_use_of_the_family():
+    rules = RotationDismissals(
+        names=frozenset({("live | epl (sat)", 3), ("live | slf (fri)", 0)}),
+        families=frozenset({("live epl", 3), ("live slf", 0)}),
+        in_use=frozenset({("live epl", 3), ("live slf", 9)}),
+    )
+    # Uses the family: the dismissed name only.
+    assert is_dismissed_rotation("LIVE | EPL (Sat)", 3, rules)
+    assert not is_dismissed_rotation("LIVE | EPL (Tue)", 3, rules)
+    # Another account's dismissal is not this account's, in either case.
+    assert not is_dismissed_rotation("LIVE | EPL (Sat)", 9, rules)
+    # Recorded with no account: per day where the family is used, the family elsewhere.
+    assert is_dismissed_rotation("LIVE | SLF (Fri)", 9, rules)
+    assert not is_dismissed_rotation("LIVE | SLF (Mon)", 9, rules)
+    assert is_dismissed_rotation("LIVE | SLF (Mon)", 3, rules)
+    assert is_dismissed_rotation("LIVE | SLF (Mon)", 0, rules)
+    # Never a non-rotating name.
+    assert not is_dismissed_rotation("LIVE | SLF", 3, rules)
+    assert not is_dismissed_rotation("LIVE | SLF (Backup)", 3, rules)
+
+
+@pytest.mark.parametrize(
+    "dismissed_account, blocked",
+    [(4, True), (0, True), (5, False)],
+)
+def test_a_dismissed_day_covers_the_family_when_the_account_has_no_source_in_it(
+    db, dismissed_account, blocked
+):
+    """Prod, 2026-11-23: `(Fri)` dismissed, nothing kept, `(Mon)` auto-added (#1285)."""
+    _toggle(leagues=["nhl"])
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", dismissed_account)
+    mon = _group(72, f"{SLF} (Mon)")
+    games = {72: [_stream(i, f"nhl: A{i} vs B{i}") for i in range(3)]}
+    added = 0
+    for day in (0, 1):  # two days of evidence is what automatic mode asks for
+        summary, _, _ = _scan([mon], games, now=NOW + timedelta(days=day))
+        added += summary.sources_auto_added
+        assert summary.skipped_dismissed == (1 if blocked else 0)
+    later = NOW + timedelta(days=1)
+    if blocked:
+        assert _rows_for(72) == [] and _suggested(later) == [] and _sources() == {}
+        assert added == 0
+    else:
+        # Another account's no is not this account's: read, counted, added.
+        assert _rows_for(72) == [(4, "accepted")] and added == 1
+        assert list(_sources()) == [f"{SLF} (Mon)"]
+
+
+def test_a_group_dismissed_for_every_account_is_not_read(db):
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 0)
+    _, m3u, _ = _scan([_group(72, f"{SLF} (Mon)")], {72: [_stream(1, "nhl: A vs B")]})
+    assert m3u.read == []
+
+
+def test_a_week_of_rotation_offers_nothing_from_a_dismissed_family(db):
+    _toggle(leagues=["nhl"])
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 4)  # this account's own no
+        _dismiss(conn, 61, f"{SLF} (Fri)", 0)  # and one recorded with no account
+    for day, label in enumerate(["Mon", "Tue", "Wed", "Thur", "Fri", "Sat", "Sun", "Mon"]):
+        gid = 100 + day
+        group = SimpleNamespace(id=gid, name=f"{SLF} ({label})", m3u_accounts=[4, 5, 6])
+        streams = {gid: [_acct_stream(gid * 10 + a, f"nhl: A{a} vs B{a}", a) for a in (4, 5, 6)]}
+        now = NOW + timedelta(days=day)
+        summary, m3u, _ = _scan([group], streams, now=now)
+        assert (m3u.read, summary.sources_auto_added) == ([], 0)
+        assert _rows_for(gid) == [] and _suggested(now) == []
+    assert _sources() == {}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        {"managed": 0},
+        {"managed": 1},
+        {"managed": 0, "enabled": False},
+        {"managed": 0, "account": None},  # reads the whole group: use for every account
+    ],
+)
+def test_a_source_in_the_family_keeps_the_dismissal_to_its_day(db, source):
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 4)
+        _managed_source(conn, "Sat", 80, f"{SLF} (Sat)", **source)
+    groups = [_group(72, f"{SLF} (Mon)"), _group(73, f"{SLF} (Fri)")]
+    games = {72: [_stream(1, "nhl: A vs B")], 73: [_stream(2, "nhl: C vs D")]}
+    _scan(groups, games)
+    if source["managed"]:
+        # Alone in its family and its own group gone: it follows to (Mon).
+        with get_db() as conn:
+            assert [b[1] for b in _bound(conn)] == [72]
+    else:
+        assert _suggested() == [(f"{SLF} (Mon)", 4)]
+    assert _rows_for(73) == []  # never (Fri), read or bound
+
+
+def test_another_accounts_source_does_not_open_the_family(db):
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 4)
+        _managed_source(conn, "Sat", 80, f"{SLF} (Sat)", account=5, managed=0)
+    _scan([_group(72, f"{SLF} (Mon)")], {72: [_stream(1, "nhl: A vs B")]})
+    assert _suggested() == [] and _rows_for(72) == []
+
+
+def test_the_scope_switches_when_a_source_is_added_and_when_the_last_one_is_deleted(api):
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 4)
+    week = {
+        "Sun": _group(71, f"{SLF} (Sun)"),
+        "Mon": _group(72, f"{SLF} (Mon)"),
+        "Fri": _group(73, f"{SLF} (Fri)"),
+        "Tue": _group(74, f"{SLF} (Tue)"),
+    }
+    games = {g.id: [_stream(g.id, f"nhl: A{g.id} vs B{g.id}")] for g in week.values()}
+
+    _scan([week["Sun"]], games)
+    assert _suggested() == []
+
+    # A source for one day, made by hand: the account now uses the family.
+    with get_db() as conn:
+        source_id = _managed_source(conn, "Sat", 80, f"{SLF} (Sat)", managed=0)
+    day = NOW + timedelta(days=1)
+    _scan([week["Sun"], week["Fri"]], games, now=day)
+    assert _suggested(day) == [(f"{SLF} (Sun)", 4)]
+    day += timedelta(days=1)
+    _scan([week["Mon"], week["Fri"]], games, now=day)
+    assert [name for name, _ in _suggested(day)] == [f"{SLF} (Mon)"]  # one family, one row
+    assert _rows_for(73) == []  # (Fri) stays the user's no
+
+    # Deleted the way the Sources page deletes it: the family is closed again.
+    assert api.delete(f"/api/v1/groups/{source_id}").status_code == 200
+    day += timedelta(days=1)
+    summary, _, _ = _scan([week["Tue"], week["Fri"]], games, now=day)
+    assert _suggested(day) == [] and _rows_for(74) == []
+    assert summary.groups_scanned == 0
+    listed = api.get("/api/v1/source-discovery/candidates").json()["candidates"]
+    assert [c["m3u_group_name"] for c in listed] == []
+
+
+def test_deleting_the_only_source_of_a_rotating_family_dismisses_the_family(api):
+    """The deleted source's own day is the dismissal: no other day brings it back."""
+    _toggle(leagues=["nhl"])
+    games = {gid: [_stream(gid, f"nhl: A{gid} vs B{gid}")] for gid in (71, 72, 73)}
+    _scan([_group(71, f"{SLF} (Sat)")], games)
+    with get_db() as conn:
+        (candidate,) = get_candidates(conn, NOW, EVIDENCE_WINDOW_DAYS, status="new")
+        source_id = accept_candidate(conn, candidate)
+    assert api.delete(f"/api/v1/groups/{source_id}").status_code == 200
+    for day, gid, label in ((1, 72, "Sun"), (2, 72, "Sun"), (3, 73, "Mon")):
+        now = NOW + timedelta(days=day)
+        summary, _, _ = _scan([_group(gid, f"{SLF} ({label})")], games, now=now)
+        assert (summary.sources_auto_added, summary.sources_readded) == (0, 0)
+        assert _suggested(now) == []
+    assert _sources() == {}
+
+
+def test_the_review_list_hides_a_dismissed_familys_days_until_a_source_exists(db):
+    """Rows recorded before the day was dismissed stay in the table, out of the list."""
+    with get_db() as conn:
+        record_scan(conn, [_day(72, f"{SLF} (Mon)"), _day(75, SLF), _day(76, "LIVE | NHL")], NOW)
+        _dismiss(conn, 60, f"{SLF} (Fri)", 4)
+    # The undated group of the same name is not a day of the family.
+    assert _suggested() == [("LIVE | NHL", 4), (SLF, 4)]
+    with get_db() as conn:
+        source_id = _managed_source(conn, "Sat", 80, f"{SLF} (Sat)", managed=0)
+    assert (f"{SLF} (Mon)", 4) in _suggested()
+    with get_db() as conn:
+        conn.execute("DELETE FROM event_epg_groups WHERE id = ?", (source_id,))
+    assert (f"{SLF} (Mon)", 4) not in _suggested()
+
+
+def test_automatic_mode_never_adds_a_day_of_a_dismissed_family(db):
+    """The prod state: `(Mon)` already had its row and two days of evidence."""
+    _toggle(leagues=["nhl"])
+    _two_days(72, f"{SLF} (Mon)", 8, {"nhl": 8})
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 0)
+    assert _auto().sources_auto_added == 0 and _sources() == {}
+    # With a source in the family the same evidence is the account's to use.
+    with get_db() as conn:
+        _managed_source(conn, "Sat", 80, f"{SLF} (Sat)", account=None, managed=0)
+    assert _auto().sources_auto_added == 1
+
+
+def test_evidence_for_a_dismissed_familys_day_is_not_recorded(db):
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 4)
+        recorded = record_scan(conn, [_day(72, f"{SLF} (Mon)"), _day(73, f"{SLF} (Mon)", 5)], NOW)
+        assert recorded == {73}
+        # A dismissed row is never folded into the family's candidate.
+        rows = conn.execute(
+            "SELECT m3u_group_id, status FROM source_candidates WHERE m3u_account_id = 4"
+        ).fetchall()
+        assert [tuple(r) for r in rows] == [(60, "dismissed")]
+
+
+def test_an_approval_that_outlived_its_source_is_still_use_of_the_family(db):
+    """Discovery removed the source and kept the yes: its day is added back.
+
+    A source the user deleted leaves a dismissed row instead, and nothing returns.
+    """
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, readd_approved_sources
+    from teamarr.database.source_candidates import (
+        dismiss_candidate_for_source,
+        forget_removed_source,
+    )
+
+    with get_db() as conn:
+        _dismiss(conn, 60, f"{SLF} (Fri)", 4)
+        source_id = _managed_source(conn, "Mon", 72, f"{SLF} (Mon)")
+        conn.execute("DELETE FROM event_epg_groups WHERE id = ?", (source_id,))
+        forget_removed_source(conn, source_id)
+        conn.commit()
+    games = {72: [_stream(i, f"nhl: A{i} vs B{i}") for i in range(4)]}
+    summary, _, _ = _scan([_group(72, f"{SLF} (Mon)")], games)
+    assert summary.sources_readded == 1
+
+    with get_db() as conn:
+        (readded,) = [r[0] for r in conn.execute("SELECT id FROM event_epg_groups")]
+        conn.execute("DELETE FROM event_epg_groups WHERE id = ?", (readded,))
+        dismiss_candidate_for_source(conn, readded)
+        conn.commit()
+        assert rotation_dismissals(conn).in_use == frozenset()
+        again = ScanSummary()
+        record_scan(conn, [_day(73, f"{SLF} (Tue)")], NOW + timedelta(days=1))
+        readd_approved_sources(conn, NOW + timedelta(days=1), again)
+        assert again.sources_readded == 0
+    later = NOW + timedelta(days=1)
+    summary, _, _ = _scan([_group(72, f"{SLF} (Mon)")], games, now=later)
+    assert (summary.sources_readded, summary.sources_auto_added) == (0, 0)
+    assert _suggested(later) == []
+
+
+def test_a_rebind_reads_dismissals_as_the_scan_does(db):
+    """The moved source is itself use of the family, so its account's dismissal
+    is per day; an account with no source gets nothing from the same scan."""
+    with get_db() as conn:
+        _managed_source(conn, "SLF", 12, f"{SLF} (Thur)")
+        _dismiss(conn, 60, f"{SLF} (Sat)", 0)
+        evidence = [
+            _day(90, f"{SLF} (Sat)", streams=50),
+            _day(91, f"{SLF} (Sun)", streams=5),
+            _day(91, f"{SLF} (Sun)", account=5, streams=5),
+        ]
+        assert _rebind(conn, evidence, {90, 91}) == 1
+        assert [b[1] for b in _bound(conn)] == [91]
+        record_scan(conn, evidence, NOW)
+        rows = conn.execute(
+            "SELECT m3u_group_id, m3u_account_id, status FROM source_candidates "
+            "ORDER BY m3u_group_id, m3u_account_id"
+        ).fetchall()
+        assert [tuple(r) for r in rows] == [(60, 0, "dismissed"), (91, 4, "accepted")]
+
+
+def test_a_dismissed_group_that_does_not_rotate_blocks_only_itself(db):
+    """By id, and by its exact name under a new id. Nothing like a family."""
+    with get_db() as conn:
+        _dismiss(conn, 60, "LIVE | NHL (Direct)", 4)
+    groups = [_group(72, "LIVE | NHL (Direct)"), _group(73, "LIVE | NHL (Backup)")]
+    games = {72: [_stream(1, "nhl: A vs B")], 73: [_stream(2, "nhl: C vs D")]}
+    summary, m3u, _ = _scan(groups, games)
+    assert m3u.read == [73] and summary.skipped_dismissed == 1
+    assert _suggested() == [("LIVE | NHL (Backup)", 4)]
+    assert _rows_for(72) == [(4, "dismissed")]  # the renamed group keeps the no

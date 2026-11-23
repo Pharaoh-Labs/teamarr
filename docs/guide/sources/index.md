@@ -105,7 +105,11 @@ An automated source on such a group follows it. When its group is gone, the next
 
 - **Only an automated source follows.** A source you added yourself stays on the group it was added from; turn on **Automate** to let it follow.
 - **A source per day is left as you made it.** If an account has more than one source in the same family (one for `EPL (Fri)`, one for `EPL (Mon)`, one for `EPL (Sun)`), none of them is moved to another day. Each waits for the group with its own name, and a day no source is named for is listed as a separate suggestion.
-- **Dismissing a day dismisses that day only.** Dismiss `EPL (Sat)` and `(Sat)` is not suggested, scanned or used as a replacement again on that account, whatever group it comes back as. The other days are still suggested and followed. To silence the whole family, dismiss each day as it is suggested.
+- **How far dismissing a day reaches depends on whether the account uses the family.**
+    - *The account has a source in the family* (any source, added by you or by discovery, enabled or not). Dismissing a day dismisses that day only. With sources for `EPL (Fri)`, `(Mon)` and `(Sun)`, dismiss `EPL (Sat)` and `(Sat)` is not suggested, scanned or used as a replacement again on that account, whatever group it comes back as. The other days are still suggested and followed.
+    - *The account has no source in the family.* Dismissing one day dismisses the whole family for that account. Dismiss `Selected Live Football (Fri)` with nothing added, and `(Sat)`, `(Sun)`, `(Mon)` and every other day are not scanned, suggested or added by automatic mode either. One dismissal is enough.
+    - The two switch on their own. Add a source for one day and the other days of the family are suggested again from the next scan, except the days you dismissed. Delete the account's last source in the family and the family is dismissed again: deleting a source counts as dismissing its day. A source that was removed because its group disappeared is different. It is still approved, and is added back when the group returns.
+    - To see the days again without adding a source, restore the dismissed day from *Show dismissed groups*.
 
 A group that comes back with exactly the same name is a separate, simpler case and does not wait for the daily scan: see [Remove](#remove). Other name changes leave the old source missing and show the new group as a separate suggestion.
 
