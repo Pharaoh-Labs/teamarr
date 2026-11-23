@@ -39,6 +39,7 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
         mark_group_source_missing,
         mark_group_source_seen,
     )
+    from teamarr.database.source_candidates import account_key, binding_conflicts
 
     conn_dc = get_dispatcharr_connection(db_factory=db_factory)
     if conn_dc is None:
@@ -80,9 +81,23 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
             WHERE enabled = 1
               AND m3u_group_id IS NOT NULL
               AND COALESCE(is_channel_source, 0) = 0
+            ORDER BY id
             """
         ).fetchall()
+        # (group, account) pairs an enabled source reads: a heal never puts a
+        # second reader on one (#1265). A disabled source reads nothing, and
+        # blocking on it would strand the enabled source that replaced it.
+        held: dict[int, set[int]] = {}
+        for group_id, account_id in conn.execute(
+            """
+            SELECT m3u_group_id, m3u_account_id FROM event_epg_groups
+            WHERE enabled = 1 AND m3u_group_id IS NOT NULL
+              AND COALESCE(is_channel_source, 0) = 0
+            """
+        ).fetchall():
+            held.setdefault(group_id, set()).add(account_key(account_id))
         for row in rows:
+            source_acc_id = row["m3u_account_id"]
             account_name = account_names_by_id.get(row["m3u_account_id"])
             if account_name and account_name != row["m3u_account_name"]:
                 conn.execute(
@@ -107,20 +122,39 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
                         row["m3u_account_id"],
                         target_acc_id,
                     )
+                    source_acc_id = target_acc_id
+                    held[row["m3u_group_id"]].add(account_key(target_acc_id))
 
             if row["m3u_group_id"] in existing_ids:
                 mark_group_source_seen(conn, row["id"])
                 continue
             # Source id is gone, but a same-named group may exist under a new id
             # (deleted + recreated) — that's not stale. Self-heal the stored id
-            # when the name maps to exactly one live group.
+            # when the name maps to exactly one live group. The name is the
+            # only evidence used: a group that merely looks alike (another day
+            # of a rotating family, #1265) is the daily scan's to judge.
             name_ids = ids_by_name.get(row["m3u_group_name"] or "")
             if name_ids:
                 if len(name_ids) == 1:
+                    if binding_conflicts(held.get(name_ids[0], ()), account_key(source_acc_id)):
+                        # Another source already reads these streams there.
+                        logger.info(
+                            "[STALE_GROUPS] '%s' not healed onto group %s: another source reads it",
+                            row["name"],
+                            name_ids[0],
+                        )
+                        mark_group_source_missing(conn, row["id"])
+                        continue
+                    if not _move_linked_candidates(conn, row, name_ids[0]):
+                        # The candidate table says that pair is another
+                        # source's, or dismissed. Source and row stay together.
+                        mark_group_source_missing(conn, row["id"])
+                        continue
                     conn.execute(
                         "UPDATE event_epg_groups SET m3u_group_id = ? WHERE id = ?",
                         (name_ids[0], row["id"]),
                     )
+                    held.setdefault(name_ids[0], set()).add(account_key(source_acc_id))
                     logger.info(
                         "[STALE_GROUPS] Healed '%s' source id %s -> %s (recreated under new id)",
                         row["name"],
@@ -158,6 +192,48 @@ def detect_stale_groups(db_factory: Any) -> list[dict]:
             ", ".join(g["name"] for g in stale),
         )
     return stale
+
+
+def _move_linked_candidates(conn: Any, source: Any, new_group_id: int) -> bool:
+    """Move a healing source's accepted candidate row onto the group it will read.
+
+    The row is what tells the daily scan the group is spoken for; left on the
+    old id, the scan's evidence for the returned group lands on a second row.
+    Returns False, with nothing moved, when the row cannot go there: the
+    candidate table gives that (group, account) to another source or records
+    it as dismissed. A source with no linked row has nothing to move (True).
+    The row is found by its link, not by the old group id: rows written before
+    this sync existed sit on whatever id the source was accepted under.
+    """
+    from teamarr.database.source_candidates import ScanEvidence, move_accepted_candidate
+
+    candidate = conn.execute(
+        """
+        SELECT id, m3u_group_name, m3u_account_id FROM source_candidates
+        WHERE status = 'accepted' AND source_group_id = ?
+        ORDER BY id DESC LIMIT 1
+        """,
+        (source["id"],),
+    ).fetchone()
+    if candidate is None:
+        return True
+    moved = move_accepted_candidate(
+        conn,
+        candidate["id"],
+        ScanEvidence(
+            m3u_group_id=new_group_id,
+            m3u_group_name=candidate["m3u_group_name"],
+            m3u_account_id=candidate["m3u_account_id"] or None,
+        ),
+    )
+    if not moved:
+        logger.info(
+            "[STALE_GROUPS] '%s' not healed onto group %s: candidate %s cannot move there",
+            source["name"],
+            new_group_id,
+            candidate["id"],
+        )
+    return moved
 
 
 def _delete_long_missing(conn: Any, policy: SourceLifecyclePolicy) -> int:

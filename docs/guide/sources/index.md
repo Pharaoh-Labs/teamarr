@@ -99,9 +99,15 @@ The list is flat and organized by the M3U account each group comes from. A group
 
 **Decisions are remembered.** A dismissed group is not suggested or scanned again unless you restore it from *Show dismissed groups*, also when the provider renames it and it comes back under the same name. Deleting a source you added from a suggestion counts as dismissing its group. A source you added is never offered again; if it is later removed because its group disappeared, it is added back when the group returns.
 
-If a provider changes a day or date at the end of a group name, discovery treats the versions from the same accounts as one group. For example, `Conference League (Wed)` and `Conference League (Thur)` share scan evidence. They still need matches on two different scan days for automatic addition. Dismissing one version also dismisses its replacements.
+**Groups named after the day.** Some providers put the match day or date at the end of a group name and replace the group each day: `Conference League (Wed)` today, `Conference League (Thur)` tomorrow, each a new group in Dispatcharr. Discovery treats the versions one account carries as one group. They share one suggestion and its scan evidence, and they still need matches on two different scan days for automatic addition.
 
-When an automated source loses its group, the next discovery scan can link it to the replacement without changing its settings. If you added the source yourself, turn on **Automate** to let it follow those changes. Other name changes can still leave the old source missing and show the new group as a separate suggestion.
+An automated source on such a group follows it. When its group is gone, the next daily scan moves the source to the version that is live now, on the same account, and keeps its settings and scan history. Until that scan the source shows **Source missing**. Three limits apply:
+
+- **Only an automated source follows.** A source you added yourself stays on the group it was added from; turn on **Automate** to let it follow.
+- **A source per day is left as you made it.** If an account has more than one source in the same family (one for `EPL (Fri)`, one for `EPL (Mon)`, one for `EPL (Sun)`), none of them is moved to another day. Each waits for the group with its own name, and a day no source is named for is listed as a separate suggestion.
+- **Dismissing a day dismisses that day only.** Dismiss `EPL (Sat)` and `(Sat)` is not suggested, scanned or used as a replacement again on that account, whatever group it comes back as. The other days are still suggested and followed. To silence the whole family, dismiss each day as it is suggested.
+
+A group that comes back with exactly the same name is a separate, simpler case and does not wait for the daily scan: see [Remove](#remove). Other name changes leave the old source missing and show the new group as a separate suggestion.
 
 ### Add
 
@@ -129,6 +135,8 @@ Both windows are settings in this block. Switching an automated source off or on
 ### Remove
 
 Every generation run checks that each source's M3U group still exists in Dispatcharr. A source whose group was removed or renamed is listed here as **missing** and marked **Source missing** in the table; it can no longer pull streams, and its channels stay until their normal expiry. **Delete all missing** removes them in one go.
+
+A provider that deletes a group and recreates it gives it a new ID in Dispatcharr. When exactly one group with the source's exact group name exists, the same run points the source at it and the source is not missing. This applies to every source, automated or not, and to a recreated group that has no streams yet. It goes by the exact name only: a group with a different day at the end of its name is not a match here (see *Groups named after the day* above). If another enabled source already reads that group for the same account, the source is left missing instead of doubling it.
 
 **Delete a source whose group has been missing for N days** is the one rule that applies to sources you made yourself. It is **0 (never) by default**, because deleting a source drops its league scope, keywords and overrides. Set it to a number of days and a missing hand-made source is deleted on its own once it has been missing that long, counted from the last run that saw its group. Discovered sources follow the Retire rules instead. A deleted source's group is not suggested straight back; it counts as dismissed.
 
