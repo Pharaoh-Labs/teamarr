@@ -33,6 +33,7 @@ import threading
 import time
 from collections import Counter, defaultdict
 from collections.abc import Callable
+from collections.abc import Set as AbstractSet
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from sqlite3 import Connection
@@ -289,7 +290,9 @@ class SourceDiscovery:
         return taken
 
     @staticmethod
-    def _nothing_new(group: Any, accounts: set[int], by_family: set[int] = frozenset()) -> bool:
+    def _nothing_new(
+        group: Any, accounts: set[int], by_family: AbstractSet[int] = frozenset()
+    ) -> bool:
         """Whether a group with decided accounts can be skipped without reading it.
 
         ``accounts`` are the ones a source reads or the user dismissed. The

@@ -13,6 +13,7 @@ real sources as empty or placeholders.
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from sqlite3 import Connection
@@ -76,7 +77,9 @@ def group_name_key(name: str | None) -> str:
     return (name or "").strip().lower()
 
 
-def is_dismissed_day(name: str | None, account: int, dismissed_names: set[tuple[str, int]]) -> bool:
+def is_dismissed_day(
+    name: str | None, account: int, dismissed_names: AbstractSet[tuple[str, int]]
+) -> bool:
     """Whether this exact rotating group name was dismissed for the account (#1265).
 
     A day of a rotating family comes back under a new group id every time, so
