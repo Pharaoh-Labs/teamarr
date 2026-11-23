@@ -53,3 +53,9 @@ def test_self_map_does_not_log(matcher, caplog):
     assert matcher._resolve_alias("Australia", None) == "australia"
     alias_lines = [r for r in caplog.records if "Country name resolved" in r.message]
     assert alias_lines == []
+
+
+def test_reverse_resolve_alias_normalizes_punctuation(matcher):
+    matcher._reverse_aliases = {"st louis": [("st louis city sc", "usa.1")]}
+    assert matcher._reverse_resolve_alias("St. Louis") == [("st louis city sc", "usa.1")]
+    assert ("arizona diamondbacks", None) in matcher._reverse_resolve_alias("D.backs")

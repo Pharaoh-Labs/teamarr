@@ -139,3 +139,53 @@ class TestLanguagePrefix:
         shape handled elsewhere."""
         before = classify_stream("Peacock 04: USA vs. Chile (Español) @ 29 Sep 07:30 PM ET")
         assert before.team1 == "USA"
+
+
+class TestBatchBDateAndColonExtraction:
+    """Live stream extraction fixes (#1264): CAM 01 NOV 21 and team2 colon tails."""
+
+    def test_cam_number_before_month_day_does_not_steal_date(self):
+        classified = classify_stream(
+            "AHL 01 | 2026 CHICAGO WOLVES VS TORONTO MARLIES CAM 01 NOV 21 01:30PM ET"
+        )
+        assert classified.normalized.extracted_date == date(2026, 11, 21)
+        assert classified.team2 == "TORONTO MARLIES"
+
+    def test_day_first_date_before_two_digit_year_keeps_the_day(self):
+        classified = classify_stream("CHICAGO WOLVES VS TORONTO MARLIES 21 Nov 26 7:30PM ET")
+        extracted = classified.normalized.extracted_date
+        assert extracted is not None
+        assert (extracted.month, extracted.day) == (11, 21)
+
+    @pytest.mark.parametrize(
+        ("stream_name", "expected_t1", "expected_t2"),
+        [
+            ("Bills vs 142: Broncos", "Bills", "Broncos"),
+            ("Bills vs ESPN+ 45: Broncos", "Bills", "Broncos"),
+            ("Bills vs ESPN+ 45: Broncos: 12:00 PM ET", "Bills", "Broncos"),
+            ("Bills vs ESPN: Broncos", "Bills", "Broncos"),
+            ("Bills vs NFL RedZone: Broncos", "Bills", "Broncos"),
+            ("Bills vs DAZN 03: Broncos", "Bills", "Broncos"),
+            ("Bills vs DAZN 03: ESPN: Broncos: NFL RedZone", "Bills", "Broncos"),
+            ("Bills vs Broncos: ESPN", "Bills", "Broncos"),
+            ("Bills vs Broncos (:05)", "Bills", "Broncos"),
+            ("Dortmund vs Schalke 04: 12:00 PM ET", "Dortmund", "Schalke 04"),
+            (
+                "LIVE: BRIDGEWATER STATE VS. AMHERST (FIRST ROUND): Sat 21 Nov 12:00 EST (US):"
+                "  : USA: ESPN+ [PPV EVENTS] 36 [1080p]",
+                "BRIDGEWATER STATE",
+                "AMHERST",
+            ),
+            (
+                "End: Italia: Brescia Lions vs. Napoli Knights: all: 21-11-2026: 12:00 (GMT):"
+                "  : USA: SOCCER [PPV EVENTS] 55 [1080p]",
+                "Brescia Lions",
+                "Napoli Knights",
+            ),
+        ],
+    )
+    def test_team2_colon_metadata_tail_is_truncated_not_treated_as_prefix(
+        self, stream_name, expected_t1, expected_t2
+    ):
+        classified = classify_stream(stream_name)
+        assert (classified.team1, classified.team2) == (expected_t1, expected_t2)

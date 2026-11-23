@@ -86,6 +86,10 @@ class TestBothSidesTranslate:
             once = normalize_for_matching(name)
             assert normalize_text(once) == once
 
+    def test_word_boundaries_prevent_partial_word_corruption(self):
+        assert translate_cities("First Vienna Wiener SC") == "First Vienna Wiener SC"
+        assert translate_cities("Roman Reigns") == "Roman Reigns"
+
 
 class TestReportedProgramme:
     def test_nurnberg_hannover_matches(self, db_factory):

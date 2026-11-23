@@ -330,6 +330,7 @@ class StreamMatchCache:
         stream_name: str,
         generation: int,
         reason: str | None = None,
+        target_date: str | None = None,
     ) -> bool:
         """Cache a failed match attempt.
 
@@ -349,12 +350,19 @@ class StreamMatchCache:
             stream_name: Exact stream name
             generation: Current EPG generation counter
             reason: The FailedReason value this attempt produced
+            target_date: Optional ISO date string when the failure depends on
+                the day's search window (e.g. NO_EVENT_FOUND, #1264)
 
         Returns:
             True if cached successfully
         """
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
-        failed_payload = json.dumps({"failed_reason": reason}) if reason else None
+        payload: dict[str, Any] = {}
+        if reason:
+            payload["failed_reason"] = reason
+        if target_date:
+            payload["target_date"] = target_date
+        failed_payload = json.dumps(payload) if payload else None
 
         try:
             with self._conn() as conn:
@@ -600,6 +608,8 @@ class StreamMatchCache:
         group_id: int,
         stream_id: int,
         stream_name: str,
+        *,
+        failed_only: bool = False,
     ) -> bool:
         """Delete a single cache entry.
 
@@ -609,18 +619,21 @@ class StreamMatchCache:
             group_id: Event group ID
             stream_id: Stream ID
             stream_name: Exact stream name
+            failed_only: Preserve successful matches and user corrections.
 
         Returns:
             True if entry was deleted
         """
         fingerprint = compute_fingerprint(group_id, stream_id, stream_name)
 
+        query = "DELETE FROM stream_match_cache WHERE fingerprint = ?"
+        params = (fingerprint,)
+        if failed_only:
+            query += " AND event_id = ? AND user_corrected = 0"
+            params += (FAILED_MATCH_EVENT_ID,)
         try:
             with self._conn() as conn:
-                cursor = conn.execute(
-                    "DELETE FROM stream_match_cache WHERE fingerprint = ?",
-                    (fingerprint,),
-                )
+                cursor = conn.execute(query, params)
                 self._commit(conn)
                 deleted = cursor.rowcount > 0
                 if deleted:
