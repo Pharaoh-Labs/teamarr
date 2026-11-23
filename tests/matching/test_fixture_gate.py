@@ -850,6 +850,74 @@ class TestUserAliasCountsAtTheLeagueGate:
         assert matcher._fixture_vetoes(after, HOCKEY) is False
 
 
+class TestUserAliasBehindALabel:
+    """A competition label in front of an aliased side (#1225). Refinement used
+    to know only cached surfaces, so `NCAA Hockey - W. Michigan` held nothing
+    it recognised, stayed whole, and the exact-key alias lookup missed."""
+
+    ALIASES = TestUserAliasCountsAtTheLeagueGate.ALIASES
+    STREAM = "NCAA Hockey - W. Michigan at N. Dakota"
+
+    def test_label_is_stripped_to_the_alias(self, hockey_db):
+        add_aliases(hockey_db, self.ALIASES)
+        matcher = make_team_matcher(db_factory=hockey_db)
+        ctx = _ctx(self.STREAM)
+        assert ctx.team1 == "NCAA Hockey - W. Michigan"
+        matcher._refine_sides(ctx)
+        assert (ctx.team1, ctx.team2) == ("W. Michigan", "N. Dakota")
+        assert ctx.classified.team1 == "W. Michigan"
+
+    def test_matches_in_both_paths(self, hockey_db):
+        add_aliases(hockey_db, self.ALIASES)
+        single = _match(self.STREAM, WMU_UND, HOCKEY, hockey_db)
+        multi = _match_multi(self.STREAM, WMU_UND, hockey_db)
+        assert single.category is ResultCategory.MATCHED
+        assert multi.category is ResultCategory.MATCHED
+        assert single.event.id == multi.event.id == WMU_UND.id
+
+    def test_without_the_alias_the_side_stays_whole(self, hockey_db):
+        matcher = make_team_matcher(db_factory=hockey_db)
+        ctx = _ctx(self.STREAM)
+        matcher._refine_sides(ctx)
+        assert ctx.team1 != "W. Michigan"
+
+    def test_a_side_that_is_the_alias_is_not_cut_down(self, hockey_db):
+        """`W. Michigan` must never become `Michigan`."""
+        add_aliases(hockey_db, self.ALIASES)
+        matcher = make_team_matcher(db_factory=hockey_db)
+        ctx = _ctx("W. Michigan at N. Dakota")
+        matcher._refine_sides(ctx)
+        assert (ctx.team1, ctx.team2) == ("W. Michigan", "N. Dakota")
+
+    def test_a_bare_word_in_front_of_an_alias_is_not_stripped(self, hockey_db):
+        """The #799 guard: a plain word flush against the span could be the
+        rest of the name."""
+        add_aliases(hockey_db, self.ALIASES)
+        matcher = make_team_matcher(db_factory=hockey_db)
+        ctx = _ctx("Ohio W. Michigan at N. Dakota")
+        matcher._refine_sides(ctx)
+        assert ctx.team1 == "Ohio W. Michigan"
+
+    def test_alias_added_later_counts_after_reload(self, hockey_db):
+        matcher = make_team_matcher(db_factory=hockey_db)
+        ctx = _ctx(self.STREAM)
+        matcher._refine_sides(ctx)
+        assert ctx.team1 == "NCAA Hockey - W. Michigan"
+
+        add_aliases(hockey_db, self.ALIASES)
+        matcher.reload_aliases()
+        ctx = _ctx(self.STREAM)
+        matcher._refine_sides(ctx)
+        assert ctx.team1 == "W. Michigan"
+
+    def test_the_shared_index_stores_no_alias(self, hockey_db):
+        add_aliases(hockey_db, self.ALIASES)
+        matcher = make_team_matcher(db_factory=hockey_db)
+        matcher._refine_sides(_ctx(self.STREAM))
+        index = matcher._get_identity_index()
+        assert index.refine_side("NCAA Hockey - W. Michigan", anchor="end") != "W. Michigan"
+
+
 class TestOneSidedAlias:
     """`W. Michigan at Michigan` (#1155): only the first side is aliased, and
     the index's answer for the pair has no hockey in it."""

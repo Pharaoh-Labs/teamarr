@@ -52,7 +52,7 @@ from __future__ import annotations
 import logging
 import re
 import threading
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from functools import lru_cache
@@ -194,6 +194,11 @@ _SPAN_CANON = {"st": "state"}
 
 def _canon_span(tokens: Sequence[str]) -> tuple[str, ...]:
     return tuple(_SPAN_CANON.get(t, t) for t in tokens)
+
+
+def span_key(text: str) -> tuple[str, ...]:
+    """The key ``refine_side`` looks a run of tokens up under."""
+    return _canon_span(normalize_text(text).split())
 
 
 def _initialism(tokens: Sequence[str]) -> str:
@@ -583,7 +588,12 @@ class TeamIdentityIndex:
         return False
 
     def refine_side(
-        self, side: str, *, anchor: str, junk: AbstractSet[str] = frozenset()
+        self,
+        side: str,
+        *,
+        anchor: str,
+        junk: AbstractSet[str] = frozenset(),
+        extra_surfaces: Mapping[tuple[str, ...], tuple[str, ...]] | None = None,
     ) -> str | None:
         """The slice of ``side`` that names a team, or None to leave it alone.
 
@@ -601,6 +611,12 @@ class TeamIdentityIndex:
         guards still apply, which is the point of doing it here rather than in
         a regex: "Maryland Sun @ Sep 27" loses its Sunday, "Connecticut Sun"
         on a Sunday is a surface in its own right and is never touched.
+
+        ``extra_surfaces`` are surfaces only this caller knows — the matcher's
+        user aliases (#1225), as ``span_key(alias) -> canonical team names``.
+        They count like any other surface for this call and are never stored:
+        the index is shared and holds no per-user rows (#1155). The teams an
+        alias names take part in the remainder guard like a cached surface's.
         """
         raw_tokens = side.split()
         if len(raw_tokens) < 2:
@@ -623,7 +639,15 @@ class TeamIdentityIndex:
                 if not identities and n == 1:
                     identities = self._code_identities(raw_tokens[owner[i]], norm[i])
                 if not identities:
-                    continue
+                    if not extra_surfaces or canon[i : i + n] not in extra_surfaces:
+                        continue
+                    identities = tuple(
+                        dict.fromkeys(
+                            identity
+                            for name in extra_surfaces[canon[i : i + n]]
+                            for identity in self.resolve(name).identities
+                        )
+                    )
                 distance = total - (i + n) if anchor == "end" else i
                 candidate = (n, -distance, i, identities)
                 if best is None or candidate[:2] > best[:2]:
