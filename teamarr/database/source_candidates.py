@@ -12,7 +12,7 @@ real sources as empty or placeholders.
 
 import json
 from collections import defaultdict
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from sqlite3 import Connection
@@ -58,6 +58,17 @@ def _one_account(account_id: int | None, account_ids: list[int]) -> tuple[int | 
 def account_key(account_id: int | None) -> int:
     """The stored form of an account id: 0 for "no account"."""
     return account_id or 0
+
+
+def binding_conflicts(held: Iterable[int], account: int) -> bool:
+    """Whether a source reading ``account`` in a group would share streams there.
+
+    ``held`` are the account keys of the sources already on the group. A source
+    with no account (0) reads the whole group, so it conflicts with any holder
+    and any newcomer conflicts with it (#1226).
+    """
+    holders = set(held)
+    return bool(holders) and (account == 0 or 0 in holders or account in holders)
 
 
 @dataclass
