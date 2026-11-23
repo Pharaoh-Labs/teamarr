@@ -441,6 +441,7 @@ class SourceDiscovery:
         with self._db_factory() as conn:
             taken = self._taken_accounts(conn)
             dismissed, dismissed_names = dismissed_groups(conn)
+            awaited = _names_awaiting_heal(conn, live_ids)
             leagues = self._processor._get_subscription_leagues(conn, None)
             surfaces = league_name_surfaces(conn, leagues)
 
@@ -465,14 +466,17 @@ class SourceDiscovery:
             sourced = taken.get(group.id, set())
             said_no = dismissed_by_group.get(group.id, set())
             said_no_by_name = dismissed_by_name.get(name, set()) - said_no
-            decided = {account_key(a) for a in sourced} | said_no | said_no_by_name
-            if None in sourced:
+            # A source that lost its group id is named for this group: the
+            # next run's exact-name heal puts it back here.
+            spoken_for = awaited.get(group.name or "", set())
+            decided = {account_key(a) for a in sourced} | said_no | said_no_by_name | spoken_for
+            if None in sourced or 0 in spoken_for:
                 summary.skipped_sources += 1
             elif rotating and 0 in dismissed_by_name.get(name, ()) and not sourced:
                 # Dismissed with no account: every account's copy of this day.
                 summary.skipped_dismissed += 1
             elif decided and self._nothing_new(group, decided):
-                if sourced:
+                if sourced or spoken_for:
                     summary.skipped_sources += 1
                 else:
                     summary.skipped_dismissed += 1
@@ -487,9 +491,10 @@ class SourceDiscovery:
             name = group_name_key(group.name)
             rotating = rotating_group_key(group.name or "") is not None
             sourced = taken.get(group.id, set())
+            spoken_for = awaited.get(group.name or "", set())
 
             def skip(account: int) -> bool:
-                if (account or None) in sourced:
+                if (account or None) in sourced or account in spoken_for:
                     return True
                 if (group.id, account) in dismissed:
                     summary.skipped_dismissed += 1
@@ -953,6 +958,33 @@ def _evidence_for(
         return evidence.get((source.m3u_group_id, source.m3u_account_id))
     halves = [e for (group_id, _), e in evidence.items() if group_id == source.m3u_group_id]
     return max(halves, key=lambda e: (e.game_matches, e.team_only_matches), default=None)
+
+
+def _names_awaiting_heal(conn: Connection, live_ids: set[int]) -> dict[str, set[int]]:
+    """Group names an enabled source is waiting for, as ``{name: {account keys}}``.
+
+    A source whose group id is gone is healed by the per-run pass onto the one
+    live group with exactly its name (``missing.detect_stale_groups``). A scan
+    that runs before that pass would record the returned group as a new
+    candidate for the same account, and automatic mode could add a second
+    source on it, which then blocks the heal for good. The scan leaves the
+    name to its source. Only enabled sources: the per-run pass heals no others,
+    and a retired managed source's group is scanned on purpose. The name is
+    compared as the heal compares it, exactly.
+    """
+    awaited: dict[str, set[int]] = defaultdict(set)
+    rows = conn.execute(
+        """
+        SELECT m3u_group_id, m3u_group_name, m3u_account_id FROM event_epg_groups
+        WHERE enabled = 1 AND m3u_group_id IS NOT NULL AND m3u_group_name IS NOT NULL
+          AND COALESCE(is_channel_source, 0) = 0
+        ORDER BY id
+        """
+    ).fetchall()
+    for row in rows:
+        if row["m3u_group_id"] not in live_ids:
+            awaited[row["m3u_group_name"]].add(account_key(row["m3u_account_id"]))
+    return awaited
 
 
 def _stream_count(group: Any) -> int | None:

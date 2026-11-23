@@ -1438,6 +1438,39 @@ def test_a_hand_made_source_is_not_rebound_even_alone_in_its_family(db):
         assert _bound(conn) == [("My NHL", 12, "LIVE | NHL (Thur)")]
 
 
+@pytest.mark.parametrize(
+    "source, read, bound_to",
+    [
+        ({}, [5], 71),  # enabled: the per-run pass will heal it; only account 5 is news
+        ({"managed": 0}, [5], 71),
+        ({"account": None}, [], 71),  # no account: it reads the whole group
+        # Retired: the per-run pass skips it, so its group is scanned as before
+        # and the scan itself follows it there.
+        ({"enabled": False}, [4, 5], 73),
+    ],
+)
+def test_the_scan_leaves_a_returned_group_to_the_source_named_for_it(db, source, read, bound_to):
+    """A scan ahead of the per-run pass must not offer a source its own group (#1265).
+
+    The source's id is gone and its exact name is back under a new one. Read
+    as a candidate, automatic mode could add a second source there and the
+    heal would then be refused for good.
+    """
+    with get_db() as conn:
+        _managed_source(conn, "NHL", 71, "LIVE | NHL (Wed)", **source)
+    back = SimpleNamespace(id=73, name="LIVE | NHL (Wed)", m3u_accounts=[4, 5])
+    streams = {73: [_acct_stream(1, "nhl: A vs B", 4), _acct_stream(2, "nhl: A vs B", 5)]}
+    _scan([back], streams)
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT m3u_account_id FROM source_candidates WHERE m3u_group_id = 73 "
+            "ORDER BY m3u_account_id"
+        ).fetchall()
+        bound = conn.execute("SELECT m3u_group_id FROM event_epg_groups").fetchone()[0]
+    assert [r[0] for r in rows] == read
+    assert bound == bound_to
+
+
 def test_managed_source_follows_rotation_after_a_gap_and_keeps_its_settings(db):
     _toggle(leagues=["nhl"])
     first = _group(71, "LIVE | NHL (Wed)")
