@@ -1229,6 +1229,177 @@ def test_rotating_group_dismissal_survives_disappearance_and_restore(db):
     assert _by_name(later)[thu.name].id == candidate.id
 
 
+def _managed_source(conn, name, group_id, group_name, account=4, managed=1, enabled=True):
+    source_id = create_group(
+        conn,
+        name=name,
+        leagues=[],
+        m3u_group_id=group_id,
+        m3u_group_name=group_name,
+        m3u_account_id=account,
+        enabled=enabled,
+    )
+    conn.execute("UPDATE event_epg_groups SET managed = ? WHERE id = ?", (managed, source_id))
+    if managed:
+        conn.execute(
+            "INSERT INTO source_candidates "
+            "(m3u_group_id, m3u_group_name, m3u_account_id, status, source_group_id) "
+            "VALUES (?, ?, ?, 'accepted', ?)",
+            (group_id, group_name, account or 0, source_id),
+        )
+    return source_id
+
+
+def _bound(conn):
+    return [
+        tuple(r)
+        for r in conn.execute(
+            "SELECT name, m3u_group_id, m3u_group_name FROM event_epg_groups ORDER BY id"
+        )
+    ]
+
+
+def _day(group_id, name, account=4, streams=10, games=1):
+    return ScanEvidence(
+        m3u_group_id=group_id,
+        m3u_group_name=name,
+        m3u_account_id=account,
+        stream_count=streams,
+        game_matches=games,
+    )
+
+
+def _rebind(conn, evidence, live_ids):
+    from teamarr.consumers.source_lifecycle.discovery import ScanSummary, rebind_rotating_sources
+
+    summary = ScanSummary()
+    rebind_rotating_sources(conn, NOW, live_ids=live_ids, evidence=evidence, summary=summary)
+    return summary.sources_rebound
+
+
+@pytest.mark.parametrize(
+    "second",
+    [
+        {"managed": 1},
+        {"managed": 0},
+        {"managed": 1, "enabled": False},
+        {"managed": 0, "enabled": False},
+    ],
+)
+def test_a_family_with_a_source_per_day_is_never_rebound(db, second):
+    """More than one source of a family on an account: each stays on its own id (#1265).
+
+    The second source counts whatever it is — hand-made, retired — because its
+    existence is what says the days were kept apart on purpose.
+    """
+    with get_db() as conn:
+        _managed_source(conn, "EPL Mon", 10, "LIVE | EPL (Mon)")
+        _managed_source(conn, "EPL Fri", 11, "LIVE | EPL (Fri)", **second)
+        before = _bound(conn)
+        evidence = [_day(50, "LIVE | EPL (Fri)"), _day(51, "LIVE | EPL (Tue)")]
+        assert _rebind(conn, evidence, {50, 51}) == 0
+        assert _bound(conn) == before
+
+
+def test_a_source_per_day_family_gets_other_days_as_their_own_suggestion(db):
+    """The whole scan: nothing is rebound, and a day no source is named for is offered."""
+    with get_db() as conn:
+        _managed_source(conn, "EPL Mon", 10, "LIVE | EPL (Mon)")
+        _managed_source(conn, "EPL Fri", 11, "LIVE | EPL (Fri)")
+    tue = _group(51, "LIVE | EPL (Tue)")
+    summary, _, _ = _scan([tue], {51: [_stream(1, "eng.1: A vs B")]})
+    assert summary.sources_rebound == 0
+    with get_db() as conn:
+        assert [b[1] for b in _bound(conn)] == [10, 11]
+    found = _by_name()
+    assert (found[tue.name].status, found[tue.name].source_group_id) == ("new", None)
+
+
+def test_one_account_with_a_source_per_day_does_not_stop_another_accounts_rotation(db):
+    with get_db() as conn:
+        _managed_source(conn, "EPL Mon 4", 10, "LIVE | EPL (Mon)", account=4)
+        _managed_source(conn, "EPL Fri 4", 11, "LIVE | EPL (Fri)", account=4)
+        _managed_source(conn, "EPL 5", 12, "LIVE | EPL (Mon)", account=5)
+        evidence = [
+            _day(50, "LIVE | EPL (Tue)", account=4),
+            _day(50, "LIVE | EPL (Tue)", account=5),
+        ]
+        assert _rebind(conn, evidence, {50}) == 1
+        assert [b[1] for b in _bound(conn)] == [10, 11, 50]
+
+
+@pytest.mark.parametrize(
+    "dismissed_account, rebound_to",
+    [(4, 12), (0, 12), (5, 90)],
+)
+def test_a_rebind_never_lands_on_a_dismissed_day(db, dismissed_account, rebound_to):
+    """`(Sat)` was dismissed under an old id; it returns under a new one (#1265).
+
+    The name is what the user said no to. Another account's dismissal is not
+    this account's.
+    """
+    with get_db() as conn:
+        _managed_source(conn, "NHL", 12, "LIVE | NHL (Thur)")
+        conn.execute(
+            "INSERT INTO source_candidates (m3u_group_id, m3u_group_name, m3u_account_id, status) "
+            "VALUES (60, 'live | NHL (Sat) ', ?, 'dismissed')",
+            (dismissed_account,),
+        )
+        assert _rebind(conn, [_day(90, "LIVE | NHL (Sat)", streams=50)], {90}) == (rebound_to == 90)
+        assert [b[1] for b in _bound(conn)] == [rebound_to]
+        statuses = conn.execute(
+            "SELECT m3u_group_id, status FROM source_candidates ORDER BY m3u_group_id"
+        ).fetchall()
+        assert (60, "dismissed") in [tuple(r) for r in statuses]
+
+
+def test_a_rebind_takes_the_next_day_when_the_best_one_is_dismissed(db):
+    with get_db() as conn:
+        _managed_source(conn, "NHL", 12, "LIVE | NHL (Thur)")
+        conn.execute(
+            "INSERT INTO source_candidates (m3u_group_id, m3u_group_name, m3u_account_id, status) "
+            "VALUES (60, 'LIVE | NHL (Sat)', 4, 'dismissed')"
+        )
+        evidence = [
+            _day(90, "LIVE | NHL (Sat)", streams=50),
+            _day(85, "LIVE | NHL (Fri)", streams=5),
+        ]
+        assert _rebind(conn, evidence, {85, 90}) == 1
+        assert _bound(conn) == [("NHL", 85, "LIVE | NHL (Fri)")]
+
+
+def test_a_rebind_does_not_depend_on_row_or_evidence_order(db):
+    """Same inputs, any order, same binding; a rerun changes nothing."""
+    import itertools
+
+    evidence = [
+        _day(81, "LIVE | NHL (Fri)", streams=10),
+        _day(82, "LIVE | NHL (Sat)", streams=10),
+        _day(83, "LIVE | NHL (Sun)", streams=10, games=0),
+        _day(84, "LIVE | NBA (Sat)", streams=99),
+    ]
+    results = set()
+    for order in itertools.permutations(evidence):
+        with get_db() as conn:
+            conn.execute("DELETE FROM source_candidates")
+            conn.execute("DELETE FROM event_epg_groups")
+            _managed_source(conn, "NHL", 12, "LIVE | NHL (Thur)")
+            _managed_source(conn, "NBA", 13, "LIVE | NBA (Thur)")
+            assert _rebind(conn, list(order), {81, 82, 83, 84}) == 2
+            first = tuple(_bound(conn))
+            assert _rebind(conn, list(order), {81, 82, 83, 84}) == 0
+            assert tuple(_bound(conn)) == first
+            results.add(first)
+    assert results == {(("NHL", 82, "LIVE | NHL (Sat)"), ("NBA", 84, "LIVE | NBA (Sat)"))}
+
+
+def test_a_hand_made_source_is_not_rebound_even_alone_in_its_family(db):
+    with get_db() as conn:
+        _managed_source(conn, "My NHL", 12, "LIVE | NHL (Thur)", managed=0)
+        assert _rebind(conn, [_day(90, "LIVE | NHL (Fri)")], {90}) == 0
+        assert _bound(conn) == [("My NHL", 12, "LIVE | NHL (Thur)")]
+
+
 def test_managed_source_follows_rotation_after_a_gap_and_keeps_its_settings(db):
     _toggle(leagues=["nhl"])
     first = _group(71, "LIVE | NHL (Wed)")

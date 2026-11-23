@@ -71,6 +71,22 @@ def binding_conflicts(held: Iterable[int], account: int) -> bool:
     return bool(holders) and (account == 0 or 0 in holders or account in holders)
 
 
+def group_name_key(name: str | None) -> str:
+    """The form a group name is compared in for dismissals."""
+    return (name or "").strip().lower()
+
+
+def is_dismissed_day(name: str | None, account: int, dismissed_names: set[tuple[str, int]]) -> bool:
+    """Whether this exact rotating group name was dismissed for the account (#1265).
+
+    A day of a rotating family comes back under a new group id every time, so
+    its dismissal is read by name. It covers that name only — never the other
+    days of the family — and one recorded with no account covers every account.
+    """
+    key = group_name_key(name)
+    return (key, account) in dismissed_names or (key, 0) in dismissed_names
+
+
 @dataclass
 class CandidateEvidence:
     """A candidate with its evidence summed up over a window of scans."""
@@ -108,6 +124,34 @@ class CandidateEvidence:
 def rotation_rank(ev: ScanEvidence) -> tuple[bool, int, int]:
     """Prefer live games, then stream count, then the newer Dispatcharr ID."""
     return bool(ev.game_matches), ev.stream_count, ev.m3u_group_id
+
+
+def rotating_family_sizes(conn: Connection) -> dict[tuple[str, int], int]:
+    """How many sources each rotating family has per account (#1265).
+
+    Every source counts, hand-made, managed, enabled or not. More than one on
+    an account means the user keeps a source per day (``EPL (Fri)``, ``(Mon)``,
+    ``(Sun)``): those are separate on purpose and stay bound per group id. A
+    family with exactly one is the rotating case, where the source follows.
+    """
+    sizes: dict[tuple[str, int], int] = defaultdict(int)
+    rows = conn.execute(
+        """
+        SELECT g.m3u_account_id AS account,
+               COALESCE(NULLIF(g.m3u_group_name, ''), c.m3u_group_name, '') AS group_name
+        FROM event_epg_groups g
+        LEFT JOIN source_candidates c ON c.id = (
+            SELECT MAX(id) FROM source_candidates
+            WHERE source_group_id = g.id AND status = 'accepted'
+        )
+        WHERE g.m3u_group_id IS NOT NULL AND COALESCE(g.is_channel_source, 0) = 0
+        ORDER BY g.id
+        """
+    ).fetchall()
+    for row in rows:
+        if key := rotating_group_key(row["group_name"]):
+            sizes[key, account_key(row["account"])] += 1
+    return sizes
 
 
 def _merge_scan_history(conn: Connection, keeper_id: int, duplicate_id: int) -> None:
@@ -164,6 +208,7 @@ def _scan_batches(
 
     prior = defaultdict(list)
     dismissed = dismissed_rotation_keys(conn)
+    family_sizes = rotating_family_sizes(conn)
     for row in conn.execute(
         "SELECT c.*, g.m3u_group_id AS bound_id FROM source_candidates c "
         "LEFT JOIN event_epg_groups g ON g.id = c.source_group_id ORDER BY c.id"
@@ -178,7 +223,7 @@ def _scan_batches(
     for key, batch in rotating.items():
         rows = prior[key]
         linked = [row for row in rows if row["bound_id"] is not None]
-        if len(linked) > 1:
+        if len(linked) > 1 or family_sizes.get(key, 0) > 1:
             # Legacy installs may have deliberately created separate sources.
             for ev in batch:
                 yield ev, [ev]
@@ -416,7 +461,7 @@ def dismissed_groups(conn: Connection) -> tuple[set[tuple[int, int]], set[tuple[
     ).fetchall()
     return (
         {(row[0], row[2] or 0) for row in rows},
-        {((row[1] or "").strip().lower(), row[2] or 0) for row in rows},
+        {(group_name_key(row[1]), row[2] or 0) for row in rows},
     )
 
 

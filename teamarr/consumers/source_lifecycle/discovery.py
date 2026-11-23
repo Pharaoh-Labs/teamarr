@@ -53,13 +53,16 @@ from teamarr.database.source_candidates import (
     CandidateEvidence,
     ScanEvidence,
     account_key,
+    binding_conflicts,
     dismiss_group,
     dismissed_groups,
     dismissed_rotation_keys,
     forget_removed_source,
     get_candidates,
+    is_dismissed_day,
     move_accepted_candidate,
     record_scan,
+    rotating_family_sizes,
     rotation_rank,
     set_candidate_status,
     upsert_accepted_candidate,
@@ -589,12 +592,8 @@ class SourceDiscovery:
                 dismiss_group(conn, group.id, group.name, account or None)
             rebind_rotating_sources(conn, now, live_ids, found, summary)
             scanned_ids = record_scan(conn, found, now)
-            readd_approved_sources(
-                conn, now, summary, scanned_ids, account_names=account_names
-            )
-            auto_add_sources(
-                conn, now, summary, scanned_ids, account_names=account_names
-            )
+            readd_approved_sources(conn, now, summary, scanned_ids, account_names=account_names)
+            auto_add_sources(conn, now, summary, scanned_ids, account_names=account_names)
             if live_ids:
                 maintain_managed_sources(
                     conn,
@@ -807,7 +806,14 @@ def rebind_rotating_sources(
     evidence: list[ScanEvidence],
     summary: ScanSummary,
 ) -> None:
-    """Follow a rotating group only after the bound ID disappears."""
+    """Follow a rotating group only after the bound ID disappears (#1259, #1265).
+
+    Only a managed source is moved, only within its own account, and only when
+    it is the one source of its family on that account: an install that keeps a
+    source per day (``EPL (Fri)``, ``(Mon)``, ``(Sun)``) made them separate on
+    purpose, and each comes back through the per-run exact-name heal alone.
+    A day the user dismissed is never a destination, whatever id it has now.
+    """
     by_key: dict[str, list[ScanEvidence]] = defaultdict(list)
     for ev in evidence:
         key = rotating_group_key(ev.m3u_group_name)
@@ -816,40 +822,54 @@ def rebind_rotating_sources(
     if not by_key:
         return
 
-    sources = [s for s in get_all_groups(conn, include_disabled=True) if not s.is_channel_source]
-    taken = {(s.m3u_group_id, s.m3u_account_id) for s in sources}
-    dismissed, _ = dismissed_groups(conn)
+    sources = sorted(
+        (s for s in get_all_groups(conn, include_disabled=True) if not s.is_channel_source),
+        key=lambda s: s.id,
+    )
+    dismissed, dismissed_names = dismissed_groups(conn)
     accepted = {
         row["source_group_id"]: row
         for row in conn.execute(
             "SELECT id, source_group_id, m3u_group_name FROM source_candidates "
-            "WHERE status = 'accepted' AND source_group_id IS NOT NULL"
+            "WHERE status = 'accepted' AND source_group_id IS NOT NULL ORDER BY id"
         )
     }
+
+    def family_of(source: EventEPGGroup) -> str | None:
+        candidate = accepted.get(source.id)
+        name = source.m3u_group_name or (candidate["m3u_group_name"] if candidate else "")
+        return rotating_group_key(name)
+
+    held: dict[int, set[int]] = defaultdict(set)
+    for source in sources:
+        if source.m3u_group_id is not None:
+            held[source.m3u_group_id].add(account_key(source.m3u_account_id))
+    family_size = rotating_family_sizes(conn)
+
     for source in sorted(sources, key=lambda s: (not s.enabled, s.id)):
         if not source.managed or source.m3u_group_id is None or source.m3u_group_id in live_ids:
             continue
-        candidate = accepted.get(source.id)
-        name = source.m3u_group_name or (candidate["m3u_group_name"] if candidate else "")
-        key = rotating_group_key(name)
+        key = family_of(source)
         if not key:
             continue
+        account = account_key(source.m3u_account_id)
+        if family_size.get((key, account), 0) > 1:
+            continue  # Separate sources per day: none of them follows another day.
+        candidate = accepted.get(source.id)
         replacements = sorted(
             (
                 ev
                 for ev in by_key.get(key, [])
-                if (ev.m3u_group_id, ev.m3u_account_id) not in taken
-                and (ev.m3u_group_id, None) not in taken
-                and account_key(source.m3u_account_id) == account_key(ev.m3u_account_id)
+                if account_key(ev.m3u_account_id) == account
+                and not binding_conflicts(held.get(ev.m3u_group_id, ()), account)
+                and (ev.m3u_group_id, account) not in dismissed
+                and (ev.m3u_group_id, 0) not in dismissed
+                and not is_dismissed_day(ev.m3u_group_name, account, dismissed_names)
             ),
             key=rotation_rank,
             reverse=True,
         )
         for replacement in replacements:
-            group_id = replacement.m3u_group_id
-            account = account_key(replacement.m3u_account_id)
-            if (group_id, account) in dismissed or (group_id, 0) in dismissed:
-                continue
             if candidate and not move_accepted_candidate(conn, candidate["id"], replacement):
                 continue
             conn.execute(
@@ -868,7 +888,7 @@ def rebind_rotating_sources(
                     name_leagues=replacement.name_leagues,
                     source_group_id=source.id,
                 )
-            taken.add((replacement.m3u_group_id, replacement.m3u_account_id))
+            held[replacement.m3u_group_id].add(account)
             summary.sources_rebound += 1
             logger.info(
                 "[DISCOVERY] Rebound source %r from group %d to %d",
