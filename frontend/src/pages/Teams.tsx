@@ -79,7 +79,7 @@ interface TeamUpdate {
   active?: boolean
   managed_channel_enabled?: boolean
   managed_channel_number?: number | null
-  managed_channel_lifecycle?: "persistent" | "game_days" | null
+  managed_channel_lifecycle?: "persistent" | "in_season" | "game_days" | null
   managed_channel_record?: boolean
 }
 
@@ -214,11 +214,12 @@ function EditTeamDialog({ team, templates, open, onOpenChange, onSave, isSaving 
                   value={formData.managed_channel_lifecycle ?? ""}
                   onChange={(e) => setFormData({
                     ...formData,
-                    managed_channel_lifecycle: (e.target.value || null) as "persistent" | "game_days" | null,
+                    managed_channel_lifecycle: (e.target.value || null) as "persistent" | "in_season" | "game_days" | null,
                   })}
                 >
                   <option value="">Use global setting (Channels → Numbering)</option>
                   <option value="persistent">Persistent — always exists</option>
+                  <option value="in_season">In season</option>
                   <option value="game_days">Game days only</option>
                 </Select>
               </div>
@@ -604,7 +605,7 @@ export function Teams() {
       <Alert variant="info" title="What is Team EPG?">
         Team EPG builds a dedicated XMLTV schedule for each active team. You can associate that guide
         with an existing Dispatcharr channel, or enable management to have Teamarr create and maintain
-        a Dispatcharr channel in the dedicated managed-team range — always, or only on game days, per
+        a Dispatcharr channel in the dedicated managed-team range — always, in season, or only on game days, per
         the lifecycle setting. Managed channels carry the team guide and attach streams matched from
         enabled Sources only while their game windows are active.
       </Alert>
@@ -1024,11 +1025,11 @@ export function Teams() {
                           </RichTooltip>
                         ) : team.managed_channel_sync_status === "idle" ? (
                           <RichTooltip
-                            title="Idle until the next game day"
+                            title="Idle until the next game"
                             content={
                               <p className="max-w-xs text-xs">
                                 {team.managed_channel_sync_message ??
-                                  "No game inside the lifecycle window; the channel returns on game day."}
+                                  "No game right now; the channel returns with the next game."}
                                 {team.managed_channel_assigned_number
                                   ? ` Reserved number ${team.managed_channel_assigned_number}.`
                                   : ""}

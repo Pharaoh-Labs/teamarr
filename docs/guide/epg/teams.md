@@ -10,7 +10,7 @@ redirect_from:
 
 # Teams
 
-**Cricket:** IPL, Big Bash, SA20 and Major League Cricket support team import and
+**Cricket:** IPL, Big Bash, SA20, Major League Cricket and the Caribbean Premier League support team import and
 team channels through ESPN, with no premium API key. Existing recognized team
 selections migrate automatically. The international ODI, T20I and Test format
 leagues remain event-only. See [migration details](../../reference/providers/espn.md#franchise-cricket).
@@ -72,16 +72,17 @@ The edit dialog can enable a managed channel for a team. Turning it on also acti
 
 Configure the automatic **Managed Team EPG Channels** range and choose priority teams in **Channels → Numbering**. Priority teams are numbered first when channels are created. This range is independent from event-channel numbering, so ordinary channel blocks do not consume it. Automatic numbers follow the [Number Stability](../channels/numbering#number-stability) mode: Compact re-sorts them every run, Gapped and Strict hold them until the daily re-layout. An explicit override pins a number; a collision with another channel moves it.
 
-#### Lifecycle: Persistent Or Game Days Only
+#### Lifecycle: Persistent, In Season Or Game Days Only
 
 The global **Lifecycle** setting in **Channels → Numbering** (overridable per team in the edit dialog) decides when the Dispatcharr channel exists:
 
 | Mode | Behaviour |
 |------|-----------|
 | **Persistent** (default) | The channel always exists. Between games it is an empty channel carrying the team's idle guide. |
+| **In season** | The channel exists while the team has a game inside the Team EPG look-ahead window — **Schedule Days Ahead** in the **Team EPG Settings** card on the Teams page, 30 days by default — and is removed when the schedule holds none: no game starting in that many days, none inside its event-channel lifecycle window, and no matched stream still attached. Through the season it behaves like a persistent channel, guide between games included; in the off-season it is gone, and it returns as soon as the first game of the new season comes inside the look-ahead. While it is away the team keeps its ownership record, its **reserved channel number**, its tvg-id and its logo, exactly as under Game days only, and the Teams page shows the team as **Idle** with an *Off-season* note in the tooltip. |
 | **Game days only** | The channel is created when one of the team's games enters the event-channel lifecycle window and removed after it leaves — the same create/delete timing, pre/post buffers and sport durations as [event channels](../channels/lifecycle). Between games the team keeps its ownership record, its **reserved channel number**, its tvg-id and its logo, so the channel that returns on game day is the same channel for Dispatcharr, Channels DVR and Emby. The Teams page shows such a team as **Idle** with the next game in the tooltip. |
 
-Game-day activation is decided from the team's schedule, not from whether a stream has matched: a team channel carrying its own guide is the right destination on game day even before a provider lists the feed, and any eligible stream (stream-name, team or EPG matched) attaches once it appears. Teamarr never removes a channel on a reading it cannot trust: if the team's guide failed this run, the schedule provider errored, or a matched stream is still attached inside its window, the channel is left exactly as it is. An inactive team under this mode is idle. Reserved numbers are re-sorted with the rest of the managed block under Compact numbering, so the block stays contiguous whether a team is idle or on air.
+Under both In season and Game days only, activation is decided from the team's schedule, not from whether a stream has matched: a team channel carrying its own guide is the right destination on game day even before a provider lists the feed, and any eligible stream (stream-name, team or EPG matched) attaches once it appears. Teamarr never removes a channel on a reading it cannot trust: if the team's guide failed this run, the schedule provider errored, or a matched stream is still attached inside its window, the channel is left exactly as it is. An inactive team under either mode is idle. Reserved numbers are re-sorted with the rest of the managed block under Compact numbering, so the block stays contiguous whether a team is idle or on air.
 
 Managed Team EPG channels are durable, empty Dispatcharr channels when no game is on (persistent mode). During generation, Teamarr attaches streams matched to that team's games in any of the team's competitions, applies the dedicated **Team Channels** stream-priority scope, and releases memberships that no longer match. That scope can use **Managed Team** to promote the channel owner's feed or demote identified opponent feeds without removing ambiguous or generic streams. Every attachment has a window: an EPG-matched linear stream keeps its programme slot plus the configured buffers, and a name-matched stream gets the game itself, widened by the lifecycle pre/post buffers. A game that is final, cancelled or outside the event-channel lifecycle window never attaches. When more than one game is inside its window at once, the channel carries the one that starts soonest and switches when that game's window closes.
 

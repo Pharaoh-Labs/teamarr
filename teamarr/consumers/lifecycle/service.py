@@ -497,7 +497,8 @@ class ChannelLifecycleService(
         blocks with different groups (#1018). One resolver per batch
         (``_lane_resolver``, loaded where ``_league_configs`` is), and the same
         call on the create and sync paths — a channel must not flip groups
-        between runs.
+        between runs. These are event channels, so a block limited to team
+        channels (#1224) never lends them its group.
         """
         resolver = getattr(self, "_lane_resolver", None)
         if resolver is None:
@@ -512,6 +513,7 @@ class ChannelLifecycleService(
             getattr(event, "season_type", None),
             segment=segment,
             exception_keyword=exception_keyword,
+            channel_kind="event",
         )
         if block is None or not block.has_channel_group:
             return None

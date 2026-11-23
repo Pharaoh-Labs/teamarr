@@ -13,12 +13,18 @@ resolver builds for itself.
 
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import MagicMock
+from weakref import ref
+
+import pytest
 
 from teamarr.consumers.event_group_processor.matching import StreamMatching
+from teamarr.consumers.event_group_processor.processor import EventGroupProcessor
 from teamarr.consumers.matching.epg_resolver import (
     build_epg_catalog_index,
     resolve_program_tvg_ids,
 )
+from teamarr.database.groups import create_group
 
 EPG_DATA = [
     {"id": 1, "tvg_id": "espn.us", "name": "ESPN", "epg_source": 7},
@@ -49,6 +55,17 @@ class _Counter:
     def paginated_get(self, path, error_context=None):
         self.source_calls += 1
         return [{"id": 7, "is_active": True, "name": "Guide"}]
+
+
+@pytest.fixture(autouse=True)
+def _no_managed_channels(monkeypatch):
+    """The harness has no database, and the snapshot reads managed ids
+    strictly (#1201) — a failed read is a failed snapshot. These tests are
+    about the Dispatcharr fetches, so the id read answers with none."""
+    monkeypatch.setattr(
+        "teamarr.consumers.event_group_processor.stream_fetcher.managed_channel_ids",
+        lambda db_factory, *, strict=False: set(),
+    )
 
 
 class _Harness(StreamMatching):
@@ -89,6 +106,43 @@ def test_clear_releases_the_cache_for_the_next_run():
 
     assert counter.epg_data_calls == 2
     assert counter.channel_map_calls == 2
+
+
+@pytest.mark.parametrize("operation", ["generation", "preview"])
+@pytest.mark.parametrize("fail", [False, True])
+def test_processing_releases_the_xtream_cache_on_exit(db_factory, monkeypatch, operation, fail):
+    proc = EventGroupProcessor(db_factory, dispatcharr_client=MagicMock(), service=MagicMock())
+    seen = []
+
+    def during_processing(_arg):
+        assert proc._xtream_parse_cache is not None
+        assert proc._epg_program_cache == {}
+        seen.append(ref(proc._xtream_parse_cache))
+        if fail:
+            raise RuntimeError("test processing failure")
+        return []
+
+    if operation == "generation":
+        monkeypatch.setattr(proc, "_sync_channel_source_rows", during_processing)
+
+        def run():
+            proc.process_all_groups(run_enforcement=False)
+    else:
+        with db_factory() as conn:
+            group_id = create_group(conn, name="Preview Source", leagues=[], m3u_group_id=5)
+        monkeypatch.setattr(proc, "_fetch_streams", during_processing)
+
+        def run():
+            proc.preview_group(group_id)
+
+    if fail:
+        with pytest.raises(RuntimeError, match="test processing failure"):
+            run()
+    else:
+        run()
+
+    assert len(seen) == 1 and seen[0]() is None
+    assert proc._epg_program_cache is None
 
 
 def test_fetch_failure_is_not_cached():

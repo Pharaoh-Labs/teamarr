@@ -1,10 +1,13 @@
 """Lifecycle management for Teamarr-owned Team EPG channels.
 
-Two lifecycles (#904). ``persistent`` (default) keeps a channel for every
-opted-in team. ``game_days`` keeps the *ownership row* for every opted-in
-team but only the Dispatcharr channel while the team has a game inside the
-event-channel lifecycle window (same create/delete thresholds and buffers as
-event channels). Outside it the row goes dormant (``sync_status='idle'``, no
+Three lifecycles. ``persistent`` (default) keeps a channel for every
+opted-in team. ``game_days`` (#904) keeps the *ownership row* for every
+opted-in team but only the Dispatcharr channel while the team has a game
+inside the event-channel lifecycle window (same create/delete thresholds and
+buffers as event channels). ``in_season`` (#1206) is the same arrangement
+with a wider rule: the channel exists while the team has a game inside the
+Team EPG schedule look-ahead, and goes when it has none. Outside it the row
+goes dormant (``sync_status='idle'``, no
 channel id) and still reserves the team's channel number, so the channel
 reappears with the same tvg-id, number and logo. Activation is decided from
 the team's schedule, never from whether a stream happened to match — a team
@@ -56,6 +59,11 @@ RECORDING_POST_MINUTES = 45
 # Dispatcharr's "every profile" sentinel (creator.py). A None setting means the
 # user never narrowed profiles, which the event path also sends as [0].
 _ALL_PROFILES = [0]
+
+# Lifecycles under which a team may legitimately have no channel right now:
+# the ownership row, reserved number, tvg-id and logo stay and the channel is
+# decided from the team's schedule each run. Anything else is persistent.
+SCHEDULE_DRIVEN_LIFECYCLES = frozenset({"game_days", "in_season"})
 
 
 class TeamChannelManager:
@@ -253,12 +261,14 @@ class TeamChannelManager:
                     result["conflicts"] += 1
                     continue
 
-                # Game-days lifecycle (#904): decide whether this team should
-                # have a Dispatcharr channel right now. None = could not tell
-                # (schedule unreadable) → keep whatever state it is in.
+                # Schedule-driven lifecycles (#904 game days, #1206 in
+                # season): decide whether this team should have a Dispatcharr
+                # channel right now. None = could not tell (schedule
+                # unreadable) → keep whatever state it is in.
                 wanted, note = True, None
-                if self._lifecycle_for(team, settings) == "game_days":
-                    wanted, note = self._game_day_verdict(conn, team, timing)
+                lifecycle = self._lifecycle_for(team, settings)
+                if lifecycle in SCHEDULE_DRIVEN_LIFECYCLES:
+                    wanted, note = self._lifecycle_verdict(conn, team, timing, lifecycle)
                     if wanted is None:
                         wanted = remote is not None
 
@@ -394,14 +404,14 @@ class TeamChannelManager:
         return result
 
     # ------------------------------------------------------------------
-    # Game-days lifecycle (#904)
+    # Schedule-driven lifecycles: game days (#904), in season (#1206)
     # ------------------------------------------------------------------
 
     @staticmethod
     def _lifecycle_for(team: dict, settings) -> str:
         """Per-team override, else the global setting; anything odd is persistent."""
         value = team.get("managed_channel_lifecycle") or getattr(settings, "lifecycle", None)
-        return "game_days" if value == "game_days" else "persistent"
+        return value if value in SCHEDULE_DRIVEN_LIFECYCLES else "persistent"
 
     @staticmethod
     def _schedule_days_ahead(conn) -> int:
@@ -410,12 +420,20 @@ class TeamChannelManager:
         except Exception:  # noqa: BLE001 - tests use a bare schema
             return 30
 
-    def _game_day_verdict(self, conn, team: dict, timing) -> tuple[bool | None, str | None]:
+    def _lifecycle_verdict(
+        self, conn, team: dict, timing, lifecycle: str = "game_days"
+    ) -> tuple[bool | None, str | None]:
         """Should this team have a channel right now?
 
-        ``(True, why)`` when a game is inside its event-channel lifecycle window
-        (create threshold reached, delete threshold not), or a stream
-        membership is currently attached — stream evidence keeps a live
+        Both schedule-driven lifecycles share the read and its failure modes;
+        only the rule for a qualifying game differs.
+
+        ``game_days``: ``(True, why)`` when a game is inside its event-channel
+        lifecycle window (create threshold reached, delete threshold not).
+        ``in_season`` (#1206): also when a game starts inside the Team EPG
+        look-ahead (``team_schedule_days_ahead``) — the provider's schedule
+        can run past it, so the start is checked against the window itself.
+        Under either, a stream membership currently attached keeps a live
         channel up through a schedule blip. ``(False, why)`` when the schedule
         was read and holds no such game. ``(None, why)`` when it cannot be
         read: no service, no timing rules, the team's guide errored this run,
@@ -473,6 +491,14 @@ class TeamChannelManager:
                 return True, "A matched stream is attached"
         except Exception:  # noqa: BLE001 - tests use a bare schema
             pass
+        if lifecycle == "in_season":
+            if upcoming is not None and upcoming <= now + timedelta(days=days):
+                return True, f"In season: next game {to_db_utc(upcoming)} UTC"
+            if upcoming is not None:
+                return False, (
+                    f"Off-season: no game in the next {days} days; next {to_db_utc(upcoming)} UTC"
+                )
+            return False, f"Off-season: no game in the next {days} days"
         if upcoming is not None:
             return False, f"No game in the lifecycle window; next {to_db_utc(upcoming)} UTC"
         return False, f"No game in the next {days} days"
@@ -510,7 +536,7 @@ class TeamChannelManager:
         result["hibernated"] += 1
         result["idle"] += 1
         logger.info(
-            "[TEAM_CHANNEL] %s: channel removed until the next game day (%s)",
+            "[TEAM_CHANNEL] %s: channel removed until its next game (%s)",
             team.get("team_name"),
             note,
         )
@@ -1189,7 +1215,12 @@ class TeamChannelManager:
 
         lane = LaneResolver.load(
             conn, Lane(id=None, start=settings.range_start, end=settings.range_end)
-        ).resolve(team.get("sport"), team.get("primary_league"), team.get("team_name"))
+        ).resolve(
+            team.get("sport"),
+            team.get("primary_league"),
+            team.get("team_name"),
+            channel_kind="team",
+        )
         number = lane.start
         while lane.end is None or number <= lane.end:
             if number not in occupied:

@@ -465,11 +465,16 @@ class DetectionKeywordService:
         if cls._event_type_patterns is None:
             cls._event_type_patterns = {}
             for event_type, keywords in cls.get_event_type_keywords().items():
-                cls._event_type_patterns[event_type] = []
-                for keyword in keywords:
-                    # Use word boundaries to avoid matching 'wbo' in 'Cowboys'
-                    pattern = re.compile(rf"\b{re.escape(keyword)}\b", re.IGNORECASE)
-                    cls._event_type_patterns[event_type].append(pattern)
+                if not keywords:
+                    cls._event_type_patterns[event_type] = []
+                    continue
+                # Combine all keywords for an event type into one word-bounded
+                # alternation regex (#1263) so detect_event_type runs a single
+                # regex scan per event type instead of 40+ per stream.
+                alternation = "|".join(re.escape(keyword) for keyword in keywords)
+                cls._event_type_patterns[event_type] = [
+                    re.compile(rf"\b(?:{alternation})\b", re.IGNORECASE)
+                ]
         return cls._event_type_patterns
 
     @classmethod

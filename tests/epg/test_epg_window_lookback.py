@@ -39,7 +39,7 @@ class _Harness(StreamMatching):
 def _capture_window(monkeypatch):
     seen: dict[str, datetime] = {}
 
-    def fake_build(_epg, _resolution, window_start, window_end):
+    def fake_build(_epg, _resolution, window_start, window_end, **_kwargs):
         seen["start"], seen["end"] = window_start, window_end
         return EPGProgramIndex({})
 

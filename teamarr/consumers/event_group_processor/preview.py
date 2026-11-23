@@ -29,6 +29,7 @@ class PreviewBuilder:
         _filter_streams: Any
         _get_subscription_leagues: Any
         _match_streams: Any
+        _epg_cache_scope: Any
 
     def preview_group(
         self,
@@ -49,7 +50,7 @@ class PreviewBuilder:
         """
         target_date = target_date or date.today()
 
-        with self._db_factory() as conn:
+        with self._epg_cache_scope(), self._db_factory() as conn:
             group = get_group(conn, group_id)
             if not group:
                 result = PreviewResult(group_id=group_id, group_name="Unknown")

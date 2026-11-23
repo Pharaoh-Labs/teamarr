@@ -19,7 +19,11 @@ import {
   useManagedTeamChannelSettings,
   useUpdateManagedTeamChannelSettings,
 } from "@/hooks/useSettings"
-import type { LifecycleSettings, ChannelNumberingSettings } from "@/api/settings"
+import type {
+  LifecycleSettings,
+  ChannelNumberingSettings,
+  ManagedTeamChannelLifecycle,
+} from "@/api/settings"
 import { useTeams } from "@/hooks/useTeams"
 
 /**
@@ -38,6 +42,8 @@ export function ChannelNumbering() {
   const updateChannelNumbering = useUpdateChannelNumberingSettings()
   const { data: managedTeamData } = useManagedTeamChannelSettings()
   const updateManagedTeam = useUpdateManagedTeamChannelSettings()
+  // In season follows the Team EPG look-ahead (#1206).
+  const scheduleDaysAhead = settings?.epg?.team_schedule_days_ahead ?? 30
   const { data: teams } = useTeams()
 
   const [lifecycle, setLifecycle] = useState<LifecycleSettings | null>(null)
@@ -57,7 +63,7 @@ export function ChannelNumbering() {
   const [managedTeamRangeStart, setManagedTeamRangeStart] = useState("9000")
   const [managedTeamRangeEnd, setManagedTeamRangeEnd] = useState("")
   const [managedTeamPriorityIds, setManagedTeamPriorityIds] = useState<number[]>([])
-  const [managedTeamLifecycle, setManagedTeamLifecycle] = useState<"persistent" | "game_days">("persistent")
+  const [managedTeamLifecycle, setManagedTeamLifecycle] = useState<ManagedTeamChannelLifecycle>("persistent")
 
   const lifecycleInitRef = useRef(false)
   useEffect(() => {
@@ -270,14 +276,17 @@ export function ChannelNumbering() {
             <Select
               id="managed-team-lifecycle"
               value={managedTeamLifecycle}
-              onChange={(e) => setManagedTeamLifecycle(e.target.value as "persistent" | "game_days")}
+              onChange={(e) => setManagedTeamLifecycle(e.target.value as ManagedTeamChannelLifecycle)}
             >
               <option value="persistent">Persistent — the channel always exists</option>
+              <option value="in_season">In season — there while the team has a game coming up</option>
               <option value="game_days">Game days only — appears inside the game's lifecycle window</option>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Game days only follows the event-channel create and delete timing and buffers. Between games
-              the team keeps its number, tvg-id and logo, so the channel comes back as the same channel.
+              Persistent: always there. In season: there while the team has a game in the next{" "}
+              {scheduleDaysAhead} days (the Team EPG look-ahead, Schedule Days Ahead on the Teams page). Game
+              days only: there only around each game, following the event-channel create and delete timing and buffers. While the channel
+              is away the team keeps its number, tvg-id and logo, so it comes back as the same channel.
               Each team can override this in its edit dialog.
             </p>
           </div>

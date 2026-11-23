@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS teams (
     active BOOLEAN DEFAULT 1,
     managed_channel_enabled BOOLEAN NOT NULL DEFAULT 0,
     managed_channel_number INTEGER,
-    managed_channel_lifecycle TEXT,          -- NULL = inherit the global setting (#904)
+    managed_channel_lifecycle TEXT,          -- NULL = inherit the global setting; 'persistent' | 'in_season' | 'game_days' (#904, #1206)
     managed_channel_record BOOLEAN NOT NULL DEFAULT 0,  -- (#729) Schedule a Dispatcharr recording for each of this team's games on its managed team channel
 
     -- One entry per team per league (ESPN reuses IDs across leagues for different teams)
@@ -383,7 +383,10 @@ CREATE TABLE IF NOT EXISTS settings (
     managed_team_channel_priority_ids JSON DEFAULT '[]',
     -- Team channel lifecycle (#904): 'persistent' keeps every managed team
     -- channel; 'game_days' creates it inside the event-channel lifecycle
-    -- window of a game and removes it after, keeping tvg-id and number.
+    -- window of a game and removes it after, keeping tvg-id and number;
+    -- 'in_season' (#1206) keeps it while the team has a game inside the
+    -- Team EPG look-ahead (team_schedule_days_ahead) and removes it when
+    -- it has none, keeping tvg-id and number the same way.
     managed_team_channel_lifecycle TEXT DEFAULT 'persistent',
 
     -- Default Team Filtering (for Event Groups)
@@ -1194,6 +1197,9 @@ CREATE TABLE IF NOT EXISTS numbering_exceptions (
     -- fixed precedence order in numbering_exceptions.py picks the winner.
     segments TEXT,                           -- comma-separated lowercase codes: 'race,qualifying'
     keyword TEXT,                            -- 'main' | 'any' | 'driver' | 'variant' | 'feed:<feed_key>' | 'label:<keyword label>'
+    -- Channel kind condition (#1224): NULL = any channel. Lets one league number
+    -- its event channels and its managed team channels in two separate blocks.
+    channel_kind TEXT,                       -- 'team' (managed team channels) | 'event' (event channels)
     -- Output channel group for channels in this block (#950). Same shape as the
     -- global/per-league pair: a static id, or a pattern ("09 TEAMARR {league}")
     -- in channel_group_mode. Both NULL = the subscription's group applies.
@@ -1505,6 +1511,7 @@ INSERT OR REPLACE INTO leagues (league_code, provider, provider_league_id, provi
     ('bbl', 'espn', 'cricket/8044', NULL, 'Big Bash League', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/8044.png', NULL, 1, 'BBL', 'bbl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('sa20', 'espn', 'cricket/21275', NULL, 'South Africa Twenty20', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/21275.png', NULL, 1, 'SA20', 'sa20', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
     ('mlc', 'espn', 'cricket/21266', NULL, 'Major League Cricket', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/21266.png', NULL, 1, 'MLC', 'mlc', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
+    ('cpl', 'espn', 'cricket/8623', NULL, 'Caribbean Premier League', 'cricket', 'https://a.espncdn.com/i/leaguelogos/cricket/500/8623.png', NULL, 1, 'CPL', 'cpl', 'team_vs_team', NULL, NULL, NULL, NULL, 1),
 
     -- Rugby (ESPN)
     ('rwc',   'espn', 'rugby/164205',    NULL, 'Rugby World Cup',                 'rugby', 'https://upload.wikimedia.org/wikipedia/commons/a/a3/Rugby_World_Cup_Logo%2C_used_post_RWC_2023.svg', NULL, 1, 'RWC',   'rwc',   'team_vs_team', NULL, NULL, NULL, NULL, 1),
@@ -1941,6 +1948,7 @@ CREATE TABLE IF NOT EXISTS managed_channel_history (
 
 CREATE INDEX IF NOT EXISTS idx_mch_channel ON managed_channel_history(managed_channel_id, changed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_mch_type ON managed_channel_history(change_type);
+CREATE INDEX IF NOT EXISTS idx_mch_changed_at ON managed_channel_history(changed_at);
 
 
 -- =============================================================================

@@ -690,11 +690,16 @@ class ChannelManager:
 
         return [DispatcharrChannelProfile.from_api(p) for p in response.json()]
 
-    def create_profile(self, name: str) -> OperationResult:
+    def create_profile(self, name: str, start_empty: bool = False) -> OperationResult:
         """Create a new channel profile in Dispatcharr.
+
+        Dispatcharr adds every existing channel to a new profile unless the
+        request says ``start_empty`` (#1260). A build without the field
+        ignores it and keeps the old behaviour.
 
         Args:
             name: Profile name
+            start_empty: Create the profile with no channels in it
 
         Returns:
             OperationResult with success status and created profile data
@@ -702,7 +707,9 @@ class ChannelManager:
         if not name or not name.strip():
             return OperationResult(success=False, error="Profile name is required")
 
-        payload = {"name": name.strip()}
+        payload: dict[str, object] = {"name": name.strip()}
+        if start_empty:
+            payload["start_empty"] = True
         response = self._client.post("/api/channels/profiles/", payload)
 
         if response is None:

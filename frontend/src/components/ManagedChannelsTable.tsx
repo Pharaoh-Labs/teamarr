@@ -44,6 +44,7 @@ import type { ManagedChannel, ChannelStreamEntry, ChannelStreamsResponse, Stream
 import { OrphansDialog } from "@/components/managed-channels/OrphansDialog"
 import { ResetAllDialog } from "@/components/managed-channels/ResetAllDialog"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
+import { audioChannelLayout } from "@/lib/audio-channels"
 import { useSports } from "@/hooks/useSports"
 import { useRowSelection } from "@/hooks/useRowSelection"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -113,6 +114,10 @@ function StreamStatsBadges({ stats }: { stats: Record<string, unknown> | null })
 
   const sampleRate = stats.sample_rate as number | undefined
   if (sampleRate != null) chips.push(chip(`${(sampleRate / 1000).toFixed(0)} kHz`))
+
+  // 2.0 = stereo, 5.1 = surround; a high audio bitrate alone does not say which (#1234).
+  const audioLayout = audioChannelLayout(stats.audio_channels)
+  if (audioLayout) chips.push(chip(`${audioLayout} ch`))
 
   if (chips.length === 0) return <span className="text-muted-foreground">—</span>
 
