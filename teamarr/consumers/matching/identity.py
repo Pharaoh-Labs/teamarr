@@ -659,6 +659,15 @@ class TeamIdentityIndex:
         which already rejects "Ohio Wesleyan" against the Bobcats. A token
         with punctuation or a digit ("Football:", "(Big", "|", "13", "6pm")
         is the boundary providers actually write.
+
+        A lone hyphen is such a boundary after a one-word team too (#1264):
+        "Sharks - Big Ten Network", "Kraken - Day #1". The words after it are
+        the rest of the name only when the joined words are a surface, and
+        then this is never reached — the hyphen normalizes to nothing, so
+        ``refine_side`` finds "Ohio - Wesleyan" as the two-token run "ohio
+        wesleyan" before it ever considers "Ohio" alone. Reading the hyphen
+        as glue for a team the cache does not know halved the strip for every
+        one-word team (292 → 153 of 300 `{away} at {home} - Big Ten Network`).
         """
         run: list[str] = []
         for token in outward:

@@ -651,11 +651,13 @@ class StreamMatcher:
                 stream_id = stream.get("id", 0)
                 stream_name = stream.get("name", "")
 
-                match_results = self._match_single(
+                name_results = self._match_single(
                     stream_id=stream_id,
                     stream_name=stream_name,
                     target_date=target_date,
+                    remember_failure=False,
                 )
+                match_results = name_results
 
                 # EPG augmentation (epic 183.4): for streams carrying a tvg_id in an
                 # EPG-enabled group, also match via EPG program titles and reconcile.
@@ -679,6 +681,24 @@ class StreamMatcher:
                 elif self._epg_index is not None:
                     # EPG-enabled group, but nothing to look a guide up by.
                     self._mark_no_epg_channel(match_results, None)
+
+                # Record negative-cache failures only AFTER EPG reconciliation (#1264):
+                # a stream that failed by name but matched via EPG must not persist a
+                # __FAILED__ row in stream_match_cache (or keep a stale one from a
+                # previous run when EPG now matches).
+                if any(r.matched for r in match_results):
+                    if (
+                        self._db_factory is not None
+                        and any(r.from_cache and not r.matched for r in name_results)
+                    ):
+                        self._cache.delete(self._group_id, stream_id, stream_name, failed_only=True)
+                elif not any(r.from_cache for r in match_results):
+                    self._remember_failure(
+                        match_results,
+                        stream_id,
+                        stream_name,
+                        target_date=target_date,
+                    )
 
                 # Track cache stats and accumulate (TEAM_ONLY may return multiple results)
                 any_matched = False
@@ -900,6 +920,8 @@ class StreamMatcher:
         stream_id: int,
         stream_name: str,
         target_date: date,
+        *,
+        remember_failure: bool = True,
     ) -> list[MatchedStreamResult]:
         """Match a single stream. Returns a list — usually one element, but TEAM_ONLY
         streams can fan out to multiple results (one per matched event)."""
@@ -1004,7 +1026,9 @@ class StreamMatcher:
         # the mixed-group fallbacks below. Classification has already run — it
         # happens before any cache check — so an unclassifiable stream is not a
         # target here and gains nothing.
-        cached_fail = self._cached_failure(classified, stream_id, stream_name)
+        cached_fail = self._cached_failure(
+            classified, stream_id, stream_name, target_date=target_date
+        )
         if cached_fail is not None:
             return cached_fail
 
@@ -1032,7 +1056,8 @@ class StreamMatcher:
             )
             for o in outcomes
         ]
-        self._remember_failure(outcomes, stream_id, stream_name)
+        if remember_failure:
+            self._remember_failure(outcomes, stream_id, stream_name, target_date=target_date)
         return results
 
     def _user_skipped(
@@ -1069,7 +1094,12 @@ class StreamMatcher:
         ]
 
     def _cached_failure(
-        self, classified, stream_id: int, stream_name: str
+        self,
+        classified,
+        stream_id: int,
+        stream_name: str,
+        *,
+        target_date: date | None = None,
     ) -> "list[MatchedStreamResult] | None":
         """A remembered failure for this stream, or None to match it properly (#754).
 
@@ -1089,7 +1119,8 @@ class StreamMatcher:
         if entry is None or entry.event_id != FAILED_MATCH_EVENT_ID:
             return None
 
-        raw = (entry.cached_data or {}).get("failed_reason")
+        cached_data = entry.cached_data or {}
+        raw = cached_data.get("failed_reason")
         try:
             reason = FailedReason(raw)
         except ValueError:
@@ -1097,6 +1128,19 @@ class StreamMatcher:
         if reason not in _CACHEABLE_FAILED_REASONS:
             # Written by an older build, or the allowlist shrank. Re-match
             # rather than trust a verdict this build no longer stands behind.
+            return None
+
+        # A dateless stream that failed with NO_EVENT_FOUND because its fixture
+        # sat beyond +days_ahead can enter the window when target_date advances
+        # (#1264). Re-match once per calendar day while keeping same-day runs
+        # cached. Legacy rows have no date, so re-match those on first read.
+        cached_target_date = cached_data.get("target_date")
+        if (
+            reason is FailedReason.NO_EVENT_FOUND
+            and target_date is not None
+            and cached_target_date != target_date.isoformat()
+        ):
+            self._cache.delete(self._group_id, stream_id, stream_name, failed_only=True)
             return None
 
         # A replayed failure is a sighting like any other (#1101). Every
@@ -1122,7 +1166,12 @@ class StreamMatcher:
         ]
 
     def _remember_failure(
-        self, outcomes: "list[MatchOutcome]", stream_id: int, stream_name: str
+        self,
+        outcomes: "list[MatchOutcome] | list[MatchedStreamResult]",
+        stream_id: int,
+        stream_name: str,
+        *,
+        target_date: date | None = None,
     ) -> None:
         """Remember a failure whose reason is stable between runs (#754).
 
@@ -1134,7 +1183,7 @@ class StreamMatcher:
         """
         if not _negative_cache_enabled() or self._db_factory is None or not outcomes:
             return
-        if any(o.is_matched for o in outcomes):
+        if any(o.is_matched if isinstance(o, MatchOutcome) else o.matched for o in outcomes):
             return
 
         reasons = {o.failed_reason for o in outcomes}
@@ -1150,6 +1199,11 @@ class StreamMatcher:
             stream_name=stream_name,
             generation=self._generation,
             reason=reason.value,
+            target_date=(
+                target_date.isoformat()
+                if target_date is not None and reason is FailedReason.NO_EVENT_FOUND
+                else None
+            ),
         )
 
     def _route_to_outcomes(
