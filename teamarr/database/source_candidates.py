@@ -13,6 +13,7 @@ real sources as empty or placeholders.
 import json
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from sqlite3 import Connection
@@ -76,15 +77,76 @@ def group_name_key(name: str | None) -> str:
     return (name or "").strip().lower()
 
 
-def is_dismissed_day(name: str | None, account: int, dismissed_names: set[tuple[str, int]]) -> bool:
+def is_dismissed_day(
+    name: str | None, account: int, dismissed_names: AbstractSet[tuple[str, int]]
+) -> bool:
     """Whether this exact rotating group name was dismissed for the account (#1265).
 
     A day of a rotating family comes back under a new group id every time, so
     its dismissal is read by name. It covers that name only — never the other
     days of the family — and one recorded with no account covers every account.
+    This is the reach of a dismissal on an account that uses the family; the
+    question to ask about a group is ``is_dismissed_rotation``.
     """
     key = group_name_key(name)
     return (key, account) in dismissed_names or (key, 0) in dismissed_names
+
+
+@dataclass(frozen=True)
+class RotationDismissals:
+    """What decides whether a day of a rotating family is dismissed (#1285).
+
+    ``names`` and ``families`` are the dismissed rows, as ``(group name,
+    account)`` and ``(rotating key, account)``; ``in_use`` are the ``(rotating
+    key, account)`` pairs the account uses. Read together by
+    ``rotation_dismissals`` so every caller judges from the same facts.
+    """
+
+    names: frozenset[tuple[str, int]] = frozenset()
+    families: frozenset[tuple[str, int]] = frozenset()
+    in_use: frozenset[tuple[str, int]] = frozenset()
+
+    def uses(self, family: str, account: int) -> bool:
+        """Whether the account uses the family. A source with no account reads
+        the whole group, every account's streams, so it is use for all of them."""
+        return (family, account) in self.in_use or (family, 0) in self.in_use
+
+    def accounts_naming(self, name: str | None) -> set[int]:
+        """The accounts a dismissal in this group's family was recorded for."""
+        family = rotating_group_key(name or "")
+        return {account for key, account in self.families if key == family}
+
+    def covers_every_account(self, name: str | None) -> bool:
+        """Whether no account at all could want this group: the answer for an
+        account that uses nothing, and for each account that uses the family."""
+        family = rotating_group_key(name or "")
+        users = {account for key, account in self.in_use if key == family}
+        return all(is_dismissed_rotation(name, account, self) for account in users | {-1})
+
+
+def is_dismissed_rotation(name: str | None, account: int, rules: RotationDismissals) -> bool:
+    """Whether a rotating group is dismissed for the account (#1265, #1285).
+
+    The one test for a day of a rotating family, wherever it is asked. How far
+    a dismissed day reaches follows from whether the account uses the family:
+
+    * it does (``EPL (Fri)``, ``(Mon)``, ``(Sun)`` kept, ``(Sat)`` dismissed):
+      the dismissal covers that day's name only, and the other days stay
+      readable;
+    * it does not (``Selected Live Football (Fri)`` dismissed, nothing kept):
+      the dismissal covers the whole family. Every other day is the same "no"
+      under another name, and reading them one at a time let automatic mode
+      add ``(Mon)`` on a real install.
+
+    A dismissal recorded with no account applies to every account, each under
+    its own case. False for a name that is not a rotating one.
+    """
+    family = rotating_group_key(name or "")
+    if family is None:
+        return False
+    if rules.uses(family, account):
+        return is_dismissed_day(name, account, rules.names)
+    return (family, account) in rules.families or (family, 0) in rules.families
 
 
 @dataclass
@@ -154,6 +216,41 @@ def rotating_family_sizes(conn: Connection) -> dict[tuple[str, int], int]:
     return sizes
 
 
+def rotating_families_in_use(conn: Connection) -> frozenset[tuple[str, int]]:
+    """The ``(rotating key, account)`` pairs an account uses (#1285).
+
+    A source in the family, counted as ``rotating_family_sizes`` counts them:
+    managed or hand-made, enabled or not. And an approval that outlived its
+    source: discovery removes a managed source whose group has been gone long
+    enough and leaves its candidate ``accepted`` so the group is added back
+    when it returns. That is still the user's yes. Without it a family whose
+    sources were all removed over a summer would be closed by the one day the
+    user dismissed, and the days they approved would never be read again. A
+    source the user deleted leaves a dismissed row instead, and is not use.
+    """
+    used = {key for key, count in rotating_family_sizes(conn).items() if count}
+    for row in conn.execute(
+        "SELECT m3u_group_name, m3u_account_id FROM source_candidates "
+        "WHERE status = 'accepted' AND source_group_id IS NULL"
+    ):
+        if family := rotating_group_key(row[0] or ""):
+            used.add((family, row[1] or 0))
+    return frozenset(used)
+
+
+def rotation_dismissals(conn: Connection) -> RotationDismissals:
+    """The current rotating-day dismissals and which accounts use which family."""
+    _, names = dismissed_groups(conn)
+    families = {
+        (family, account) for name, account in names if (family := rotating_group_key(name))
+    }
+    return RotationDismissals(
+        names=frozenset(names),
+        families=frozenset(families),
+        in_use=rotating_families_in_use(conn),
+    )
+
+
 def _merge_scan_history(conn: Connection, keeper_id: int, duplicate_id: int) -> None:
     conn.execute(
         "UPDATE source_candidate_scans SET candidate_id = ? WHERE candidate_id = ? "
@@ -197,13 +294,13 @@ def _scan_batches(
     their next scan without rewriting unrelated groups or requiring a migration.
     """
     rotating: dict[tuple[str, int], list[ScanEvidence]] = defaultdict(list)
-    _, dismissed_names = dismissed_groups(conn)
+    rotation = rotation_dismissals(conn)
     for ev in evidence:
         key = rotating_group_key(ev.m3u_group_name)
         if key and not ev.replay:
             account = account_key(ev.m3u_account_id)
-            if is_dismissed_day(ev.m3u_group_name, account, dismissed_names):
-                continue  # The user said no to this day; it is nobody's evidence.
+            if is_dismissed_rotation(ev.m3u_group_name, account, rotation):
+                continue  # The user said no to this day or family; nobody's evidence.
             rotating[key, account].append(ev)
         else:
             yield ev, [ev]
@@ -340,7 +437,7 @@ def get_candidates(
 ) -> list[CandidateEvidence]:
     """Every candidate with its evidence over the last ``window_days``."""
     since = to_db_utc(now - timedelta(days=window_days))
-    _, dismissed_names = dismissed_groups(conn)
+    rotation = rotation_dismissals(conn)
     query = "SELECT * FROM source_candidates"
     params: list = []
     if status:
@@ -349,10 +446,10 @@ def get_candidates(
     candidates: dict[int, CandidateEvidence] = {}
     for row in conn.execute(query, params).fetchall():
         account_id = row["m3u_account_id"] or None
-        if (
-            row["status"] == "new"
-            and rotating_group_key(row["m3u_group_name"]) is not None
-            and is_dismissed_day(row["m3u_group_name"], account_key(account_id), dismissed_names)
+        # A day of a dismissed rotation is not offered, however it got its row.
+        # The test is live: a source added in the family brings its days back.
+        if row["status"] == "new" and is_dismissed_rotation(
+            row["m3u_group_name"], account_key(account_id), rotation
         ):
             continue
         candidates[row["id"]] = CandidateEvidence(

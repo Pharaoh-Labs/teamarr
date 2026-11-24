@@ -33,6 +33,7 @@ import threading
 import time
 from collections import Counter, defaultdict
 from collections.abc import Callable
+from collections.abc import Set as AbstractSet
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from sqlite3 import Connection
@@ -59,10 +60,11 @@ from teamarr.database.source_candidates import (
     forget_removed_source,
     get_candidates,
     group_name_key,
-    is_dismissed_day,
+    is_dismissed_rotation,
     move_accepted_candidate,
     record_scan,
     rotating_family_sizes,
+    rotation_dismissals,
     rotation_rank,
     set_candidate_status,
     upsert_accepted_candidate,
@@ -288,7 +290,9 @@ class SourceDiscovery:
         return taken
 
     @staticmethod
-    def _nothing_new(group: Any, accounts: set[int]) -> bool:
+    def _nothing_new(
+        group: Any, accounts: set[int], by_family: AbstractSet[int] = frozenset()
+    ) -> bool:
         """Whether a group with decided accounts can be skipped without reading it.
 
         ``accounts`` are the ones a source reads or the user dismissed. The
@@ -297,12 +301,17 @@ class SourceDiscovery:
         the common one: at most one account has streams in the group, and one
         is already decided. A group more accounts carry is read, and its
         streams say whose they are.
+
+        ``by_family`` are accounts decided only because another day of the
+        group's rotating family was dismissed (#1285). They count where the
+        listing names its accounts; where it does not, a dismissal of another
+        day says too little about who carries this one, and the group is read.
         """
         entries = getattr(group, "m3u_accounts", None) or []
         if any(not isinstance(e, dict) for e in entries):
             # Older Dispatcharr lists bare account ids: an exact answer.
-            return not ({e for e in entries if isinstance(e, int)} - accounts)
-        return sum(1 for e in entries if (e.get("stream_count") or 0) > 0) <= 1
+            return not ({e for e in entries if isinstance(e, int)} - accounts - by_family)
+        return bool(accounts) and sum(1 for e in entries if (e.get("stream_count") or 0) > 0) <= 1
 
     def _scan_group(
         self,
@@ -441,6 +450,7 @@ class SourceDiscovery:
         with self._db_factory() as conn:
             taken = self._taken_accounts(conn)
             dismissed, dismissed_names = dismissed_groups(conn)
+            rotation = rotation_dismissals(conn)
             awaited = _names_awaiting_heal(conn, live_ids)
             leagues = self._processor._get_subscription_leagues(conn, None)
             surfaces = league_name_surfaces(conn, leagues)
@@ -460,8 +470,9 @@ class SourceDiscovery:
         for group in live_groups:
             name = group_name_key(group.name)
             # A rotating group is back under a new id every day or week. Its
-            # dismissal is by name like any other, and covers that day's name
-            # only (#1265); no row is written for each new id it arrives under.
+            # dismissal is by name, and reaches as far as the account's use of
+            # the family says (#1265, #1285: is_dismissed_rotation); no row is
+            # written for each new id it arrives under.
             rotating = rotating_group_key(group.name or "") is not None
             sourced = taken.get(group.id, set())
             said_no = dismissed_by_group.get(group.id, set())
@@ -470,12 +481,18 @@ class SourceDiscovery:
             # next run's exact-name heal puts it back here.
             spoken_for = awaited.get(group.name or "", set())
             decided = {account_key(a) for a in sourced} | said_no | said_no_by_name | spoken_for
+            # Accounts for which another day's dismissal covers this group.
+            by_family = {
+                account
+                for account in rotation.accounts_naming(group.name)
+                if is_dismissed_rotation(group.name, account, rotation)
+            } - decided
             if None in sourced or 0 in spoken_for:
                 summary.skipped_sources += 1
-            elif rotating and 0 in dismissed_by_name.get(name, ()) and not sourced:
-                # Dismissed with no account: every account's copy of this day.
+            elif rotating and not sourced and rotation.covers_every_account(group.name):
+                # Dismissed for every account there could be: nothing to read.
                 summary.skipped_dismissed += 1
-            elif decided and self._nothing_new(group, decided):
+            elif (decided or by_family) and self._nothing_new(group, decided, by_family):
                 if sourced or spoken_for:
                     summary.skipped_sources += 1
                 else:
@@ -500,7 +517,7 @@ class SourceDiscovery:
                     summary.skipped_dismissed += 1
                     return True
                 if rotating:
-                    if is_dismissed_day(group.name, account, dismissed_names):
+                    if is_dismissed_rotation(group.name, account, rotation):
                         summary.skipped_dismissed += 1
                         return True
                 elif (name, account) in dismissed_names:
@@ -773,7 +790,9 @@ def rebind_rotating_sources(
     it is the one source of its family on that account: an install that keeps a
     source per day (``EPL (Fri)``, ``(Mon)``, ``(Sun)``) made them separate on
     purpose, and each comes back through the per-run exact-name heal alone.
-    A day the user dismissed is never a destination, whatever id it has now.
+    A day the user dismissed is never a destination, whatever id it has now
+    (``is_dismissed_rotation``; the source being moved is itself use of the
+    family, so for it a dismissal always reads per day).
     """
     by_key: dict[str, list[ScanEvidence]] = defaultdict(list)
     for ev in evidence:
@@ -787,7 +806,8 @@ def rebind_rotating_sources(
         (s for s in get_all_groups(conn, include_disabled=True) if not s.is_channel_source),
         key=lambda s: s.id,
     )
-    dismissed, dismissed_names = dismissed_groups(conn)
+    dismissed, _ = dismissed_groups(conn)
+    rotation = rotation_dismissals(conn)
     accepted = {
         row["source_group_id"]: row
         for row in conn.execute(
@@ -825,7 +845,7 @@ def rebind_rotating_sources(
                 and not binding_conflicts(held.get(ev.m3u_group_id, ()), account)
                 and (ev.m3u_group_id, account) not in dismissed
                 and (ev.m3u_group_id, 0) not in dismissed
-                and not is_dismissed_day(ev.m3u_group_name, account, dismissed_names)
+                and not is_dismissed_rotation(ev.m3u_group_name, account, rotation)
             ),
             key=rotation_rank,
             reverse=True,
