@@ -849,6 +849,11 @@ export function ManagedChannelsTable() {
 
   const teamChannels = filteredChannels.filter((channel) => channel.channel_type === "team")
   const eventChannels = filteredChannels.filter((channel) => channel.channel_type === "event")
+  // Unfiltered: the section stays, with an empty-state line, when a filter
+  // leaves no team rows (#1288) instead of disappearing.
+  const hasTeamChannels = (channelsData?.channels ?? []).some(
+    (channel) => channel.channel_type === "team"
+  )
 
   const {
     selectedIds,
@@ -991,31 +996,6 @@ export function ManagedChannelsTable() {
         <TableHead className="w-16 text-right">Actions</TableHead>
         <TableHead className="w-6"></TableHead>
       </TableRow>
-      {isEventTable && (
-        <TableRow className="border-b-2 border-border">
-          <TableHead className="py-0.5 pb-1.5"></TableHead>
-          <TableHead className="py-0.5 pb-1.5"></TableHead>
-          <TableHead className="py-0.5 pb-1.5">
-            <div className="relative">
-              <Input type="text" placeholder="Filter..." value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} className="h-[18px] text-[0.65rem] italic px-1 pr-4 rounded-sm" />
-              {nameFilter && <button onClick={() => setNameFilter("")} className="absolute right-0.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="h-2.5 w-2.5" /></button>}
-            </div>
-          </TableHead>
-          <TableHead className="py-0.5 pb-1.5"></TableHead>
-          <TableHead className="py-0.5 pb-1.5">
-            <FilterSelect value={sportFilter} onChange={setSportFilter} options={[{ value: "", label: "All" }, ...sports.map((s) => ({ value: s, label: getSportDisplayName(s, sportsMap) }))]} />
-          </TableHead>
-          <TableHead className="py-0.5 pb-1.5">
-            <FilterSelect value={leagueFilter} onChange={setLeagueFilter} options={[{ value: "", label: "All" }, ...leagues.map((l) => ({ value: l, label: l }))]} />
-          </TableHead>
-          <TableHead className="py-0.5 pb-1.5">
-            <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: "", label: "All" }, ...statuses.map((s) => ({ value: s, label: s }))]} />
-          </TableHead>
-          <TableHead className="py-0.5 pb-1.5"></TableHead>
-          <TableHead className="py-0.5 pb-1.5"></TableHead>
-          <TableHead className="py-0.5 pb-1.5"></TableHead>
-        </TableRow>
-      )}
     </TableHeader>
   )
 
@@ -1123,18 +1103,60 @@ export function ManagedChannelsTable() {
               No managed channels found.
             </div>
           ) : (
-            <div className="space-y-6">
-              {teamChannels.length > 0 && (
-                <section>
-                  <h2 className="mb-2 text-sm font-semibold">Team Channels</h2>
+            <div className="mt-3 space-y-4">
+              {/* One filter bar for both lists (#1288): the filters always
+                  narrowed team and event rows alike, but the controls sat in
+                  the event table's header and read as event-only. */}
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-0.5 text-[0.65rem] text-muted-foreground">
+                  Channel
+                  <div className="relative w-48">
+                    <Input type="text" placeholder="Filter..." value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} className="h-[18px] text-[0.65rem] italic px-1 pr-4 rounded-sm" />
+                    {nameFilter && <button type="button" aria-label="Clear channel filter" onClick={() => setNameFilter("")} className="absolute right-0.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"><X className="h-2.5 w-2.5" /></button>}
+                  </div>
+                </label>
+                <label className="flex w-32 flex-col gap-0.5 text-[0.65rem] text-muted-foreground">
+                  Sport
+                  <FilterSelect value={sportFilter} onChange={setSportFilter} options={[{ value: "", label: "All" }, ...sports.map((s) => ({ value: s, label: getSportDisplayName(s, sportsMap) }))]} />
+                </label>
+                <label className="flex w-32 flex-col gap-0.5 text-[0.65rem] text-muted-foreground">
+                  League
+                  <FilterSelect value={leagueFilter} onChange={setLeagueFilter} options={[{ value: "", label: "All" }, ...leagues.map((l) => ({ value: l, label: l }))]} />
+                </label>
+                <label className="flex w-32 flex-col gap-0.5 text-[0.65rem] text-muted-foreground">
+                  Status
+                  <FilterSelect value={statusFilter} onChange={setStatusFilter} options={[{ value: "", label: "All" }, ...statuses.map((s) => ({ value: s, label: s }))]} />
+                </label>
+              </div>
+              {hasTeamChannels && (
+                <CollapsibleSection
+                  title="Team Channels"
+                  variant="subsection"
+                  count={`(${teamChannels.length})`}
+                  persistKey="channels.active.team"
+                  defaultCollapsed={false}
+                >
                   <Table>
                     {renderTableHeader(false)}
-                    <TableBody>{renderChannelRows(teamChannels)}</TableBody>
+                    <TableBody>
+                      {teamChannels.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                            No team channels match the current filters.
+                          </TableCell>
+                        </TableRow>
+                      ) : renderChannelRows(teamChannels)}
+                    </TableBody>
                   </Table>
-                </section>
+                </CollapsibleSection>
               )}
-              <section>
-                <h2 className="mb-2 text-sm font-semibold">Event Channels</h2>
+              <CollapsibleSection
+                title="Event Channels"
+                variant="subsection"
+                count={`(${eventChannels.length})`}
+                persistKey="channels.active.event"
+                defaultCollapsed={false}
+              >
                 <Table>
                   {renderTableHeader(true)}
                   <TableBody>
@@ -1147,7 +1169,7 @@ export function ManagedChannelsTable() {
                     ) : renderChannelRows(eventChannels)}
                   </TableBody>
                 </Table>
-              </section>
+              </CollapsibleSection>
             </div>
           )}
 
