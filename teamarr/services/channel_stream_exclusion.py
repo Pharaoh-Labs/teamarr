@@ -99,7 +99,7 @@ def remove_event_stream(
         dispatcharr_channel_id = channel.dispatcharr_channel_id
 
     remote = _remote_streams(channel_manager, dispatcharr_channel_id)
-    if remote is not None and stream_id in remote:
+    if remote is not None and dispatcharr_channel_id and stream_id in remote:
         _push(channel_manager, dispatcharr_channel_id, [s for s in remote if s != stream_id])
 
     with db_factory() as conn:
@@ -154,6 +154,7 @@ def restore_event_stream(
     remote = _remote_streams(channel_manager, dispatcharr_channel_id)
     if (
         remote is not None
+        and dispatcharr_channel_id
         and stream_id not in remote
         and _in_window(row.attach_at, row.detach_at, datetime.now(UTC))
     ):
