@@ -207,8 +207,18 @@ export interface StreamNameMatch {
   team: string
 }
 
+// A stream the user removed from this channel (#1173). Undo restores it.
+export interface RemovedStreamEntry {
+  dispatcharr_stream_id: number
+  stream_name: string | null
+  source_group: string | null
+  m3u_account_name: string | null
+  removed_at: string | null
+}
+
 export interface ChannelStreamsResponse {
   streams: ChannelStreamEntry[]
+  removed_streams?: RemovedStreamEntry[]
   stats_refreshed: boolean
   current_event: {
     title: string | null
@@ -224,4 +234,19 @@ export interface ChannelStreamsResponse {
 
 export async function getChannelStreams(channelId: number): Promise<ChannelStreamsResponse> {
   return api.get(`/channels/managed/${channelId}/streams`)
+}
+
+// Take one stream off one channel; later runs do not add it back (#1173).
+export async function removeChannelStream(
+  channelId: number,
+  streamId: number,
+): Promise<{ success: boolean; message: string }> {
+  return api.delete(`/channels/managed/${channelId}/streams/${streamId}`)
+}
+
+export async function restoreChannelStream(
+  channelId: number,
+  streamId: number,
+): Promise<{ success: boolean; message: string }> {
+  return api.post(`/channels/managed/${channelId}/streams/${streamId}/restore`)
 }

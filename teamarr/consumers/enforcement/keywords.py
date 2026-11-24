@@ -138,6 +138,7 @@ class KeywordEnforcer:
             log_channel_history,
             remove_stream_from_channel,
             stream_exists_on_channel,
+            stream_removed_by_user,
         )
 
         result = KeywordEnforcementResult()
@@ -291,7 +292,13 @@ class KeywordEnforcer:
                         # The creator may already have attached the stream to the
                         # target this run (its keyword changed); only the removal
                         # above is still needed, or the target gets a second row.
-                        if not stream_exists_on_channel(
+                        # The user took this stream off the target (#1173):
+                        # it still leaves the channel it does not belong on,
+                        # and is not put back on the one it was removed from.
+                        excluded_on_target = stream_removed_by_user(
+                            conn, target_channel.id, stream.dispatcharr_stream_id
+                        )
+                        if not excluded_on_target and not stream_exists_on_channel(
                             conn, target_channel.id, stream.dispatcharr_stream_id
                         ):
                             changed_targets.add(target_channel.id)
@@ -328,7 +335,11 @@ class KeywordEnforcer:
                         if self._channel_manager:
                             self._move_stream_in_dispatcharr(
                                 from_channel_id=channel.dispatcharr_channel_id,
-                                to_channel_id=target_channel.dispatcharr_channel_id,
+                                to_channel_id=(
+                                    None
+                                    if excluded_on_target
+                                    else target_channel.dispatcharr_channel_id
+                                ),
                                 stream_id=stream.dispatcharr_stream_id,
                             )
 
@@ -340,13 +351,14 @@ class KeywordEnforcer:
                             change_source="keyword_enforcement",
                             notes=f"Moved stream '{stream_name}' to {target_name} channel",
                         )
-                        log_channel_history(
-                            conn=conn,
-                            managed_channel_id=target_channel.id,
-                            change_type="stream_added",
-                            change_source="keyword_enforcement",
-                            notes=f"Received stream '{stream_name}' from keyword enforcement",
-                        )
+                        if not excluded_on_target:
+                            log_channel_history(
+                                conn=conn,
+                                managed_channel_id=target_channel.id,
+                                change_type="stream_added",
+                                change_source="keyword_enforcement",
+                                notes=f"Received stream '{stream_name}' from keyword enforcement",
+                            )
 
                         result.streams_moved.append(
                             {

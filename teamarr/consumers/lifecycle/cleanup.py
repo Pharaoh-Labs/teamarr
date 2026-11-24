@@ -5,6 +5,7 @@ stream cleanup, orphan Dispatcharr channels and disabled-group cleanup.
 """
 
 import logging
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from sqlite3 import Connection
@@ -314,6 +315,27 @@ class ChannelCleanup(_LifecycleHost):
 
         return updated_count
 
+    @staticmethod
+    def _user_skipped_fingerprints(conn: Connection) -> set[str]:
+        """Fingerprints of every stream a user marked "no event" (#1160).
+
+        All source groups at once: a channel carries streams from other
+        groups too, and each is keyed on the group that attached it. Rows
+        written by older versions carry a NULL event id; both forms count.
+        """
+        from teamarr.consumers.stream_match_cache import USER_SKIPPED_EVENT_ID
+
+        try:
+            rows = conn.execute(
+                """SELECT fingerprint FROM stream_match_cache
+                   WHERE user_corrected = 1 AND (event_id IS NULL OR event_id = ?)""",
+                (USER_SKIPPED_EVENT_ID,),
+            ).fetchall()
+        except sqlite3.Error as e:
+            logger.warning("[LIFECYCLE] Could not read user-skipped streams: %s", e)
+            return set()
+        return {row[0] for row in rows}
+
     def _event_in_progress(
         self,
         channel: Any,
@@ -529,10 +551,12 @@ class ChannelCleanup(_LifecycleHost):
         Returns:
             StreamProcessResult with deleted channels and errors
         """
+        from teamarr.consumers.stream_match_cache import compute_fingerprint
         from teamarr.database.channel_numbers import get_global_consolidation_mode
         from teamarr.database.channels import (
             get_all_channel_streams,
             get_managed_channels_for_group,
+            get_user_removed_stream_ids,
             log_channel_history,
             remove_stream_from_channel,
             update_stream_name,
@@ -578,9 +602,34 @@ class ChannelCleanup(_LifecycleHost):
                 # channel of its own, so there is nothing to keep this one for.
                 consolidating = get_global_consolidation_mode(conn) == "consolidate"
 
-                members = get_all_channel_streams(conn, [channel.id for channel in channels])
+                channel_ids = [channel.id for channel in channels]
+                members = get_all_channel_streams(conn, channel_ids)
+                # Channels the user took a stream off (#1173). Such a channel
+                # is never deleted for having no streams left: a new channel
+                # for the event would not carry the removal, and the removed
+                # stream would be attached to it in the same run.
+                user_removed = get_user_removed_stream_ids(conn, channel_ids)
+                # Streams the user marked "no event" (#1160). The matcher
+                # stops matching them, but nothing detached one that was
+                # already on a channel, since a stream that matches nothing
+                # is not "rotated". Keyed like the matcher's own lookup:
+                # source group, stream id and the stream's current name.
+                skipped_fingerprints = self._user_skipped_fingerprints(conn)
+
+                def _skipped_by_user(s: Any, stream_id: int) -> bool:
+                    if not skipped_fingerprints:
+                        return False
+                    source_id = s.source_group_id if s.source_group_id is not None else group_id
+                    name = getattr(s, "stream_name", None)
+                    if source_id == group_id and stream_id in current_streams:
+                        name = current_streams[stream_id].get("name") or name
+                    if not name:
+                        return False
+                    return compute_fingerprint(source_id, stream_id, name) in skipped_fingerprints
+
                 for channel in channels:
                     streams = members.get(channel.id, [])
+                    emptied_by_user = bool(user_removed.get(channel.id))
 
                     # A live event holds on to its streams (#1174): nothing
                     # below detaches from a channel whose event is in progress.
@@ -589,7 +638,7 @@ class ChannelCleanup(_LifecycleHost):
                     if not streams:
                         # Legacy fallback: check primary_stream_id
                         primary_id = getattr(channel, "primary_stream_id", None)
-                        if changed_only or live:
+                        if changed_only or live or emptied_by_user:
                             continue
                         if primary_id and primary_id not in current_ids_set:
                             success = self.delete_managed_channel(
@@ -621,6 +670,18 @@ class ChannelCleanup(_LifecycleHost):
                     for s in streams:
                         stream_id = getattr(s, "dispatcharr_stream_id", None)
                         if not stream_id:
+                            continue
+                        if _skipped_by_user(s, stream_id):
+                            # The user's own decision, so a live event does
+                            # not hold it and the zero-match path applies it.
+                            changed_streams.append(
+                                {
+                                    "stream": s,
+                                    "old_name": getattr(s, "stream_name", None),
+                                    "new_name": getattr(s, "stream_name", None),
+                                    "reason": "user_skipped",
+                                }
+                            )
                             continue
                         verdict, payload = self._stream_verdict(
                             s,
@@ -688,7 +749,12 @@ class ChannelCleanup(_LifecycleHost):
                             channel_event_id,
                         )
 
-                    if not valid_streams and streams_to_remove and not replacement_arriving:
+                    if (
+                        not valid_streams
+                        and streams_to_remove
+                        and not replacement_arriving
+                        and not emptied_by_user
+                    ):
                         # All streams gone or changed - delete channel
                         reasons = []
                         if missing_streams:
@@ -698,6 +764,9 @@ class ChannelCleanup(_LifecycleHost):
                             c for c in changed_streams if c.get("reason") == "content_changed"
                         ]
                         filtered = [c for c in changed_streams if c.get("reason") == "filtered"]
+                        skipped = [c for c in changed_streams if c.get("reason") == "user_skipped"]
+                        if skipped:
+                            reasons.append(f"{len(skipped)} marked no event")
                         if rotated:
                             reasons.append(f"{len(rotated)} rotated")
                         if content:
@@ -760,6 +829,8 @@ class ChannelCleanup(_LifecycleHost):
                                     )
                                 if reason == "event_rotated":
                                     notes = f"Stream {stream_id} rotated to different event"
+                                elif reason == "user_skipped":
+                                    notes = f"Stream {stream_id} marked 'no event' by the user"
                                 elif reason == "filtered":
                                     notes = (
                                         f"Stream {stream_id} filtered out: {changed['new_name']}"  # noqa: E501

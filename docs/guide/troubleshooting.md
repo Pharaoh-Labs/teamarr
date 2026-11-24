@@ -27,6 +27,8 @@ Common causes:
 ### Streams matching the wrong event
 
 - Click the **Matched** count in the Dashboard's run history and use **Fix** on the wrong match to correct it manually — the correction persists as a "User Fixed" match
+- **Skip Stream** in that dialog (a "no event" correction) also detaches the stream from the channel it was wrongly attached to, on the next run. If that was the channel's only stream, the channel is removed.
+- To take a stream off one channel without changing how it matches, expand the channel under [Managed Channels](dashboard#managed-channels) and use the **×** on the stream's row
 - Check [Matching → Custom Rules](matching/) for conflicting league or sport hints
 - Verify your stream filters (include/exclude regex) aren't too broad
 - Use the preview button on the [Sources](sources/) page to see matches without running a full generation

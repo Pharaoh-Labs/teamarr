@@ -39,8 +39,19 @@ import {
 import { useGroups } from "@/hooks/useGroups"
 import { useQuery } from "@tanstack/react-query"
 import { getLeagues } from "@/api/teams"
-import { deleteManagedChannel, getChannelStreams } from "@/api/channels"
-import type { ManagedChannel, ChannelStreamEntry, ChannelStreamsResponse, StreamRuleMatch } from "@/api/channels"
+import {
+  deleteManagedChannel,
+  getChannelStreams,
+  removeChannelStream,
+  restoreChannelStream,
+} from "@/api/channels"
+import type {
+  ManagedChannel,
+  ChannelStreamEntry,
+  ChannelStreamsResponse,
+  RemovedStreamEntry,
+  StreamRuleMatch,
+} from "@/api/channels"
 import { OrphansDialog } from "@/components/managed-channels/OrphansDialog"
 import { ResetAllDialog } from "@/components/managed-channels/ResetAllDialog"
 import { getLeagueDisplayName, getSportDisplayName } from "@/lib/utils"
@@ -499,6 +510,7 @@ interface ChannelRowProps {
   expanded: boolean
   selected: boolean
   streams: ChannelStreamEntry[] | undefined
+  removedStreams: RemovedStreamEntry[] | undefined
   currentEvent: ChannelStreamsResponse["current_event"] | undefined
   loading: boolean
   isGenerating: boolean
@@ -508,6 +520,8 @@ interface ChannelRowProps {
   onToggleExpand: (id: number) => void
   onToggleSelect: (id: number) => void
   onDelete: (channel: ManagedChannel) => void
+  onRemoveStream: (channel: ManagedChannel, stream: ChannelStreamEntry, isLast: boolean) => void
+  onRestoreStream: (channel: ManagedChannel, stream: RemovedStreamEntry) => void
 }
 
 // Memoized so per-row state changes (expand, select) don't re-render the whole
@@ -517,6 +531,7 @@ const ChannelRow = React.memo(function ChannelRow({
   expanded,
   selected,
   streams,
+  removedStreams,
   currentEvent,
   loading,
   isGenerating,
@@ -526,6 +541,8 @@ const ChannelRow = React.memo(function ChannelRow({
   onToggleExpand,
   onToggleSelect,
   onDelete,
+  onRemoveStream,
+  onRestoreStream,
 }: ChannelRowProps) {
   const { formatDateTime, formatRelativeTime, timezone } = useDateFormat()
   const isTeamChannel = channel.channel_type === "team"
@@ -667,7 +684,8 @@ const ChannelRow = React.memo(function ChannelRow({
                   <col className="w-[10%]" />
                   <col className="w-[8%]" />
                   <col className="w-[6%]" />
-                  <col className="w-[22%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[4%]" />
                 </colgroup>
                 <thead>
                   <tr>
@@ -698,6 +716,7 @@ const ChannelRow = React.memo(function ChannelRow({
                         </RichTooltip>
                       </span>
                     </th>
+                    <th className="pb-1.5"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -710,11 +729,62 @@ const ChannelRow = React.memo(function ChannelRow({
                       <td className="py-1 pr-4"><FeedSideCell side={stream.feed_side} /></td>
                       <td className="py-1 pr-4"><PriorityCell priority={stream.priority} expected={stream.expected_priority} rules={stream.matched_rules} sortingScope={stream.sorting_scope} generating={isGenerating} /></td>
                       <td className="py-1"><StreamStatsBadges stats={stream.stream_stats} /></td>
+                      <td className="py-1 text-right">
+                        <button
+                          type="button"
+                          onClick={() => onRemoveStream(channel, stream, (streams ?? []).length === 1)}
+                          className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          title={isTeamChannel
+                            ? "Remove this stream from this channel for this game"
+                            : "Remove this stream from this channel"}
+                          aria-label={`Remove ${stream.stream_name ?? `stream ${stream.dispatcharr_stream_id}`}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                       </table>
                     </>
+                  )}
+                  {(removedStreams ?? []).length > 0 && (
+                    <div className="mt-2">
+                      <p className="mb-1 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                        Removed by you
+                        <RichTooltip
+                          content={isTeamChannel
+                            ? "Streams you removed from this channel for this game. Runs do not add them back. Undo restores one."
+                            : "Streams you removed from this channel. Runs do not add them back while the channel exists. Undo restores one."}
+                          side="top"
+                        >
+                          <Info className="h-3 w-3 text-muted-foreground/50 cursor-help shrink-0" />
+                        </RichTooltip>
+                      </p>
+                      <ul className="text-xs">
+                        {(removedStreams ?? []).map((stream) => (
+                          <li
+                            key={stream.dispatcharr_stream_id}
+                            className="flex items-center gap-4 border-t border-border/30 py-1 text-muted-foreground/70"
+                          >
+                            <span className="min-w-0 flex-1 truncate">
+                              {stream.stream_name ?? `#${stream.dispatcharr_stream_id}`}
+                              <span className="ml-3 text-muted-foreground/50">
+                                {[stream.source_group, stream.m3u_account_name].filter(Boolean).join(" · ")}
+                              </span>
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-2 text-xs"
+                              onClick={() => onRestoreStream(channel, stream)}
+                            >
+                              Undo
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                 </>
               )}
@@ -737,6 +807,7 @@ export function ManagedChannelsTable() {
   // Expand states
   const [expandedChannels, setExpandedChannels] = useState<Set<number>>(new Set())
   const [channelStreams, setChannelStreams] = useState<Map<number, ChannelStreamEntry[]>>(new Map())
+  const [channelRemovedStreams, setChannelRemovedStreams] = useState<Map<number, RemovedStreamEntry[]>>(new Map())
   const [channelCurrentEvents, setChannelCurrentEvents] = useState<Map<number, ChannelStreamsResponse["current_event"]>>(new Map())
   const [loadingStreams, setLoadingStreams] = useState<Set<number>>(new Set())
 
@@ -891,6 +962,7 @@ export function ManagedChannelsTable() {
     try {
       const data = await getChannelStreams(channelId)
       setChannelStreams((prev) => new Map(prev).set(channelId, data.streams))
+      setChannelRemovedStreams((prev) => new Map(prev).set(channelId, data.removed_streams ?? []))
       setChannelCurrentEvents((prev) => new Map(prev).set(channelId, data.current_event))
     } catch {
       setChannelStreams((prev) => new Map(prev).set(channelId, []))
@@ -938,6 +1010,42 @@ export function ManagedChannelsTable() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGenerating])
 
+  // Remove one stream from one channel (#1173). Identity-stable for the
+  // memo'd rows: everything it reads arrives as an argument.
+  const handleRemoveStream = useCallback(async (
+    channel: ManagedChannel,
+    stream: ChannelStreamEntry,
+    isLast: boolean,
+  ) => {
+    const name = stream.stream_name ?? `stream ${stream.dispatcharr_stream_id}`
+    const scope = channel.channel_type === "team"
+      ? "Runs will not add it back to this channel for this game."
+      : "Runs will not add it back to this channel."
+    const last = isLast ? "\n\nThis leaves the channel with no streams." : ""
+    if (!confirm(`Remove "${name}" from ${channel.channel_name}?\n\n${scope} Other channels are not affected.${last}`)) return
+    try {
+      await removeChannelStream(channel.id, stream.dispatcharr_stream_id)
+      toast.success(`Removed ${name}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove stream")
+    }
+    void fetchStreams(channel.id)
+  }, [fetchStreams])
+
+  const handleRestoreStream = useCallback(async (
+    channel: ManagedChannel,
+    stream: RemovedStreamEntry,
+  ) => {
+    const name = stream.stream_name ?? `stream ${stream.dispatcharr_stream_id}`
+    try {
+      await restoreChannelStream(channel.id, stream.dispatcharr_stream_id)
+      toast.success(`Restored ${name}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to restore stream")
+    }
+    void fetchStreams(channel.id)
+  }, [fetchStreams])
+
   const handleDelete = async () => {
     if (!deleteConfirm || deleteConfirm.channel_type === "team") return
     try {
@@ -968,6 +1076,7 @@ export function ManagedChannelsTable() {
       expanded={expandedChannels.has(channel.id)}
       selected={selectedIds.has(channel.id)}
       streams={channelStreams.get(channel.id)}
+      removedStreams={channelRemovedStreams.get(channel.id)}
       currentEvent={channelCurrentEvents.get(channel.id)}
       loading={loadingStreams.has(channel.id)}
       isGenerating={isGenerating}
@@ -977,6 +1086,8 @@ export function ManagedChannelsTable() {
       onToggleExpand={handleToggleExpand}
       onToggleSelect={toggleSelect}
       onDelete={setDeleteConfirm}
+      onRemoveStream={handleRemoveStream}
+      onRestoreStream={handleRestoreStream}
     />
   ))
 
