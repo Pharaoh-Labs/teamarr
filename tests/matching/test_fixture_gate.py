@@ -1015,3 +1015,31 @@ class TestAliasedSidesSurviveCandidateNarrowing:
         result = matcher._match_against_multi_league_events(_ctx("Kzoo vs Fargo U"), candidates)
         assert result.category is ResultCategory.MATCHED
         assert result.event.id == WMU_UND.id
+
+
+class TestStStatePartialResolution:
+    """Short-name 'St' in one sport must not hide 'State' in another (#1299).
+
+    ESPN stores short_name='Bemidji St' in college-football and 'Bemidji State'
+    in college hockey. Resolving 'Bemidji St.' must include both so the fixture
+    gate does not veto womens-college-hockey.
+    """
+
+    def test_bemidji_st_resolves_across_st_and_state_leagues(self):
+        teams = [
+            ("Lindenwood Lions", "Lindenwood", "LIN", "college-football", "football"),
+            ("Lindenwood Lions", "Lindenwood", "LIN", "womens-college-hockey", "hockey"),
+            ("Bemidji State Beavers", "Bemidji St", "BST", "college-football", "football"),
+            (
+                "Bemidji State Beavers",
+                "Bemidji State",
+                "BST",
+                "womens-college-hockey",
+                "hockey",
+            ),
+        ]
+        index = TeamIdentityIndex(teams)
+        leagues = index.fixture_leagues("Lindenwood", "Bemidji St.")
+        assert leagues is not None
+        assert "womens-college-hockey" in leagues
+        assert "college-football" in leagues

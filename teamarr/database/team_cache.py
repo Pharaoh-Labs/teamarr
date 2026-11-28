@@ -498,4 +498,10 @@ def load_label_surfaces(conn: Connection) -> list[str]:
             continue
         for row in rows:
             labels.extend(value for value in tuple(row) if value)
+    # Include provider sport aliases (e.g., "Ice Hockey", "Rugby League") so
+    # extraction refinement recognizes them as sport boundaries even when the
+    # sports table only stores the canonical display_name ("Hockey", #1299).
+    from teamarr.core.sports import SPORT_ALIASES
+
+    labels.extend(SPORT_ALIASES.keys())
     return labels
