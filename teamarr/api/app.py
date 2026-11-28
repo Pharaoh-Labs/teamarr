@@ -360,6 +360,30 @@ async def lifespan(app: FastAPI):
     logger.info("[SHUTDOWN] Teamarr stopped")
 
 
+def spa_file_response(frontend_dist: Path | str, path: str) -> FileResponse:
+    """The file a non-API path resolves to in the built frontend.
+
+    Serves a static file if it exists (favicon, etc.). The path is the
+    caller's: it is normalised and only served from inside the dist directory
+    (#1051); anything else is a SPA route and gets ``index.html``.
+
+    ``index.html`` names the hashed bundles, so it must be revalidated on
+    every load: with no ``Cache-Control`` a browser caches it heuristically
+    and an open tab keeps the previous build's UI after an update (#1302).
+    The hashed files under ``assets/`` are immutable and keep their caching.
+    """
+    dist_root = os.path.abspath(frontend_dist)
+    index = os.path.join(dist_root, "index.html")
+    candidate = os.path.normpath(os.path.join(dist_root, path))
+    if (
+        candidate != index
+        and candidate.startswith(dist_root + os.sep)
+        and os.path.isfile(candidate)
+    ):
+        return FileResponse(candidate)
+    return FileResponse(index, headers={"Cache-Control": "no-cache"})
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
 
@@ -424,16 +448,7 @@ def create_app() -> FastAPI:
 
                 raise HTTPException(status_code=404, detail="Not found")
 
-            # Serve static files if they exist (favicon, etc.). The path is
-            # the caller's: normalise it and only serve it from inside the
-            # dist directory (#1051); anything else is a SPA route.
-            dist_root = os.path.abspath(frontend_dist)
-            candidate = os.path.normpath(os.path.join(dist_root, path))
-            if candidate.startswith(dist_root + os.sep) and os.path.isfile(candidate):
-                return FileResponse(candidate)
-
-            # Fall back to index.html for SPA routing
-            return FileResponse(os.path.join(dist_root, "index.html"))
+            return spa_file_response(frontend_dist, path)
 
         logger.info("[STARTUP] Serving React UI from %s", frontend_dist)
     else:
