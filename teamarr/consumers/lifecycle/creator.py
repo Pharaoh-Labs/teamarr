@@ -896,6 +896,7 @@ class ChannelCreator(_LifecycleHost):
             log_channel_history,
             mark_channel_deleted,
             stream_exists_on_channel,
+            stream_removed_by_user,
             update_stream_account_name,
             update_stream_channel_source_group,
             update_stream_feed_side,
@@ -979,7 +980,18 @@ class ChannelCreator(_LifecycleHost):
             result.merge(settings_result)
             return result
 
-        if effective_mode == "consolidate":
+        if effective_mode == "consolidate" and stream_removed_by_user(conn, existing.id, stream_id):
+            # The user took this stream off this channel (#1173): it stays
+            # off until they undo it or the channel retires.
+            result.existing.append(
+                {
+                    "stream": stream_name,
+                    "channel_id": existing.dispatcharr_channel_id,
+                    "channel_number": existing.channel_number,
+                    "action": "removed_by_user",
+                }
+            )
+        elif effective_mode == "consolidate":
             # Add stream to existing channel if not already present
             if not stream_exists_on_channel(conn, existing.id, stream_id):
                 # Compute priority from ordering rules (or use sequential if no rules)

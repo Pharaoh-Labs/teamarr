@@ -58,7 +58,12 @@ A collapsible **Managed Channels** table lists the channels Teamarr currently ma
 - **Team Channels and Event Channels** are separate sections inside the table. Each collapses on its own, and the browser remembers which are open.
 - **One filter bar** above both sections (channel name, sport, league, status) narrows team and event rows together. A section left with no rows says so.
 - **Sync status badges** — In Sync, Pending, Created, Drifted, Orphaned, or Error. Drifted event channels are corrected on the next generation run. Team-channel status reflects only a locally recorded ownership mapping.
-- **Expand an event row** to see its attached streams with per-stream match detail, priority, and stream health (resolution, fps, bitrate). Team channels remain visible as an ownership audit, while their memberships are managed from the Team EPG workflow.
+- **Expand a row** to see its attached streams with per-stream match detail, priority, and stream health (resolution, fps, bitrate). A team channel shows the streams of the game it is carrying.
+- **Remove a stream from one channel** with the **×** at the end of its row. The stream is detached in Dispatcharr at once, and later runs do not add it back to that channel. Nothing else changes: the stream still attaches to other channels, and no rule is created. Removing the last stream leaves the channel in place with no streams.
+    - On an **event channel** the removal lasts as long as the channel does.
+    - On a **team channel** it covers the game the stream is carrying, so the same stream is offered again for the team's next game.
+    - Removed streams are listed under **Removed by you** in the same panel. **Undo** attaches one again; the next run places it by the stream ordering rules.
+    - To stop a stream matching any game at all, use **Fix → Skip Stream** from the run history instead.
 - **Find Orphans** detects Teamarr-tagged event channels in Dispatcharr that aren't tracked locally; **Reset All**, the multi-select bar, and a per-row delete button handle event-channel removals. These controls, pending deletion scheduling, expiry, reconciliation, and orphan handling exclude persistent managed Team EPG channels. Manage those channels from [EPG → Team EPG](epg/teams).
 
 A separate **Recently Deleted** section lists channels removed by event cleanup (channel, event, sport, league, and when they were deleted).

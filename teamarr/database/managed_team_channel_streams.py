@@ -9,6 +9,12 @@ from sqlite3 import Connection
 # then purged so the table does not grow forever (#826).
 _REMOVED_RETENTION = "-7 days"
 
+# A stream the user took off a team channel (#1173). Same marker as an event
+# channel's (database/channels/streams.py). A team channel outlives its games,
+# so the removal is scoped to the game the stream was carrying: the same
+# stream is offered again for the team's next game.
+USER_REMOVED_REASON = "user_removed"
+
 # One event per channel at a time: the soonest game that is currently inside
 # its window. Rows without a stored start (pre-#826) sort last.
 _SELECTED_EVENT = """
@@ -62,6 +68,19 @@ def reconcile_team_streams(
     transient source failure must not clear a live game off a channel (#826).
     Rows for teams outside ``active_team_ids`` are always released.
     """
+    excluded = user_removed_team_stream_keys(conn)
+    if excluded:
+        memberships = [
+            item
+            for item in memberships
+            if (
+                item["team_id"],
+                item["dispatcharr_stream_id"],
+                item["event_id"],
+                item["event_provider"],
+            )
+            not in excluded
+        ]
     desired = {
         (
             item["team_id"],
@@ -123,6 +142,7 @@ def reconcile_team_streams(
                     event_start = excluded.event_start,
                     detach_at = excluded.detach_at,
                    removed_at = NULL,
+                   remove_reason = NULL,
                    updated_at = CURRENT_TIMESTAMP""",
             (
                 item["team_id"],
@@ -145,11 +165,126 @@ def reconcile_team_streams(
             ),
         )
 
+    # A user's removal is kept until its game's window has closed, however
+    # long ago the click was: purged earlier, the next run re-attaches it.
     conn.execute(
         "DELETE FROM managed_team_channel_streams "
-        "WHERE removed_at IS NOT NULL AND removed_at < datetime('now', ?)",
-        (_REMOVED_RETENTION,),
+        "WHERE removed_at IS NOT NULL AND removed_at < datetime('now', ?) "
+        "AND (remove_reason IS NOT ? OR detach_at IS NULL OR detach_at < datetime('now'))",
+        (_REMOVED_RETENTION, USER_REMOVED_REASON),
     )
+
+
+def user_removed_team_stream_keys(conn: Connection) -> set[tuple]:
+    """(team, stream, event, provider) for every stream a user removed (#1173)."""
+    rows = conn.execute(
+        """SELECT DISTINCT team_id, dispatcharr_stream_id, event_id, event_provider
+           FROM managed_team_channel_streams
+           WHERE removed_at IS NOT NULL AND remove_reason = ?""",
+        (USER_REMOVED_REASON,),
+    ).fetchall()
+    return {(row[0], row[1], row[2], row[3]) for row in rows}
+
+
+def remove_team_stream_by_user(
+    conn: Connection, team_id: int, dispatcharr_stream_id: int, now: datetime | None = None
+) -> list[int]:
+    """Take a stream off a team channel for the game it is carrying (#1173).
+
+    Every membership of the stream for that game goes (one per source and
+    programme slot), so no sibling row keeps it on the channel. Returns the
+    ids of the rows removed (empty = the stream is not on the channel).
+    """
+    current = [
+        row
+        for row in get_assigned_team_streams(conn, team_id, now)
+        if row["dispatcharr_stream_id"] == dispatcharr_stream_id
+    ]
+    if not current:
+        return []
+    ids = [
+        row[0]
+        for row in conn.execute(
+            """SELECT id FROM managed_team_channel_streams
+               WHERE team_id = ? AND dispatcharr_stream_id = ?
+                 AND event_id = ? AND event_provider = ? AND removed_at IS NULL""",
+            (
+                team_id,
+                dispatcharr_stream_id,
+                current[0]["event_id"],
+                current[0]["event_provider"],
+            ),
+        ).fetchall()
+    ]
+    mark_team_stream_rows(conn, ids, removed=True)
+    return ids
+
+
+def get_user_removed_team_streams(
+    conn: Connection, team_id: int, now: datetime | None = None
+) -> list[dict]:
+    """Streams the user removed from a team channel whose game is not over (#1173).
+
+    One entry per stream id, newest removal first.
+    """
+    timestamp = (now or datetime.now(UTC)).strftime("%Y-%m-%d %H:%M:%S")
+    rows = conn.execute(
+        """SELECT * FROM managed_team_channel_streams
+           WHERE team_id = ? AND removed_at IS NOT NULL AND remove_reason = ?
+             AND (detach_at IS NULL OR detach_at > ?)
+           ORDER BY removed_at DESC, id DESC""",
+        (team_id, USER_REMOVED_REASON, timestamp),
+    ).fetchall()
+    seen: set[int] = set()
+    streams = []
+    for row in rows:
+        if row["dispatcharr_stream_id"] in seen:
+            continue
+        seen.add(row["dispatcharr_stream_id"])
+        streams.append(dict(row))
+    return streams
+
+
+def restore_team_stream_by_user(
+    conn: Connection, team_id: int, dispatcharr_stream_id: int
+) -> list[int]:
+    """Undo a user's removal of a stream from a team channel (#1173).
+
+    Returns the ids of the rows brought back (empty = nothing to undo).
+    """
+    ids = [
+        row[0]
+        for row in conn.execute(
+            """SELECT id FROM managed_team_channel_streams
+               WHERE team_id = ? AND dispatcharr_stream_id = ?
+                 AND removed_at IS NOT NULL AND remove_reason = ?""",
+            (team_id, dispatcharr_stream_id, USER_REMOVED_REASON),
+        ).fetchall()
+    ]
+    mark_team_stream_rows(conn, ids, removed=False)
+    return ids
+
+
+def mark_team_stream_rows(conn: Connection, row_ids: list[int], *, removed: bool) -> None:
+    """Set or clear the user-removed marker on the given membership rows (#1173)."""
+    if not row_ids:
+        return
+    placeholders = ", ".join("?" * len(row_ids))
+    if removed:
+        conn.execute(
+            f"""UPDATE managed_team_channel_streams
+                SET removed_at = CURRENT_TIMESTAMP, remove_reason = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id IN ({placeholders})""",
+            (USER_REMOVED_REASON, *row_ids),
+        )
+    else:
+        conn.execute(
+            f"""UPDATE managed_team_channel_streams
+                SET removed_at = NULL, remove_reason = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE id IN ({placeholders})""",
+            row_ids,
+        )
 
 
 def active_stream_ids(conn: Connection, team_id: int, now: datetime | None = None) -> list[int]:

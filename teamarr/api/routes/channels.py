@@ -26,11 +26,15 @@ from teamarr.database.channels.streams import (
     fetch_stream_stats_by_ids,
     get_channel_streams,
     get_stream_match_details,
+    get_user_removed_streams,
     refresh_stream_stats,
 )
 from teamarr.database.channels.types import ManagedChannelStream
 from teamarr.database.groups import get_group_names_by_ids
-from teamarr.database.managed_team_channel_streams import get_assigned_team_streams
+from teamarr.database.managed_team_channel_streams import (
+    get_assigned_team_streams,
+    get_user_removed_team_streams,
+)
 from teamarr.database.managed_team_channels import list_owned_enabled_managed_team_channels
 from teamarr.database.settings import get_dispatcharr_settings, get_epg_settings
 from teamarr.database.stream_ordering_scopes import (
@@ -254,10 +258,29 @@ class TeamChannelCurrentEvent(BaseModel):
     detach_at: str | None = None
 
 
+class RemovedStreamEntry(BaseModel):
+    """A stream the user removed from this channel (#1173). Undo restores it."""
+
+    dispatcharr_stream_id: int
+    stream_name: str | None = None
+    source_group: str | None = None
+    m3u_account_name: str | None = None
+    removed_at: str | None = None
+
+
+class StreamActionResponse(BaseModel):
+    """Result of removing or restoring one stream on one channel."""
+
+    success: bool
+    message: str
+
+
 class ChannelStreamsResponse(BaseModel):
     """Streams attached to a managed channel."""
 
     streams: list[ChannelStreamEntry]
+    # Streams the user took off this channel; the run does not put them back.
+    removed_streams: list[RemovedStreamEntry] = []
     stats_refreshed: bool = False
     current_event: TeamChannelCurrentEvent | None = None
 
@@ -480,8 +503,9 @@ def get_managed_channel_streams(channel_id: int):
                     detail=f"Channel {channel_id} not found",
                 )
             streams = get_assigned_team_streams(conn, team_id)
+            removed = get_user_removed_team_streams(conn, team_id)
             group_names = get_group_names_by_ids(
-                conn, [stream["source_group_id"] for stream in streams]
+                conn, [stream["source_group_id"] for stream in [*streams, *removed]]
             )
             xmltv = get_team_xmltv(conn, team_id)
             current = None
@@ -650,6 +674,16 @@ def get_managed_channel_streams(channel_id: int):
                 )
                 for stream in streams
             ],
+            removed_streams=[
+                RemovedStreamEntry(
+                    dispatcharr_stream_id=stream["dispatcharr_stream_id"],
+                    stream_name=stream["stream_name"],
+                    source_group=group_names.get(stream["source_group_id"]),
+                    m3u_account_name=stream["m3u_account_name"],
+                    removed_at=_safe_isoformat(stream["removed_at"]),
+                )
+                for stream in removed
+            ],
             current_event=(
                 TeamChannelCurrentEvent(
                     title=current["title"],
@@ -675,9 +709,12 @@ def get_managed_channel_streams(channel_id: int):
             )
 
         streams = get_channel_streams(conn, channel_id)
+        removed = get_user_removed_streams(conn, channel_id)
 
         # Resolve source group names in one query
-        group_ids = [s.source_group_id for s in streams if s.source_group_id is not None]
+        group_ids = [
+            s.source_group_id for s in [*streams, *removed] if s.source_group_id is not None
+        ]
         group_names = get_group_names_by_ids(conn, group_ids)
 
         # Refresh stats when any stream has null stats or stats older than 1 hour
@@ -795,8 +832,70 @@ def get_managed_channel_streams(channel_id: int):
             )
             for s in streams
         ],
+        removed_streams=[
+            RemovedStreamEntry(
+                dispatcharr_stream_id=s.dispatcharr_stream_id,
+                stream_name=s.stream_name,
+                source_group=group_names.get(s.source_group_id) if s.source_group_id else None,
+                m3u_account_name=s.m3u_account_name,
+                removed_at=_safe_isoformat(s.removed_at),
+            )
+            for s in removed
+        ],
         stats_refreshed=stats_refreshed,
     )
+
+
+def _change_channel_stream(channel_id: int, stream_id: int, *, removing: bool) -> None:
+    """Run a remove or restore and map its failures to HTTP errors."""
+    from teamarr.services import channel_stream_exclusion as exclusion
+
+    try:
+        client = get_dispatcharr_client(get_db)
+    except Exception:
+        client = None
+    channel_manager = ChannelManager(client) if client else None
+    try:
+        if channel_id < 0:
+            action = exclusion.remove_team_stream if removing else exclusion.restore_team_stream
+            action(get_db, channel_manager, -channel_id, stream_id)
+        else:
+            action = exclusion.remove_event_stream if removing else exclusion.restore_event_stream
+            action(get_db, channel_manager, channel_id, stream_id)
+    except exclusion.StreamNotOnChannel as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except exclusion.DispatcharrUpdateFailed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Dispatcharr did not accept the change: {exc}",
+        ) from exc
+
+
+@router.delete("/managed/{channel_id}/streams/{stream_id}", response_model=StreamActionResponse)
+def remove_managed_channel_stream(channel_id: int, stream_id: int):
+    """Remove one stream from one managed channel (#1173).
+
+    The stream is detached in Dispatcharr at once and later runs do not put
+    it back on this channel. Other channels are not affected. On an event
+    channel the removal lasts as long as the channel; on a team channel
+    (negative id) it covers the game the stream is carrying. Removing the
+    last stream leaves the channel in place with no streams.
+    """
+    _change_channel_stream(channel_id, stream_id, removing=True)
+    return StreamActionResponse(success=True, message=f"Stream {stream_id} removed")
+
+
+@router.post(
+    "/managed/{channel_id}/streams/{stream_id}/restore", response_model=StreamActionResponse
+)
+def restore_managed_channel_stream(channel_id: int, stream_id: int):
+    """Undo a removal made with the DELETE route above (#1173).
+
+    The stream is attached in Dispatcharr again at the end of the channel's
+    list; the next run places it by the stream ordering rules.
+    """
+    _change_channel_stream(channel_id, stream_id, removing=False)
+    return StreamActionResponse(success=True, message=f"Stream {stream_id} restored")
 
 
 @router.delete("/managed/{channel_id}", response_model=DeleteResponse)

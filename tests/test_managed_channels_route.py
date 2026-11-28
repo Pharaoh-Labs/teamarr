@@ -135,7 +135,8 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
             event_id TEXT, event_provider TEXT, source_group_id INTEGER, stream_name TEXT,
             m3u_account_name TEXT, match_method TEXT, match_type TEXT, feed_side TEXT,
             feed_team_id TEXT, dispatcharr_channel_group TEXT, priority INTEGER,
-            event_start TEXT, attach_at TEXT, detach_at TEXT, removed_at TEXT
+            event_start TEXT, attach_at TEXT, detach_at TEXT, removed_at TEXT,
+            remove_reason TEXT
         );
         CREATE TABLE team_epg_xmltv (team_id INTEGER, xmltv_content TEXT, updated_at TEXT);
         INSERT INTO teams (
@@ -147,7 +148,7 @@ def test_managed_team_channel_streams_show_the_attached_event(monkeypatch):
             (7, 90, 'team-uuid', 9000, 'ready', '2026-01-01', '2026-01-02');
         INSERT INTO managed_team_channel_streams VALUES
             (1, 7, 44, 'game-1', 'espn', 3, 'Blue at Red', 'Sports', 'epg', 'event',
-             'away', 'home', NULL, 1, NULL, NULL, NULL, NULL);
+             'away', 'home', NULL, 1, NULL, NULL, NULL, NULL, NULL);
         INSERT INTO team_epg_xmltv VALUES (
             7,
             '<tv><programme channel="team-blue" start="20260913090000 +0000" '

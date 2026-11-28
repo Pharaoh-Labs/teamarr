@@ -229,6 +229,7 @@ CREATE TABLE IF NOT EXISTS managed_team_channel_streams (
     attach_at TIMESTAMP,
     detach_at TIMESTAMP,
     removed_at TIMESTAMP,
+    remove_reason TEXT,                       -- (#1173) 'user_removed' = the user took this stream off the channel for this game; the run does not put it back. NULL for every other removal.
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (team_id) REFERENCES managed_team_channels(team_id) ON DELETE CASCADE

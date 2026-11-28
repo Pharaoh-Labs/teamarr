@@ -133,7 +133,7 @@ _MEMBERSHIP_TABLE = """
         dispatcharr_channel_group TEXT, dispatcharr_source_channel_id INTEGER,
         priority INTEGER DEFAULT 999,
         event_start TEXT, attach_at TEXT, detach_at TEXT, removed_at TEXT,
-        created_at TEXT, updated_at TEXT,
+        remove_reason TEXT, created_at TEXT, updated_at TEXT,
         UNIQUE(team_id, dispatcharr_stream_id, event_id, event_provider,
                source_group_id, attach_at)
     );

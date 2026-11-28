@@ -189,6 +189,127 @@ def stream_exists_on_channel(
     return cursor.fetchone() is not None
 
 
+# A stream the user took off one channel (#1173). The soft-removed row IS the
+# exclusion: every path that would put the stream back on that channel asks
+# stream_removed_by_user first, and the row goes when the channel does, so the
+# exclusion never outlives the channel it was made on.
+USER_REMOVED_REASON = "user_removed"
+
+
+def stream_removed_by_user(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+) -> bool:
+    """Whether the user removed this stream from this channel (#1173)."""
+    cursor = conn.execute(
+        """SELECT 1 FROM managed_channel_streams
+           WHERE managed_channel_id = ?
+             AND dispatcharr_stream_id = ?
+             AND removed_at IS NOT NULL
+             AND remove_reason = ?
+           LIMIT 1""",
+        (managed_channel_id, dispatcharr_stream_id, USER_REMOVED_REASON),
+    )
+    return cursor.fetchone() is not None
+
+
+def get_user_removed_streams(
+    conn: Connection,
+    managed_channel_id: int,
+) -> list[ManagedChannelStream]:
+    """The streams the user removed from a channel, newest removal first (#1173).
+
+    One entry per stream id.
+    """
+    cursor = conn.execute(
+        """SELECT * FROM managed_channel_streams
+           WHERE managed_channel_id = ?
+             AND removed_at IS NOT NULL
+             AND remove_reason = ?
+           ORDER BY removed_at DESC, id DESC""",
+        (managed_channel_id, USER_REMOVED_REASON),
+    )
+    seen: set[int] = set()
+    streams = []
+    for row in cursor.fetchall():
+        stream = ManagedChannelStream.from_row(dict(row))
+        if stream.dispatcharr_stream_id in seen:
+            continue
+        seen.add(stream.dispatcharr_stream_id)
+        streams.append(stream)
+    return streams
+
+
+def get_user_removed_stream_ids(
+    conn: Connection,
+    managed_channel_ids: list[int],
+) -> dict[int, set[int]]:
+    """channel id -> stream ids the user removed from it (#1173). One query."""
+    removed: dict[int, set[int]] = {}
+    chunk = 500
+    for start in range(0, len(managed_channel_ids), chunk):
+        ids = managed_channel_ids[start : start + chunk]
+        placeholders = ", ".join("?" * len(ids))
+        cursor = conn.execute(
+            f"""SELECT managed_channel_id, dispatcharr_stream_id
+                FROM managed_channel_streams
+                WHERE managed_channel_id IN ({placeholders})
+                  AND removed_at IS NOT NULL
+                  AND remove_reason = ?""",
+            (*ids, USER_REMOVED_REASON),
+        )
+        for row in cursor.fetchall():
+            removed.setdefault(row[0], set()).add(row[1])
+    return removed
+
+
+def restore_user_removed_stream(
+    conn: Connection,
+    managed_channel_id: int,
+    dispatcharr_stream_id: int,
+) -> bool:
+    """Undo a user's removal: the stream is a member of the channel again (#1173).
+
+    Only the newest removed row comes back, so a stream never returns as two
+    members.
+    """
+    row = conn.execute(
+        """SELECT id FROM managed_channel_streams
+           WHERE managed_channel_id = ?
+             AND dispatcharr_stream_id = ?
+             AND removed_at IS NOT NULL
+             AND remove_reason = ?
+           ORDER BY removed_at DESC, id DESC
+           LIMIT 1""",
+        (managed_channel_id, dispatcharr_stream_id, USER_REMOVED_REASON),
+    ).fetchone()
+    if row is None:
+        return False
+    # Every marker for the pair is cleared; only the newest row is revived,
+    # and only when the stream is not already a member.
+    conn.execute(
+        """UPDATE managed_channel_streams
+           SET remove_reason = NULL
+           WHERE managed_channel_id = ?
+             AND dispatcharr_stream_id = ?
+             AND removed_at IS NOT NULL
+             AND remove_reason = ?""",
+        (managed_channel_id, dispatcharr_stream_id, USER_REMOVED_REASON),
+    )
+    if not stream_exists_on_channel(conn, managed_channel_id, dispatcharr_stream_id):
+        conn.execute(
+            "UPDATE managed_channel_streams SET removed_at = NULL WHERE id = ?",
+            (row[0],),
+        )
+    logger.debug(
+        "[RESTORED] Stream %d on channel %d (user undo)",
+        dispatcharr_stream_id,
+        managed_channel_id,
+    )
+    return True
+
+
 def compute_stream_priority_from_rules(
     conn: Connection,
     stream_name: str | None = None,

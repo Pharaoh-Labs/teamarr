@@ -109,7 +109,7 @@ Every decision that could orphan or duplicate a channel is made only on evidence
 
 Turn management off from **EPG → Team EPG** to release a channel. Teamarr applies that during the next manual or scheduled generation: it removes the proven Teamarr-owned Dispatcharr channel, then its ownership and stream-membership records. If Teamarr cannot prove ownership or Dispatcharr deletion fails, the generation records the error so a manual replacement cannot be deleted accidentally. Deactivating a team is different: the channel, its number and its identity are kept, its streams are released, and its guide stops updating until the team is active again. Deleting a team removes its configuration and its proven Teamarr-owned channel immediately; a team with no managed channel can be deleted without a Dispatcharr connection.
 
-The [Dashboard](../dashboard) lists managed team channels for status and stream audit only. Its event-channel reset, expiry, reconciliation, orphan discovery, and deletion controls do not apply to persistent Team EPG channels.
+The [Dashboard](../dashboard) lists managed team channels with their status and the streams of the game they are carrying. A stream can be removed from a team channel there for that game, and restored with **Undo**. The Dashboard's event-channel reset, expiry, reconciliation, orphan discovery, and deletion controls do not apply to persistent Team EPG channels.
 
 ## Team EPG Settings
 

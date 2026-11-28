@@ -63,6 +63,7 @@ class ChannelSyncer(_LifecycleHost):
         from teamarr.database.channels import (
             keyword_display_value,
             log_channel_history,
+            stream_removed_by_user,
             update_managed_channel,
         )
 
@@ -199,7 +200,13 @@ class ChannelSyncer(_LifecycleHost):
                 # streams is already tuple[int, ...] of stream IDs
                 ch_streams = current_channel.streams
                 current_stream_ids = list(ch_streams) if ch_streams else []
-                if stream_id not in current_stream_ids:
+                if stream_id not in current_stream_ids and stream_removed_by_user(
+                    conn, existing.id, stream_id
+                ):
+                    # Not drift: the user took this stream off this channel
+                    # (#1173), so Dispatcharr lacking it is the wanted state.
+                    pass
+                elif stream_id not in current_stream_ids:
                     # Stream drift — Dispatcharr is missing a stream the DB expects.
                     # The fix is Dispatcharr-side (push the stream back via update_data);
                     # DB stream membership lives in managed_channel_streams (written by
