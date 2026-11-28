@@ -203,6 +203,7 @@ class BaseHTTPClient:
         params: dict | None = None,
         *,
         label: str | None = None,
+        missing_ok: bool = False,
     ) -> dict | None:
         """Make a GET request with retry logic, returning parsed JSON or None.
 
@@ -215,6 +216,9 @@ class BaseHTTPClient:
             params: Optional query parameters
             label: Short label for logs/metrics (defaults to the URL;
                 call_metrics reduces either form to the last path segment)
+            missing_ok: A 404 is an expected answer for this request (the
+                caller is probing for something that may not exist): it is
+                logged at DEBUG and not counted as a failed call (#1294).
         """
         label = label if label is not None else url
         rate_limit_retries = 0
@@ -269,6 +273,9 @@ class BaseHTTPClient:
                 return response.json()
 
             except httpx.HTTPStatusError as e:
+                if missing_ok and e.response.status_code == 404:
+                    logger.debug("[%s] HTTP 404 for %s (expected miss)", self.LOG_TAG, url)
+                    return None
                 logger.warning("[%s] HTTP %d for %s", self.LOG_TAG, e.response.status_code, url)
                 # 4xx is deterministic (429 is handled before raise_for_status),
                 # so retrying just repeats the identical failure — only 5xx gets
