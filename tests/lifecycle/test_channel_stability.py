@@ -365,6 +365,33 @@ def test_strict_reset_is_contiguous(db):
 # ---------------------------------------------------------------------------
 
 
+def test_compact_steady_state_moves_nothing(db):
+    """Numbers are stored as TEXT; a channel already in place has not moved (#1292)."""
+    _set_mode(db, "compact")
+    _add(db, 1, "A", "101", 0, "2026-06-18 10:00:00", "e1")
+    _add(db, 2, "B", "102", 0, "2026-06-18 12:00:00", "e2")
+    db.commit()
+
+    result = cn.reassign_all_channels(db)
+    assert _numbers(db) == {"A": 101, "B": 102}
+    assert result["channels_processed"] == 2
+    assert result["channels_moved"] == 0
+    assert result["drift_details"] == []
+
+
+def test_compact_reports_only_the_channel_that_moved(db):
+    _set_mode(db, "compact")
+    _add(db, 1, "A", "101", 0, "2026-06-18 10:00:00", "e1")
+    _add(db, 2, "B", "105", 0, "2026-06-18 12:00:00", "e2")
+    db.commit()
+
+    result = cn.reassign_all_channels(db)
+    assert _numbers(db) == {"A": 101, "B": 102}
+    assert result["channels_moved"] == 1
+    moves = [(m["channel_name"], m["old_number"], m["new_number"]) for m in result["drift_details"]]
+    assert moves == [("B", 105, 102)]
+
+
 def test_compact_mode_never_resets(db):
     _set_mode(db, "compact")
     assert cn.should_run_channel_reset(db) is False

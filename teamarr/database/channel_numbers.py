@@ -793,7 +793,11 @@ def _place_compact(
         next_num += 1
 
     for i, ch in enumerate(channels):
-        old_num = ch["channel_number"]
+        # channel_number is TEXT: compared raw, "101" != 101 called every
+        # channel moved on every run and pushed each number to Dispatcharr
+        # again, and the str/int mix hid real collisions from the push's
+        # ordering check (#1292).
+        old_num = _channel_num_as_int(ch["channel_number"])
 
         if next_num > effective_end:
             logger.warning(
