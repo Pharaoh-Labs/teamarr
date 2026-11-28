@@ -371,7 +371,6 @@ class SportsDataService:
                 )
                 self._cache.delete(cache_key)
                 return _CACHE_MISS
-            logger.debug("[CACHE_HIT] %s", cache_key)
             try:
                 return [_enrich_event_teams(_read_cached_event(e)) for e in cached]
             except (KeyError, TypeError) as e:
@@ -644,7 +643,6 @@ class SportsDataService:
                 )
                 self._cache.delete(cache_key)
             else:
-                logger.debug("[CACHE_HIT] %s", cache_key)
                 try:
                     return [_enrich_event_teams(_read_cached_event(e)) for e in cached]
                 except (KeyError, TypeError) as e:
@@ -679,7 +677,6 @@ class SportsDataService:
                 )
                 self._cache.delete(cache_key)
             else:
-                logger.debug("[CACHE_HIT] %s", cache_key)
                 try:
                     return dict_to_team(cached)
                 except (KeyError, TypeError) as e:
@@ -725,7 +722,6 @@ class SportsDataService:
                 )
                 self._cache.delete(cache_key)
                 return _CACHE_MISS
-            logger.debug("[CACHE_HIT] %s", cache_key)
             try:
                 return _enrich_event_teams(_read_cached_event(cached))
             except (KeyError, TypeError) as e:
@@ -978,7 +974,6 @@ class SportsDataService:
             if cached == _NOT_FOUND:
                 logger.debug("[CACHE_HIT] %s (negative)", cache_key)
                 return None
-            logger.debug("[CACHE_HIT] %s", cache_key)
             try:
                 return dict_to_stats(cached)
             except (KeyError, TypeError) as e:
@@ -1039,7 +1034,6 @@ class SportsDataService:
         cache_key = make_cache_key("rankings", league)
         cached = self._cache.get(cache_key)
         if cached is not None:
-            logger.debug("[CACHE_HIT] %s", cache_key)
             return cached
 
         for provider in self._providers:
