@@ -734,8 +734,13 @@ class TeamIdentityIndex:
         # very real uefa.champions fixture. The provider's own code (ROMA)
         # is a curated statement about that club; carried as a never-exact
         # reading it only widens the identity set, per the module rules.
+        canon = " ".join(_canon_span(norm.split()))
+        canon_alt = canon if canon != norm else None
+
         if norm in self._exact:
             hits = self._exact[norm] + self._partial.get(norm, []) + self._by_abbrev.get(norm, [])
+            if canon_alt:
+                hits = hits + self._exact.get(canon_alt, []) + self._partial.get(canon_alt, [])
             # An alias rewrite that lands on a surface form widens the same
             # way (#874). "Ireland" is the rugby side's full name, while ESPN
             # spells the soccer side "Republic of Ireland" (short name "Rep
@@ -758,6 +763,11 @@ class TeamIdentityIndex:
         # reading, add the partial ones, and call it exact only when it is the
         # sole reading ("d backs" -> Arizona, #480).
         partial = self._partial.get(norm, [])
+        if canon_alt:
+            # ESPN's short_name can write "Bemidji St" in college-football and
+            # "Bemidji State" in college-hockey; union both so "Bemidji St."
+            # does not resolve to football alone and veto hockey (#1299).
+            partial = partial + self._exact.get(canon_alt, []) + self._partial.get(canon_alt, [])
         for variant in self._alias_variants(norm):
             if variant in self._exact:
                 hits = self._exact[variant] + partial
