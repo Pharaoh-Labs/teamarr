@@ -193,9 +193,11 @@ class ESPNClient(BaseHTTPClient):
         self._cricket_season_cache = TTLCache(default_ttl_seconds=300, max_size=64)
         self._cricket_season_lock = threading.Lock()
 
-    def _request(self, url: str, params: dict | None = None) -> dict | None:
+    def _request(
+        self, url: str, params: dict | None = None, *, missing_ok: bool = False
+    ) -> dict | None:
         label = url.split("/sports/")[-1] if "/sports/" in url else url
-        return self._request_json(url, params, label=label)
+        return self._request_json(url, params, label=label, missing_ok=missing_ok)
 
     def get_sport_league(
         self, league: str, override: tuple[str, str] | None = None
@@ -461,8 +463,15 @@ class ESPNClient(BaseHTTPClient):
             hit = self._cricket_season_cache.get(key)
             if hit is not None:
                 return hit["data"]
-            params = {"season": season} if season is not None else None
-            data = self._request(f"{self._base_url}/cricket/{series_id}/scoreboard", params)
+            url = f"{self._base_url}/cricket/{series_id}/scoreboard"
+            if season is None:
+                data = self._request(url)
+            else:
+                # A season year ESPN does not have is a 404, and the caller
+                # asks for calendar years as well as the linked season: SA20
+                # starts in January and is labelled with the next year, so
+                # its current-year request misses on every run (#1294).
+                data = self._request(url, {"season": season}, missing_ok=True)
             if data is not None and not isinstance(data.get("events"), list):
                 data = None
             self._cricket_season_cache.set(key, {"data": data}, ttl_seconds=300 if data else 30)

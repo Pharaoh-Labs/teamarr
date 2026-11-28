@@ -146,6 +146,7 @@ def test_season_cache_single_flights_and_expires():
         request.assert_called_once_with(
             "https://site.api.espn.com/apis/site/v2/sports/cricket/21266/scoreboard",
             {"season": 2026},
+            missing_ok=True,
         )
         client._cricket_season_cache.clear()
         client.get_cricket_season("21266", 2026)
@@ -172,3 +173,25 @@ def test_empty_success_is_cached_but_invalid_payload_is_not_a_schedule():
         assert request.call_count == 1
     with patch.object(client, "_request", return_value={"error": "bad"}):
         assert client.get_cricket_season("21266", 2029) is None
+
+
+def test_missing_season_year_is_not_a_warning(caplog):
+    """SA20 is labelled with the next year, so season=<this year> is a 404 (#1294)."""
+    import logging
+
+    import httpx
+
+    client = ESPNClient()
+    request = httpx.Request("GET", "https://site.api.espn.com/x")
+    missing = httpx.Response(404, request=request)
+    http = type("Http", (), {"get": lambda self, url, params=None: missing})()
+    with patch.object(client, "_get_client", return_value=http):
+        with caplog.at_level(logging.DEBUG, logger="teamarr.providers.base_client"):
+            assert client.get_cricket_season("21275", 2026) is None
+            season_levels = [r.levelno for r in caplog.records if "404" in r.getMessage()]
+            assert season_levels == [logging.DEBUG]
+            caplog.clear()
+            # The default slate is not a probe: a 404 there is still a warning.
+            assert client.get_cricket_season("21275") is None
+            default_levels = [r.levelno for r in caplog.records if "404" in r.getMessage()]
+            assert default_levels == [logging.WARNING]
