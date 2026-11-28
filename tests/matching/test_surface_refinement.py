@@ -553,3 +553,23 @@ class TestPassingScoresNeverDrop:
         )
         assert result.category is not ResultCategory.MATCHED
         assert classified.team1 == "B1G Football - Howard"
+
+    def test_ice_hockey_label_stripped_without_trailing_colon(self):
+        # BIG10+ streams omit the colon after 'Ice Hockey (W|M)' (#1299),
+        # leaving 'BIG10+ 08: Ice Hockey Lindenwood' as team1; load_label_surfaces
+        # must include sport aliases ('Ice Hockey') so refine_side strips it.
+        from teamarr.database.team_cache import load_label_surfaces
+
+        conn = sqlite3.connect(":memory:")
+        labels = load_label_surfaces(conn)
+        conn.close()
+
+        index = TeamIdentityIndex(
+            [
+                ("Lindenwood Lions", "Lindenwood", "LIN", "womens-college-hockey", "hockey"),
+                ("Canisius Golden Griffins", "Canisius", "CAN", "mens-college-hockey", "hockey"),
+            ],
+            labels=labels,
+        )
+        assert index.refine_side("BIG10+ 08: Ice Hockey Lindenwood", anchor="end") == "Lindenwood"
+        assert index.refine_side("BIG10+ 12: Ice Hockey Canisius", anchor="end") == "Canisius"
